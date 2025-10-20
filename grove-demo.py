@@ -5,7 +5,7 @@ constructors_positions = {
     "<body>" : ["firstChild", "nextElement"], 
     "<a>" : ["attr_href", "firstChild", "nextElement"], 
     "<p>" : ["firstChild", "nextElement"],
-    "string(*)" : [] # no positions, leaf node, the actual value is stored in the node id
+    "string(*)" : ["nextElement"] # string can have nextElement. example: <p>Hello<strong>WORLD!</strong>></p>
 }
 
 # G = W x L             x V 
@@ -19,29 +19,24 @@ example = {
     ("edge1", "node1", "<a>", "attr_href", "node2", 'string("http://example.com")', "active"),
     ("edge2", "node1", "<a>", "firstChild", "node3", 'string("Click here")', "active"),
     ("edge3", "node1", "<a>", "nextElement", "node4", "<p>", "active"),
-    ("edge4", "node4", "<p>", "firstChild", "node5", 'string("Hello, world!")', "active"),
+    ("edge4", "node4", "<p>", "firstChild", "node5", 'string("Hello, ")', "active"),
+    ("edge5", "node5", 'string("Hello, ")', "nextElement", "node6", "<strong>", "active"),
+    ("edge6", "node6", "<strong>", "firstChild", "node7", 'string("world!")', "active"),
 }
 root = "node0"
 root_type = "<body>"
 
 def render(edges: set, root_node_id: str, root_node_type: str) -> str:
+    is_string_node = root_node_type.startswith('string("') and root_node_type.endswith('")')
+    is_element_node = root_node_type.startswith("<") and root_node_type.endswith(">")
+
     edges_from_root = [e for e in edges if e[NODE_ID_FROM] == root_node_id and e[STATUS] == "active"]
-    if not edges_from_root:
-        if root_node_type.startswith('string("') and root_node_type.endswith('")'):
-            print(root_node_type[8:-2], end='')
-        else:
-            print(root_node_type, end='')
-        return
+
+    if is_string_node:
+        print(root_node_type[8:-2], end='')
     
-    from_type = edges_from_root[0][NODE_TYPE_FROM]
-
-    if from_type == "attribute":
-        for edge in edges_from_root:
-            if edge[NODE_TYPE_TO].startswith("string") and edge[POSITION_FROM] == "value":
-                render(edges, edge[NODE_ID_TO], edge[NODE_TYPE_TO])
-
-    if from_type.startswith("<") and from_type.endswith(">"):
-        print(from_type[:-1], end="")
+    if is_element_node:
+        print(root_node_type[:-1], end="")
         attributes_edges = [e for e in edges_from_root if e[POSITION_FROM].startswith("attr_")]
         for attr_edge in attributes_edges:
             print(f' {attr_edge[POSITION_FROM][5:]}="', end='')
@@ -52,11 +47,40 @@ def render(edges: set, root_node_id: str, root_node_type: str) -> str:
         firstChild_edges = [e for e in edges_from_root if e[POSITION_FROM] == "firstChild"]
         for firstChild_edge in firstChild_edges:
             render(edges, firstChild_edge[NODE_ID_TO], firstChild_edge[NODE_TYPE_TO])
-        print(f"</{from_type[1:-1]}>", end="")
-
+        print(f"</{root_node_type[1:-1]}>", end="")
+    
+    if is_string_node or is_element_node:
         nextElement_edges = [e for e in edges_from_root if e[POSITION_FROM] == "nextElement"]
         for nextElement_edge in nextElement_edges:
             render(edges, nextElement_edge[NODE_ID_TO], nextElement_edge[NODE_TYPE_TO])
+
+
+def next_node_id(edges):
+    nodes = [e[NODE_ID_TO] for e in edges] + [e[NODE_ID_FROM] for e in edges]
+    max_node = max(nodes)
+    return f"node{int(max_node[4:]) + 1}"
+
+def next_edge_id(edges):
+    return f"edge{len(edges)}"
+
+def add(edges, from_node_id, from_node_type, from_position, to_node_type):
+    new_edge_id, new_node_id = next_edge_id(edges), next_node_id(edges)
+    edges.add((new_edge_id, from_node_id, from_node_type, from_position, new_node_id, to_node_type, "active"))
+
+
+# specific examples what we can add. probably will be separate buttons for each in the real UI
+
+def add_firstChild(edges, from_node_id, from_node_type, to_node_type):
+    add(edges, from_node_id, from_node_type, "firstChild", to_node_type)
+
+def add_nextElement(edges, from_node_id, from_node_type, to_node_type):
+    add(edges, from_node_id, from_node_type, "nextElement", to_node_type)
+
+def add_string(edges, from_node_id, from_node_type, from_position, string_value):
+    add(edges, from_node_id, from_node_type, from_position, f'string("{string_value}")')
+
+def add_href(edges, from_node_id, href_value):
+    add_string(edges, from_node_id, "<a>", "attr_href", href_value)
 
 
 # prints <body><a href="http://example.com">Click here</a><p>Hello, world!</p></body>
