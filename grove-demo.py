@@ -2,12 +2,10 @@
 
 # Possible positions for each node type (constructor)
 constructors_positions = {
-    "<body>" : ["content"], 
-    "<a>" : ["href", "content"], 
-    "<p>" : ["content"],
-    "linkedList" : ["head", "tail"],
-    "attribute" : ["value"],
-    "string" : [] # no positions, leaf node, the actual value is stored in the node id
+    "<body>" : ["firstChild", "nextElement"], 
+    "<a>" : ["attr_href", "firstChild", "nextElement"], 
+    "<p>" : ["firstChild", "nextElement"],
+    "string(*)" : [] # no positions, leaf node, the actual value is stored in the node id
 }
 
 # G = W x L             x V 
@@ -17,14 +15,11 @@ constructors_positions = {
 EDGE_ID, NODE_ID_FROM, NODE_TYPE_FROM, POSITION_FROM, NODE_ID_TO, NODE_TYPE_TO, STATUS = 0, 1, 2, 3, 4, 5, 6
 
 example = {
-    ("edge0", "node0",  "<body>", "content", "node1", "linkedList", "active"),
-    ("edge1", "node1", "linkedList", "head", "node2", "<a>", "active"),
-    ("edge2", "node2", "<a>", "href", "node3", "attribute", "active"),
-    ("edge3", "node3", "attribute", "value", "node6", 'string("http://example.com")', "active"),
-    ("edge7", "node2", "<a>", "content", "node7", 'string("Click here")', "active"),
-    ("edge4", "node1", "linkedList", "tail", "node4", "linkedList", "active"),
-    ("edge5", "node4", "linkedList", "head", "node5", "<p>", "active"),
-    ("edge6", "node5", "<p>", "content", "node8", 'string("Hello, world!")', "active"),
+    ("edge0", "node0", "<body>", "firstChild", "node1", "<a>", "active"),
+    ("edge1", "node1", "<a>", "attr_href", "node2", 'string("http://example.com")', "active"),
+    ("edge2", "node1", "<a>", "firstChild", "node3", 'string("Click here")', "active"),
+    ("edge3", "node1", "<a>", "nextElement", "node4", "<p>", "active"),
+    ("edge4", "node4", "<p>", "firstChild", "node5", 'string("Hello, world!")', "active"),
 }
 root = "node0"
 root_type = "<body>"
@@ -47,24 +42,22 @@ def render(edges: set, root_node_id: str, root_node_type: str) -> str:
 
     if from_type.startswith("<") and from_type.endswith(">"):
         print(from_type[:-1], end="")
-        attributes_edges = [e for e in edges_from_root if e[NODE_TYPE_TO] == "attribute"]
+        attributes_edges = [e for e in edges_from_root if e[POSITION_FROM].startswith("attr_")]
         for attr_edge in attributes_edges:
-            print(f' {attr_edge[POSITION_FROM]}="', end='')
+            print(f' {attr_edge[POSITION_FROM][5:]}="', end='')
             render(edges, attr_edge[NODE_ID_TO], attr_edge[NODE_TYPE_TO])
             print('"', end="")
         print(">", end="")
-        content_edges = [e for e in edges_from_root if e[POSITION_FROM] == "content"]
-        for content_edge in content_edges:
-            render(edges, content_edge[NODE_ID_TO], content_edge[NODE_TYPE_TO])
+
+        firstChild_edges = [e for e in edges_from_root if e[POSITION_FROM] == "firstChild"]
+        for firstChild_edge in firstChild_edges:
+            render(edges, firstChild_edge[NODE_ID_TO], firstChild_edge[NODE_TYPE_TO])
         print(f"</{from_type[1:-1]}>", end="")
-    
-    if from_type == "linkedList":
-        head_edges = [e for e in edges_from_root if e[POSITION_FROM] == "head"]
-        for head_edge in head_edges:
-            render(edges, head_edge[NODE_ID_TO], head_edge[NODE_TYPE_TO])
-        tail_edges = [e for e in edges_from_root if e[POSITION_FROM] == "tail"]
-        for tail_edge in tail_edges:
-            render(edges, tail_edge[NODE_ID_TO], tail_edge[NODE_TYPE_TO])
+
+        nextElement_edges = [e for e in edges_from_root if e[POSITION_FROM] == "nextElement"]
+        for nextElement_edge in nextElement_edges:
+            render(edges, nextElement_edge[NODE_ID_TO], nextElement_edge[NODE_TYPE_TO])
+
 
 # prints <body><a href="http://example.com">Click here</a><p>Hello, world!</p></body>
 render(example, root, root_type)
