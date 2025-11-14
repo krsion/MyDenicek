@@ -1,75 +1,21 @@
-import { DomNavigator } from "./DomNavigator";
+
 import { useMemo, useState } from "react";
-// Explicit extension because verbatimModuleSyntax + bundler resolution can require it.
-import { JsonMLRenderer, wrapJsonML } from "./JsonML.tsx";
-import type { JsonMLNode } from "./JsonML.tsx";
-import { AutomergeDemo } from "./AutomergeDemo.tsx";
 import { PrimaryButton, DefaultButton, TextField } from "@fluentui/react";
 import { Card } from "@fluentui/react-components";
+import { type AutomergeUrl, useDocument } from "@automerge/react";
+
+import { DomNavigator } from "./DomNavigator";
 import { ElementDetails } from "./ElementDetails.tsx";
+import type { JsonMLNode } from "./JsonML.tsx";
+import { JsonMLRenderer, wrapJsonML } from "./JsonML.tsx";
+import type { JsonMLDoc } from "./main.tsx";
 
-function buildInitialTree(): JsonMLNode {
-  return [
-    "section",
-    { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }, "data-testid": "section" },
-    [
-      "article",
-      { style: { padding: 12, background: "#fff", borderRadius: 8, border: "1px solid #ddd" }, "data-testid": "article-a" },
-      ["h2", "Article A"],
-      [
-        "p",
-        "Lorem ",
-        ["strong", "ipsum"],
-        " dolor sit amet, ",
-        ["em", "consectetur"],
-        " adipiscing elit."
-      ],
-      [
-        "ul",
-        ["li", "Item A1"],
-        ["li", "Item A2"],
-        ["li", "Item A3"],
-      ]
-    ],
-    [
-      "article",
-      { style: { padding: 12, background: "#fff", borderRadius: 8, border: "1px solid #ddd" }, "data-testid": "article-b" },
-      ["h2", "Article B"],
-      [
-        "p",
-        "Sed do eiusmod tempor ",
-        ["code", "incididunt"],
-        " ut labore et dolore magna aliqua."
-      ],
-      [
-        "div",
-        { style: { display: "flex", gap: 8 } },
-        ["button", "Button 1"],
-        ["button", "Button 2"],
-        ["button", "Button 3"],
-      ]
-    ],
-    [
-      "article",
-      { style: { padding: 12, background: "#fff", borderRadius: 8, border: "1px solid #ddd", gridColumn: "span 2" }, "data-testid": "article-c" },
-      ["h2", "Article C"],
-      [
-        "div",
-        { style: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 } },
-        ...Array.from({ length: 9 }).map((_, i) => [
-          "div",
-          { style: { padding: 12, background: "#f7f7f7", border: "1px dashed #ccc", borderRadius: 6 } },
-          `Box ${i + 1}`,
-        ])
-      ]
-    ]
-  ];
-}
 
-export default function App() {
+export const App = ({ docUrl }: { docUrl: AutomergeUrl }) => {
+  const [doc, changeDoc] = useDocument<JsonMLDoc>(docUrl, { suspense: true });
   const [selectedEl, setSelectedEl] = useState<HTMLElement | null>(null);
   const [wrapTag, setWrapTag] = useState("div");
-  const [tree, setTree] = useState<JsonMLNode>(() => buildInitialTree());
+  // const [tree, setTree] = useState<JsonMLNode>();
   const [importText, setImportText] = useState("");
   const [importError, setImportError] = useState<string | null>(null);
 
@@ -103,7 +49,7 @@ export default function App() {
   return (
     <Card appearance="subtle">
       <DomNavigator onSelectedChange={setSelectedEl}>
-        <JsonMLRenderer tree={tree} />
+        <JsonMLRenderer tree={doc.tree} />
       </DomNavigator>
 
       <ElementDetails details={details} />
@@ -122,7 +68,9 @@ export default function App() {
             if (!selectedJsonMLPath) {
               return;
             }
-            setTree((prev) => wrapJsonML(prev, selectedJsonMLPath, tag));
+            changeDoc((prev) => {
+              prev.tree = wrapJsonML(prev.tree, selectedJsonMLPath, tag);
+            });
             // After render select wrapper (same path)
             setTimeout(() => {
               const el = document.querySelector(`[data-jsonml-path='${selectedJsonMLPath}']`) as HTMLElement | null;
@@ -159,7 +107,7 @@ export default function App() {
           <DefaultButton
             type="button"
             onClick={() => {
-              const json = JSON.stringify(tree, null, 2);
+              const json = JSON.stringify(doc, null, 2);
               setImportText(json);
               navigator.clipboard?.writeText(json).catch(() => { });
             }}
@@ -175,7 +123,7 @@ export default function App() {
                 if (!Array.isArray(parsed) || typeof parsed[0] !== "string") {
                   throw new Error("Root must be an array starting with a tag string.");
                 }
-                setTree(parsed as JsonMLNode);
+                changeDoc(_ => parsed as JsonMLNode);
                 // Reset selection
                 setSelectedEl(null);
               } catch (err: any) {
@@ -195,8 +143,6 @@ export default function App() {
         {importError && <div style={{ marginTop: 6, color: "#b91c1c" }}>Import error: {importError}</div>}
         {!importError && importText && <div style={{ marginTop: 6, fontSize: 11, color: "#64748b" }}>Ready to import (root tag: {(() => { try { const p = JSON.parse(importText); return Array.isArray(p) && typeof p[0] === 'string' ? p[0] : 'invalid'; } catch { return 'invalid'; } })()})</div>}
       </Card>
-
-      <AutomergeDemo />
     </Card>
   );
 }
