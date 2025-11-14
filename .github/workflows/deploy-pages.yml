@@ -24,13 +24,11 @@ jobs:
           npm ci
           npm run build
 
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v3
-
-      - name: Upload artifact (site)
-        uses: actions/upload-pages-artifact@v1
+      - name: Deploy to GitHub Pages (gh-pages branch)
+        # Use an action that publishes by pushing to the gh-pages branch
+        # This avoids using the artifact upload which depends on deprecated upload-artifact v3
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          path: ./dom-navigator/dist
-
-      - name: Deploy to GitHub Pages
-        uses: actions/deploy-pages@v1
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dom-navigator/dist
+          publish_branch: gh-pages
