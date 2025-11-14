@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 // Explicit extension because verbatimModuleSyntax + bundler resolution can require it.
 import { JsonMLRenderer, wrapJsonML } from "./JsonML.tsx";
 import type { JsonMLNode } from "./JsonML.tsx";
+import { AutomergeDemo } from "./AutomergeDemo.tsx";
 
 function buildInitialTree(): JsonMLNode {
   return [
@@ -240,6 +241,11 @@ export default function App() {
         {importError && <div style={{ marginTop: 6, color: "#b91c1c" }}>Import error: {importError}</div>}
         {!importError && importText && <div style={{ marginTop: 6, fontSize: 11, color: "#64748b" }}>Ready to import (root tag: {(() => { try { const p = JSON.parse(importText); return Array.isArray(p) && typeof p[0] === 'string' ? p[0] : 'invalid'; } catch { return 'invalid'; } })()})</div>}
       </div>
+
+  {/* Automerge Network Sync Demo */}
+  <AutomergeDemo />
     </div>
   );
 }
+
+
