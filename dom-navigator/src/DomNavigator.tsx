@@ -64,9 +64,9 @@ export function DomNavigator({ children, onSelectedChange }: { children: React.R
 
   function firstElementChildOf(el: HTMLElement | null): HTMLElement | null {
     if (!el) return null;
-    let c = el.firstElementChild as HTMLElement | null;
-    while (c && !(c instanceof HTMLElement)) c = c.nextElementSibling as HTMLElement | null;
-    return c;
+    let c: Element | null = el.firstElementChild;
+    while (c && !(c instanceof HTMLElement)) c = c.nextElementSibling;
+    return c instanceof HTMLElement ? c : null;
   }
 
   function prevSibling(el: HTMLElement | null): HTMLElement | null {
