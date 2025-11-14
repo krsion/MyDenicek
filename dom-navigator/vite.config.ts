@@ -5,6 +5,9 @@ import topLevelAwait from 'vite-plugin-top-level-await'
 
 // https://vite.dev/config/
 export default defineConfig({
+  // When deploying to GitHub Pages under a project site (username.github.io/mywebnicek)
+  // set the base to the repository path so assets are referenced correctly.
+  base: '/mywebnicek/',
   plugins: [
     react({
       babel: {

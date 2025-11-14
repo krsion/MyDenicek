@@ -1,0 +1,36 @@
+name: Build and Deploy dom-navigator to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install and build dom-navigator
+        working-directory: ./dom-navigator
+        run: |
+          npm ci
+          npm run build
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v3
+
+      - name: Upload artifact (site)
+        uses: actions/upload-pages-artifact@v1
+        with:
+          path: ./dom-navigator/dist
+
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v1
