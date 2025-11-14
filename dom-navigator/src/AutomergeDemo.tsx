@@ -1,4 +1,5 @@
 import { IndexedDBStorageAdapter, Repo, RepoContext, WebSocketClientAdapter, isValidAutomergeUrl, DocHandle, type AutomergeUrl, useDocument } from '@automerge/react';
+import { PrimaryButton } from "@fluentui/react";
 const repo = new Repo({
   network: [new WebSocketClientAdapter("wss://sync.automerge.org/")],
   storage: new IndexedDBStorageAdapter()
@@ -30,7 +31,7 @@ const Foo = ({ docUrl }: { docUrl: AutomergeUrl }) => {
   const [doc, changeDoc] = useDocument<FooDoc>(docUrl, { suspense: true });
   return (
     <div>Hello, {doc.foo}
-      <button onClick={() => changeDoc(d => { d.foo = d.foo === "bar" ? "baz" : "bar"; })}>Toggle</button>
+      <PrimaryButton onClick={() => changeDoc(d => { d.foo = d.foo === "bar" ? "baz" : "bar"; })}>Toggle</PrimaryButton>
     </div>
   );
 };

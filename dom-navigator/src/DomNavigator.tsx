@@ -1,7 +1,7 @@
 
 
 import React, { useRef, useState, useEffect, useLayoutEffect } from "react";
-import { PrettyKeyboardButton } from "./PrettyKeyboardButton";
+import { Tag, TagGroup, Card } from "@fluentui/react-components";
 
 /** Wrap your content with <DomNavigator> to enable navigation/highlighting within it. */
 
@@ -159,24 +159,16 @@ export function DomNavigator({ children, onSelectedChange }: { children: React.R
 
 
   return (
-    <div ref={wrapperRef} style={{ position: "relative", margin: 16 }}>
-      {/* Navigation help */}
-      <div
-        style={{
-          fontSize: 12,
-          color: "#333",
-          background: "#eef2ff",
-          border: "1px solid #c7d2fe",
-          borderRadius: 8,
-          padding: "8px 10px",
-          display: "inline-flex",
-          gap: 10,
-          alignItems: "center",
-          marginBottom: 8,
-        }}
-      >
-        <PrettyKeyboardButton>←</PrettyKeyboardButton> Parent <PrettyKeyboardButton>→</PrettyKeyboardButton> First child <PrettyKeyboardButton>↑</PrettyKeyboardButton> Prev sibling <PrettyKeyboardButton>↓</PrettyKeyboardButton> Next sibling <PrettyKeyboardButton>Esc</PrettyKeyboardButton> Clear
-      </div>
+    <Card ref={wrapperRef} appearance="filled-alternative">
+      <TagGroup>
+        <TagGroup>
+          <Tag>←&nbsp;Parent</Tag>
+          <Tag>→&nbsp;First child</Tag>
+          <Tag>↑&nbsp;Prev sibling</Tag>
+          <Tag>↓&nbsp;Next sibling</Tag>
+          <Tag>Esc&nbsp;Clear</Tag>
+        </TagGroup>
+      </TagGroup>
 
       {/* The navigable container */}
       <div
@@ -184,15 +176,6 @@ export function DomNavigator({ children, onSelectedChange }: { children: React.R
         tabIndex={0}
         onKeyDown={handleKeyDown}
         onClick={handleClick}
-        style={{
-          position: "relative",
-          outline: "none",
-          background: "#f3f4f6",
-          border: "1px solid #e5e7eb",
-          padding: 16,
-          borderRadius: 12,
-          minHeight: 240,
-        }}
       >
         {children}
       </div>
@@ -235,6 +218,6 @@ export function DomNavigator({ children, onSelectedChange }: { children: React.R
           </div>
         </div>
       )}
-    </div>
+    </Card>
   );
 }
