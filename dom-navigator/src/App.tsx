@@ -6,8 +6,7 @@ import { type AutomergeUrl, useDocument } from "@automerge/react";
 
 import { DomNavigator } from "./DomNavigator";
 import { ElementDetails } from "./ElementDetails.tsx";
-import type { JsonMLNode } from "./JsonML.tsx";
-import { JsonMLRenderer, wrapJsonML } from "./JsonML.tsx";
+import { JsonMLRenderer, wrapJsonMLMutable } from "./JsonML.tsx";
 import type { JsonMLDoc } from "./main.tsx";
 
 
@@ -40,8 +39,9 @@ export const App = ({ docUrl }: { docUrl: AutomergeUrl }) => {
       depth++;
     }
     const path = pathParts.join("/");
+    const guid = selectedEl.getAttribute("data-jsonml-path") || null;
 
-    return { tag, id, classes, width, height, dataTestId, text, path };
+    return { tag, id, guid, classes, width, height, dataTestId, text, path };
   }, [selectedEl]);
 
   const selectedJsonMLPath = selectedEl?.getAttribute("data-jsonml-path") || null;
@@ -69,7 +69,9 @@ export const App = ({ docUrl }: { docUrl: AutomergeUrl }) => {
               return;
             }
             changeDoc((prev) => {
-              prev.tree = wrapJsonML(prev.tree, selectedJsonMLPath, tag);
+              // mutate the proxied `tree` in-place to avoid assigning objects that reference
+              // existing document proxies (Automerge will reject those).
+              wrapJsonMLMutable(prev.tree, selectedJsonMLPath, tag);
             });
             // After render select wrapper (same path)
             setTimeout(() => {
@@ -120,10 +122,7 @@ export const App = ({ docUrl }: { docUrl: AutomergeUrl }) => {
               setImportError(null);
               try {
                 const parsed = JSON.parse(importText);
-                if (!Array.isArray(parsed) || typeof parsed[0] !== "string") {
-                  throw new Error("Root must be an array starting with a tag string.");
-                }
-                changeDoc(_ => parsed as JsonMLNode);
+                changeDoc(_ => parsed);
                 // Reset selection
                 setSelectedEl(null);
               } catch (err: any) {
@@ -141,7 +140,33 @@ export const App = ({ docUrl }: { docUrl: AutomergeUrl }) => {
           placeholder="JsonML JSON here"
         />
         {importError && <div style={{ marginTop: 6, color: "#b91c1c" }}>Import error: {importError}</div>}
-        {!importError && importText && <div style={{ marginTop: 6, fontSize: 11, color: "#64748b" }}>Ready to import (root tag: {(() => { try { const p = JSON.parse(importText); return Array.isArray(p) && typeof p[0] === 'string' ? p[0] : 'invalid'; } catch { return 'invalid'; } })()})</div>}
+        {!importError && importText && (
+          <div style={{ marginTop: 6, fontSize: 11, color: "#64748b" }}>
+            Ready to import (
+            {(() => {
+              try {
+                const p = JSON.parse(importText);
+                if (Array.isArray(p) && typeof p[0] === "string") {
+                  return `root tag: ${p[0]}`;
+                }
+                if (
+                  typeof p === "object" &&
+                  p !== null &&
+                  "nodes" in p &&
+                  "edges" in p &&
+                  Array.isArray(p.nodes) &&
+                  Array.isArray(p.edges)
+                ) {
+                  return `nodes: ${p.nodes.length}, edges: ${p.edges.length}`;
+                }
+                return "invalid";
+              } catch {
+                return "invalid";
+              }
+            })()}
+            )
+          </div>
+        )}
       </Card>
     </Card>
   );
