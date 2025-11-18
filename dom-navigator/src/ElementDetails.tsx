@@ -1,12 +1,16 @@
 import { Card, Table, TableRow, TableCell, TableBody } from "@fluentui/react-components";
 
-export function ElementDetails({ details }: { details: { tag: string; id: string | null; classes: string[]; width: number; height: number; dataTestId: string | null; text: string; path: string; } | null }) {
+export function ElementDetails({ details }: { details: { tag: string; id: string | null; guid?: string | null; classes: string[]; width: number; height: number; dataTestId: string | null; text: string; path: string; } | null }) {
   return <Card>
     <Table size="extra-small">
       <TableBody>
         <TableRow>
           <TableCell>Tag</TableCell>
           <TableCell>{details?.tag}</TableCell>
+        </TableRow>
+        <TableRow>
+          <TableCell>GUID</TableCell>
+          <TableCell>{details?.guid ?? <span style={{ color: "#999" }}>(none)</span>}</TableCell>
         </TableRow>
         <TableRow>
           <TableCell>Id</TableCell>
