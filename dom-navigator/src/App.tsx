@@ -5,9 +5,10 @@ import { type AutomergeUrl, useDocument } from "@automerge/react";
 
 import { DomNavigator } from "./DomNavigator";
 import { ElementDetails } from "./ElementDetails.tsx";
-import { wrapNode, type JsonDoc } from "./Document.ts";
+import { wrapNode, renameNode, type JsonDoc } from "./Document.ts";
 import { RenderedDocument } from "./RenderedDocument.tsx";
-import { WrapForm } from "./WrapForm.tsx";
+import { TagForm } from "./TagForm.tsx";
+import { Stack } from "@fluentui/react";
 
 export const App = ({ docUrl }: { docUrl: AutomergeUrl }) => {
   const [doc, changeDoc] = useDocument<JsonDoc>(docUrl, { suspense: true });
@@ -49,11 +50,20 @@ export const App = ({ docUrl }: { docUrl: AutomergeUrl }) => {
 
       <ElementDetails details={details} />
 
-      <WrapForm selectedNodeGuid={selectedNodeGuid} onSubmit={(tag) => {
+      <Stack horizontal tokens={{ childrenGap: 16 }}>
+
+      <TagForm selectedNodeGuid={selectedNodeGuid} onSubmit={(tag) => {
         changeDoc((prev: JsonDoc) => {
           wrapNode(prev, selectedNodeGuid!, tag);
         });
-      }} />
+      }} label="Wrap in" buttonText="Wrap" />
+
+      <TagForm selectedNodeGuid={selectedNodeGuid} onSubmit={(tag) => {
+        changeDoc((prev: JsonDoc) => {
+          renameNode(prev, selectedNodeGuid!, tag);
+        });
+      }} label="Rename tag to" buttonText="Rename" />
+      </Stack>
     </Card>
   );
 }

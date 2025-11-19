@@ -30,7 +30,6 @@ export function buildMaps(doc: JsonDoc) {
   return { nodesById, childrenMap };
 }
 
-// Mutable variant for use inside Automerge `change` callbacks. Mutates doc in-place.
 export function wrapNode(doc: JsonDoc, targetId: string, wrapperTag: string): void {
   const nodes = doc.nodes;
   const edges = doc.edges;
@@ -53,6 +52,12 @@ export function wrapNode(doc: JsonDoc, targetId: string, wrapperTag: string): vo
 
   // wrapper -> target
   edges.push({ parent: wrapperId, child: targetId });
+}
+
+export function renameNode(doc: JsonDoc, targetId: string, newTag: string): void {
+  const node = doc.nodes.find((n) => n.id === targetId);
+  if (!node) return;
+  node.tag = newTag;
 }
 
 export function initialDocument(): JsonDoc | undefined {
@@ -123,3 +128,15 @@ export function initialDocument(): JsonDoc | undefined {
   };
 }
 
+const experiment: any = ([
+  {tag: 'ul', initialChildTag: 'li', children: [
+    {version: 0, tag: 'li', children: ['Hello']}, 
+    {version: 1, tag: 'td', children: ['World']},
+    {version: 2, tag: 'tr', children: [
+      {tag: 'td', children: ['!']}
+    ]}
+  ], childTransformations: [
+    {version: 0, type: 'rename', tag: 'td'},
+    {version: 1, type: 'wrap', tag: 'tr'}
+  ]}
+])
