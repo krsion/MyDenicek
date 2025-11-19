@@ -48,7 +48,7 @@ function latestVersionForParent(doc: JsonDoc, parent: string | null) {
   return max;
 }
 
-export function wrapNode(doc: JsonDoc, targetId: string, wrapperTag: string): void {
+export function wrapNode(doc: JsonDoc, targetId: string, wrapperTag: string, appliedVersion?: number): void {
   const nodes = doc.nodes;
   const edges = doc.edges;
 
@@ -61,15 +61,18 @@ export function wrapNode(doc: JsonDoc, targetId: string, wrapperTag: string): vo
   const parentEdgeIndex = edges.findIndex((e) => e.child === targetId);
   const parent = parentEdgeIndex >= 0 ? edges[parentEdgeIndex].parent : null;
 
+  const parentEdgeVersion = appliedVersion ?? latestVersionForParent(doc, parent);
+
   if (parentEdgeIndex >= 0) {
     // replace parent->target with parent->wrapper
-    edges.splice(parentEdgeIndex, 1, { parent, child: wrapperId, version: latestVersionForParent(doc, parent) });
+    edges.splice(parentEdgeIndex, 1, { parent, child: wrapperId, version: parentEdgeVersion });
   } else {
-    edges.push({ parent: null, child: wrapperId, version: latestVersionForParent(doc, null) });
+    edges.push({ parent: null, child: wrapperId, version: parentEdgeVersion });
   }
 
   // wrapper -> target
-  edges.push({ parent: wrapperId, child: targetId, version: latestVersionForParent(doc, wrapperId) });
+  const wrapperEdgeVersion = appliedVersion ?? latestVersionForParent(doc, wrapperId);
+  edges.push({ parent: wrapperId, child: targetId, version: wrapperEdgeVersion });
 }
 
 export function renameNode(doc: JsonDoc, targetId: string, newTag: string): void {
@@ -93,6 +96,27 @@ export function addTransformation(doc: JsonDoc, parent: string | null, type: "wr
   const current = latestVersionForParent(doc, parent);
   const t: Transformation = { parent, version: current + 1, type, tag };
   doc.transformations.push(t);
+
+  // eagerly apply the transformation to existing children of the parent
+  const edges = doc.edges;
+  const children = edges.filter((e) => e.parent === parent);
+  for (const e of children) {
+    const childVersion = e.version ?? 0;
+    if (childVersion >= t.version) continue;
+
+    if (t.type === "rename") {
+      renameNode(doc, e.child, t.tag);
+
+      // mark this child as having seen the transformation
+      // find the edge object in edges and update its version
+      const idx = edges.findIndex((x) => x.parent === e.parent && x.child === e.child);
+      if (idx >= 0) edges[idx].version = t.version;
+    } else if (t.type === "wrap") {
+      // wrapping may replace the parent->child edge with parent->wrapper and add wrapper->child
+      // wrapNode accepts an optional appliedVersion to stamp created edges
+      wrapNode(doc, e.child, t.tag, t.version);
+    }
+  }
 }
 
 export function addChildNode(doc: JsonDoc, parentId: string | null, tag: string) {
