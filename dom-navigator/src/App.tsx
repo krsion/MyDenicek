@@ -1,5 +1,5 @@
 
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Card, Switch } from "@fluentui/react-components";
 import { type AutomergeUrl, useDocument } from "@automerge/react";
 
