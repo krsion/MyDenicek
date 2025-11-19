@@ -5,7 +5,8 @@ import { type AutomergeUrl, useDocument } from "@automerge/react";
 
 import { DomNavigator } from "./DomNavigator";
 import { ElementDetails } from "./ElementDetails.tsx";
-import { wrapNode, renameNode, addTransformation, type JsonDoc } from "./Document.ts";
+import { wrapNode, renameNode, addTransformation, addChildNode, setNodeValue, type JsonDoc } from "./Document.ts";
+import { ValueForm } from "./ValueForm";
 import { RenderedDocument } from "./RenderedDocument.tsx";
 import { TagForm } from "./TagForm.tsx";
 import { Stack } from "@fluentui/react";
@@ -23,22 +24,13 @@ export const App = ({ docUrl }: { docUrl: AutomergeUrl }) => {
     const width = Math.round(rect.width);
     const height = Math.round(rect.height);
     const dataTestId = selectedEl.getAttribute("data-testid");
-    const text = (selectedEl.innerText || "").replace(/\s+/g, " ").trim().slice(0, 120);
-
-    const pathParts: string[] = [];
-    let node: HTMLElement | null = selectedEl;
-    let depth = 0;
-    while (node) {
-      const part = `${node.tagName.toLowerCase()}${node.id ? `#${node.id}` : ""}`;
-      pathParts.unshift(part);
-      node = node.parentElement;
-      depth++;
-    }
-    const path = pathParts.join("/");
     const guid = selectedEl.getAttribute("data-node-guid") || null;
+    // pull the node.value from the document model if available
+    const modelNode = guid ? doc.nodes.find((n) => n.id === guid) : undefined;
+    const value = modelNode ? (modelNode.value as string | number | undefined) : undefined;
 
-    return { tag, id, guid, classes, width, height, dataTestId, text, path };
-  }, [selectedEl]);
+    return { tag, id, guid, classes, width, height, dataTestId, value };
+  }, [selectedEl, doc]);
 
   const selectedNodeGuid = selectedEl?.getAttribute("data-node-guid") || null;
 
@@ -77,6 +69,20 @@ export const App = ({ docUrl }: { docUrl: AutomergeUrl }) => {
           addTransformation(prev, selectedNodeGuid!, "rename", tag);
         });
       }} label="Rename all children tags to" buttonText="Rename" />
+
+      <TagForm selectedNodeGuid={selectedNodeGuid} onSubmit={(tag) => {
+        changeDoc((prev: JsonDoc) => {
+          if (!selectedNodeGuid) return;
+          addChildNode(prev, selectedNodeGuid!, tag);
+        });
+      }} label="Add child element" buttonText="Add" />
+
+      <ValueForm selectedNodeGuid={selectedNodeGuid} onSubmit={(v) => {
+        changeDoc((prev: JsonDoc) => {
+          if (!selectedNodeGuid) return;
+          setNodeValue(prev, selectedNodeGuid!, v);
+        });
+      }} label="Edit text content" buttonText="Set" />
       </Stack>
     </Card>
   );
