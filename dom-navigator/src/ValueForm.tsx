@@ -2,23 +2,16 @@ import { PrimaryButton } from "@fluentui/react";
 import { Card, Input, Field } from "@fluentui/react-components";
 import { useCallback, useState, useEffect } from "react";
 
-export function ValueForm({ selectedNodeGuid, onSubmit, label, buttonText }: { selectedNodeGuid: string | null; onSubmit: (value: string) => void; label: string; buttonText: string; }) {
-  const [value, setValue] = useState("");
+export function ValueForm({ selectedNodeGuid, currentValue, onSubmit, label, buttonText }: { selectedNodeGuid: string | null; currentValue?: string | number; onSubmit: (value: string) => void; label: string; buttonText: string; }) {
+  const [value, setValue] = useState(currentValue === undefined || currentValue === null ? "" : String(currentValue));
 
   useEffect(() => {
-    // When selection changes, try to populate the current node's text content as a convenience.
-    if (!selectedNodeGuid) {
+    if (currentValue === undefined || currentValue === null) {
       setValue("");
-      return;
+    } else {
+      setValue(String(currentValue));
     }
-    const el = document.querySelector(`[data-node-guid='${selectedNodeGuid}']`) as HTMLElement | null;
-    if (!el) {
-      setValue("");
-      return;
-    }
-    // Use innerText as the editable value (this reflects rendered content)
-    setValue((el.innerText || "").replace(/\s+/g, " ").trim());
-  }, [selectedNodeGuid]);
+  }, [selectedNodeGuid, currentValue]);
 
   const onClick = useCallback(() => {
     if (!selectedNodeGuid) return;

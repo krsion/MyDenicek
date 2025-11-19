@@ -77,7 +77,7 @@ export const App = ({ docUrl }: { docUrl: AutomergeUrl }) => {
         });
       }} label="Add child element" buttonText="Add" />
 
-      <ValueForm selectedNodeGuid={selectedNodeGuid} onSubmit={(v) => {
+      <ValueForm selectedNodeGuid={selectedNodeGuid} currentValue={details?.value} onSubmit={(v) => {
         changeDoc((prev: JsonDoc) => {
           if (!selectedNodeGuid) return;
           setNodeValue(prev, selectedNodeGuid!, v);
