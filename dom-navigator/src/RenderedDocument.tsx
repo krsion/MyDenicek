@@ -30,8 +30,31 @@ export function RenderedDocument({ tree }: { tree: JsonDoc; }) {
     for (let i = 0; i < children.length; i++) {
       const e = children[i];
       const rendered = renderById(e.child, `${path}.${i}`);
-      if (React.isValidElement(rendered)) renderedChildren.push(React.cloneElement(rendered, { key: e.child }));
-      else renderedChildren.push(rendered);
+
+      // Determine transformations for this parent
+      const allTransforms = (tree.transformations || []).filter((t) => t.parent === node.id).sort((a, b) => a.version - b.version);
+      const childVersion = e.version ?? 0;
+      const toApply = allTransforms.filter((t) => t.version > childVersion);
+
+      // Apply transforms in order to the rendered node (renderer-only)
+      let transformed: React.ReactNode = rendered;
+      for (const t of toApply) {
+        if (t.type === "rename") {
+          if (React.isValidElement(transformed) && typeof transformed.type === "string") {
+            const el = transformed as React.ReactElement<any>;
+            const props = { ...(el.props || {}) };
+            const childrenProp = props.children;
+            transformed = React.createElement(t.tag, props, childrenProp);
+          } else {
+            // nothing to rename (text node or fragment)
+          }
+        } else if (t.type === "wrap") {
+          transformed = React.createElement(t.tag, {}, transformed);
+        }
+      }
+
+      if (React.isValidElement(transformed)) renderedChildren.push(React.cloneElement(transformed, { key: e.child }));
+      else renderedChildren.push(transformed);
     }
     return React.createElement(tag, attrs, ...renderedChildren);
   }

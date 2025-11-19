@@ -9,11 +9,20 @@ export type Node = {
 export type Edge = {
   parent: string | null; // null => root-level
   child: string; // node id
+  version?: number; // version of transformations applied when this child was added
 };
 
 export type JsonDoc = {
   nodes: Node[];
   edges: Edge[];
+  transformations?: Transformation[];
+};
+
+export type Transformation = {
+  parent: string | null;
+  version: number; // 1-based incrementing version for this parent
+  type: "wrap" | "rename";
+  tag: string;
 };
 
 export function buildMaps(doc: JsonDoc) {
@@ -28,6 +37,15 @@ export function buildMaps(doc: JsonDoc) {
   // sort children by position in nodes list
   for (const arr of childrenMap.values()) arr.sort((a, b) => (nodesOrder.get(a.child) ?? 0) - (nodesOrder.get(b.child) ?? 0));
   return { nodesById, childrenMap };
+}
+
+function latestVersionForParent(doc: JsonDoc, parent: string | null) {
+  const t = doc.transformations || [];
+  let max = 0;
+  for (const x of t) {
+    if (x.parent === parent && x.version > max) max = x.version;
+  }
+  return max;
 }
 
 export function wrapNode(doc: JsonDoc, targetId: string, wrapperTag: string): void {
@@ -45,19 +63,26 @@ export function wrapNode(doc: JsonDoc, targetId: string, wrapperTag: string): vo
 
   if (parentEdgeIndex >= 0) {
     // replace parent->target with parent->wrapper
-    edges.splice(parentEdgeIndex, 1, { parent, child: wrapperId });
+    edges.splice(parentEdgeIndex, 1, { parent, child: wrapperId, version: latestVersionForParent(doc, parent) });
   } else {
-    edges.push({ parent: null, child: wrapperId });
+    edges.push({ parent: null, child: wrapperId, version: latestVersionForParent(doc, null) });
   }
 
   // wrapper -> target
-  edges.push({ parent: wrapperId, child: targetId });
+  edges.push({ parent: wrapperId, child: targetId, version: latestVersionForParent(doc, wrapperId) });
 }
 
 export function renameNode(doc: JsonDoc, targetId: string, newTag: string): void {
   const node = doc.nodes.find((n) => n.id === targetId);
   if (!node) return;
   node.tag = newTag;
+}
+
+export function addTransformation(doc: JsonDoc, parent: string | null, type: "wrap" | "rename", tag: string) {
+  if (!doc.transformations) doc.transformations = [];
+  const current = latestVersionForParent(doc, parent);
+  const t: Transformation = { parent, version: current + 1, type, tag };
+  doc.transformations.push(t);
 }
 
 export function initialDocument(): JsonDoc | undefined {
@@ -127,16 +152,3 @@ export function initialDocument(): JsonDoc | undefined {
     ]
   };
 }
-
-const experiment: any = ([
-  {tag: 'ul', initialChildTag: 'li', children: [
-    {version: 0, tag: 'li', children: ['Hello']}, 
-    {version: 1, tag: 'td', children: ['World']},
-    {version: 2, tag: 'tr', children: [
-      {tag: 'td', children: ['!']}
-    ]}
-  ], childTransformations: [
-    {version: 0, type: 'rename', tag: 'td'},
-    {version: 1, type: 'wrap', tag: 'tr'}
-  ]}
-])
