@@ -23,7 +23,7 @@ export function TagForm({ selectedNodeGuid, onSubmit, label, buttonText }: { sel
   }, [selectedNodeGuid, tag, onSubmit]);
 
   return (
-    <Card>
+    <Card style={{ minWidth: 240 }}>
       <Field label={label} orientation="vertical" hint={"Common tags: div, section, article, span, p"}>
         <Input
           value={tag}

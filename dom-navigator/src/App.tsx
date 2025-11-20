@@ -66,7 +66,7 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
 
       <ElementDetails details={details} />
 
-      <Stack horizontal tokens={{ childrenGap: 16 }}>
+      <Stack horizontal wrap tokens={{ childrenGap: 8 }}>
 
         <TagForm selectedNodeGuid={selectedNodeGuid} onSubmit={(tag) => {
           changeDoc((prev: JsonDoc) => {
