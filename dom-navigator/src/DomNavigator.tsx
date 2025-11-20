@@ -40,6 +40,25 @@ export function DomNavigator({ children, onSelectedChange, selectedElement }: { 
     if (selected) positionOverlay(selected);
   }, [selected]);
 
+  // Recompute overlay when the selected element resizes (e.g. text edit changed dimensions)
+  useEffect(() => {
+    if (!selected) return;
+    // Use ResizeObserver when available to update overlay on size changes
+    let ro: ResizeObserver | null = null;
+    try {
+      ro = new ResizeObserver(() => positionOverlay(selected));
+      ro.observe(selected);
+    } catch (err) {
+      // ResizeObserver may not be supported in some environments; fall back to window resize
+      const onWin = () => positionOverlay(selected);
+      window.addEventListener("resize", onWin, { passive: true });
+      return () => window.removeEventListener("resize", onWin);
+    }
+    return () => {
+      if (ro) ro.disconnect();
+    };
+  }, [selected]);
+
   function positionOverlay(el: HTMLElement) {
     const wrapper = wrapperRef.current;
     if (!wrapper) return;
