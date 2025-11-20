@@ -1,4 +1,4 @@
-import { Card, Table, TableRow, TableCell, TableBody } from "@fluentui/react-components";
+import { Card, Table, TableBody, TableCell, TableRow } from "@fluentui/react-components";
 
 export function ElementDetails({ details }: { details: { tag: string; id: string | null; guid?: string | null; classes: string[]; width: number; height: number; dataTestId: string | null; value?: string | number; } | null }) {
   return <Card>

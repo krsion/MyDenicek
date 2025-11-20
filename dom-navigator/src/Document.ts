@@ -2,7 +2,7 @@
 export type Node = {
   id: string;
   tag?: string; // element tag (e.g. 'div', 'p'); absent for text-only fragments
-  attrs?: Record<string, any>;
+  attrs?: Record<string, unknown>;
   value?: string | number; // textual content
 };
 
@@ -48,6 +48,11 @@ function latestVersionForParent(doc: JsonDoc, parent: string | null) {
   return max;
 }
 
+const getUUID = () => {
+  const c = (globalThis as unknown as { crypto?: { randomUUID?: () => string } }).crypto;
+  return c && typeof c.randomUUID === 'function' ? c.randomUUID() : Date.now().toString(36);
+};
+
 export function wrapNode(doc: JsonDoc, targetId: string, wrapperTag: string, appliedVersion?: number): void {
   const nodes = doc.nodes;
   const edges = doc.edges;
@@ -55,7 +60,7 @@ export function wrapNode(doc: JsonDoc, targetId: string, wrapperTag: string, app
   const targetIndex = nodes.findIndex((n) => n.id === targetId);
   if (targetIndex === -1) return;
 
-  const wrapperId = `w_${typeof crypto !== "undefined" && (crypto as any).randomUUID ? (crypto as any).randomUUID() : Date.now().toString(36)}`;
+  const wrapperId = `w_${getUUID()}`;
   nodes.splice(targetIndex, 0, { id: wrapperId, tag: wrapperTag, attrs: {} });
 
   const parentEdgeIndex = edges.findIndex((e) => e.child === targetId);
@@ -122,7 +127,7 @@ export function addTransformation(doc: JsonDoc, parent: string | null, type: "wr
 export function addChildNode(doc: JsonDoc, parentId: string | null, tag: string) {
   const nodes = doc.nodes;
   const edges = doc.edges;
-  const id = `n_${typeof crypto !== "undefined" && (crypto as any).randomUUID ? (crypto as any).randomUUID() : Date.now().toString(36)}`;
+  const id = `n_${getUUID()}`;
   const node: Node = { id, tag, attrs: {} };
   nodes.push(node);
 

@@ -1,15 +1,15 @@
 
-import { useMemo, useState } from "react";
-import { Card, CardHeader, Switch, Tag, TagGroup } from "@fluentui/react-components";
 import { type AutomergeUrl, useDocument } from "@automerge/react";
+import { Stack } from "@fluentui/react";
+import { Card, CardHeader, Switch, Tag, TagGroup } from "@fluentui/react-components";
+import { useMemo, useState } from "react";
 
+import { addChildNode, addTransformation, type JsonDoc, renameNode, setNodeValue, wrapNode } from "./Document.ts";
 import { DomNavigator } from "./DomNavigator";
 import { ElementDetails } from "./ElementDetails.tsx";
-import { wrapNode, renameNode, addTransformation, addChildNode, setNodeValue, type JsonDoc } from "./Document.ts";
-import { ValueForm } from "./ValueForm";
 import { RenderedDocument } from "./RenderedDocument.tsx";
 import { TagForm } from "./TagForm.tsx";
-import { Stack } from "@fluentui/react";
+import { ValueForm } from "./ValueForm";
 
 export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl, onConnect: () => void, onDisconnect: () => void }) => {
   const [doc, changeDoc] = useDocument<JsonDoc>(docUrl, { suspense: true });

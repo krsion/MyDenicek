@@ -1,10 +1,11 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import { App } from './App.tsx'
-import { initializeIcons } from '@fluentui/react'
+import { DocHandle, IndexedDBStorageAdapter, isValidAutomergeUrl, Repo, RepoContext, WebSocketClientAdapter } from '@automerge/react';
+import { initializeIcons } from '@fluentui/react';
 import { FluentProvider, webLightTheme } from '@fluentui/react-components';
-import { IndexedDBStorageAdapter, Repo, RepoContext, WebSocketClientAdapter, isValidAutomergeUrl, DocHandle } from '@automerge/react';
-import { initialDocument, type JsonDoc } from './Document.ts'
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+
+import { App } from './App.tsx';
+import { initialDocument, type JsonDoc } from './Document.ts';
 const repo = new Repo({
   network: [new WebSocketClientAdapter("wss://sync.automerge.org/")],
   storage: new IndexedDBStorageAdapter()

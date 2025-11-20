@@ -1,6 +1,6 @@
 
 
-import React, { useRef, useState, useEffect, useLayoutEffect } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 /** Wrap your content with <DomNavigator> to enable navigation/highlighting within it. */
 
@@ -16,6 +16,22 @@ export function DomNavigator({ children, onSelectedChange, selectedElement }: { 
     visible: boolean;
     label: string;
   }>({ top: 0, left: 0, width: 0, height: 0, visible: false, label: "" });
+
+  const positionOverlay = useCallback((el: HTMLElement) => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+    const s = el.getBoundingClientRect();
+    const w = wrapper.getBoundingClientRect();
+    const label = describe(el);
+    setOverlay({
+      top: s.top - w.top,
+      left: s.left - w.left,
+      width: s.width,
+      height: s.height,
+      visible: true,
+      label,
+    });
+  }, []);
 
   // Focus the container so it can capture keyboard events
   useEffect(() => {
@@ -49,11 +65,11 @@ export function DomNavigator({ children, onSelectedChange, selectedElement }: { 
       window.removeEventListener("scroll", onWinChange);
       window.removeEventListener("resize", onWinChange);
     };
-  }, [selected]);
+  }, [positionOverlay, selected]);
 
   useLayoutEffect(() => {
     if (selected) positionOverlay(selected);
-  }, [selected]);
+  }, [positionOverlay, selected]);
 
   // Recompute overlay when the selected element resizes (e.g. text edit changed dimensions)
   useEffect(() => {
@@ -63,7 +79,7 @@ export function DomNavigator({ children, onSelectedChange, selectedElement }: { 
     try {
       ro = new ResizeObserver(() => positionOverlay(selected));
       ro.observe(selected);
-    } catch (err) {
+    } catch  {
       // ResizeObserver may not be supported in some environments; fall back to window resize
       const onWin = () => positionOverlay(selected);
       window.addEventListener("resize", onWin, { passive: true });
@@ -72,23 +88,8 @@ export function DomNavigator({ children, onSelectedChange, selectedElement }: { 
     return () => {
       if (ro) ro.disconnect();
     };
-  }, [selected]);
+  }, [positionOverlay, selected]);
 
-  function positionOverlay(el: HTMLElement) {
-    const wrapper = wrapperRef.current;
-    if (!wrapper) return;
-    const s = el.getBoundingClientRect();
-    const w = wrapper.getBoundingClientRect();
-    const label = describe(el);
-    setOverlay({
-      top: s.top - w.top,
-      left: s.left - w.left,
-      width: s.width,
-      height: s.height,
-      visible: true,
-      label,
-    });
-  }
 
   function withinContainer(el: Element | null): el is HTMLElement {
     if (!el || !(el instanceof HTMLElement)) return false;
@@ -141,7 +142,7 @@ export function DomNavigator({ children, onSelectedChange, selectedElement }: { 
       // ensure keyboard focus for further navigation
       containerRef.current?.focus();
     }
-  }, [selectedElement]);
+  }, [positionOverlay, selectedElement]);
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (!containerRef.current) return;
