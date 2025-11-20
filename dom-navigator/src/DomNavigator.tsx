@@ -1,7 +1,6 @@
 
 
 import React, { useRef, useState, useEffect, useLayoutEffect } from "react";
-import { Tag, TagGroup, Card } from "@fluentui/react-components";
 
 /** Wrap your content with <DomNavigator> to enable navigation/highlighting within it. */
 

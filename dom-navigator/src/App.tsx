@@ -1,6 +1,6 @@
 
 import { useMemo, useState } from "react";
-import { Caption1, Card, CardHeader, Switch, Tag, TagGroup } from "@fluentui/react-components";
+import { Card, CardHeader, Switch, Tag, TagGroup } from "@fluentui/react-components";
 import { type AutomergeUrl, useDocument } from "@automerge/react";
 
 import { DomNavigator } from "./DomNavigator";
