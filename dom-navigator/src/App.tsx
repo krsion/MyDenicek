@@ -52,7 +52,7 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
         label={connected ? "Sync on" : "Sync off"}
       />
 
-      <DomNavigator onSelectedChange={setSelectedEl}>
+      <DomNavigator onSelectedChange={setSelectedEl} selectedElement={selectedEl}>
         <RenderedDocument tree={doc} />
       </DomNavigator>
 
@@ -87,10 +87,25 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
         }} label="Rename all children tags to" buttonText="Rename" />
 
         <TagForm selectedNodeGuid={selectedNodeGuid} onSubmit={(tag) => {
+          let newId: string | null = null;
           changeDoc((prev: JsonDoc) => {
             if (!selectedNodeGuid) return;
-            addChildNode(prev, selectedNodeGuid!, tag);
+            newId = addChildNode(prev, selectedNodeGuid!, tag);
           });
+          if (newId) {
+            // The DOM update may be async. Retry a few times until the element appears.
+            const trySelect = (attempt = 0) => {
+              const el = document.querySelector(`[data-node-guid="${newId}"]`) as HTMLElement | null;
+              if (el) {
+                setSelectedEl(el);
+                return;
+              }
+              if (attempt < 10) {
+                setTimeout(() => trySelect(attempt + 1), 50);
+              }
+            };
+            trySelect();
+          }
         }} label="Add child element" buttonText="Add" />
 
         <ValueForm selectedNodeGuid={selectedNodeGuid} currentValue={details?.value} onSubmit={(v) => {

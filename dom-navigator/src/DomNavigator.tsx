@@ -5,7 +5,7 @@ import { Tag, TagGroup, Card } from "@fluentui/react-components";
 
 /** Wrap your content with <DomNavigator> to enable navigation/highlighting within it. */
 
-export function DomNavigator({ children, onSelectedChange }: { children: React.ReactNode; onSelectedChange?: (el: HTMLElement | null) => void; }) {
+export function DomNavigator({ children, onSelectedChange, selectedElement }: { children: React.ReactNode; onSelectedChange?: (el: HTMLElement | null) => void; selectedElement?: HTMLElement | null }) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [selected, setSelected] = useState<HTMLElement | null>(null);
@@ -91,6 +91,23 @@ export function DomNavigator({ children, onSelectedChange }: { children: React.R
       "." + (el.className as string).trim().split(/\s+/).join(".") : "";
     return `${tag}${id}${cls}`;
   }
+
+  // Sync selection from an external source (e.g. the app after adding a node)
+  useEffect(() => {
+    // If prop is not provided, do nothing
+    if (typeof selectedElement === "undefined") return;
+    if (selectedElement === null) {
+      setSelected(null);
+      setOverlay((o) => ({ ...o, visible: false }));
+      return;
+    }
+    if (withinContainer(selectedElement)) {
+      setSelected(selectedElement);
+      positionOverlay(selectedElement);
+      // ensure keyboard focus for further navigation
+      containerRef.current?.focus();
+    }
+  }, [selectedElement]);
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (!containerRef.current) return;
