@@ -1,7 +1,7 @@
 
 import { type AutomergeUrl, useDocument } from "@automerge/react";
 import { Stack } from "@fluentui/react";
-import { Card, CardHeader, Switch, Tag, TagGroup } from "@fluentui/react-components";
+import { Card, CardHeader, DrawerBody, DrawerHeader, DrawerHeaderTitle, InlineDrawer, Switch, Tag, TagGroup } from "@fluentui/react-components";
 import { useMemo, useState } from "react";
 
 import { addChildNode, addTransformation, type JsonDoc, renameNode, setNodeValue, wrapNode } from "./Document.ts";
@@ -37,92 +37,110 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
 
 
   return (
-    <Card appearance="filled-alternative">
-      <CardHeader header={<TagGroup>
-        <Tag>←&nbsp;Parent</Tag>
-        <Tag>→&nbsp;First child</Tag>
-        <Tag>↑&nbsp;Prev sibling</Tag>
-        <Tag>↓&nbsp;Next sibling</Tag>
-        <Tag>Esc&nbsp;Clear</Tag>
-        <Switch
-          checked={connected}
-          onChange={() => {
-            if (connected) {
-              setConnected(false);
-              onDisconnect();
-            } else {
-              setConnected(true);
-              onConnect();
-            }
-          }}
-          label={connected ? "Sync on" : "Sync off"}
+    <div style={{ display: 'flex' }}>
+      <InlineDrawer open separator position="start" >
+        <DrawerHeader>
+          <DrawerHeaderTitle>Actions</DrawerHeaderTitle>
+        </DrawerHeader>
+        <DrawerBody>
+          <Stack tokens={{ childrenGap: 8 }}>
+            <TagForm selectedNodeGuid={selectedNodeGuid} onSubmit={(tag) => {
+              changeDoc((prev: JsonDoc) => {
+                wrapNode(prev, selectedNodeGuid!, tag);
+              });
+            }} label="Wrap into" buttonText="Wrap" />
+
+            <TagForm selectedNodeGuid={selectedNodeGuid} onSubmit={(tag) => {
+              changeDoc((prev: JsonDoc) => {
+                renameNode(prev, selectedNodeGuid!, tag);
+              });
+            }} label="Rename tag to" buttonText="Rename" />
+
+            <TagForm selectedNodeGuid={selectedNodeGuid} onSubmit={(tag) => {
+              changeDoc((prev: JsonDoc) => {
+                if (!selectedNodeGuid) return;
+                addTransformation(prev, selectedNodeGuid!, "wrap", tag);
+              });
+            }} label="Wrap all children into" buttonText="Wrap" />
+
+            <TagForm selectedNodeGuid={selectedNodeGuid} onSubmit={(tag) => {
+              changeDoc((prev: JsonDoc) => {
+                if (!selectedNodeGuid) return;
+                addTransformation(prev, selectedNodeGuid!, "rename", tag);
+              });
+            }} label="Rename all children tags to" buttonText="Rename" />
+
+            <TagForm selectedNodeGuid={selectedNodeGuid} onSubmit={(tag) => {
+              let newId: string | null = null;
+              changeDoc((prev: JsonDoc) => {
+                if (!selectedNodeGuid) return;
+                newId = addChildNode(prev, selectedNodeGuid!, tag);
+              });
+              if (newId) {
+                // The DOM update may be async. Retry a few times until the element appears.
+                const trySelect = (attempt = 0) => {
+                  const el = document.querySelector(`[data-node-guid="${newId}"]`) as HTMLElement | null;
+                  if (el) {
+                    setSelectedEl(el);
+                    return;
+                  }
+                  if (attempt < 10) {
+                    setTimeout(() => trySelect(attempt + 1), 50);
+                  }
+                };
+                trySelect();
+              }
+            }} label="Add child element" buttonText="Add" />
+
+            <ValueForm selectedNodeGuid={selectedNodeGuid} currentValue={details?.value} onSubmit={(v) => {
+              changeDoc((prev: JsonDoc) => {
+                if (!selectedNodeGuid) return;
+                setNodeValue(prev, selectedNodeGuid!, v);
+              });
+            }} label="Edit text content" buttonText="Set" />
+          </Stack>
+        </DrawerBody>
+      </InlineDrawer>
+      <Card appearance="subtle" style={{ flex: "1" }}>
+
+        <CardHeader header={<TagGroup>
+          <Tag>←&nbsp;Parent</Tag>
+          <Tag>→&nbsp;First child</Tag>
+          <Tag>↑&nbsp;Prev sibling</Tag>
+          <Tag>↓&nbsp;Next sibling</Tag>
+          <Tag>Esc&nbsp;Clear</Tag>
+          <Switch
+            checked={connected}
+            onChange={() => {
+              if (connected) {
+                setConnected(false);
+                onDisconnect();
+              } else {
+                setConnected(true);
+                onConnect();
+              }
+            }}
+            label={connected ? "Sync on" : "Sync off"}
+          />
+        </TagGroup>}
         />
-      </TagGroup>} 
-      />
 
-      <DomNavigator onSelectedChange={setSelectedEl} selectedElement={selectedEl}>
-        <RenderedDocument tree={doc} />
-      </DomNavigator>
+        <DomNavigator onSelectedChange={setSelectedEl} selectedElement={selectedEl}>
+          <RenderedDocument tree={doc} />
+        </DomNavigator>
 
-      <ElementDetails details={details} />
+        <ElementDetails details={details} />
 
-      <Stack horizontal wrap tokens={{ childrenGap: 8 }}>
 
-        <TagForm selectedNodeGuid={selectedNodeGuid} onSubmit={(tag) => {
-          changeDoc((prev: JsonDoc) => {
-            wrapNode(prev, selectedNodeGuid!, tag);
-          });
-        }} label="Wrap into" buttonText="Wrap" />
-
-        <TagForm selectedNodeGuid={selectedNodeGuid} onSubmit={(tag) => {
-          changeDoc((prev: JsonDoc) => {
-            renameNode(prev, selectedNodeGuid!, tag);
-          });
-        }} label="Rename tag to" buttonText="Rename" />
-
-        <TagForm selectedNodeGuid={selectedNodeGuid} onSubmit={(tag) => {
-          changeDoc((prev: JsonDoc) => {
-            if (!selectedNodeGuid) return;
-            addTransformation(prev, selectedNodeGuid!, "wrap", tag);
-          });
-        }} label="Wrap all children into" buttonText="Wrap" />
-
-        <TagForm selectedNodeGuid={selectedNodeGuid} onSubmit={(tag) => {
-          changeDoc((prev: JsonDoc) => {
-            if (!selectedNodeGuid) return;
-            addTransformation(prev, selectedNodeGuid!, "rename", tag);
-          });
-        }} label="Rename all children tags to" buttonText="Rename" />
-
-        <TagForm selectedNodeGuid={selectedNodeGuid} onSubmit={(tag) => {
-          let newId: string | null = null;
-          changeDoc((prev: JsonDoc) => {
-            if (!selectedNodeGuid) return;
-            newId = addChildNode(prev, selectedNodeGuid!, tag);
-          });
-          if (newId) {
-            // The DOM update may be async. Retry a few times until the element appears.
-            const trySelect = (attempt = 0) => {
-              const el = document.querySelector(`[data-node-guid="${newId}"]`) as HTMLElement | null;
-              if (el) {
-                setSelectedEl(el);
-                return;
-              }
-              if (attempt < 10) {
-                setTimeout(() => trySelect(attempt + 1), 50);
-              }
-            };
-            trySelect();
-          }
-        }} label="Add child element" buttonText="Add" />
-
-        <ValueForm selectedNodeGuid={selectedNodeGuid} currentValue={details?.value} onSubmit={(v) => {
-          changeDoc((prev: JsonDoc) => {
-            if (!selectedNodeGuid) return;
-            setNodeValue(prev, selectedNodeGuid!, v);
-          });
-        }} label="Edit text content" buttonText="Set" />
-      </Stack>
-    </Card>
+      </Card>
+      <InlineDrawer open separator position="end" >
+        <DrawerHeader>
+          <DrawerHeaderTitle>History</DrawerHeaderTitle>
+        </DrawerHeader>
+        <DrawerBody>
+          {/* History component goes here */}
+        </DrawerBody>
+      </InlineDrawer>
+    </div>
   );
 }

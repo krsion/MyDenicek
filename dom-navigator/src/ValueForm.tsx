@@ -24,8 +24,8 @@ export function ValueForm({ selectedNodeGuid, currentValue, onSubmit, label, but
   }, [selectedNodeGuid, value, onSubmit]);
 
   return (
-    <Card style={{ minWidth: 240}}>
-      <Field label={label} orientation="vertical" hint={"Edit text content for the selected node"}>
+    <Card style={{ minWidth: 240 }}>
+      <Field label={label} orientation="vertical" >
         <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder="Text content" />
       </Field>
       <PrimaryButton disabled={!selectedNodeGuid} onClick={onClick}>{buttonText}</PrimaryButton>

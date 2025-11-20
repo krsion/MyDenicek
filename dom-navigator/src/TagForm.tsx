@@ -24,7 +24,7 @@ export function TagForm({ selectedNodeGuid, onSubmit, label, buttonText }: { sel
 
   return (
     <Card style={{ minWidth: 240 }}>
-      <Field label={label} orientation="vertical" hint={"Common tags: div, section, article, span, p"}>
+      <Field label={label} orientation="vertical">
         <Input
           value={tag}
           onChange={(e) => setTag(e.target.value)}
