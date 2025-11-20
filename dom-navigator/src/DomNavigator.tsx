@@ -23,6 +23,22 @@ export function DomNavigator({ children, onSelectedChange, selectedElement }: { 
     containerRef.current?.focus();
   }, []);
 
+  // Ensure the wrapper is a positioned element so absolute overlay is placed correctly.
+  // If the wrapper's computed position is `static`, set an inline `position: relative`.
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    const cs = window.getComputedStyle(el);
+    const prevInline = el.style.position;
+    if (cs.position === "static") {
+      el.style.position = "relative";
+    }
+    return () => {
+      // restore previous inline position
+      el.style.position = prevInline || "";
+    };
+  }, []);
+
   // Recompute overlay on scroll/resize
   useEffect(() => {
     function onWinChange() {
@@ -195,16 +211,8 @@ export function DomNavigator({ children, onSelectedChange, selectedElement }: { 
 
 
   return (
-    <Card ref={wrapperRef} appearance="filled-alternative">
-      <TagGroup>
-        <TagGroup>
-          <Tag>←&nbsp;Parent</Tag>
-          <Tag>→&nbsp;First child</Tag>
-          <Tag>↑&nbsp;Prev sibling</Tag>
-          <Tag>↓&nbsp;Next sibling</Tag>
-          <Tag>Esc&nbsp;Clear</Tag>
-        </TagGroup>
-      </TagGroup>
+    <div ref={wrapperRef}>
+      
 
       {/* The navigable container */}
       <div
@@ -254,6 +262,6 @@ export function DomNavigator({ children, onSelectedChange, selectedElement }: { 
           </div>
         </div>
       )}
-    </Card>
+    </div>
   );
 }

@@ -1,6 +1,6 @@
 
 import { useMemo, useState } from "react";
-import { Card, Switch } from "@fluentui/react-components";
+import { Caption1, Card, CardHeader, Switch, Tag, TagGroup } from "@fluentui/react-components";
 import { type AutomergeUrl, useDocument } from "@automerge/react";
 
 import { DomNavigator } from "./DomNavigator";
@@ -37,19 +37,27 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
 
 
   return (
-    <Card appearance="subtle">
-      <Switch
-        checked={connected}
-        onChange={() => {
-          if (connected) {
-            setConnected(false);
-            onDisconnect();
-          } else {
-            setConnected(true);
-            onConnect();
-          }
-        }}
-        label={connected ? "Sync on" : "Sync off"}
+    <Card appearance="filled-alternative">
+      <CardHeader header={<TagGroup>
+        <Tag>←&nbsp;Parent</Tag>
+        <Tag>→&nbsp;First child</Tag>
+        <Tag>↑&nbsp;Prev sibling</Tag>
+        <Tag>↓&nbsp;Next sibling</Tag>
+        <Tag>Esc&nbsp;Clear</Tag>
+        <Switch
+          checked={connected}
+          onChange={() => {
+            if (connected) {
+              setConnected(false);
+              onDisconnect();
+            } else {
+              setConnected(true);
+              onConnect();
+            }
+          }}
+          label={connected ? "Sync on" : "Sync off"}
+        />
+      </TagGroup>} 
       />
 
       <DomNavigator onSelectedChange={setSelectedEl} selectedElement={selectedEl}>
