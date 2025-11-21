@@ -1,5 +1,6 @@
 
 
+import { makeStyles } from "@fluentui/react-components";
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 /** Wrap your content with <DomNavigator> to enable navigation/highlighting within it. */
@@ -16,6 +17,31 @@ export function DomNavigator({ children, onSelectedChange, selectedElement }: { 
     visible: boolean;
     label: string;
   }>({ top: 0, left: 0, width: 0, height: 0, visible: false, label: "" });
+
+  const useStyles = makeStyles({
+    overlay: {
+      position: "absolute",
+      pointerEvents: "none",
+      borderRadius: "6px",
+      boxShadow: "0 0 0 2px rgba(59,130,246,0.9), 0 0 0 6px rgba(59,130,246,0.2)",
+      background: "rgba(59,130,246,0.10)",
+      transition: "all 120ms ease",
+    },
+    overlayLabel: {
+      position: "absolute",
+      top: "-24px",
+      left: "0px",
+      padding: "2px 6px",
+      fontSize: "11px",
+      background: "#1f2937",
+      color: "#fff",
+      borderRadius: "4px",
+      boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
+      whiteSpace: "nowrap",
+    },
+  });
+
+  const styles = useStyles();
 
   const positionOverlay = useCallback((el: HTMLElement) => {
     const wrapper = wrapperRef.current;
@@ -79,7 +105,7 @@ export function DomNavigator({ children, onSelectedChange, selectedElement }: { 
     try {
       ro = new ResizeObserver(() => positionOverlay(selected));
       ro.observe(selected);
-    } catch  {
+    } catch {
       // ResizeObserver may not be supported in some environments; fall back to window resize
       const onWin = () => positionOverlay(selected);
       window.addEventListener("resize", onWin, { passive: true });
@@ -212,7 +238,7 @@ export function DomNavigator({ children, onSelectedChange, selectedElement }: { 
 
   return (
     <div ref={wrapperRef}>
-      
+
 
       {/* The navigable container */}
       <div
@@ -228,35 +254,19 @@ export function DomNavigator({ children, onSelectedChange, selectedElement }: { 
       {overlay.visible && (
         <div
           aria-hidden
+          className={styles.overlay}
           style={{
-            position: "absolute",
             top: overlay.top,
             left: overlay.left,
             width: overlay.width,
             height: overlay.height,
-            pointerEvents: "none",
-            borderRadius: 6,
-            boxShadow: "0 0 0 2px rgba(59,130,246,0.9), 0 0 0 6px rgba(59,130,246,0.2)",
-            background: "rgba(59,130,246,0.10)",
-            transition: "all 120ms ease",
           }}
         >
           {/* Label */}
           <div
             data-testid="overlay-label"
             data-tagname={overlay.label.split("#")[0].split(".")[0]}
-            style={{
-              position: "absolute",
-              top: -24,
-              left: 0,
-              padding: "2px 6px",
-              fontSize: 11,
-              background: "#1f2937",
-              color: "#fff",
-              borderRadius: 4,
-              boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
-              whiteSpace: "nowrap",
-            }}
+            className={styles.overlayLabel}
           >
             {overlay.label}
           </div>

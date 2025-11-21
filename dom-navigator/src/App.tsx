@@ -1,7 +1,7 @@
 
 import { type AutomergeUrl, useDocument } from "@automerge/react";
 import { Stack } from "@fluentui/react";
-import { Card, CardHeader, DrawerBody, DrawerHeader, DrawerHeaderTitle, InlineDrawer, Switch, Tag, TagGroup } from "@fluentui/react-components";
+import { Card, CardHeader, DrawerBody, DrawerHeader, DrawerHeaderTitle, InlineDrawer, makeStyles, Switch, Tag, TagGroup } from "@fluentui/react-components";
 import { useMemo, useState } from "react";
 
 import { addChildNode, addTransformation, type JsonDoc, renameNode, setNodeValue, wrapNode } from "./Document.ts";
@@ -35,9 +35,20 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
 
   const selectedNodeGuid = selectedEl?.getAttribute("data-node-guid") || null;
 
+  const useStyles = makeStyles({
+    root: {
+      display: "flex",
+    },
+    card: {
+      flex: "1",
+    },
+  });
+
+  const styles = useStyles();
+
 
   return (
-    <div style={{ display: 'flex' }}>
+    <div className={styles.root}>
       <InlineDrawer open separator position="start" >
         <DrawerHeader>
           <DrawerHeaderTitle>Actions</DrawerHeaderTitle>
@@ -101,7 +112,7 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
           </Stack>
         </DrawerBody>
       </InlineDrawer>
-      <Card appearance="subtle" style={{ flex: "1" }}>
+      <Card appearance="subtle" className={styles.card}>
 
         <CardHeader header={<TagGroup>
           <Tag>←&nbsp;Parent</Tag>
