@@ -5,6 +5,29 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 
 /** Wrap your content with <DomNavigator> to enable navigation/highlighting within it. */
 
+const useStyles = makeStyles({
+  overlay: {
+    position: "absolute",
+    pointerEvents: "none",
+    borderRadius: "6px",
+    boxShadow: "0 0 0 2px rgba(59,130,246,0.9), 0 0 0 6px rgba(59,130,246,0.2)",
+    background: "rgba(59,130,246,0.10)",
+    transition: "all 120ms ease",
+  },
+  overlayLabel: {
+    position: "absolute",
+    top: "-24px",
+    left: "0px",
+    padding: "2px 6px",
+    fontSize: "11px",
+    background: "#1f2937",
+    color: "#fff",
+    borderRadius: "4px",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
+    whiteSpace: "nowrap",
+  },
+});
+
 export function DomNavigator({ children, onSelectedChange, selectedElement }: { children: React.ReactNode; onSelectedChange?: (el: HTMLElement | null) => void; selectedElement?: HTMLElement | null }) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -18,28 +41,7 @@ export function DomNavigator({ children, onSelectedChange, selectedElement }: { 
     label: string;
   }>({ top: 0, left: 0, width: 0, height: 0, visible: false, label: "" });
 
-  const useStyles = makeStyles({
-    overlay: {
-      position: "absolute",
-      pointerEvents: "none",
-      borderRadius: "6px",
-      boxShadow: "0 0 0 2px rgba(59,130,246,0.9), 0 0 0 6px rgba(59,130,246,0.2)",
-      background: "rgba(59,130,246,0.10)",
-      transition: "all 120ms ease",
-    },
-    overlayLabel: {
-      position: "absolute",
-      top: "-24px",
-      left: "0px",
-      padding: "2px 6px",
-      fontSize: "11px",
-      background: "#1f2937",
-      color: "#fff",
-      borderRadius: "4px",
-      boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
-      whiteSpace: "nowrap",
-    },
-  });
+
 
   const styles = useStyles();
 

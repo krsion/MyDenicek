@@ -11,6 +11,15 @@ import { RenderedDocument } from "./RenderedDocument.tsx";
 import { TagForm } from "./TagForm.tsx";
 import { ValueForm } from "./ValueForm";
 
+const useStyles = makeStyles({
+  root: {
+    display: "flex",
+  },
+  card: {
+    flex: "1",
+  },
+});
+
 export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl, onConnect: () => void, onDisconnect: () => void }) => {
   const [doc, changeDoc] = useDocument<JsonDoc>(docUrl, { suspense: true });
   const [selectedEl, setSelectedEl] = useState<HTMLElement | null>(null);
@@ -34,15 +43,6 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
   }, [selectedEl, doc]);
 
   const selectedNodeGuid = selectedEl?.getAttribute("data-node-guid") || null;
-
-  const useStyles = makeStyles({
-    root: {
-      display: "flex",
-    },
-    card: {
-      flex: "1",
-    },
-  });
 
   const styles = useStyles();
 
