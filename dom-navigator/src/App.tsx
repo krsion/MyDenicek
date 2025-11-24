@@ -1,8 +1,8 @@
 
-import { type AutomergeUrl, useDocument } from "@automerge/react";
-import { Stack, Text } from "@fluentui/react";
-import { Card, CardHeader, DrawerBody, DrawerHeader, DrawerHeaderTitle, InlineDrawer, makeStyles, Switch, Tag, TagGroup } from "@fluentui/react-components";
-import { useMemo, useState } from "react";
+import { type AutomergeUrl, type Repo, RepoContext, useDocument } from "@automerge/react";
+import { Stack } from "@fluentui/react";
+import { Card, CardHeader, DrawerBody, DrawerHeader, DrawerHeaderTitle, InlineDrawer, Label, makeStyles, Switch, Tag, TagGroup } from "@fluentui/react-components";
+import { useContext, useMemo, useState } from "react";
 
 import { addChildNode, addTransformation, detectConflicts, type JsonDoc, renameNode, setNodeValue, wrapNode } from "./Document.ts";
 import { DomNavigator } from "./DomNavigator";
@@ -24,6 +24,9 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
   const [doc, changeDoc] = useDocument<JsonDoc>(docUrl, { suspense: true });
   const [selectedEl, setSelectedEl] = useState<HTMLElement | null>(null);
   const [connected, setConnected] = useState(true);
+
+  const repo = useContext(RepoContext) as Repo | undefined;
+  const peerId = repo?.peerId ?? null;
 
   const details = useMemo(() => {
     if (!selectedEl) return null;
@@ -60,7 +63,7 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
           <Stack tokens={{ childrenGap: 8 }}>
             <TagForm selectedNodeGuid={selectedNodeGuid} onSubmit={(tag) => {
               changeDoc((prev: JsonDoc) => {
-                wrapNode(prev, selectedNodeGuid!, tag);
+                wrapNode(prev, selectedNodeGuid!, tag, undefined, peerId);
               });
             }} label="Wrap into" buttonText="Wrap" />
 
@@ -73,14 +76,14 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
             <TagForm selectedNodeGuid={selectedNodeGuid} onSubmit={(tag) => {
               changeDoc((prev: JsonDoc) => {
                 if (!selectedNodeGuid) return;
-                addTransformation(prev, selectedNodeGuid!, "wrap", tag);
+                addTransformation(prev, selectedNodeGuid!, "wrap", tag, peerId);
               });
             }} label="Wrap all children into" buttonText="Wrap" />
 
             <TagForm selectedNodeGuid={selectedNodeGuid} onSubmit={(tag) => {
               changeDoc((prev: JsonDoc) => {
                 if (!selectedNodeGuid) return;
-                addTransformation(prev, selectedNodeGuid!, "rename", tag);
+                addTransformation(prev, selectedNodeGuid!, "rename", tag, peerId);
               });
             }} label="Rename all children tags to" buttonText="Rename" />
 
@@ -88,7 +91,7 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
               let newId: string | null = null;
               changeDoc((prev: JsonDoc) => {
                 if (!selectedNodeGuid) return;
-                newId = addChildNode(prev, selectedNodeGuid!, tag);
+                newId = addChildNode(prev, selectedNodeGuid!, tag, peerId);
               });
               if (newId) {
                 // The DOM update may be async. Retry a few times until the element appears.
@@ -157,12 +160,17 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
               <div>No conflicts detected</div>
             ) : (
               conflicts.map((c) => (
-                <Card key={c.child} appearance="outline">
+                <Card key={c.child} appearance="subtle">
                   <CardHeader header={<TagGroup><Tag>{c.child}</Tag></TagGroup>} />
-                  <Text>Referenced by parents:</Text>
-                  {c.parents.map((p) => (
-                    <Tag key={String(p)}>{p === null ? "(root)" : p}</Tag>
-                  ))}
+
+                  <Stack tokens={{ childrenGap: 6 }}>
+                    {c.parents.map((pp) => (
+                      <Card appearance="subtle">
+                        <Label size="small">node: {pp.parent === null ? "(root)" : pp.parent}</Label>
+                        <Label size="small">{pp.peerId ? `replica: ${pp.peerId}` : 'replica: unknown'}</Label>
+                      </Card>
+                    ))}
+                  </Stack>
                 </Card>
               ))
             )}

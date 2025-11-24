@@ -10,6 +10,7 @@ export type Edge = {
   parent: string | null; // null => root-level
   child: string; // node id
   version?: number; // version of transformations applied when this child was added
+  peerId?: string | null; // optional replica id / peer that created this edge
 };
 
 export type JsonDoc = {
@@ -53,7 +54,7 @@ const getUUID = () => {
   return c && typeof c.randomUUID === 'function' ? c.randomUUID() : Date.now().toString(36);
 };
 
-export function wrapNode(doc: JsonDoc, targetId: string, wrapperTag: string, appliedVersion?: number): void {
+export function wrapNode(doc: JsonDoc, targetId: string, wrapperTag: string, appliedVersion?: number, peerId?: string | null): void {
   const nodes = doc.nodes;
   const edges = doc.edges;
 
@@ -70,14 +71,14 @@ export function wrapNode(doc: JsonDoc, targetId: string, wrapperTag: string, app
 
   if (parentEdgeIndex >= 0) {
     // replace parent->target with parent->wrapper
-    edges.splice(parentEdgeIndex, 1, { parent, child: wrapperId, version: parentEdgeVersion });
+    edges.splice(parentEdgeIndex, 1, { parent, child: wrapperId, version: parentEdgeVersion, peerId: peerId ?? null });
   } else {
-    edges.push({ parent: null, child: wrapperId, version: parentEdgeVersion });
+    edges.push({ parent: null, child: wrapperId, version: parentEdgeVersion, peerId: peerId ?? null });
   }
 
   // wrapper -> target
   const wrapperEdgeVersion = appliedVersion ?? latestVersionForParent(doc, wrapperId);
-  edges.push({ parent: wrapperId, child: targetId, version: wrapperEdgeVersion });
+  edges.push({ parent: wrapperId, child: targetId, version: wrapperEdgeVersion, peerId: peerId ?? null });
 }
 
 export function renameNode(doc: JsonDoc, targetId: string, newTag: string): void {
@@ -96,7 +97,7 @@ export function setNodeValue(doc: JsonDoc, targetId: string, value: string | num
   }
 }
 
-export function addTransformation(doc: JsonDoc, parent: string | null, type: "wrap" | "rename", tag: string) {
+export function addTransformation(doc: JsonDoc, parent: string | null, type: "wrap" | "rename", tag: string, peerId?: string | null) {
   if (!doc.transformations) doc.transformations = [];
   const current = latestVersionForParent(doc, parent);
   const t: Transformation = { parent, version: current + 1, type, tag };
@@ -119,12 +120,12 @@ export function addTransformation(doc: JsonDoc, parent: string | null, type: "wr
     } else if (t.type === "wrap") {
       // wrapping may replace the parent->child edge with parent->wrapper and add wrapper->child
       // wrapNode accepts an optional appliedVersion to stamp created edges
-      wrapNode(doc, e.child, t.tag, t.version);
+      wrapNode(doc, e.child, t.tag, t.version, peerId ?? null);
     }
   }
 }
 
-export function addChildNode(doc: JsonDoc, parentId: string | null, tag: string) {
+export function addChildNode(doc: JsonDoc, parentId: string | null, tag: string, peerId?: string | null) {
   const nodes = doc.nodes;
   const edges = doc.edges;
   const id = `n_${getUUID()}`;
@@ -133,28 +134,37 @@ export function addChildNode(doc: JsonDoc, parentId: string | null, tag: string)
 
   // when adding a new child, set its edge.version to the latest available version for the parent
   const version = latestVersionForParent(doc, parentId);
-  edges.push({ parent: parentId, child: id, version });
+  edges.push({ parent: parentId, child: id, version, peerId: peerId ?? null });
   return id;
 }
 
+export type ConflictParent = { parent: string | null; peerId?: string | null };
+
 export type Conflict = {
   child: string;
-  parents: Array<string | null>;
+  parents: ConflictParent[];
+  // chosen parent according to deterministic rule (smallest key)
+  chosenParent: string | null;
 };
 
 // Detect nodes that are referenced as a child by more than one distinct parent
 export function detectConflicts(doc: JsonDoc): Conflict[] {
-  const map = new Map<string, Set<string | null>>();
+  // Map child -> Map of parent -> peerId (peerId may vary per edge)
+  const map = new Map<string, Map<string | null, string | null>>();
   for (const e of doc.edges) {
-    const set = map.get(e.child) || new Set<string | null>();
-    set.add(e.parent);
-    map.set(e.child, set);
+    const parentsMap = map.get(e.child) || new Map<string | null, string | null>();
+    parentsMap.set(e.parent, e.peerId ?? null);
+    map.set(e.child, parentsMap);
   }
 
   const conflicts: Conflict[] = [];
-  for (const [child, parentsSet] of map.entries()) {
-    if (parentsSet.size > 1) {
-      conflicts.push({ child, parents: Array.from(parentsSet) });
+  for (const [child, parentsMap] of map.entries()) {
+    if (parentsMap.size > 1) {
+      const parents: ConflictParent[] = Array.from(parentsMap.entries()).map(([p, peerId]) => ({ parent: p, peerId }));
+      // deterministic choice: pick smallest key (null considered as empty string)
+      parents.sort((a, b) => (a.peerId ?? "").localeCompare(b.peerId ?? ""));
+      const chosenParent = parents.length ? parents[0].parent : null;
+      conflicts.push({ child, parents, chosenParent });
     }
   }
   return conflicts;

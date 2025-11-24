@@ -1,14 +1,26 @@
 import React from "react";
 
-import { buildMaps, type JsonDoc } from "./Document.ts";
+import { buildMaps, detectConflicts, type JsonDoc } from "./Document.ts";
 
 
 export function RenderedDocument({ tree }: { tree: JsonDoc; }) {
   const { nodesById, childrenMap } = buildMaps(tree);
+  const conflicts = detectConflicts(tree);
+  const chosenParentByChild = new Map<string, string | null>();
+  for (const c of conflicts) chosenParentByChild.set(c.child, c.chosenParent);
+  // Collect parent nodes that should be suppressed (they are non-chosen parents in conflicts)
+  const suppressedParents = new Set<string>();
+  for (const c of conflicts) {
+    for (const p of c.parents) {
+      if (p.parent !== c.chosenParent && p.parent !== null) suppressedParents.add(p.parent);
+    }
+  }
 
   function renderById(id: string, path: string): React.ReactNode {
     const node = nodesById.get(id);
     if (!node) return null;
+    // If this node is a suppressed (non-chosen) parent in a conflict, don't render it at all
+    if (suppressedParents.has(node.id)) return null;
     const children = childrenMap.get(node.id) || [];
 
     // If there's no tag, treat this as a text node or a fragment of children
@@ -31,6 +43,13 @@ export function RenderedDocument({ tree }: { tree: JsonDoc; }) {
     for (let i = 0; i < children.length; i++) {
       const e = children[i];
       const rendered = renderById(e.child, `${path}.${i}`);
+
+      // If this child is part of a conflict, only render it under the deterministic chosenParent
+      const chosen = chosenParentByChild.get(e.child);
+      if (chosen !== undefined && chosen !== node.id) {
+        // skip rendering this child here because another parent is chosen
+        continue;
+      }
 
       // Determine transformations for this parent
       const allTransforms = (tree.transformations || []).filter((t) => t.parent === node.id).sort((a, b) => a.version - b.version);
