@@ -137,6 +137,29 @@ export function addChildNode(doc: JsonDoc, parentId: string | null, tag: string)
   return id;
 }
 
+export type Conflict = {
+  child: string;
+  parents: Array<string | null>;
+};
+
+// Detect nodes that are referenced as a child by more than one distinct parent
+export function detectConflicts(doc: JsonDoc): Conflict[] {
+  const map = new Map<string, Set<string | null>>();
+  for (const e of doc.edges) {
+    const set = map.get(e.child) || new Set<string | null>();
+    set.add(e.parent);
+    map.set(e.child, set);
+  }
+
+  const conflicts: Conflict[] = [];
+  for (const [child, parentsSet] of map.entries()) {
+    if (parentsSet.size > 1) {
+      conflicts.push({ child, parents: Array.from(parentsSet) });
+    }
+  }
+  return conflicts;
+}
+
 export function initialDocument(): JsonDoc | undefined {
   return {
     nodes: [

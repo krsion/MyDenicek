@@ -1,10 +1,10 @@
 
 import { type AutomergeUrl, useDocument } from "@automerge/react";
-import { Stack } from "@fluentui/react";
+import { Stack, Text } from "@fluentui/react";
 import { Card, CardHeader, DrawerBody, DrawerHeader, DrawerHeaderTitle, InlineDrawer, makeStyles, Switch, Tag, TagGroup } from "@fluentui/react-components";
 import { useMemo, useState } from "react";
 
-import { addChildNode, addTransformation, type JsonDoc, renameNode, setNodeValue, wrapNode } from "./Document.ts";
+import { addChildNode, addTransformation, detectConflicts, type JsonDoc, renameNode, setNodeValue, wrapNode } from "./Document.ts";
 import { DomNavigator } from "./DomNavigator";
 import { ElementDetails } from "./ElementDetails.tsx";
 import { RenderedDocument } from "./RenderedDocument.tsx";
@@ -44,7 +44,10 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
 
   const selectedNodeGuid = selectedEl?.getAttribute("data-node-guid") || null;
 
+  const conflicts = useMemo(() => detectConflicts(doc), [doc]);
+
   const styles = useStyles();
+  console.log(doc);
 
 
   return (
@@ -146,10 +149,24 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
       </Card>
       <InlineDrawer open separator position="end" >
         <DrawerHeader>
-          <DrawerHeaderTitle>History</DrawerHeaderTitle>
+          <DrawerHeaderTitle>Conflicts</DrawerHeaderTitle>
         </DrawerHeader>
         <DrawerBody>
-          {/* History component goes here */}
+          <Stack tokens={{ childrenGap: 8 }}>
+            {conflicts.length === 0 ? (
+              <div>No conflicts detected</div>
+            ) : (
+              conflicts.map((c) => (
+                <Card key={c.child} appearance="outline">
+                  <CardHeader header={<TagGroup><Tag>{c.child}</Tag></TagGroup>} />
+                  <Text>Referenced by parents:</Text>
+                  {c.parents.map((p) => (
+                    <Tag key={String(p)}>{p === null ? "(root)" : p}</Tag>
+                  ))}
+                </Card>
+              ))
+            )}
+          </Stack>
         </DrawerBody>
       </InlineDrawer>
     </div>
