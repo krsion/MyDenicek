@@ -1,5 +1,4 @@
 import { DocHandle, IndexedDBStorageAdapter, isValidAutomergeUrl, Repo, RepoContext, WebSocketClientAdapter } from '@automerge/react';
-import { initializeIcons } from '@fluentui/react';
 import { FluentProvider, webLightTheme } from '@fluentui/react-components';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -21,8 +20,6 @@ if (isValidAutomergeUrl(locationHash)) {
   handle = repo.create<JsonDoc>(initialDocument());
   document.location.hash = handle.url;
 }
-
-initializeIcons();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
