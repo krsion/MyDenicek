@@ -49,7 +49,7 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
             <ToolbarPopoverButton
               icon={<AddRegular />}
               disabled={!selectedNodeGuid}
-              initialValue={details?.tag}
+              initialValue={doc.nodes.find(n => n.id === (doc.edges.find(e => e.parent === selectedNodeGuid)?.child ?? null))?.tag}
               ariaLabel="Add child"
               onSubmit={(tag) => {
                 let newId: string | null = null;
