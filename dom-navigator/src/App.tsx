@@ -47,6 +47,7 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
         <Toolbar style={{ display: "flex", justifyContent: "space-between" }}>
           <ToolbarGroup>
             <ToolbarPopoverButton
+              text="Add child"
               icon={<AddRegular />}
               disabled={!selectedNodeGuid}
               initialValue={doc.nodes.find(n => n.id === (doc.edges.find(e => e.parent === selectedNodeGuid)?.child ?? null))?.tag}
@@ -70,11 +71,10 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
                   trySelect();
                 }
               }}
-            >
-              Add child
-            </ToolbarPopoverButton>
+            />
 
             <ToolbarPopoverButton
+              text="Wrap"
               icon={<BackpackRegular />}
               disabled={!selectedNodeGuid}
               ariaLabel="Wrap"
@@ -82,12 +82,12 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
                 changeDoc((prev: JsonDoc) => {
                   wrapNode(prev, selectedNodeGuid!, tag, undefined, peerId);
                 });
+                clickOnSelectedNode(selectedNodeGuid);
               }}
-            >
-              Wrap
-            </ToolbarPopoverButton>
+            />
 
             <ToolbarPopoverButton
+              text="Edit"
               icon={<EditRegular />}
               disabled={!selectedNodeGuid}
               ariaLabel="Edit"
@@ -98,11 +98,10 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
                   setNodeValue(prev, selectedNodeGuid!, value);
                 });
               }}
-            >
-              Edit
-            </ToolbarPopoverButton>
+            />
 
             <ToolbarPopoverButton
+              text="Rename"
               icon={<RenameRegular />}
               disabled={!selectedNodeGuid}
               ariaLabel="Rename"
@@ -111,13 +110,13 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
                 changeDoc((prev: JsonDoc) => {
                   renameNode(prev, selectedNodeGuid!, tag);
                 });
+                clickOnSelectedNode(selectedNodeGuid);
               }}
-            >
-              Rename
-            </ToolbarPopoverButton>
+            />
             <ToolbarDivider />
 
             <ToolbarPopoverButton
+              text="Wrap all children"
               icon={<BackpackFilled />}
               disabled={!selectedNodeGuid}
               ariaLabel="Wrap all children"
@@ -127,11 +126,10 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
                   addTransformation(prev, selectedNodeGuid!, "wrap", tag, peerId);
                 });
               }}
-            >
-              Wrap all children
-            </ToolbarPopoverButton>
+            />
 
             <ToolbarPopoverButton
+              text="Rename all children"
               icon={<RenameFilled />}
               disabled={!selectedNodeGuid}
               initialValue={doc.nodes.find(n => n.id === (doc.edges.find(e => e.parent === selectedNodeGuid)?.child ?? null))?.tag}
@@ -142,13 +140,11 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
                   addTransformation(prev, selectedNodeGuid!, "rename", tag, peerId);
                 });
               }}
-            >
-              Rename all children
-            </ToolbarPopoverButton>
+            />
           </ToolbarGroup>
 
           <ToolbarGroup>
-            <span style={{ marginRight: 12 }}>{peerId ? `Peer ID: ${peerId}` : "No Peer ID"}</span>
+            <Text>{peerId}</Text>
             <Switch
               checked={connected}
               onChange={() => {
@@ -162,7 +158,7 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
               }}
               label={connected ? "Sync on" : "Sync off"}
             />
-            <ToolbarButton icon={<NavigationRegular />} onClick={() => setConflictsOpen(!conflictsOpen)}>Conflicts ({conflicts.length})</ToolbarButton>
+            {conflicts.length > 0 && <ToolbarButton icon={<NavigationRegular />} onClick={() => setConflictsOpen(!conflictsOpen)}>Conflicts ({conflicts.length})</ToolbarButton>}
           </ToolbarGroup>
         </Toolbar>
 
@@ -200,3 +196,9 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
   );
 }
 
+function clickOnSelectedNode(selectedNodeGuid: string | null) {
+  setTimeout(() => {
+    const el = document.querySelector(`[data-node-guid='${selectedNodeGuid}']`) as HTMLElement | null;
+    el?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  }, 0);
+}

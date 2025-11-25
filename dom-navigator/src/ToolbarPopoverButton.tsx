@@ -1,4 +1,4 @@
-import { Input, ToolbarButton } from "@fluentui/react-components";
+import { Input, ToolbarButton, Tooltip } from "@fluentui/react-components";
 import { Popover, PopoverSurface, PopoverTrigger } from "@fluentui/react-popover";
 import { type KeyboardEvent, useEffect, useState } from "react";
 
@@ -10,9 +10,10 @@ type Props = {
     children?: React.ReactNode;
     onSubmit: (tag: string) => void;
     initialValue?: string;
+    text: string;
 };
 
-export const ToolbarPopoverButton = ({ icon, disabled, placeholder, ariaLabel, children, onSubmit, initialValue }: Props) => {
+export const ToolbarPopoverButton = ({ icon, disabled, placeholder, ariaLabel, children, onSubmit, initialValue, text }: Props) => {
     const [open, setOpen] = useState(false);
     const [value, setValue] = useState(initialValue);
 
@@ -23,9 +24,11 @@ export const ToolbarPopoverButton = ({ icon, disabled, placeholder, ariaLabel, c
     return (
         <Popover open={open} onOpenChange={(_ev, data) => setOpen(data.open)}>
             <PopoverTrigger>
-                <ToolbarButton icon={icon} disabled={disabled} onClick={() => setOpen(true)} aria-label={ariaLabel}>
-                    {children}
-                </ToolbarButton>
+                <Tooltip content={text} relationship="label" withArrow={true}>
+                    <ToolbarButton icon={icon} disabled={disabled} onClick={() => setOpen(true)} aria-label={ariaLabel}>
+                        {children}
+                    </ToolbarButton>
+                </Tooltip>
             </PopoverTrigger>
 
             <PopoverSurface style={{ padding: 12 }}>
