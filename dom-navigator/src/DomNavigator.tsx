@@ -28,7 +28,7 @@ const useStyles = makeStyles({
   },
 });
 
-export function DomNavigator({ children, onSelectedChange, selectedElement }: { children: React.ReactNode; onSelectedChange?: (el: HTMLElement | null) => void; selectedElement?: HTMLElement | null }) {
+export function DomNavigator({ children, onSelectedChange, selectedNodeId, peerSelections }: { children: React.ReactNode; onSelectedChange?: (nodeId: string | null) => void; selectedNodeId?: string | null, peerSelections?: { [peerId: string]: string | null } }) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [selected, setSelected] = useState<HTMLElement | null>(null);
@@ -40,6 +40,15 @@ export function DomNavigator({ children, onSelectedChange, selectedElement }: { 
     visible: boolean;
     label: string;
   }>({ top: 0, left: 0, width: 0, height: 0, visible: false, label: "" });
+
+  const [peerOverlays, setPeerOverlays] = useState<Record<string, {
+    top: number;
+    left: number;
+    width: number;
+    height: number;
+    visible: boolean;
+    label?: string;
+  }>>({});
 
 
 
@@ -59,6 +68,45 @@ export function DomNavigator({ children, onSelectedChange, selectedElement }: { 
       visible: true,
       label,
     });
+  }, []);
+
+  const colorFromString = useCallback((s: string) => {
+    // simple deterministic color based on string -> hue
+    let h = 0;
+    for (let i = 0; i < s.length; i++) {
+      h = (h * 31 + s.charCodeAt(i)) % 360;
+    }
+    // return a semi-transparent HSL color strings
+    return {
+      stroke: `hsl(${h} 70% 45% / 0.9)`,
+      fill: `hsl(${h} 70% 45% / 0.10)`,
+      subtle: `hsl(${h} 70% 45% / 0.05)`,
+    };
+  }, []);
+
+  const positionPeerOverlay = useCallback((peerId: string, el: HTMLElement | null) => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper || !el) {
+      setPeerOverlays((p) => {
+        const next = { ...p };
+        delete next[peerId];
+        return next;
+      });
+      return;
+    }
+    const s = el.getBoundingClientRect();
+    const w = wrapper.getBoundingClientRect();
+    setPeerOverlays((p) => ({
+      ...p,
+      [peerId]: {
+        top: s.top - w.top,
+        left: s.left - w.left,
+        width: s.width,
+        height: s.height,
+        visible: true,
+        label: peerId,
+      },
+    }));
   }, []);
 
   // Focus the container so it can capture keyboard events
@@ -94,6 +142,51 @@ export function DomNavigator({ children, onSelectedChange, selectedElement }: { 
       window.removeEventListener("resize", onWinChange);
     };
   }, [positionOverlay, selected]);
+
+  // Update peer overlays when peerSelections change or when the container updates
+  useEffect(() => {
+    if (!peerSelections) return;
+    const root = containerRef.current;
+    if (!root) return;
+
+    Object.entries(peerSelections).forEach(([peerId, nodeId]) => {
+      if (!nodeId) {
+        // clear overlay for this peer
+        setPeerOverlays((p) => {
+          const next = { ...p };
+          delete next[peerId];
+          return next;
+        });
+        return;
+      }
+      const el = root.querySelector(`[data-node-guid="${nodeId}"]`) as HTMLElement | null;
+      if (el && withinContainer(el)) {
+        positionPeerOverlay(peerId, el);
+      } else {
+        positionPeerOverlay(peerId, null);
+      }
+    });
+  }, [peerSelections, positionPeerOverlay]);
+
+  // Recompute peer overlays on scroll/resize
+  useEffect(() => {
+    function onWinChange() {
+      if (!peerSelections) return;
+      const root = containerRef.current;
+      if (!root) return;
+      Object.entries(peerSelections).forEach(([peerId, nodeId]) => {
+        if (!nodeId) return;
+        const el = root.querySelector(`[data-node-guid="${nodeId}"]`) as HTMLElement | null;
+        positionPeerOverlay(peerId, el);
+      });
+    }
+    window.addEventListener("scroll", onWinChange, { passive: true });
+    window.addEventListener("resize", onWinChange, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onWinChange);
+      window.removeEventListener("resize", onWinChange);
+    };
+  }, [peerSelections, positionPeerOverlay]);
 
   useLayoutEffect(() => {
     if (selected) positionOverlay(selected);
@@ -158,19 +251,23 @@ export function DomNavigator({ children, onSelectedChange, selectedElement }: { 
   // Sync selection from an external source (e.g. the app after adding a node)
   useEffect(() => {
     // If prop is not provided, do nothing
-    if (typeof selectedElement === "undefined") return;
-    if (selectedElement === null) {
+    if (typeof selectedNodeId === "undefined") return;
+    if (selectedNodeId === null) {
       setSelected(null);
       setOverlay((o) => ({ ...o, visible: false }));
       return;
     }
-    if (withinContainer(selectedElement)) {
-      setSelected(selectedElement);
-      positionOverlay(selectedElement);
+    // Find the element by data-node-guid within the container
+    const root = containerRef.current;
+    if (!root) return;
+    const el = root.querySelector(`[data-node-guid="${selectedNodeId}"]`) as HTMLElement | null;
+    if (el && withinContainer(el)) {
+      setSelected(el);
+      positionOverlay(el);
       // ensure keyboard focus for further navigation
       containerRef.current?.focus();
     }
-  }, [positionOverlay, selectedElement]);
+  }, [positionOverlay, selectedNodeId]);
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (!containerRef.current) return;
@@ -192,7 +289,7 @@ export function DomNavigator({ children, onSelectedChange, selectedElement }: { 
       const start = firstElementChildOf(containerRef.current);
       if (start) {
         setSelected(start);
-        onSelectedChange?.(start);
+        onSelectedChange?.(start.getAttribute("data-node-guid") || null);
       }
       return;
     }
@@ -224,7 +321,7 @@ export function DomNavigator({ children, onSelectedChange, selectedElement }: { 
 
     if (next && next !== selected) {
       setSelected(next);
-      onSelectedChange?.(next);
+      onSelectedChange?.(next.getAttribute("data-node-guid") || null);
       // Ensure the element is visible without jumping too much
       next.scrollIntoView({ block: "nearest", inline: "nearest" });
     }
@@ -234,7 +331,7 @@ export function DomNavigator({ children, onSelectedChange, selectedElement }: { 
     if (!(e.target instanceof HTMLElement)) return;
     if (!withinContainer(e.target)) return;
     setSelected(e.target);
-    onSelectedChange?.(e.target);
+    onSelectedChange?.(e.target.getAttribute("data-node-guid") || null);
   }
 
 
@@ -274,6 +371,37 @@ export function DomNavigator({ children, onSelectedChange, selectedElement }: { 
           </div>
         </div>
       )}
+
+      {/* Peer overlays: subtle, non-interactive highlights for remote selections */}
+      {Object.entries(peerOverlays).map(([peerId, o]) => {
+        if (!o.visible) return null;
+        const colors = colorFromString(peerId);
+        return (
+          <div
+            key={`peer-${peerId}`}
+            aria-hidden
+            className={styles.overlay}
+            style={{
+              top: o.top,
+              left: o.left,
+              width: o.width,
+              height: o.height,
+              background: colors.fill,
+              boxShadow: `0 0 0 2px ${colors.subtle}`,
+              pointerEvents: "none",
+              transition: "all 120ms ease",
+            }}
+          >
+            <div
+              data-testid={`peer-overlay-label-${peerId}`}
+              className={styles.overlayLabel}
+              style={{ background: colors.stroke, color: "#fff", fontSize: 11 }}
+            >
+              {peerId}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

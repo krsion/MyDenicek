@@ -28,7 +28,7 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <FluentProvider theme={webLightTheme}>
       <RepoContext.Provider value={repo}>
-        <App docUrl={handle.url} onConnect={() => repo.networkSubsystem.adapters[0]!.connect(repo.peerId)} onDisconnect={() => repo.networkSubsystem.adapters[0]!.disconnect()} />
+        <App handle={handle} onConnect={() => repo.networkSubsystem.adapters[0]!.connect(repo.peerId)} onDisconnect={() => repo.networkSubsystem.adapters[0]!.disconnect()} />
       </RepoContext.Provider>
     </FluentProvider>
   </StrictMode>

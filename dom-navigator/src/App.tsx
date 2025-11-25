@@ -1,5 +1,5 @@
 
-import { type AutomergeUrl, type Repo, RepoContext, useDocument } from "@automerge/react";
+import { DocHandle, type PeerId, type Repo, RepoContext, useDocument, useLocalAwareness, useRemoteAwareness } from "@automerge/react";
 import { Card, CardHeader, Drawer, DrawerBody, DrawerHeader, DrawerHeaderTitle, Switch, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup } from "@fluentui/react-components";
 import { AddRegular, ArrowDownRegular, ArrowLeftRegular, ArrowRightRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, EditRegular, NavigationRegular, RenameFilled, RenameRegular } from "@fluentui/react-icons";
 import { useContext, useMemo, useState } from "react";
@@ -11,16 +11,31 @@ import { ElementDetails } from "./ElementDetails.tsx";
 import { RenderedDocument } from "./RenderedDocument.tsx";
 import ToolbarPopoverButton from "./ToolbarPopoverButton";
 
-export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl, onConnect: () => void, onDisconnect: () => void }) => {
-  const [doc, changeDoc] = useDocument<JsonDoc>(docUrl, { suspense: true });
-  const [selectedEl, setSelectedEl] = useState<HTMLElement | null>(null);
+export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<JsonDoc>, onConnect: () => void, onDisconnect: () => void }) => {
+  const [doc, changeDoc] = useDocument<JsonDoc>(handle.url, { suspense: true });
+  const repo = useContext(RepoContext) as Repo | undefined;
+  const peerId: PeerId | null = repo?.peerId ?? null;
+
+  const [localState, updateLocalState] = useLocalAwareness({
+    handle: handle, userId: repo?.peerId as string, initialState: {
+      selectedNodeId: null
+    }
+  });
+
+  const [peerStates] = useRemoteAwareness({ handle: handle, localUserId: peerId as string, offlineTimeout: 1000 });
+  const peerSelections: { [peerId: string]: string | null } = useMemo(() => {
+    const selections: { [peerId: string]: string | null } = {};
+    Object.entries(peerStates).forEach(([peerId, state]) => {
+      selections[peerId] = state.selectedNodeId || null;
+    });
+    return selections;
+  }, [peerStates]);
   const [connected, setConnected] = useState(true);
   const [conflictsOpen, setConflictsOpen] = useState(false);
 
-  const repo = useContext(RepoContext) as Repo | undefined;
-  const peerId = repo?.peerId ?? null;
 
   const details = useMemo(() => {
+    const selectedEl = localState?.selectedNodeId ? document.querySelector(`[data-node-guid="${localState.selectedNodeId}"]`) as HTMLElement | null : null;
     if (!selectedEl) return null;
     const tag = selectedEl.tagName.toLowerCase();
     const id = selectedEl.id || null;
@@ -35,9 +50,9 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
     const value = modelNode ? (modelNode.value as string | undefined) : undefined;
 
     return { tag, id, guid, classes, width, height, dataTestId, value };
-  }, [selectedEl, doc]);
+  }, [localState?.selectedNodeId, doc]);
 
-  const selectedNodeGuid = selectedEl?.getAttribute("data-node-guid") || null;
+  const selectedNodeGuid = localState.selectedNodeId || null;
 
   const conflicts = useMemo(() => detectConflicts(doc), [doc]);
 
@@ -58,17 +73,7 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
                   newId = addChildNode(prev, selectedNodeGuid!, tag, peerId);
                 });
                 if (newId) {
-                  const trySelect = (attempt = 0) => {
-                    const el = document.querySelector(`[data-node-guid="${newId}"]`) as HTMLElement | null;
-                    if (el) {
-                      setSelectedEl(el);
-                      return;
-                    }
-                    if (attempt < 10) {
-                      setTimeout(() => trySelect(attempt + 1), 50);
-                    }
-                  };
-                  trySelect();
+                  updateLocalState({ selectedNodeId: newId });
                 }
               }}
             />
@@ -171,7 +176,7 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
         </TagGroup>}
         />
 
-        <DomNavigator onSelectedChange={setSelectedEl} selectedElement={selectedEl}>
+        <DomNavigator onSelectedChange={(id) => { updateLocalState({ selectedNodeId: id }) }} selectedNodeId={localState.selectedNodeId} peerSelections={peerSelections}>
           <RenderedDocument tree={doc} />
         </DomNavigator>
 
