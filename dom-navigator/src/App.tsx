@@ -1,12 +1,13 @@
 import { DocHandle, type PeerId, type Repo, RepoContext, useDocument, useLocalAwareness, useRemoteAwareness } from "@automerge/react";
-import { Card, CardHeader, Drawer, DrawerBody, DrawerHeader, DrawerHeaderTitle, Switch, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
-import { AddRegular, ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, EditRegular, NavigationRegular, RenameFilled, RenameRegular } from "@fluentui/react-icons";
+import { Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, Drawer, DrawerBody, DrawerHeader, DrawerHeaderTitle, Switch, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
+import { AddRegular, ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CodeRegular, EditRegular, HistoryRegular, NavigationRegular, RenameFilled, RenameRegular } from "@fluentui/react-icons";
 import { useContext, useMemo, useState } from "react";
 
 import { ConflictsTable } from "./ConflictsTable.tsx";
 import { addChildNode, addTransformation, detectConflicts, type JsonDoc, renameNode, setNodeValue, wrapNode } from "./Document.ts";
 import { DomNavigator } from "./DomNavigator";
 import { ElementDetails } from "./ElementDetails.tsx";
+import { JsonView } from "./JsonView.tsx";
 import { RenderedDocument } from "./RenderedDocument.tsx";
 import ToolbarPopoverButton from "./ToolbarPopoverButton";
 
@@ -212,7 +213,19 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
               }}
               label={connected ? "Sync on" : "Sync off"}
             />
-            <ToolbarButton icon={<NavigationRegular />} onClick={() => setHistoryOpen(!historyOpen)}>History</ToolbarButton>
+            <Dialog>
+              <DialogTrigger>
+                <ToolbarButton icon={<CodeRegular />}>Raw</ToolbarButton>
+              </DialogTrigger>
+              <DialogSurface style={{ width: 1000 }}>
+                <DialogBody>
+                  <DialogContent>
+                    <JsonView doc={doc} />
+                  </DialogContent>
+                </DialogBody>
+              </DialogSurface>
+            </Dialog>
+            <ToolbarButton icon={<HistoryRegular />} onClick={() => setHistoryOpen(!historyOpen)}>History</ToolbarButton>
             {conflicts.length > 0 && <ToolbarButton icon={<NavigationRegular />} onClick={() => setConflictsOpen(!conflictsOpen)}>Conflicts ({conflicts.length})</ToolbarButton>}
           </ToolbarGroup>
         </Toolbar>
