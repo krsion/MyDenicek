@@ -1,7 +1,6 @@
-
 import { DocHandle, type PeerId, type Repo, RepoContext, useDocument, useLocalAwareness, useRemoteAwareness } from "@automerge/react";
-import { Card, CardHeader, Drawer, DrawerBody, DrawerHeader, DrawerHeaderTitle, Switch, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup } from "@fluentui/react-components";
-import { AddRegular, ArrowDownRegular, ArrowLeftRegular, ArrowRightRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, EditRegular, NavigationRegular, RenameFilled, RenameRegular } from "@fluentui/react-icons";
+import { Card, CardHeader, Drawer, DrawerBody, DrawerHeader, DrawerHeaderTitle, Switch, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
+import { AddRegular, ArrowDownRegular, ArrowLeftRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, EditRegular, NavigationRegular, RenameFilled, RenameRegular } from "@fluentui/react-icons";
 import { useContext, useMemo, useState } from "react";
 
 import { ConflictsTable } from "./ConflictsTable.tsx";
@@ -13,6 +12,14 @@ import ToolbarPopoverButton from "./ToolbarPopoverButton";
 
 export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<JsonDoc>, onConnect: () => void, onDisconnect: () => void }) => {
   const [doc, changeDoc] = useDocument<JsonDoc>(handle.url, { suspense: true });
+  const [undoStack, setUndoStack] = useState<JsonDoc[]>([]);
+
+  const modifyDoc = (updater: (d: JsonDoc) => void) => {
+    const snapshot = JSON.parse(JSON.stringify(doc));
+    setUndoStack(prev => [...prev, snapshot]);
+    changeDoc(updater);
+  };
+
   const repo = useContext(RepoContext) as Repo | undefined;
   const peerId: PeerId | null = repo?.peerId ?? null;
 
@@ -32,6 +39,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
   }, [peerStates]);
   const [connected, setConnected] = useState(true);
   const [conflictsOpen, setConflictsOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
 
   const details = useMemo(() => {
@@ -61,6 +69,26 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
       <Card appearance="subtle">
         <Toolbar style={{ display: "flex", justifyContent: "space-between" }}>
           <ToolbarGroup>
+            <Tooltip content="Undo" relationship="label">
+              <ToolbarButton
+                icon={<ArrowUndoRegular />}
+                onClick={() => {
+                  if (undoStack.length === 0) return;
+                  const prevDoc = undoStack[undoStack.length - 1];
+                  setUndoStack(stack => stack.slice(0, -1));
+                  changeDoc((d) => {
+                    d.nodes = JSON.parse(JSON.stringify(prevDoc.nodes));
+                    d.edges = JSON.parse(JSON.stringify(prevDoc.edges));
+                    d.transformations = prevDoc.transformations ? JSON.parse(JSON.stringify(prevDoc.transformations)) : [];
+                  });
+
+                  clickOnSelectedNode(selectedNodeGuid);
+
+                }}
+                disabled={undoStack.length === 0}
+              />
+            </Tooltip>
+            <ToolbarDivider />
             <ToolbarPopoverButton
               text="Add child"
               icon={<AddRegular />}
@@ -69,12 +97,25 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
               ariaLabel="Add child"
               onSubmit={(tag) => {
                 let newId: string | null = null;
-                changeDoc((prev: JsonDoc) => {
+                modifyDoc((prev: JsonDoc) => {
                   newId = addChildNode(prev, selectedNodeGuid!, tag, peerId);
                 });
                 if (newId) {
                   updateLocalState({ selectedNodeId: newId });
                 }
+              }}
+            />
+            <ToolbarPopoverButton
+              text="Edit"
+              icon={<EditRegular />}
+              disabled={!selectedNodeGuid}
+              ariaLabel="Edit"
+              initialValue={details?.value}
+              onSubmit={(value) => {
+                modifyDoc((prev: JsonDoc) => {
+                  if (!selectedNodeGuid) return;
+                  setNodeValue(prev, selectedNodeGuid!, value);
+                });
               }}
             />
 
@@ -84,24 +125,10 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
               disabled={!selectedNodeGuid}
               ariaLabel="Wrap"
               onSubmit={(tag) => {
-                changeDoc((prev: JsonDoc) => {
+                modifyDoc((prev: JsonDoc) => {
                   wrapNode(prev, selectedNodeGuid!, tag, undefined, peerId);
                 });
                 clickOnSelectedNode(selectedNodeGuid);
-              }}
-            />
-
-            <ToolbarPopoverButton
-              text="Edit"
-              icon={<EditRegular />}
-              disabled={!selectedNodeGuid}
-              ariaLabel="Edit"
-              initialValue={details?.value}
-              onSubmit={(value) => {
-                changeDoc((prev: JsonDoc) => {
-                  if (!selectedNodeGuid) return;
-                  setNodeValue(prev, selectedNodeGuid!, value);
-                });
               }}
             />
 
@@ -112,7 +139,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
               ariaLabel="Rename"
               initialValue={details?.tag}
               onSubmit={(tag) => {
-                changeDoc((prev: JsonDoc) => {
+                modifyDoc((prev: JsonDoc) => {
                   renameNode(prev, selectedNodeGuid!, tag);
                 });
                 clickOnSelectedNode(selectedNodeGuid);
@@ -126,7 +153,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
               disabled={!selectedNodeGuid}
               ariaLabel="Wrap all children"
               onSubmit={(tag) => {
-                changeDoc((prev: JsonDoc) => {
+                modifyDoc((prev: JsonDoc) => {
                   if (!selectedNodeGuid) return;
                   addTransformation(prev, selectedNodeGuid!, "wrap", tag, peerId);
                 });
@@ -140,7 +167,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
               initialValue={doc.nodes.find(n => n.id === (doc.edges.find(e => e.parent === selectedNodeGuid)?.child ?? null))?.tag}
               ariaLabel="Rename all children"
               onSubmit={(tag) => {
-                changeDoc((prev: JsonDoc) => {
+                modifyDoc((prev: JsonDoc) => {
                   if (!selectedNodeGuid) return;
                   addTransformation(prev, selectedNodeGuid!, "rename", tag, peerId);
                 });
@@ -163,6 +190,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
               }}
               label={connected ? "Sync on" : "Sync off"}
             />
+            <ToolbarButton icon={<NavigationRegular />} onClick={() => setHistoryOpen(!historyOpen)}>History</ToolbarButton>
             {conflicts.length > 0 && <ToolbarButton icon={<NavigationRegular />} onClick={() => setConflictsOpen(!conflictsOpen)}>Conflicts ({conflicts.length})</ToolbarButton>}
           </ToolbarGroup>
         </Toolbar>
@@ -195,6 +223,16 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
           ) : (
             <ConflictsTable conflicts={conflicts} doc={doc} />
           )}
+        </DrawerBody>
+      </Drawer>
+      <Drawer open={historyOpen} separator position="end" onOpenChange={(_, { open }) => {
+        setHistoryOpen(open);
+
+      }}>
+        <DrawerHeader>
+          <DrawerHeaderTitle>History</DrawerHeaderTitle>
+        </DrawerHeader>
+        <DrawerBody>
         </DrawerBody>
       </Drawer>
     </>
