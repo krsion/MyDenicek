@@ -1,6 +1,6 @@
 import { DocHandle, type PeerId, type Repo, RepoContext, useDocument, useLocalAwareness, useRemoteAwareness } from "@automerge/react";
 import { Card, CardHeader, Drawer, DrawerBody, DrawerHeader, DrawerHeaderTitle, Switch, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
-import { AddRegular, ArrowDownRegular, ArrowLeftRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, EditRegular, NavigationRegular, RenameFilled, RenameRegular } from "@fluentui/react-icons";
+import { AddRegular, ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, EditRegular, NavigationRegular, RenameFilled, RenameRegular } from "@fluentui/react-icons";
 import { useContext, useMemo, useState } from "react";
 
 import { ConflictsTable } from "./ConflictsTable.tsx";
@@ -13,10 +13,12 @@ import ToolbarPopoverButton from "./ToolbarPopoverButton";
 export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<JsonDoc>, onConnect: () => void, onDisconnect: () => void }) => {
   const [doc, changeDoc] = useDocument<JsonDoc>(handle.url, { suspense: true });
   const [undoStack, setUndoStack] = useState<JsonDoc[]>([]);
+  const [redoStack, setRedoStack] = useState<JsonDoc[]>([]);
 
   const modifyDoc = (updater: (d: JsonDoc) => void) => {
     const snapshot = JSON.parse(JSON.stringify(doc));
     setUndoStack(prev => [...prev, snapshot]);
+    setRedoStack([]);
     changeDoc(updater);
   };
 
@@ -76,6 +78,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                   if (undoStack.length === 0) return;
                   const prevDoc = undoStack[undoStack.length - 1];
                   setUndoStack(stack => stack.slice(0, -1));
+                  setRedoStack(stack => [...stack, JSON.parse(JSON.stringify(doc))]);
                   changeDoc((d) => {
                     d.nodes = JSON.parse(JSON.stringify(prevDoc.nodes));
                     d.edges = JSON.parse(JSON.stringify(prevDoc.edges));
@@ -86,6 +89,25 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
 
                 }}
                 disabled={undoStack.length === 0}
+              />
+            </Tooltip>
+            <Tooltip content="Redo" relationship="label">
+              <ToolbarButton
+                icon={<ArrowRedoRegular />}
+                onClick={() => {
+                  if (redoStack.length === 0) return;
+                  const nextDoc = redoStack[redoStack.length - 1];
+                  setRedoStack(stack => stack.slice(0, -1));
+                  setUndoStack(stack => [...stack, JSON.parse(JSON.stringify(doc))]);
+                  changeDoc((d) => {
+                    d.nodes = JSON.parse(JSON.stringify(nextDoc.nodes));
+                    d.edges = JSON.parse(JSON.stringify(nextDoc.edges));
+                    d.transformations = nextDoc.transformations ? JSON.parse(JSON.stringify(nextDoc.transformations)) : [];
+                  });
+
+                  clickOnSelectedNode(selectedNodeGuid);
+                }}
+                disabled={redoStack.length === 0}
               />
             </Tooltip>
             <ToolbarDivider />
