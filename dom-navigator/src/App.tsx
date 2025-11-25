@@ -1,7 +1,7 @@
 
 import { type AutomergeUrl, type Repo, RepoContext, useDocument } from "@automerge/react";
 import { Stack } from "@fluentui/react";
-import { Card, CardHeader, DrawerBody, DrawerHeader, DrawerHeaderTitle, InlineDrawer, Label, makeStyles, Switch, Tag, TagGroup } from "@fluentui/react-components";
+import { Card, CardHeader, DrawerBody, DrawerHeader, DrawerHeaderTitle, InlineDrawer, makeStyles, Switch, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Tag, TagGroup } from "@fluentui/react-components";
 import { useContext, useMemo, useState } from "react";
 
 import { addChildNode, addTransformation, detectConflicts, type JsonDoc, renameNode, setNodeValue, wrapNode } from "./Document.ts";
@@ -139,6 +139,7 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
             }}
             label={connected ? "Sync on" : "Sync off"}
           />
+          <Tag>{peerId ? `Peer ID: ${peerId}` : "No Peer ID"}</Tag>
         </TagGroup>}
         />
 
@@ -159,20 +160,37 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
             {conflicts.length === 0 ? (
               <div>No conflicts detected</div>
             ) : (
-              conflicts.map((c) => (
-                <Card key={c.child} appearance="subtle">
-                  <CardHeader header={<TagGroup><Tag>{c.child}</Tag></TagGroup>} />
+              <Table aria-label="Conflicts table">
+                <TableHeader>
+                  <TableRow>
+                    <TableHeaderCell>Child</TableHeaderCell>
+                    <TableHeaderCell>Parent node</TableHeaderCell>
+                    <TableHeaderCell>Replica</TableHeaderCell>
+                  </TableRow>
+                </TableHeader>
 
-                  <Stack tokens={{ childrenGap: 6 }}>
-                    {c.parents.map((pp) => (
-                      <Card appearance="subtle">
-                        <Label size="small">node: {pp.parent === null ? "(root)" : pp.parent}</Label>
-                        <Label size="small">{pp.peerId ? `replica: ${pp.peerId}` : 'replica: unknown'}</Label>
-                      </Card>
-                    ))}
-                  </Stack>
-                </Card>
-              ))
+                <TableBody>
+                  {conflicts.flatMap((c) =>
+                    c.parents.map((pp, idx) => (
+                      <TableRow key={`${c.child}-${idx}`}>
+                        {idx === 0 && (
+                          <TableCell rowSpan={c.parents.length}>
+                            {c.child}
+                          </TableCell>
+                        )}
+
+                        <TableCell>
+                          {pp.parent === null ? "(root)" : doc.nodes.find((n) => n.id == pp.parent)?.tag ?? pp.parent}
+                        </TableCell>
+
+                        <TableCell>
+                          {pp.peerId ? pp.peerId : "unknown"}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
             )}
           </Stack>
         </DrawerBody>

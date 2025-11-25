@@ -1,5 +1,4 @@
-import { PrimaryButton } from "@fluentui/react";
-import { Card, Field, Input } from "@fluentui/react-components";
+import { Button, Card, Field, Input } from "@fluentui/react-components";
 import { useCallback, useEffect, useState } from "react";
 
 export function ValueForm({ selectedNodeGuid, currentValue, onSubmit, label, buttonText }: { selectedNodeGuid: string | null; currentValue?: string | number; onSubmit: (value: string) => void; label: string; buttonText: string; }) {
@@ -28,7 +27,7 @@ export function ValueForm({ selectedNodeGuid, currentValue, onSubmit, label, but
       <Field label={label} orientation="vertical" >
         <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder="Text content" />
       </Field>
-      <PrimaryButton disabled={!selectedNodeGuid} onClick={onClick}>{buttonText}</PrimaryButton>
+      <Button disabled={!selectedNodeGuid} onClick={onClick}>{buttonText}</Button>
     </Card>
   );
 }

@@ -1,5 +1,4 @@
-import { PrimaryButton } from "@fluentui/react";
-import { Card, Field, Input } from "@fluentui/react-components";
+import { Button, Card, Field, Input } from "@fluentui/react-components";
 import { useCallback, useState } from "react";
 
 export function TagForm({ selectedNodeGuid, onSubmit, label, buttonText }: { selectedNodeGuid: string | null; onSubmit: (tag: string) => void; label: string; buttonText: string; }) {
@@ -30,9 +29,9 @@ export function TagForm({ selectedNodeGuid, onSubmit, label, buttonText }: { sel
           onChange={(e) => setTag(e.target.value)}
           placeholder="e.g. div" />
       </Field>
-      <PrimaryButton disabled={!selectedNodeGuid} onClick={onClick}>
+      <Button disabled={!selectedNodeGuid} onClick={onClick}>
         {buttonText}
-      </PrimaryButton>
+      </Button>
     </Card>
   );
 }
