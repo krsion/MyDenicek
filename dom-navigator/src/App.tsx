@@ -1,5 +1,5 @@
 import { DocHandle, type PeerId, type Repo, RepoContext, useDocument, useLocalAwareness, useRemoteAwareness } from "@automerge/react";
-import { Card, CardHeader, Drawer, DrawerBody, DrawerHeader, DrawerHeaderTitle, Switch, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
+import { Card, CardHeader, Drawer, DrawerBody, DrawerHeader, DrawerHeaderTitle, Switch, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
 import { AddRegular, ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, EditRegular, NavigationRegular, RenameFilled, RenameRegular } from "@fluentui/react-icons";
 import { useContext, useMemo, useState } from "react";
 
@@ -231,6 +231,32 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
         </DomNavigator>
 
         <ElementDetails details={details} />
+        <Card>
+          <CardHeader header={<Text>Transformations</Text>} />
+          {doc.transformations && doc.transformations.length === 0 && (<Text>No transformations</Text>)}
+          {doc.transformations && doc.transformations.length > 0 && (
+            <Table size="small">
+              <TableHeader>
+                <TableRow>
+                  <TableHeaderCell>Type</TableHeaderCell>
+                  <TableHeaderCell>Parent ID</TableHeaderCell>
+                  <TableHeaderCell>Value</TableHeaderCell>
+                  <TableHeaderCell>Version</TableHeaderCell>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {doc.transformations.map((t, i) => (
+                  <TableRow key={i}>
+                    <TableCell>{t.type}</TableCell>
+                    <TableCell>{t.parent}</TableCell>
+                    <TableCell>{t.tag}</TableCell>
+                    <TableCell>{t.version}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </Card>
 
 
       </Card>
