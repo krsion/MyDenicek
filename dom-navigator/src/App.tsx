@@ -78,7 +78,6 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
               icon={<BackpackRegular />}
               disabled={!selectedNodeGuid}
               ariaLabel="Wrap"
-              initialValue={details?.tag}
               onSubmit={(tag) => {
                 changeDoc((prev: JsonDoc) => {
                   wrapNode(prev, selectedNodeGuid!, tag, undefined, peerId);
@@ -122,7 +121,6 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
               icon={<BackpackFilled />}
               disabled={!selectedNodeGuid}
               ariaLabel="Wrap all children"
-              initialValue={details?.tag}
               onSubmit={(tag) => {
                 changeDoc((prev: JsonDoc) => {
                   if (!selectedNodeGuid) return;
@@ -136,7 +134,7 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
             <ToolbarPopoverButton
               icon={<RenameFilled />}
               disabled={!selectedNodeGuid}
-              initialValue={details?.tag}
+              initialValue={doc.nodes.find(n => n.id === (doc.edges.find(e => e.parent === selectedNodeGuid)?.child ?? null))?.tag}
               ariaLabel="Rename all children"
               onSubmit={(tag) => {
                 changeDoc((prev: JsonDoc) => {
