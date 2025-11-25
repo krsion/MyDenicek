@@ -3,7 +3,7 @@ export type Node = {
   id: string;
   tag?: string; // element tag (e.g. 'div', 'p'); absent for text-only fragments
   attrs?: Record<string, unknown>;
-  value?: string | number; // textual content
+  value?: string; // textual content
 };
 
 export type Edge = {
@@ -87,7 +87,7 @@ export function renameNode(doc: JsonDoc, targetId: string, newTag: string): void
   node.tag = newTag;
 }
 
-export function setNodeValue(doc: JsonDoc, targetId: string, value: string | number | undefined): void {
+export function setNodeValue(doc: JsonDoc, targetId: string, value: string | undefined): void {
   const node = doc.nodes.find((n) => n.id === targetId);
   if (!node) return;
   if (value === undefined || value === null) {

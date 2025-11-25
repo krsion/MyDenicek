@@ -1,29 +1,21 @@
 
 import { type AutomergeUrl, type Repo, RepoContext, useDocument } from "@automerge/react";
-import { Stack } from "@fluentui/react";
-import { Card, CardHeader, DrawerBody, DrawerHeader, DrawerHeaderTitle, InlineDrawer, makeStyles, Switch, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Tag, TagGroup } from "@fluentui/react-components";
+import { Card, CardHeader, Drawer, DrawerBody, DrawerHeader, DrawerHeaderTitle, Switch, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup } from "@fluentui/react-components";
+import { AddRegular, ArrowDownRegular, ArrowLeftRegular, ArrowRightRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, EditRegular, NavigationRegular, RenameFilled, RenameRegular } from "@fluentui/react-icons";
 import { useContext, useMemo, useState } from "react";
 
+import { ConflictsTable } from "./ConflictsTable.tsx";
 import { addChildNode, addTransformation, detectConflicts, type JsonDoc, renameNode, setNodeValue, wrapNode } from "./Document.ts";
 import { DomNavigator } from "./DomNavigator";
 import { ElementDetails } from "./ElementDetails.tsx";
 import { RenderedDocument } from "./RenderedDocument.tsx";
-import { TagForm } from "./TagForm.tsx";
-import { ValueForm } from "./ValueForm";
-
-const useStyles = makeStyles({
-  root: {
-    display: "flex",
-  },
-  card: {
-    flex: "1",
-  },
-});
+import ToolbarPopoverButton from "./ToolbarPopoverButton";
 
 export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl, onConnect: () => void, onDisconnect: () => void }) => {
   const [doc, changeDoc] = useDocument<JsonDoc>(docUrl, { suspense: true });
   const [selectedEl, setSelectedEl] = useState<HTMLElement | null>(null);
   const [connected, setConnected] = useState(true);
+  const [conflictsOpen, setConflictsOpen] = useState(false);
 
   const repo = useContext(RepoContext) as Repo | undefined;
   const peerId = repo?.peerId ?? null;
@@ -40,7 +32,7 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
     const guid = selectedEl.getAttribute("data-node-guid") || null;
     // pull the node.value from the document model if available
     const modelNode = guid ? doc.nodes.find((n) => n.id === guid) : undefined;
-    const value = modelNode ? (modelNode.value as string | number | undefined) : undefined;
+    const value = modelNode ? (modelNode.value as string | undefined) : undefined;
 
     return { tag, id, guid, classes, width, height, dataTestId, value };
   }, [selectedEl, doc]);
@@ -49,97 +41,139 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
 
   const conflicts = useMemo(() => detectConflicts(doc), [doc]);
 
-  const styles = useStyles();
-  console.log(doc);
-
-
   return (
-    <div className={styles.root}>
-      <InlineDrawer open separator position="start" >
-        <DrawerHeader>
-          <DrawerHeaderTitle>Actions</DrawerHeaderTitle>
-        </DrawerHeader>
-        <DrawerBody>
-          <Stack tokens={{ childrenGap: 8 }}>
-            <TagForm selectedNodeGuid={selectedNodeGuid} onSubmit={(tag) => {
-              changeDoc((prev: JsonDoc) => {
-                wrapNode(prev, selectedNodeGuid!, tag, undefined, peerId);
-              });
-            }} label="Wrap into" buttonText="Wrap" />
+    <>
+      <Card appearance="subtle">
+        <Toolbar style={{ display: "flex", justifyContent: "space-between" }}>
+          <ToolbarGroup>
+            <ToolbarPopoverButton
+              icon={<AddRegular />}
+              disabled={!selectedNodeGuid}
+              initialValue={details?.tag}
+              ariaLabel="Add child"
+              onSubmit={(tag) => {
+                let newId: string | null = null;
+                changeDoc((prev: JsonDoc) => {
+                  newId = addChildNode(prev, selectedNodeGuid!, tag, peerId);
+                });
+                if (newId) {
+                  const trySelect = (attempt = 0) => {
+                    const el = document.querySelector(`[data-node-guid="${newId}"]`) as HTMLElement | null;
+                    if (el) {
+                      setSelectedEl(el);
+                      return;
+                    }
+                    if (attempt < 10) {
+                      setTimeout(() => trySelect(attempt + 1), 50);
+                    }
+                  };
+                  trySelect();
+                }
+              }}
+            >
+              Add child
+            </ToolbarPopoverButton>
 
-            <TagForm selectedNodeGuid={selectedNodeGuid} onSubmit={(tag) => {
-              changeDoc((prev: JsonDoc) => {
-                renameNode(prev, selectedNodeGuid!, tag);
-              });
-            }} label="Rename tag to" buttonText="Rename" />
+            <ToolbarPopoverButton
+              icon={<BackpackRegular />}
+              disabled={!selectedNodeGuid}
+              ariaLabel="Wrap"
+              initialValue={details?.tag}
+              onSubmit={(tag) => {
+                changeDoc((prev: JsonDoc) => {
+                  wrapNode(prev, selectedNodeGuid!, tag, undefined, peerId);
+                });
+              }}
+            >
+              Wrap
+            </ToolbarPopoverButton>
 
-            <TagForm selectedNodeGuid={selectedNodeGuid} onSubmit={(tag) => {
-              changeDoc((prev: JsonDoc) => {
-                if (!selectedNodeGuid) return;
-                addTransformation(prev, selectedNodeGuid!, "wrap", tag, peerId);
-              });
-            }} label="Wrap all children into" buttonText="Wrap" />
+            <ToolbarPopoverButton
+              icon={<EditRegular />}
+              disabled={!selectedNodeGuid}
+              ariaLabel="Edit"
+              initialValue={details?.value}
+              onSubmit={(value) => {
+                changeDoc((prev: JsonDoc) => {
+                  if (!selectedNodeGuid) return;
+                  setNodeValue(prev, selectedNodeGuid!, value);
+                });
+              }}
+            >
+              Edit
+            </ToolbarPopoverButton>
 
-            <TagForm selectedNodeGuid={selectedNodeGuid} onSubmit={(tag) => {
-              changeDoc((prev: JsonDoc) => {
-                if (!selectedNodeGuid) return;
-                addTransformation(prev, selectedNodeGuid!, "rename", tag, peerId);
-              });
-            }} label="Rename all children tags to" buttonText="Rename" />
+            <ToolbarPopoverButton
+              icon={<RenameRegular />}
+              disabled={!selectedNodeGuid}
+              ariaLabel="Rename"
+              initialValue={details?.tag}
+              onSubmit={(tag) => {
+                changeDoc((prev: JsonDoc) => {
+                  renameNode(prev, selectedNodeGuid!, tag);
+                });
+              }}
+            >
+              Rename
+            </ToolbarPopoverButton>
+            <ToolbarDivider />
 
-            <TagForm selectedNodeGuid={selectedNodeGuid} onSubmit={(tag) => {
-              let newId: string | null = null;
-              changeDoc((prev: JsonDoc) => {
-                if (!selectedNodeGuid) return;
-                newId = addChildNode(prev, selectedNodeGuid!, tag, peerId);
-              });
-              if (newId) {
-                // The DOM update may be async. Retry a few times until the element appears.
-                const trySelect = (attempt = 0) => {
-                  const el = document.querySelector(`[data-node-guid="${newId}"]`) as HTMLElement | null;
-                  if (el) {
-                    setSelectedEl(el);
-                    return;
-                  }
-                  if (attempt < 10) {
-                    setTimeout(() => trySelect(attempt + 1), 50);
-                  }
-                };
-                trySelect();
-              }
-            }} label="Add child element" buttonText="Add" />
+            <ToolbarPopoverButton
+              icon={<BackpackFilled />}
+              disabled={!selectedNodeGuid}
+              ariaLabel="Wrap all children"
+              initialValue={details?.tag}
+              onSubmit={(tag) => {
+                changeDoc((prev: JsonDoc) => {
+                  if (!selectedNodeGuid) return;
+                  addTransformation(prev, selectedNodeGuid!, "wrap", tag, peerId);
+                });
+              }}
+            >
+              Wrap all children
+            </ToolbarPopoverButton>
 
-            <ValueForm selectedNodeGuid={selectedNodeGuid} currentValue={details?.value} onSubmit={(v) => {
-              changeDoc((prev: JsonDoc) => {
-                if (!selectedNodeGuid) return;
-                setNodeValue(prev, selectedNodeGuid!, v);
-              });
-            }} label="Edit text content" buttonText="Set" />
-          </Stack>
-        </DrawerBody>
-      </InlineDrawer>
-      <Card appearance="subtle" className={styles.card}>
+            <ToolbarPopoverButton
+              icon={<RenameFilled />}
+              disabled={!selectedNodeGuid}
+              initialValue={details?.tag}
+              ariaLabel="Rename all children"
+              onSubmit={(tag) => {
+                changeDoc((prev: JsonDoc) => {
+                  if (!selectedNodeGuid) return;
+                  addTransformation(prev, selectedNodeGuid!, "rename", tag, peerId);
+                });
+              }}
+            >
+              Rename all children
+            </ToolbarPopoverButton>
+          </ToolbarGroup>
+
+          <ToolbarGroup>
+            <span style={{ marginRight: 12 }}>{peerId ? `Peer ID: ${peerId}` : "No Peer ID"}</span>
+            <Switch
+              checked={connected}
+              onChange={() => {
+                if (connected) {
+                  setConnected(false);
+                  onDisconnect();
+                } else {
+                  setConnected(true);
+                  onConnect();
+                }
+              }}
+              label={connected ? "Sync on" : "Sync off"}
+            />
+            <ToolbarButton icon={<NavigationRegular />} onClick={() => setConflictsOpen(!conflictsOpen)}>Conflicts ({conflicts.length})</ToolbarButton>
+          </ToolbarGroup>
+        </Toolbar>
 
         <CardHeader header={<TagGroup>
-          <Tag>←&nbsp;Parent</Tag>
-          <Tag>→&nbsp;First child</Tag>
-          <Tag>↑&nbsp;Prev sibling</Tag>
-          <Tag>↓&nbsp;Next sibling</Tag>
-          <Tag>Esc&nbsp;Clear</Tag>
-          <Switch
-            checked={connected}
-            onChange={() => {
-              if (connected) {
-                setConnected(false);
-                onDisconnect();
-              } else {
-                setConnected(true);
-                onConnect();
-              }
-            }}
-            label={connected ? "Sync on" : "Sync off"}
-          />
-          <Tag>{peerId ? `Peer ID: ${peerId}` : "No Peer ID"}</Tag>
+          <Tag icon={<ArrowLeftRegular />}> Parent</Tag>
+          <Tag icon={<ArrowRightRegular />}> First child</Tag>
+          <Tag icon={<ArrowUpRegular />}> Prev sibling</Tag>
+          <Tag icon={<ArrowDownRegular />}> Next sibling</Tag>
+          <Tag icon={<Text>Esc</Text>}>Clear</Tag>
         </TagGroup>}
         />
 
@@ -151,50 +185,20 @@ export const App = ({ docUrl, onConnect, onDisconnect }: { docUrl: AutomergeUrl,
 
 
       </Card>
-      <InlineDrawer open separator position="end" >
+      <Drawer open={conflictsOpen} separator position="end" onOpenChange={(_, { open }) => setConflictsOpen(open)}
+      >
         <DrawerHeader>
           <DrawerHeaderTitle>Conflicts</DrawerHeaderTitle>
         </DrawerHeader>
         <DrawerBody>
-          <Stack tokens={{ childrenGap: 8 }}>
-            {conflicts.length === 0 ? (
-              <div>No conflicts detected</div>
-            ) : (
-              <Table aria-label="Conflicts table">
-                <TableHeader>
-                  <TableRow>
-                    <TableHeaderCell>Child</TableHeaderCell>
-                    <TableHeaderCell>Parent node</TableHeaderCell>
-                    <TableHeaderCell>Replica</TableHeaderCell>
-                  </TableRow>
-                </TableHeader>
-
-                <TableBody>
-                  {conflicts.flatMap((c) =>
-                    c.parents.map((pp, idx) => (
-                      <TableRow key={`${c.child}-${idx}`}>
-                        {idx === 0 && (
-                          <TableCell rowSpan={c.parents.length}>
-                            {c.child}
-                          </TableCell>
-                        )}
-
-                        <TableCell>
-                          {pp.parent === null ? "(root)" : doc.nodes.find((n) => n.id == pp.parent)?.tag ?? pp.parent}
-                        </TableCell>
-
-                        <TableCell>
-                          {pp.peerId ? pp.peerId : "unknown"}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            )}
-          </Stack>
+          {conflicts.length === 0 ? (
+            <div>No conflicts detected</div>
+          ) : (
+            <ConflictsTable conflicts={conflicts} doc={doc} />
+          )}
         </DrawerBody>
-      </InlineDrawer>
-    </div>
+      </Drawer>
+    </>
   );
 }
+
