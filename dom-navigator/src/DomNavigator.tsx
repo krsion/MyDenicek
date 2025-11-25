@@ -298,23 +298,19 @@ export function DomNavigator({ children, onSelectedChange, selectedNodeId, peerS
 
     switch (e.key) {
       case "ArrowLeft": {
-        const p = parentOf(selected);
-        next = withinContainer(p) ? p : selected; // clamp at container edge
+        next = parentOf(selected);
         break;
       }
       case "ArrowRight": {
-        const c = firstElementChildOf(selected);
-        next = withinContainer(c) ? c : selected; // no-op if no children
+        next = firstElementChildOf(selected);
         break;
       }
       case "ArrowUp": {
-        const p = prevSibling(selected);
-        next = withinContainer(p) ? p : selected; // no-op if none
+        next = prevSibling(selected);
         break;
       }
       case "ArrowDown": {
-        const n = nextSibling(selected);
-        next = withinContainer(n) ? n : selected; // no-op if none
+        next = nextSibling(selected);
         break;
       }
     }
