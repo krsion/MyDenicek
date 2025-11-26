@@ -241,11 +241,7 @@ export function DomNavigator({ children, onSelectedChange, selectedNodeId, peerS
   }
 
   function describe(el: HTMLElement): string {
-    const tag = el.tagName.toLowerCase();
-    const id = el.id ? `#${el.id}` : "";
-    const cls = el.className && typeof el.className === "string" ?
-      "." + (el.className as string).trim().split(/\s+/).join(".") : "";
-    return `${tag}${id}${cls}`;
+    return el.tagName.toLowerCase();
   }
 
   // Sync selection from an external source (e.g. the app after adding a node)

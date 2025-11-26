@@ -129,24 +129,23 @@ export function initialDocument(): JsonDoc | undefined {
   const nodesEntities: Record<string, Node> = {
       'n-root' : {tag: 'section', children: {'n-inner': true} },
       'n-inner' : {tag: 'section', children: {'article-a': true, 'article-b': true, 'article-c': true}, attrs: { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }, 'data-testid': 'section' } },
-      'article-a' : {tag: 'article', children: {'h2-a': true, 'p-a': true, 'ul-a': true}, attrs: { style: { padding: 12, background: '#fff', borderRadius: 8, border: '1px solid #ddd' }, 'data-testid': 'article-a' } },
+      'article-a' : {tag: 'article', children: {'h2-a': true, 'p-a': true, 'ul-a': true} },
       'h2-a' : {tag: 'h2', value: 'Article A' },
       'p-a' : {tag: 'p', value: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.' },
       'ul-a' : {tag: 'ul', children: {'li-a1': true, 'li-a2': true, 'li-a3': true} },
       'li-a1' : {tag: 'li', value: 'Item A1' },
       'li-a2' : {tag: 'li', value: 'Item A2' },
       'li-a3' : {tag: 'li', value: 'Item A3' },
-      'article-b' : {tag: 'article', children: {'h2-b': true, 'p-b': true, 'div-b-buttons': true}, attrs: { style: { padding: 12, background: '#fff', borderRadius: 8, border: '1px solid #ddd' }, 'data-testid': 'article-b' } },
+      'article-b' : {tag: 'article', children: {'h2-b': true, 'p-b': true, 'div-b-buttons': true} },
       'h2-b' : {tag: 'h2', value: 'Article B' },
       'p-b' : {tag: 'p', value: 'Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.' },
       'div-b-buttons' : {tag: 'div', children: {'btn1': true, 'btn2': true, 'btn3': true}, attrs: { style: { display: 'flex', gap: 8 } } },
       'btn1' : {tag: 'button', value: 'Button 1' },
       'btn2' : {tag: 'button', value: 'Button 2' },
       'btn3' : {tag: 'button', value: 'Button 3' },
-      'article-c' : {tag: 'article', children: {'h2-c': true, 'grid-c': true}, attrs: { style: { padding: 12, background: '#fff', borderRadius: 8, border: '1px solid #ddd', gridColumn: 'span 2' }, 'data-testid': 'article-c' } },
+      'article-c' : {tag: 'article', children: {'h2-c': true, 'grid-c': true}, attrs: { style: { gridColumn: 'span 2' } } },
       'h2-c' : {tag: 'h2', value: 'Article C' },
       'grid-c' : {tag: 'div', children: {'box-1': true, 'box-2': true, 'box-3': true, 'box-4': true, 'box-5': true, 'box-6': true, 'box-7': true, 'box-8': true, 'box-9': true}, attrs: { style: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 } } },
-      // boxes (box-1 .. box-9)
   };
   Array.from({ length: 9 }).map((_, i) => (nodesEntities[`box-${i + 1}`] = { tag: 'div', attrs: { style: { padding: 12, background: '#f7f7f7', border: '1px dashed #ccc', borderRadius: 6 } }, value: `Box ${i + 1}` }));
   const nodesOrders = Object.keys(nodesEntities);
