@@ -1,21 +1,16 @@
+import { insertBefore as insertNodeBefore, type OrderedDictionary, push as pushNode } from "./OrderedDictionary";
+
 // Flat graph representation: nodes + edges
 export type Node = {
-  id: string;
   tag?: string; // element tag (e.g. 'div', 'p'); absent for text-only fragments
   attrs?: Record<string, unknown>;
   value?: string; // textual content
-};
-
-export type Edge = {
-  parent: string | null; // null => root-level
-  child: string; // node id
-  version?: number; // version of transformations applied when this child was added
-  peerId?: string | null; // optional replica id / peer that created this edge
+  children?: Record<string, boolean>; // child node ids
 };
 
 export type JsonDoc = {
-  nodes: Node[];
-  edges: Edge[];
+  root: string | null;
+  nodes: OrderedDictionary<string, Node>;
   transformations?: Transformation[];
 };
 
@@ -26,18 +21,15 @@ export type Transformation = {
   tag: string;
 };
 
-export function buildMaps(doc: JsonDoc) {
-  const nodesById = new Map<string, Node>(doc.nodes.map((n) => [n.id, n] as [string, Node]));
-  const nodesOrder = new Map<string, number>(doc.nodes.map((n, i) => [n.id, i]));
-  const childrenMap = new Map<string | null, Edge[]>();
-  for (const e of doc.edges) {
-    const arr = childrenMap.get(e.parent) || [];
-    arr.push(e);
-    childrenMap.set(e.parent, arr);
+function parents(doc: JsonDoc, childId: string): (string | null)[] {
+  const parents = [];
+  const nodes = doc.nodes.entities;
+  for (const parentId of Object.keys(nodes)) {
+    if (nodes[parentId] && nodes[parentId].children && nodes[parentId].children[childId]) {
+      parents.push(parentId);
+    }
   }
-  // sort children by position in nodes list
-  for (const arr of childrenMap.values()) arr.sort((a, b) => (nodesOrder.get(a.child) ?? 0) - (nodesOrder.get(b.child) ?? 0));
-  return { nodesById, childrenMap };
+  return parents;
 }
 
 function latestVersionForParent(doc: JsonDoc, parent: string | null) {
@@ -54,41 +46,27 @@ const getUUID = () => {
   return c && typeof c.randomUUID === 'function' ? c.randomUUID() : Date.now().toString(36);
 };
 
-export function wrapNode(doc: JsonDoc, targetId: string, wrapperTag: string, appliedVersion?: number, peerId?: string | null): void {
+export function wrapNode(doc: JsonDoc, targetId: string, wrapperTag: string): void {
   const nodes = doc.nodes;
-  const edges = doc.edges;
-
-  const targetIndex = nodes.findIndex((n) => n.id === targetId);
-  if (targetIndex === -1) return;
-
-  const wrapperId = `w_${getUUID()}`;
-  nodes.splice(targetIndex, 0, { id: wrapperId, tag: wrapperTag, attrs: {} });
-
-  const parentEdgeIndex = edges.findIndex((e) => e.child === targetId);
-  const parent = parentEdgeIndex >= 0 ? edges[parentEdgeIndex].parent : null;
-
-  const parentEdgeVersion = appliedVersion ?? latestVersionForParent(doc, parent);
-
-  if (parentEdgeIndex >= 0) {
-    // replace parent->target with parent->wrapper
-    edges.splice(parentEdgeIndex, 1, { parent, child: wrapperId, version: parentEdgeVersion, peerId: peerId ?? null });
-  } else {
-    edges.push({ parent: null, child: wrapperId, version: parentEdgeVersion, peerId: peerId ?? null });
+  const wrapperId = "wrapper-"+targetId;
+  for (const parentId of parents(doc, targetId)) {
+    const parentNode = parentId ? nodes.entities[parentId] : null;
+    if (parentNode && parentNode.children) {
+      delete parentNode.children[targetId];
+      parentNode.children[wrapperId] = true;
+    }
   }
-
-  // wrapper -> target
-  const wrapperEdgeVersion = appliedVersion ?? latestVersionForParent(doc, wrapperId);
-  edges.push({ parent: wrapperId, child: targetId, version: wrapperEdgeVersion, peerId: peerId ?? null });
+  insertNodeBefore(nodes, targetId, wrapperId, { tag: wrapperTag, attrs: {}, children: {[targetId]:true} });
 }
 
 export function renameNode(doc: JsonDoc, targetId: string, newTag: string): void {
-  const node = doc.nodes.find((n) => n.id === targetId);
+  const node = doc.nodes.entities[targetId];
   if (!node) return;
   node.tag = newTag;
 }
 
 export function setNodeValue(doc: JsonDoc, targetId: string, value: string | undefined): void {
-  const node = doc.nodes.find((n) => n.id === targetId);
+  const node = doc.nodes.entities[targetId];
   if (!node) return;
   if (value === undefined || value === null) {
     delete node.value;
@@ -97,44 +75,44 @@ export function setNodeValue(doc: JsonDoc, targetId: string, value: string | und
   }
 }
 
-export function addTransformation(doc: JsonDoc, parent: string | null, type: "wrap" | "rename", tag: string, peerId?: string | null) {
+export function addTransformation(doc: JsonDoc, parent: string | null, type: "wrap" | "rename", tag: string) {
+  if (!parent) return;
   if (!doc.transformations) doc.transformations = [];
   const current = latestVersionForParent(doc, parent);
   const t: Transformation = { parent, version: current + 1, type, tag };
   doc.transformations.push(t);
 
   // eagerly apply the transformation to existing children of the parent
-  const edges = doc.edges;
-  const children = edges.filter((e) => e.parent === parent);
-  for (const e of children) {
-    const childVersion = e.version ?? 0;
-    if (childVersion >= t.version) continue;
-
+  const children = doc.nodes.entities[parent]?.children ? Object.keys(doc.nodes.entities[parent]!.children!) : [];
+  for (const child of children) {
     if (t.type === "rename") {
-      renameNode(doc, e.child, t.tag);
-
-      // mark this child as having seen the transformation
-      // find the edge object in edges and update its version
-      const idx = edges.findIndex((x) => x.parent === e.parent && x.child === e.child);
-      if (idx >= 0) edges[idx].version = t.version;
+      renameNode(doc, child, t.tag);
     } else if (t.type === "wrap") {
-      // wrapping may replace the parent->child edge with parent->wrapper and add wrapper->child
-      // wrapNode accepts an optional appliedVersion to stamp created edges
-      wrapNode(doc, e.child, t.tag, t.version, peerId ?? null);
+      wrapNode(doc, child, t.tag);
     }
   }
 }
 
-export function addChildNode(doc: JsonDoc, parentId: string | null, tag: string, peerId?: string | null) {
-  const nodes = doc.nodes;
-  const edges = doc.edges;
-  const id = `n_${getUUID()}`;
-  const node: Node = { id, tag, attrs: {} };
-  nodes.push(node);
+export function firstChildsTag(doc: JsonDoc, parentId: string): string | undefined {
+  if (!doc.nodes.entities[parentId] || !doc.nodes.entities[parentId].children) return undefined;
+  const children = doc.nodes.entities[parentId].children;
+  for (const childId of Object.keys(children)) {
+    if (children[childId]) {
+      const childTag = doc.nodes.entities[childId].tag;
+      if (childTag) return childTag;
+    }
+  }
+  return undefined; 
+}
 
-  // when adding a new child, set its edge.version to the latest available version for the parent
-  const version = latestVersionForParent(doc, parentId);
-  edges.push({ parent: parentId, child: id, version, peerId: peerId ?? null });
+export function addChildNode(doc: JsonDoc, parentId: string | null, tag: string) {
+  if (!parentId) return;
+  const nodes = doc.nodes;
+  const id = `n_${getUUID()}`;
+  const node: Node = { tag, attrs: {} };
+  pushNode(nodes, id, node);
+  if (!doc.nodes.entities[parentId].children) doc.nodes.entities[parentId].children = {};
+  doc.nodes.entities[parentId].children[id] = true;
   return id;
 }
 
@@ -147,87 +125,36 @@ export type Conflict = {
   chosenParent: string | null;
 };
 
-// Detect nodes that are referenced as a child by more than one distinct parent
-export function detectConflicts(doc: JsonDoc): Conflict[] {
-  // Map child -> Map of parent -> peerId (peerId may vary per edge)
-  const map = new Map<string, Map<string | null, string | null>>();
-  for (const e of doc.edges) {
-    const parentsMap = map.get(e.child) || new Map<string | null, string | null>();
-    parentsMap.set(e.parent, e.peerId ?? null);
-    map.set(e.child, parentsMap);
-  }
-
-  const conflicts: Conflict[] = [];
-  for (const [child, parentsMap] of map.entries()) {
-    if (parentsMap.size > 1) {
-      const parents: ConflictParent[] = Array.from(parentsMap.entries()).map(([p, peerId]) => ({ parent: p, peerId }));
-      // deterministic choice: pick smallest key (null considered as empty string)
-      parents.sort((a, b) => (a.peerId ?? "").localeCompare(b.peerId ?? ""));
-      const chosenParent = parents.length ? parents[0].parent : null;
-      conflicts.push({ child, parents, chosenParent });
-    }
-  }
-  return conflicts;
-}
-
 export function initialDocument(): JsonDoc | undefined {
-  return {
-    nodes: [
-      { id: 'n-root', tag: 'section' },
-      { id: 'n-inner', tag: 'section', attrs: { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }, 'data-testid': 'section' } },
-
-      // Article A
-      { id: 'article-a', tag: 'article', attrs: { style: { padding: 12, background: '#fff', borderRadius: 8, border: '1px solid #ddd' }, 'data-testid': 'article-a' } },
-      { id: 'h2-a', tag: 'h2', value: 'Article A' },
-      { id: 'p-a', tag: 'p', value: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.' },
-      { id: 'ul-a', tag: 'ul' },
-      { id: 'li-a1', tag: 'li', value: 'Item A1' },
-      { id: 'li-a2', tag: 'li', value: 'Item A2' },
-      { id: 'li-a3', tag: 'li', value: 'Item A3' },
-
-      // Article B
-      { id: 'article-b', tag: 'article', attrs: { style: { padding: 12, background: '#fff', borderRadius: 8, border: '1px solid #ddd' }, 'data-testid': 'article-b' } },
-      { id: 'h2-b', tag: 'h2', value: 'Article B' },
-      { id: 'p-b', tag: 'p', value: 'Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.' },
-      { id: 'div-b-buttons', tag: 'div', attrs: { style: { display: 'flex', gap: 8 } } },
-      { id: 'btn1', tag: 'button', value: 'Button 1' },
-      { id: 'btn2', tag: 'button', value: 'Button 2' },
-      { id: 'btn3', tag: 'button', value: 'Button 3' },
-
-      // Article C (spans two columns)
-      { id: 'article-c', tag: 'article', attrs: { style: { padding: 12, background: '#fff', borderRadius: 8, border: '1px solid #ddd', gridColumn: 'span 2' }, 'data-testid': 'article-c' } },
-      { id: 'h2-c', tag: 'h2', value: 'Article C' },
-      { id: 'grid-c', tag: 'div', attrs: { style: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 } } },
+  const nodesEntities: Record<string, Node> = {
+      'n-root' : {tag: 'section', children: {'n-inner': true} },
+      'n-inner' : {tag: 'section', children: {'article-a': true, 'article-b': true, 'article-c': true}, attrs: { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }, 'data-testid': 'section' } },
+      'article-a' : {tag: 'article', children: {'h2-a': true, 'p-a': true, 'ul-a': true}, attrs: { style: { padding: 12, background: '#fff', borderRadius: 8, border: '1px solid #ddd' }, 'data-testid': 'article-a' } },
+      'h2-a' : {tag: 'h2', value: 'Article A' },
+      'p-a' : {tag: 'p', value: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.' },
+      'ul-a' : {tag: 'ul', children: {'li-a1': true, 'li-a2': true, 'li-a3': true} },
+      'li-a1' : {tag: 'li', value: 'Item A1' },
+      'li-a2' : {tag: 'li', value: 'Item A2' },
+      'li-a3' : {tag: 'li', value: 'Item A3' },
+      'article-b' : {tag: 'article', children: {'h2-b': true, 'p-b': true, 'div-b-buttons': true}, attrs: { style: { padding: 12, background: '#fff', borderRadius: 8, border: '1px solid #ddd' }, 'data-testid': 'article-b' } },
+      'h2-b' : {tag: 'h2', value: 'Article B' },
+      'p-b' : {tag: 'p', value: 'Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.' },
+      'div-b-buttons' : {tag: 'div', children: {'btn1': true, 'btn2': true, 'btn3': true}, attrs: { style: { display: 'flex', gap: 8 } } },
+      'btn1' : {tag: 'button', value: 'Button 1' },
+      'btn2' : {tag: 'button', value: 'Button 2' },
+      'btn3' : {tag: 'button', value: 'Button 3' },
+      'article-c' : {tag: 'article', children: {'h2-c': true, 'grid-c': true}, attrs: { style: { padding: 12, background: '#fff', borderRadius: 8, border: '1px solid #ddd', gridColumn: 'span 2' }, 'data-testid': 'article-c' } },
+      'h2-c' : {tag: 'h2', value: 'Article C' },
+      'grid-c' : {tag: 'div', children: {'box-1': true, 'box-2': true, 'box-3': true, 'box-4': true, 'box-5': true, 'box-6': true, 'box-7': true, 'box-8': true, 'box-9': true}, attrs: { style: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 } } },
       // boxes (box-1 .. box-9)
-      ...Array.from({ length: 9 }).map((_, i) => ({ id: `box-${i + 1}`, tag: 'div', attrs: { style: { padding: 12, background: '#f7f7f7', border: '1px dashed #ccc', borderRadius: 6 } }, value: `Box ${i + 1}` }))
-    ],
-    edges: [
-      // root -> inner
-      { parent: 'n-root', child: 'n-inner' },
-      { parent: null, child: 'n-root' },
+  };
+  Array.from({ length: 9 }).map((_, i) => (nodesEntities[`box-${i + 1}`] = { tag: 'div', attrs: { style: { padding: 12, background: '#f7f7f7', border: '1px dashed #ccc', borderRadius: 6 } }, value: `Box ${i + 1}` }));
+  const nodesOrders = Object.keys(nodesEntities);
 
-      // inner -> articles
-      { parent: 'n-inner', child: 'article-a' },
-      { parent: 'n-inner', child: 'article-b' },
-      { parent: 'n-inner', child: 'article-c' },
+  const nodes: OrderedDictionary<string, Node> = {entities: nodesEntities, order: nodesOrders};
 
-      // article-a children
-      { parent: 'article-a', child: 'h2-a' },
-      { parent: 'article-a', child: 'p-a' },
-      { parent: 'article-a', child: 'ul-a' },
-      { parent: 'ul-a', child: 'li-a1' }, { parent: 'ul-a', child: 'li-a2' }, { parent: 'ul-a', child: 'li-a3' },
-
-      // article-b children
-      { parent: 'article-b', child: 'h2-b' },
-      { parent: 'article-b', child: 'p-b' },
-      { parent: 'article-b', child: 'div-b-buttons' },
-      { parent: 'div-b-buttons', child: 'btn1' }, { parent: 'div-b-buttons', child: 'btn2' }, { parent: 'div-b-buttons', child: 'btn3' },
-
-      // article-c children
-      { parent: 'article-c', child: 'h2-c' },
-      { parent: 'article-c', child: 'grid-c' },
-      // grid children: boxes
-      ...Array.from({ length: 9 }).map((_, i) => ({ parent: 'grid-c', child: `box-${i + 1}` }))
-    ]
+  return {
+    root: 'n-root',
+    nodes,
   };
 }

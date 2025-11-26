@@ -1,10 +1,9 @@
 import { DocHandle, type PeerId, type Repo, RepoContext, useDocument, useLocalAwareness, useRemoteAwareness } from "@automerge/react";
 import { Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, Drawer, DrawerBody, DrawerHeader, DrawerHeaderTitle, Switch, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
-import { AddRegular, ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CodeRegular, EditRegular, HistoryRegular, NavigationRegular, RenameFilled, RenameRegular } from "@fluentui/react-icons";
+import { AddRegular, ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CodeRegular, EditRegular, HistoryRegular, RenameFilled, RenameRegular } from "@fluentui/react-icons";
 import { useContext, useMemo, useState } from "react";
 
-import { ConflictsTable } from "./ConflictsTable.tsx";
-import { addChildNode, addTransformation, detectConflicts, type JsonDoc, renameNode, setNodeValue, wrapNode } from "./Document.ts";
+import { addChildNode, addTransformation, firstChildsTag, type JsonDoc, renameNode, setNodeValue, wrapNode } from "./Document.ts";
 import { DomNavigator } from "./DomNavigator";
 import { ElementDetails } from "./ElementDetails.tsx";
 import { JsonView } from "./JsonView.tsx";
@@ -41,7 +40,6 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
     return selections;
   }, [peerStates]);
   const [connected, setConnected] = useState(true);
-  const [conflictsOpen, setConflictsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
 
 
@@ -57,7 +55,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
     const dataTestId = selectedEl.getAttribute("data-testid");
     const guid = selectedEl.getAttribute("data-node-guid") || null;
     // pull the node.value from the document model if available
-    const modelNode = guid ? doc.nodes.find((n) => n.id === guid) : undefined;
+    const modelNode = guid ? doc.nodes.entities[guid] : undefined;
     const value = modelNode ? (modelNode.value as string | undefined) : undefined;
 
     return { tag, id, guid, classes, width, height, dataTestId, value };
@@ -65,7 +63,6 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
 
   const selectedNodeGuid = localState.selectedNodeId || null;
 
-  const conflicts = useMemo(() => detectConflicts(doc), [doc]);
 
   return (
     <>
@@ -82,7 +79,6 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                   setRedoStack(stack => [...stack, JSON.parse(JSON.stringify(doc))]);
                   changeDoc((d) => {
                     d.nodes = JSON.parse(JSON.stringify(prevDoc.nodes));
-                    d.edges = JSON.parse(JSON.stringify(prevDoc.edges));
                     d.transformations = prevDoc.transformations ? JSON.parse(JSON.stringify(prevDoc.transformations)) : [];
                   });
 
@@ -102,7 +98,6 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                   setUndoStack(stack => [...stack, JSON.parse(JSON.stringify(doc))]);
                   changeDoc((d) => {
                     d.nodes = JSON.parse(JSON.stringify(nextDoc.nodes));
-                    d.edges = JSON.parse(JSON.stringify(nextDoc.edges));
                     d.transformations = nextDoc.transformations ? JSON.parse(JSON.stringify(nextDoc.transformations)) : [];
                   });
 
@@ -116,12 +111,12 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
               text="Add child"
               icon={<AddRegular />}
               disabled={!selectedNodeGuid}
-              initialValue={doc.nodes.find(n => n.id === (doc.edges.find(e => e.parent === selectedNodeGuid)?.child ?? null))?.tag}
+              initialValue={firstChildsTag(doc, selectedNodeGuid)}
               ariaLabel="Add child"
               onSubmit={(tag) => {
-                let newId: string | null = null;
+                let newId: string | undefined = undefined;
                 modifyDoc((prev: JsonDoc) => {
-                  newId = addChildNode(prev, selectedNodeGuid!, tag, peerId);
+                  newId = addChildNode(prev, selectedNodeGuid!, tag);
                 });
                 if (newId) {
                   updateLocalState({ selectedNodeId: newId });
@@ -149,7 +144,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
               ariaLabel="Wrap"
               onSubmit={(tag) => {
                 modifyDoc((prev: JsonDoc) => {
-                  wrapNode(prev, selectedNodeGuid!, tag, undefined, peerId);
+                  wrapNode(prev, selectedNodeGuid!, tag);
                 });
                 clickOnSelectedNode(selectedNodeGuid);
               }}
@@ -178,7 +173,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
               onSubmit={(tag) => {
                 modifyDoc((prev: JsonDoc) => {
                   if (!selectedNodeGuid) return;
-                  addTransformation(prev, selectedNodeGuid!, "wrap", tag, peerId);
+                  addTransformation(prev, selectedNodeGuid!, "wrap", tag);
                 });
               }}
             />
@@ -187,12 +182,12 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
               text="Rename all children"
               icon={<RenameFilled />}
               disabled={!selectedNodeGuid}
-              initialValue={doc.nodes.find(n => n.id === (doc.edges.find(e => e.parent === selectedNodeGuid)?.child ?? null))?.tag}
+              initialValue={firstChildsTag(doc, selectedNodeGuid)}
               ariaLabel="Rename all children"
               onSubmit={(tag) => {
                 modifyDoc((prev: JsonDoc) => {
                   if (!selectedNodeGuid) return;
-                  addTransformation(prev, selectedNodeGuid!, "rename", tag, peerId);
+                  addTransformation(prev, selectedNodeGuid!, "rename", tag);
                 });
               }}
             />
@@ -226,7 +221,6 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
               </DialogSurface>
             </Dialog>
             <ToolbarButton icon={<HistoryRegular />} onClick={() => setHistoryOpen(!historyOpen)}>History</ToolbarButton>
-            {conflicts.length > 0 && <ToolbarButton icon={<NavigationRegular />} onClick={() => setConflictsOpen(!conflictsOpen)}>Conflicts ({conflicts.length})</ToolbarButton>}
           </ToolbarGroup>
         </Toolbar>
 
@@ -273,19 +267,6 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
 
 
       </Card>
-      <Drawer open={conflictsOpen} separator position="end" onOpenChange={(_, { open }) => setConflictsOpen(open)}
-      >
-        <DrawerHeader>
-          <DrawerHeaderTitle>Conflicts</DrawerHeaderTitle>
-        </DrawerHeader>
-        <DrawerBody>
-          {conflicts.length === 0 ? (
-            <div>No conflicts detected</div>
-          ) : (
-            <ConflictsTable conflicts={conflicts} doc={doc} />
-          )}
-        </DrawerBody>
-      </Drawer>
       <Drawer open={historyOpen} separator position="end" onOpenChange={(_, { open }) => {
         setHistoryOpen(open);
 
