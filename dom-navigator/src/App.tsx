@@ -1,9 +1,10 @@
 import { DocHandle, type PeerId, type Repo, RepoContext, useDocument, useLocalAwareness, useRemoteAwareness } from "@automerge/react";
 import { Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, Drawer, DrawerBody, DrawerHeader, DrawerHeaderTitle, Switch, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
-import { AddRegular, ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CodeRegular, EditRegular, HistoryRegular, RenameFilled, RenameRegular } from "@fluentui/react-icons";
+import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CodeRegular, EditRegular, HistoryRegular, RenameFilled, RenameRegular } from "@fluentui/react-icons";
 import { useContext, useMemo, useState } from "react";
 
-import { addChildNode, addTransformation, firstChildsTag, type JsonDoc, renameNode, setNodeValue, wrapNode } from "./Document.ts";
+import { AddNodePopoverButton } from "./AddNodePopoverButton";
+import { addChildNode, addSiblingNodeAfter, addSiblingNodeBefore, addTransformation, firstChildsTag, type JsonDoc, renameNode, setNodeValue, wrapNode } from "./Document.ts";
 import { DomNavigator } from "./DomNavigator";
 import { ElementDetails } from "./ElementDetails.tsx";
 import { JsonView } from "./JsonView.tsx";
@@ -107,16 +108,31 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
               />
             </Tooltip>
             <ToolbarDivider />
-            <ToolbarPopoverButton
-              text="Add child"
-              icon={<AddRegular />}
+            <AddNodePopoverButton
               disabled={!selectedNodeGuid}
-              initialValue={firstChildsTag(doc, selectedNodeGuid)}
-              ariaLabel="Add child"
-              onSubmit={(tag) => {
+              initialValue={selectedNodeGuid ? firstChildsTag(doc, selectedNodeGuid) : undefined}
+              onAddChild={(tag) => {
                 let newId: string | undefined = undefined;
                 modifyDoc((prev: JsonDoc) => {
                   newId = addChildNode(prev, selectedNodeGuid!, tag);
+                });
+                if (newId) {
+                  updateLocalState({ selectedNodeId: newId });
+                }
+              }}
+              onAddBefore={(tag) => {
+                let newId: string | undefined = undefined;
+                modifyDoc((prev: JsonDoc) => {
+                  newId = addSiblingNodeBefore(prev, selectedNodeGuid!, tag);
+                });
+                if (newId) {
+                  updateLocalState({ selectedNodeId: newId });
+                }
+              }}
+              onAddAfter={(tag) => {
+                let newId: string | undefined = undefined;
+                modifyDoc((prev: JsonDoc) => {
+                  newId = addSiblingNodeAfter(prev, selectedNodeGuid!, tag);
                 });
                 if (newId) {
                   updateLocalState({ selectedNodeId: newId });

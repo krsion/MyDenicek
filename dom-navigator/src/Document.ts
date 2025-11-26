@@ -1,4 +1,4 @@
-import { insertBefore as insertNodeBefore, type OrderedDictionary, push as pushNode } from "./OrderedDictionary";
+import { insertAfter as insertNodeAfter, insertBefore as insertNodeBefore, type OrderedDictionary, push as pushNode } from "./OrderedDictionary";
 
 // Flat graph representation: nodes + edges
 export type Node = {
@@ -113,6 +113,40 @@ export function addChildNode(doc: JsonDoc, parentId: string | null, tag: string)
   pushNode(nodes, id, node);
   if (!doc.nodes.entities[parentId].children) doc.nodes.entities[parentId].children = {};
   doc.nodes.entities[parentId].children[id] = true;
+  return id;
+}
+
+export function addSiblingNodeBefore(doc: JsonDoc, siblingId: string, tag: string) {
+  const nodes = doc.nodes;
+  const id = `n_${getUUID()}`;
+  const node: Node = { tag, attrs: {} };
+  
+  insertNodeBefore(nodes, siblingId, id, node);
+  
+  const parentIds = parents(doc, siblingId);
+  for (const parentId of parentIds) {
+    if (parentId && doc.nodes.entities[parentId]) {
+       if (!doc.nodes.entities[parentId].children) doc.nodes.entities[parentId].children = {};
+       doc.nodes.entities[parentId].children[id] = true;
+    }
+  }
+  return id;
+}
+
+export function addSiblingNodeAfter(doc: JsonDoc, siblingId: string, tag: string) {
+  const nodes = doc.nodes;
+  const id = `n_${getUUID()}`;
+  const node: Node = { tag, attrs: {} };
+  
+  insertNodeAfter(nodes, siblingId, id, node);
+  
+  const parentIds = parents(doc, siblingId);
+  for (const parentId of parentIds) {
+    if (parentId && doc.nodes.entities[parentId]) {
+       if (!doc.nodes.entities[parentId].children) doc.nodes.entities[parentId].children = {};
+       doc.nodes.entities[parentId].children[id] = true;
+    }
+  }
   return id;
 }
 

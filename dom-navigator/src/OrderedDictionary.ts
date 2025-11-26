@@ -29,6 +29,15 @@ export function insertBefore<K extends DictionaryKey, V>(dict: OrderedDictionary
     if (targetIndex === -1) return;
     if (!(insertKey in dict.entities)) {
         dict.entities[insertKey] = insertValue;
-}
+    }
     dict.order.splice(targetIndex, 0, insertKey);
+}
+
+export function insertAfter<K extends DictionaryKey, V>(dict: OrderedDictionary<K,V>, targetKey: K, insertKey: K, insertValue: V): void {
+    const targetIndex = dict.order.indexOf(targetKey);
+    if (targetIndex === -1) return;
+    if (!(insertKey in dict.entities)) {
+        dict.entities[insertKey] = insertValue;
+    }
+    dict.order.splice(targetIndex + 1, 0, insertKey);
 }
