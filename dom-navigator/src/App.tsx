@@ -150,21 +150,37 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                 }
               }}
             />
-            <ToolbarPopoverButton
-              text="Edit"
-              icon={<EditRegular />}
-              disabled={!selectedNode || selectedNode.kind !== "value"}
-              ariaLabel="Edit"
-              initialValue={details?.value || ""}
-              onSubmit={(value) => {
-                if (selectedNode?.kind == "value") {
+
+            {selectedNode?.kind === "value" && (
+              <ToolbarPopoverButton
+                text="Edit"
+                icon={<EditRegular />}
+                disabled={false}
+                ariaLabel="Edit"
+                initialValue={details?.value || ""}
+                onSubmit={(value) => {
                   modifyDoc(() => {
                     selectedNode.value = value;
                   });
-                }
-              }}
-            />
-
+                }}
+              />
+            ) ||
+              <ToolbarPopoverButton
+                text="Rename"
+                icon={<RenameRegular />}
+                disabled={!selectedNodeGuid || selectedNode?.kind !== "element"}
+                ariaLabel="Rename"
+                initialValue={details?.tag || ""}
+                onSubmit={(tag) => {
+                  if (selectedNode?.kind == "element") {
+                    modifyDoc(() => {
+                      selectedNode.tag = tag;
+                    });
+                    if (selectedNodeGuid) clickOnSelectedNode(selectedNodeGuid);
+                  }
+                }}
+              />
+            }
             <ToolbarPopoverButton
               text="Wrap"
               icon={<BackpackRegular />}
@@ -177,36 +193,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                 if (selectedNodeGuid) clickOnSelectedNode(selectedNodeGuid);
               }}
             />
-
-            <ToolbarPopoverButton
-              text="Rename"
-              icon={<RenameRegular />}
-              disabled={!selectedNodeGuid || selectedNode?.kind !== "element"}
-              ariaLabel="Rename"
-              initialValue={details?.tag || ""}
-              onSubmit={(tag) => {
-                if (selectedNode?.kind == "element") {
-                  modifyDoc(() => {
-                    selectedNode.tag = tag;
-                  });
-                  if (selectedNodeGuid) clickOnSelectedNode(selectedNodeGuid);
-                }
-              }}
-            />
             <ToolbarDivider />
-
-            <ToolbarPopoverButton
-              text="Wrap all children"
-              icon={<BackpackFilled />}
-              disabled={!selectedNodeGuid || !selectedNodeFirstChildTag}
-              ariaLabel="Wrap all children"
-              onSubmit={(tag) => {
-                modifyDoc((prev: JsonDoc) => {
-                  if (!selectedNodeGuid) return;
-                  addTransformation(prev, selectedNodeGuid!, "wrap", tag);
-                });
-              }}
-            />
 
             <ToolbarPopoverButton
               text="Rename all children"
@@ -218,6 +205,19 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                 modifyDoc((prev: JsonDoc) => {
                   if (!selectedNodeGuid) return;
                   addTransformation(prev, selectedNodeGuid!, "rename", tag);
+                });
+              }}
+            />
+
+            <ToolbarPopoverButton
+              text="Wrap all children"
+              icon={<BackpackFilled />}
+              disabled={!selectedNodeGuid || !selectedNodeFirstChildTag}
+              ariaLabel="Wrap all children"
+              onSubmit={(tag) => {
+                modifyDoc((prev: JsonDoc) => {
+                  if (!selectedNodeGuid) return;
+                  addTransformation(prev, selectedNodeGuid!, "wrap", tag);
                 });
               }}
             />
