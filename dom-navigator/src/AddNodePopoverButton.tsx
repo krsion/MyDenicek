@@ -4,7 +4,7 @@ import { Popover, PopoverSurface, PopoverTrigger } from "@fluentui/react-popover
 import { type KeyboardEvent, useEffect, useState } from "react";
 
 type Props = {
-    disabled?: boolean;
+    disabled: boolean;
     initialValue?: string;
     onAddChild: (content: string, isValue: boolean) => void;
     onAddBefore: (content: string, isValue: boolean) => void;

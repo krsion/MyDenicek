@@ -356,7 +356,7 @@ export function DomNavigator({ children, onSelectedChange, selectedNodeId, peerS
           {/* Label */}
           <div
             data-testid="overlay-label"
-            data-tagname={overlay.label.split("#")[0].split(".")[0]}
+            data-tagname={overlay.label.split("#")[0]?.split(".")[0]}
             className={styles.overlayLabel}
           >
             {overlay.label}
