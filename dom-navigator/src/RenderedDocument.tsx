@@ -47,23 +47,13 @@ export function RenderedDocument({ tree }: { tree: JsonDoc; }) {
   const styles = useStyles();
 
   function renderById(id: string, path: string): React.ReactNode {
-    const node = tree.nodes.entities[id];
-    if (!node) return null;
-    const children = tree.nodes.entities[id].children ? Object.keys(tree.nodes.entities[id].children) : [];
-    // order the children by the global order in tree.nodes.order
-    children.sort((a, b) => tree.nodes.order.indexOf(a) - tree.nodes.order.indexOf(b));
-    if (!node.tag) {
-      if (node.value !== undefined) return node.value as React.ReactNode;
-      return (
-        <>
-          {children.map((child, i) => (
-            <React.Fragment key={child}>{renderById(child, `${path}.${i}`)}</React.Fragment>
-          ))}
-        </>
-      );
+    const node = tree.nodes[id];
+    if (!node) return undefined;
+
+    if (node.kind === "value") {
+      return React.createElement('x-value', { 'data-node-guid': id }, node.value);
     }
 
-    // Render as an element; if node.value exists, render it before children
     const attrs = { ...(node.attrs || {}), "data-node-guid": id } as Record<string, unknown>;
 
     const classNames = [];
@@ -76,17 +66,16 @@ export function RenderedDocument({ tree }: { tree: JsonDoc; }) {
     if (node.tag === "td") classNames.push(styles.td);
     if (node.tag === "tr") classNames.push(styles.tr);
 
-    if (attrs.className && typeof attrs.className === "string") {
-      classNames.push(attrs.className);
+    if (attrs["className"] && typeof attrs["className"] === "string") {
+      classNames.push(attrs["className"]);
     }
-    if (classNames.length > 0) attrs.className = mergeClasses(...classNames);
+    if (classNames.length > 0) attrs["className"] = mergeClasses(...classNames);
 
     const renderedChildren: React.ReactNode[] = [];
-    if (node.value !== undefined) renderedChildren.push(node.value as React.ReactNode);
-    for (let i = 0; i < children.length; i++) {
-      const child = children[i];
+    for (let i = 0; i < node.children.length; i++) {
+      const child = node.children[i];
+      if (!child) continue;
       const rendered = renderById(child, `${path}.${i}`);
-
       if (React.isValidElement(rendered)) renderedChildren.push(React.cloneElement(rendered as React.ReactElement<unknown>, { key: child }));
       else renderedChildren.push(rendered);
     }

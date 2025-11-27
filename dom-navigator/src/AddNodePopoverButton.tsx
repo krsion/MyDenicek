@@ -6,27 +6,30 @@ import { type KeyboardEvent, useEffect, useState } from "react";
 type Props = {
     disabled?: boolean;
     initialValue?: string;
-    onAddChild: (tag: string) => void;
-    onAddBefore: (tag: string) => void;
-    onAddAfter: (tag: string) => void;
+    onAddChild: (content: string, isValue: boolean) => void;
+    onAddBefore: (content: string, isValue: boolean) => void;
+    onAddAfter: (content: string, isValue: boolean) => void;
 };
 
 export const AddNodePopoverButton = ({ disabled, initialValue, onAddChild, onAddBefore, onAddAfter }: Props) => {
     const [open, setOpen] = useState(false);
     const [value, setValue] = useState(initialValue || "");
     const [mode, setMode] = useState<"child" | "before" | "after">("child");
+    const [nodeType, setNodeType] = useState<"tag" | "value">("tag");
 
     useEffect(() => {
         setValue(initialValue || "");
     }, [initialValue]);
 
     const handleSubmit = () => {
-        const tag = value.trim();
-        if (!tag) return;
+        const content = value.trim();
+        if (!content) return;
 
-        if (mode === "child") onAddChild(tag);
-        else if (mode === "before") onAddBefore(tag);
-        else if (mode === "after") onAddAfter(tag);
+        const isValue = nodeType === "value";
+
+        if (mode === "child") onAddChild(content, isValue);
+        else if (mode === "before") onAddBefore(content, isValue);
+        else if (mode === "after") onAddAfter(content, isValue);
 
         setOpen(false);
     };
@@ -41,8 +44,14 @@ export const AddNodePopoverButton = ({ disabled, initialValue, onAddChild, onAdd
 
             <PopoverSurface style={{ padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
                 <Label>Add element</Label>
+
+                <RadioGroup value={nodeType} onChange={(_, data) => setNodeType(data.value as "tag" | "value")} layout="horizontal">
+                    <Radio value="tag" label="Tag" />
+                    <Radio value="value" label="Value" />
+                </RadioGroup>
+
                 <Input
-                    placeholder="Tag name (e.g. div)"
+                    placeholder={nodeType === "tag" ? "Tag name (e.g. div)" : "Value content"}
                     value={value}
                     onChange={(e) => setValue((e.target as HTMLInputElement).value)}
                     onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {

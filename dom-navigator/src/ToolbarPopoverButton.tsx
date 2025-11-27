@@ -3,8 +3,8 @@ import { Popover, PopoverSurface, PopoverTrigger } from "@fluentui/react-popover
 import { type KeyboardEvent, useEffect, useState } from "react";
 
 type Props = {
-    icon?: React.ReactElement;
-    disabled?: boolean;
+    icon: React.ReactElement;
+    disabled: boolean;
     placeholder?: string;
     ariaLabel?: string;
     children?: React.ReactNode;
@@ -34,7 +34,7 @@ export const ToolbarPopoverButton = ({ icon, disabled, placeholder, ariaLabel, c
             <PopoverSurface style={{ padding: 12 }}>
                 <Input
                     placeholder={placeholder}
-                    value={value}
+                    value={value || ""}
                     onChange={(e) => setValue((e.target as HTMLInputElement).value)}
                     onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
                         if (e.key !== "Enter") return;
@@ -48,5 +48,3 @@ export const ToolbarPopoverButton = ({ icon, disabled, placeholder, ariaLabel, c
         </Popover>
     );
 };
-
-export default ToolbarPopoverButton;

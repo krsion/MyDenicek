@@ -4,12 +4,12 @@ import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular
 import { useContext, useMemo, useState } from "react";
 
 import { AddNodePopoverButton } from "./AddNodePopoverButton";
-import { addChildNode, addSiblingNodeAfter, addSiblingNodeBefore, addTransformation, firstChildsTag, type JsonDoc, renameNode, setNodeValue, wrapNode } from "./Document.ts";
+import { addElementChildNode, addSiblingNodeAfter, addSiblingNodeBefore, addTransformation, addValueChildNode, firstChildsTag, type JsonDoc, type Node, wrapNode } from "./Document.ts";
 import { DomNavigator } from "./DomNavigator";
 import { ElementDetails } from "./ElementDetails.tsx";
 import { JsonView } from "./JsonView.tsx";
 import { RenderedDocument } from "./RenderedDocument.tsx";
-import ToolbarPopoverButton from "./ToolbarPopoverButton";
+import { ToolbarPopoverButton } from "./ToolbarPopoverButton";
 
 export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<JsonDoc>, onConnect: () => void, onDisconnect: () => void }) => {
   const [doc, changeDoc] = useDocument<JsonDoc>(handle.url, { suspense: true });
@@ -56,14 +56,15 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
     const dataTestId = selectedEl.getAttribute("data-testid");
     const guid = selectedEl.getAttribute("data-node-guid") || null;
     // pull the node.value from the document model if available
-    const modelNode = guid ? doc.nodes.entities[guid] : undefined;
-    const value = modelNode ? (modelNode.value as string | undefined) : undefined;
+    const modelNode = guid ? doc.nodes[guid] : undefined;
+    const value = modelNode?.kind === "value" ? (modelNode.value as string | undefined) : undefined;
 
     return { tag, id, guid, classes, width, height, dataTestId, value };
   }, [localState?.selectedNodeId, doc]);
 
-  const selectedNodeGuid = localState.selectedNodeId || null;
-
+  const selectedNodeGuid: string | undefined = localState.selectedNodeId || undefined;
+  const selectedNode: Node | undefined = selectedNodeGuid ? doc.nodes[selectedNodeGuid] : undefined;
+  const selectedNodeFirstChildTag: string | undefined = (selectedNode && selectedNode.kind === "element") ? firstChildsTag(doc.nodes, selectedNode) : undefined;
 
   return (
     <>
@@ -76,14 +77,14 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                 onClick={() => {
                   if (undoStack.length === 0) return;
                   const prevDoc = undoStack[undoStack.length - 1];
+                  if (!prevDoc) return;
                   setUndoStack(stack => stack.slice(0, -1));
                   setRedoStack(stack => [...stack, JSON.parse(JSON.stringify(doc))]);
                   changeDoc((d) => {
                     d.nodes = JSON.parse(JSON.stringify(prevDoc.nodes));
                     d.transformations = prevDoc.transformations ? JSON.parse(JSON.stringify(prevDoc.transformations)) : [];
                   });
-
-                  clickOnSelectedNode(selectedNodeGuid);
+                  if (selectedNodeGuid) clickOnSelectedNode(selectedNodeGuid);
 
                 }}
                 disabled={undoStack.length === 0}
@@ -95,6 +96,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                 onClick={() => {
                   if (redoStack.length === 0) return;
                   const nextDoc = redoStack[redoStack.length - 1];
+                  if (!nextDoc) return;
                   setRedoStack(stack => stack.slice(0, -1));
                   setUndoStack(stack => [...stack, JSON.parse(JSON.stringify(doc))]);
                   changeDoc((d) => {
@@ -102,37 +104,46 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                     d.transformations = nextDoc.transformations ? JSON.parse(JSON.stringify(nextDoc.transformations)) : [];
                   });
 
-                  clickOnSelectedNode(selectedNodeGuid);
+                  if (selectedNodeGuid) clickOnSelectedNode(selectedNodeGuid);
                 }}
                 disabled={redoStack.length === 0}
               />
             </Tooltip>
             <ToolbarDivider />
             <AddNodePopoverButton
-              disabled={!selectedNodeGuid}
-              initialValue={selectedNodeGuid ? firstChildsTag(doc, selectedNodeGuid) : undefined}
-              onAddChild={(tag) => {
+              disabled={selectedNode?.kind !== "element"}
+              initialValue={selectedNodeFirstChildTag || ""}
+              onAddChild={(content, isValue) => {
+                if (selectedNode?.kind === "element") {
+                  let newId: string | undefined = undefined;
+                  modifyDoc((prev: JsonDoc) => {
+                    if (isValue) {
+                      newId = addValueChildNode(prev, selectedNode, content);
+                    } else {
+                      newId = addElementChildNode(prev, selectedNode, content);
+                    }
+                  });
+                  if (newId) {
+                    updateLocalState({ selectedNodeId: newId });
+                  }
+                }
+              }}
+              onAddBefore={() => {
+                if (!selectedNodeGuid) return;
                 let newId: string | undefined = undefined;
                 modifyDoc((prev: JsonDoc) => {
-                  newId = addChildNode(prev, selectedNodeGuid!, tag);
+                  newId = addSiblingNodeBefore(prev.nodes, selectedNodeGuid);
                 });
                 if (newId) {
                   updateLocalState({ selectedNodeId: newId });
                 }
+
               }}
-              onAddBefore={(tag) => {
+              onAddAfter={() => {
+                if (!selectedNodeGuid) return;
                 let newId: string | undefined = undefined;
                 modifyDoc((prev: JsonDoc) => {
-                  newId = addSiblingNodeBefore(prev, selectedNodeGuid!, tag);
-                });
-                if (newId) {
-                  updateLocalState({ selectedNodeId: newId });
-                }
-              }}
-              onAddAfter={(tag) => {
-                let newId: string | undefined = undefined;
-                modifyDoc((prev: JsonDoc) => {
-                  newId = addSiblingNodeAfter(prev, selectedNodeGuid!, tag);
+                  newId = addSiblingNodeAfter(prev.nodes, selectedNodeGuid);
                 });
                 if (newId) {
                   updateLocalState({ selectedNodeId: newId });
@@ -142,14 +153,15 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
             <ToolbarPopoverButton
               text="Edit"
               icon={<EditRegular />}
-              disabled={!selectedNodeGuid}
+              disabled={!selectedNode || selectedNode.kind !== "value"}
               ariaLabel="Edit"
-              initialValue={details?.value}
+              initialValue={details?.value || ""}
               onSubmit={(value) => {
-                modifyDoc((prev: JsonDoc) => {
-                  if (!selectedNodeGuid) return;
-                  setNodeValue(prev, selectedNodeGuid!, value);
-                });
+                if (selectedNode?.kind == "value") {
+                  modifyDoc(() => {
+                    selectedNode.value = value;
+                  });
+                }
               }}
             />
 
@@ -160,23 +172,25 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
               ariaLabel="Wrap"
               onSubmit={(tag) => {
                 modifyDoc((prev: JsonDoc) => {
-                  wrapNode(prev, selectedNodeGuid!, tag);
+                  wrapNode(prev.nodes, selectedNodeGuid!, tag);
                 });
-                clickOnSelectedNode(selectedNodeGuid);
+                if (selectedNodeGuid) clickOnSelectedNode(selectedNodeGuid);
               }}
             />
 
             <ToolbarPopoverButton
               text="Rename"
               icon={<RenameRegular />}
-              disabled={!selectedNodeGuid}
+              disabled={!selectedNodeGuid || selectedNode?.kind !== "element"}
               ariaLabel="Rename"
-              initialValue={details?.tag}
+              initialValue={details?.tag || ""}
               onSubmit={(tag) => {
-                modifyDoc((prev: JsonDoc) => {
-                  renameNode(prev, selectedNodeGuid!, tag);
-                });
-                clickOnSelectedNode(selectedNodeGuid);
+                if (selectedNode?.kind == "element") {
+                  modifyDoc(() => {
+                    selectedNode.tag = tag;
+                  });
+                  if (selectedNodeGuid) clickOnSelectedNode(selectedNodeGuid);
+                }
               }}
             />
             <ToolbarDivider />
@@ -184,7 +198,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
             <ToolbarPopoverButton
               text="Wrap all children"
               icon={<BackpackFilled />}
-              disabled={!selectedNodeGuid}
+              disabled={!selectedNodeGuid || !selectedNodeFirstChildTag}
               ariaLabel="Wrap all children"
               onSubmit={(tag) => {
                 modifyDoc((prev: JsonDoc) => {
@@ -197,8 +211,8 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
             <ToolbarPopoverButton
               text="Rename all children"
               icon={<RenameFilled />}
-              disabled={!selectedNodeGuid}
-              initialValue={firstChildsTag(doc, selectedNodeGuid)}
+              disabled={!selectedNodeGuid || !selectedNodeFirstChildTag}
+              initialValue={selectedNodeFirstChildTag || ""}
               ariaLabel="Rename all children"
               onSubmit={(tag) => {
                 modifyDoc((prev: JsonDoc) => {
@@ -254,10 +268,9 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
         </DomNavigator>
 
         <ElementDetails details={details} />
-        <Card>
-          <CardHeader header={<Text>Transformations</Text>} />
-          {doc.transformations && doc.transformations.length === 0 && (<Text>No transformations</Text>)}
-          {doc.transformations && doc.transformations.length > 0 && (
+        {doc.transformations && doc.transformations.length > 0 && (
+          <Card>
+            <CardHeader header={<Text>Transformations</Text>} />
             <Table size="small">
               <TableHeader>
                 <TableRow>
@@ -278,9 +291,9 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                 ))}
               </TableBody>
             </Table>
-          )}
-        </Card>
+          </Card>
 
+        )}
 
       </Card>
       <Drawer open={historyOpen} separator position="end" onOpenChange={(_, { open }) => {
@@ -297,7 +310,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
   );
 }
 
-function clickOnSelectedNode(selectedNodeGuid: string | null) {
+function clickOnSelectedNode(selectedNodeGuid: string) {
   setTimeout(() => {
     const el = document.querySelector(`[data-node-guid='${selectedNodeGuid}']`) as HTMLElement | null;
     el?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
