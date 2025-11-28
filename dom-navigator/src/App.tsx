@@ -63,6 +63,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
   }, [localState?.selectedNodeId, doc]);
 
   const selectedNodeGuid: string | undefined = localState.selectedNodeId || undefined;
+  // Edits to selectedNode will not be synced by Automerge. instead, use changeDoc(prev => ...) to update the document model
   const selectedNode: Node | undefined = selectedNodeGuid ? doc.nodes[selectedNodeGuid] : undefined;
   const selectedNodeFirstChildTag: string | undefined = (selectedNode && selectedNode.kind === "element") ? firstChildsTag(doc.nodes, selectedNode) : undefined;
 
@@ -117,10 +118,11 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                 if (selectedNode?.kind === "element") {
                   let newId: string | undefined = undefined;
                   modifyDoc((prev: JsonDoc) => {
+                    if (!selectedNodeGuid || prev.nodes[selectedNodeGuid]?.kind !== "element") return;
                     if (isValue) {
-                      newId = addValueChildNode(prev, selectedNode, content);
+                      newId = addValueChildNode(prev, prev.nodes[selectedNodeGuid], content);
                     } else {
-                      newId = addElementChildNode(prev, selectedNode, content);
+                      newId = addElementChildNode(prev, prev.nodes[selectedNodeGuid], content);
                     }
                   });
                   if (newId) {
@@ -159,8 +161,9 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                 ariaLabel="Edit"
                 initialValue={details?.value || ""}
                 onSubmit={(value) => {
-                  modifyDoc(() => {
-                    selectedNode.value = value;
+                  modifyDoc((prev: JsonDoc) => {
+                    if (!selectedNodeGuid || prev.nodes[selectedNodeGuid]?.kind !== "value") return;
+                    prev.nodes[selectedNodeGuid].value = value;
                   });
                 }}
               />
@@ -173,8 +176,9 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                 initialValue={details?.tag || ""}
                 onSubmit={(tag) => {
                   if (selectedNode?.kind == "element") {
-                    modifyDoc(() => {
-                      selectedNode.tag = tag;
+                    modifyDoc((prev: JsonDoc) => {
+                      if (!selectedNodeGuid || prev.nodes[selectedNodeGuid]?.kind !== "element") return;
+                      prev.nodes[selectedNodeGuid].tag = tag;
                     });
                     if (selectedNodeGuid) clickOnSelectedNode(selectedNodeGuid);
                   }
