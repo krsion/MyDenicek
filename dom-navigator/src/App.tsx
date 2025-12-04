@@ -1,4 +1,4 @@
-import { next as Automerge } from "@automerge/automerge";
+import { next as Automerge, type Patch } from "@automerge/automerge";
 import { DocHandle, type PeerId, type Repo, RepoContext, useDocument, useLocalAwareness, useRemoteAwareness } from "@automerge/react";
 import { Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, Drawer, DrawerBody, DrawerHeader, DrawerHeaderTitle, Switch, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
 import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CameraRegular, CodeRegular, EditRegular, HistoryRegular, RenameFilled, RenameRegular } from "@fluentui/react-icons";
@@ -95,16 +95,16 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
     return Automerge.diff(doc, Automerge.getHeads(snapshot), Automerge.getHeads(doc));
   }, [snapshot, doc]);
 
-  const applyPatchesManual = (d: any, patches: any[]) => {
+  const applyPatchesManual = (d: JsonDoc, patches: Patch[]) => {
     patches.forEach((patch, _i) => {
-      let target: any = d;
+      let target: unknown = d;
       const path = patch.path;
       let i_path = 0;
 
       // Traverse path until we hit a primitive or end of path
       for (; i_path < path.length - 1; i_path++) {
-        const part = path[i_path];
-        const next = target[part];
+        const part = path[i_path]!;
+        const next = (target as Record<string | number, unknown>)[part];
         if (typeof next === 'string') {
           // Stop if next is string (primitive), so we can modify it on the parent
           break;
@@ -112,34 +112,36 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
         target = next;
       }
 
-      const key = path[i_path];
+      const key = path[i_path]!;
       const remainingPath = path.slice(i_path + 1);
+      const targetRecord = target as Record<string | number, unknown>;
+      const targetArray = target as unknown[];
 
       if (patch.action === 'del') {
         if (Array.isArray(target)) {
-          target.splice(key as number, 1);
+          targetArray.splice(key as number, 1);
         } else {
-          delete target[key];
+          delete targetRecord[key];
         }
       } else if (patch.action === 'put') {
-        target[key] = patch.value;
+        targetRecord[key] = patch.value;
       } else if (patch.action === 'insert') {
         // Insert into array
-        target.splice(key as number, 0, ...patch.values);
+        targetArray.splice(key as number, 0, ...patch.values);
       } else if (patch.action === 'splice') {
         // Splice string or array
         // If remainingPath has elements, the first one is likely the index
         const index = remainingPath.length > 0 ? remainingPath[0] as number : key as number;
         const value = patch.value;
 
-        if (typeof target[key] === 'string') {
-          const str = target[key];
+        if (typeof targetRecord[key] === 'string') {
+          const str = targetRecord[key] as string;
           // Simple string splice simulation
-          target[key] = str.slice(0, index) + value + str.slice(index);
-        } else if (Array.isArray(target[key])) {
-          target[key].splice(index, 0, value);
+          targetRecord[key] = str.slice(0, index) + value + str.slice(index);
+        } else if (Array.isArray(targetRecord[key])) {
+          (targetRecord[key] as unknown[]).splice(index, 0, value);
         } else if (Array.isArray(target) && patch.action === 'splice') {
-          target[key].splice(index, 0, value);
+          (targetRecord[key] as unknown[]).splice(index, 0, value);
         }
       }
     });
@@ -408,7 +410,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                   <TableRow key={i}>
                     <TableCell>{p.action}</TableCell>
                     <TableCell>{p.path.join("/")}</TableCell>
-                    <TableCell>{JSON.stringify((p as any).value)}</TableCell>
+                    <TableCell>{JSON.stringify((p as { value?: unknown }).value)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
