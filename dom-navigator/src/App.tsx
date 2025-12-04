@@ -2,11 +2,11 @@ import { next as Automerge } from "@automerge/automerge";
 import { DocHandle, type PeerId, type Repo, RepoContext, useDocument, useLocalAwareness, useRemoteAwareness } from "@automerge/react";
 import { Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, Drawer, DrawerBody, DrawerHeader, DrawerHeaderTitle, Switch, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
 import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CameraRegular, CodeRegular, EditRegular, HistoryRegular, RenameFilled, RenameRegular } from "@fluentui/react-icons";
-import { useContext, useMemo, useState } from "react";
+import { useContext, useMemo, useRef, useState } from "react";
 
 import { AddNodePopoverButton } from "./AddNodePopoverButton";
 import { addElementChildNode, addSiblingNodeAfter, addSiblingNodeBefore, addTransformation, addValueChildNode, firstChildsTag, type JsonDoc, type Node, wrapNode } from "./Document.ts";
-import { DomNavigator } from "./DomNavigator";
+import { DomNavigator, type DomNavigatorHandle } from "./DomNavigator";
 import { ElementDetails } from "./ElementDetails.tsx";
 import { JsonView } from "./JsonView.tsx";
 import { RenderedDocument } from "./RenderedDocument.tsx";
@@ -43,6 +43,28 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
   }, [peerStates]);
   const [connected, setConnected] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const navigatorRef = useRef<DomNavigatorHandle>(null);
+
+  const triggerNavigation = (action: 'parent' | 'child' | 'prev' | 'next' | 'clear') => {
+    if (!navigatorRef.current) return;
+    switch (action) {
+      case 'parent':
+        navigatorRef.current.navigateToParent();
+        break;
+      case 'child':
+        navigatorRef.current.navigateToFirstChild();
+        break;
+      case 'prev':
+        navigatorRef.current.navigateToPrevSibling();
+        break;
+      case 'next':
+        navigatorRef.current.navigateToNextSibling();
+        break;
+      case 'clear':
+        navigatorRef.current.clearSelection();
+        break;
+    }
+  };
 
 
   const details = useMemo(() => {
@@ -330,15 +352,15 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
         </Toolbar>
 
         <CardHeader header={<TagGroup>
-          <Tag icon={<ArrowLeftRegular />}> Parent</Tag>
-          <Tag icon={<ArrowRightRegular />}> First child</Tag>
-          <Tag icon={<ArrowUpRegular />}> Prev sibling</Tag>
-          <Tag icon={<ArrowDownRegular />}> Next sibling</Tag>
-          <Tag icon={<Text>Esc</Text>}>Clear</Tag>
+          <Tag icon={<ArrowUpRegular />} onClick={() => triggerNavigation('parent')} style={{ cursor: 'pointer' }}> Parent</Tag>
+          <Tag icon={<ArrowDownRegular />} onClick={() => triggerNavigation('child')} style={{ cursor: 'pointer' }}> First child</Tag>
+          <Tag icon={<ArrowLeftRegular />} onClick={() => triggerNavigation('prev')} style={{ cursor: 'pointer' }}> Prev sibling</Tag>
+          <Tag icon={<ArrowRightRegular />} onClick={() => triggerNavigation('next')} style={{ cursor: 'pointer' }}> Next sibling</Tag>
+          <Tag icon={<Text>Esc</Text>} onClick={() => triggerNavigation('clear')} style={{ cursor: 'pointer' }}>Clear</Tag>
         </TagGroup>}
         />
 
-        <DomNavigator onSelectedChange={(id) => { updateLocalState({ selectedNodeId: id }) }} selectedNodeId={doc.nodes[localState.selectedNodeId!] ? localState.selectedNodeId : null} peerSelections={peerSelections}>
+        <DomNavigator ref={navigatorRef} onSelectedChange={(id) => { updateLocalState({ selectedNodeId: id }) }} selectedNodeId={doc.nodes[localState.selectedNodeId!] ? localState.selectedNodeId : null} peerSelections={peerSelections}>
           <RenderedDocument tree={doc} />
         </DomNavigator>
 

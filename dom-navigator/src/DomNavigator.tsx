@@ -1,9 +1,17 @@
 
 
 import { makeStyles } from "@fluentui/react-components";
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 
 /** Wrap your content with <DomNavigator> to enable navigation/highlighting within it. */
+
+export interface DomNavigatorHandle {
+  navigateToParent: () => void;
+  navigateToFirstChild: () => void;
+  navigateToPrevSibling: () => void;
+  navigateToNextSibling: () => void;
+  clearSelection: () => void;
+}
 
 const useStyles = makeStyles({
   overlay: {
@@ -28,7 +36,7 @@ const useStyles = makeStyles({
   },
 });
 
-export function DomNavigator({ children, onSelectedChange, selectedNodeId, peerSelections }: { children: React.ReactNode; onSelectedChange?: (nodeId: string | null) => void; selectedNodeId?: string | null, peerSelections?: { [peerId: string]: string | null } }) {
+export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: React.ReactNode; onSelectedChange?: (nodeId: string | null) => void; selectedNodeId?: string | null, peerSelections?: { [peerId: string]: string | null } }>(({ children, onSelectedChange, selectedNodeId, peerSelections }, forwardedRef) => {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [selected, setSelected] = useState<HTMLElement | null>(null);
@@ -293,19 +301,19 @@ export function DomNavigator({ children, onSelectedChange, selectedNodeId, peerS
     let next: HTMLElement | null = null;
 
     switch (e.key) {
-      case "ArrowLeft": {
+      case "ArrowUp": {
         next = parentOf(selected);
         break;
       }
-      case "ArrowRight": {
+      case "ArrowDown": {
         next = firstElementChildOf(selected);
         break;
       }
-      case "ArrowUp": {
+      case "ArrowLeft": {
         next = prevSibling(selected);
         break;
       }
-      case "ArrowDown": {
+      case "ArrowRight": {
         next = nextSibling(selected);
         break;
       }
@@ -325,6 +333,39 @@ export function DomNavigator({ children, onSelectedChange, selectedNodeId, peerS
     setSelected(e.target);
     onSelectedChange?.(e.target.getAttribute("data-node-guid") || null);
   }
+
+  // Helper function for programmatic navigation
+  const navigate = useCallback((getNext: (current: HTMLElement) => HTMLElement | null) => {
+    if (!selected) {
+      // No selection yet → start at the first child
+      const start = firstElementChildOf(containerRef.current);
+      if (start) {
+        setSelected(start);
+        onSelectedChange?.(start.getAttribute("data-node-guid") || null);
+      }
+      return;
+    }
+
+    const next = getNext(selected);
+    if (next && next !== selected) {
+      setSelected(next);
+      onSelectedChange?.(next.getAttribute("data-node-guid") || null);
+      next.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
+  }, [selected, onSelectedChange]);
+
+  // Expose navigation methods via ref
+  useImperativeHandle(forwardedRef, () => ({
+    navigateToParent: () => navigate(parentOf),
+    navigateToFirstChild: () => navigate(firstElementChildOf),
+    navigateToPrevSibling: () => navigate(prevSibling),
+    navigateToNextSibling: () => navigate(nextSibling),
+    clearSelection: () => {
+      setSelected(null);
+      setOverlay((o) => ({ ...o, visible: false }));
+      onSelectedChange?.(null);
+    }
+  }), [navigate, onSelectedChange]);
 
 
   return (
@@ -396,4 +437,6 @@ export function DomNavigator({ children, onSelectedChange, selectedNodeId, peerS
       })}
     </div>
   );
-}
+});
+
+DomNavigator.displayName = 'DomNavigator';
