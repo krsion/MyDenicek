@@ -19,8 +19,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
   const [snapshot, setSnapshot] = useState<JsonDoc | null>(null);
 
   const modifyDoc = (updater: (d: JsonDoc) => void) => {
-    const snapshot = JSON.parse(JSON.stringify(doc));
-    setUndoStack(prev => [...prev, snapshot]);
+    setUndoStack(prev => [...prev, doc]);
     setRedoStack([]);
     changeDoc(updater);
   };
@@ -96,6 +95,56 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
     return Automerge.diff(doc, Automerge.getHeads(snapshot), Automerge.getHeads(doc));
   }, [snapshot, doc]);
 
+  const applyPatchesManual = (d: any, patches: any[]) => {
+    patches.forEach((patch, _i) => {
+      let target: any = d;
+      const path = patch.path;
+      let i_path = 0;
+
+      // Traverse path until we hit a primitive or end of path
+      for (; i_path < path.length - 1; i_path++) {
+        const part = path[i_path];
+        const next = target[part];
+        if (typeof next === 'string') {
+          // Stop if next is string (primitive), so we can modify it on the parent
+          break;
+        }
+        target = next;
+      }
+
+      const key = path[i_path];
+      const remainingPath = path.slice(i_path + 1);
+
+      if (patch.action === 'del') {
+        if (Array.isArray(target)) {
+          target.splice(key as number, 1);
+        } else {
+          delete target[key];
+        }
+      } else if (patch.action === 'put') {
+        target[key] = patch.value;
+      } else if (patch.action === 'insert') {
+        // Insert into array
+        target.splice(key as number, 0, ...patch.values);
+      } else if (patch.action === 'splice') {
+        // Splice string or array
+        // If remainingPath has elements, the first one is likely the index
+        const index = remainingPath.length > 0 ? remainingPath[0] as number : key as number;
+        const value = patch.value;
+
+        if (typeof target[key] === 'string') {
+          const str = target[key];
+          // Simple string splice simulation
+          target[key] = str.slice(0, index) + value + str.slice(index);
+        } else if (Array.isArray(target[key])) {
+          target[key].splice(index, 0, value);
+        } else if (Array.isArray(target) && patch.action === 'splice') {
+          target[key].splice(index, 0, value);
+        }
+      }
+    });
+  };
+
   return (
     <>
       <Card appearance="subtle">
@@ -109,10 +158,17 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                   const prevDoc = undoStack[undoStack.length - 1];
                   if (!prevDoc) return;
                   setUndoStack(stack => stack.slice(0, -1));
-                  setRedoStack(stack => [...stack, JSON.parse(JSON.stringify(doc))]);
+                  setRedoStack(stack => [...stack, doc]);
+                  const currentHeads = Automerge.getHeads(doc);
+                  const prevHeads = Automerge.getHeads(prevDoc);
+                  const patches = Automerge.diff(doc, currentHeads, prevHeads);
+
                   changeDoc((d) => {
-                    d.nodes = JSON.parse(JSON.stringify(prevDoc.nodes));
-                    d.transformations = prevDoc.transformations ? JSON.parse(JSON.stringify(prevDoc.transformations)) : [];
+                    try {
+                      applyPatchesManual(d, patches);
+                    } catch (e) {
+                      console.error("Error applying patches:", e);
+                    }
                   });
                   if (selectedNodeGuid) clickOnSelectedNode(selectedNodeGuid);
 
@@ -128,10 +184,17 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                   const nextDoc = redoStack[redoStack.length - 1];
                   if (!nextDoc) return;
                   setRedoStack(stack => stack.slice(0, -1));
-                  setUndoStack(stack => [...stack, JSON.parse(JSON.stringify(doc))]);
+                  setUndoStack(stack => [...stack, doc]);
+                  const currentHeads = Automerge.getHeads(doc);
+                  const nextHeads = Automerge.getHeads(nextDoc);
+                  const patches = Automerge.diff(doc, currentHeads, nextHeads);
+
                   changeDoc((d) => {
-                    d.nodes = JSON.parse(JSON.stringify(nextDoc.nodes));
-                    d.transformations = nextDoc.transformations ? JSON.parse(JSON.stringify(nextDoc.transformations)) : [];
+                    try {
+                      applyPatchesManual(d, patches);
+                    } catch (e) {
+                      console.error("Error applying redo patches:", e);
+                    }
                   });
 
                   if (selectedNodeGuid) clickOnSelectedNode(selectedNodeGuid);
@@ -297,7 +360,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
         </TagGroup>}
         />
 
-        <DomNavigator ref={navigatorRef} onSelectedChange={(id) => { updateLocalState({ selectedNodeId: id }) }} selectedNodeId={localState.selectedNodeId} peerSelections={peerSelections}>
+        <DomNavigator ref={navigatorRef} onSelectedChange={(id) => { updateLocalState({ selectedNodeId: id }) }} selectedNodeId={doc.nodes[localState.selectedNodeId!] ? localState.selectedNodeId : null} peerSelections={peerSelections}>
           <RenderedDocument tree={doc} />
         </DomNavigator>
 
