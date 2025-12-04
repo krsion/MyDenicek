@@ -28,7 +28,7 @@ const useStyles = makeStyles({
   },
 });
 
-export function DomNavigator({ children, onSelectedChange, selectedNodeId, peerSelections }: { children: React.ReactNode; onSelectedChange?: (nodeId: string | null) => void; selectedNodeId?: string | null, peerSelections?: { [peerId: string]: string | null } }) {
+export const DomNavigator = React.forwardRef<HTMLDivElement, { children: React.ReactNode; onSelectedChange?: (nodeId: string | null) => void; selectedNodeId?: string | null, peerSelections?: { [peerId: string]: string | null } }>(({ children, onSelectedChange, selectedNodeId, peerSelections }, forwardedRef) => {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [selected, setSelected] = useState<HTMLElement | null>(null);
@@ -293,19 +293,19 @@ export function DomNavigator({ children, onSelectedChange, selectedNodeId, peerS
     let next: HTMLElement | null = null;
 
     switch (e.key) {
-      case "ArrowLeft": {
+      case "ArrowUp": {
         next = parentOf(selected);
         break;
       }
-      case "ArrowRight": {
+      case "ArrowDown": {
         next = firstElementChildOf(selected);
         break;
       }
-      case "ArrowUp": {
+      case "ArrowLeft": {
         next = prevSibling(selected);
         break;
       }
-      case "ArrowDown": {
+      case "ArrowRight": {
         next = nextSibling(selected);
         break;
       }
@@ -328,7 +328,14 @@ export function DomNavigator({ children, onSelectedChange, selectedNodeId, peerS
 
 
   return (
-    <div ref={wrapperRef}>
+    <div ref={(node) => {
+      wrapperRef.current = node;
+      if (typeof forwardedRef === 'function') {
+        forwardedRef(node);
+      } else if (forwardedRef) {
+        forwardedRef.current = node;
+      }
+    }}>
 
 
       {/* The navigable container */}
@@ -396,4 +403,6 @@ export function DomNavigator({ children, onSelectedChange, selectedNodeId, peerS
       })}
     </div>
   );
-}
+});
+
+DomNavigator.displayName = 'DomNavigator';

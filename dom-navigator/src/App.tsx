@@ -2,7 +2,7 @@ import { next as Automerge } from "@automerge/automerge";
 import { DocHandle, type PeerId, type Repo, RepoContext, useDocument, useLocalAwareness, useRemoteAwareness } from "@automerge/react";
 import { Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, Drawer, DrawerBody, DrawerHeader, DrawerHeaderTitle, Switch, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
 import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CameraRegular, CodeRegular, EditRegular, HistoryRegular, RenameFilled, RenameRegular } from "@fluentui/react-icons";
-import { useContext, useMemo, useState } from "react";
+import { useContext, useMemo, useRef, useState } from "react";
 
 import { AddNodePopoverButton } from "./AddNodePopoverButton";
 import { addElementChildNode, addSiblingNodeAfter, addSiblingNodeBefore, addTransformation, addValueChildNode, firstChildsTag, type JsonDoc, type Node, wrapNode } from "./Document.ts";
@@ -44,6 +44,20 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
   }, [peerStates]);
   const [connected, setConnected] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const navigatorRef = useRef<HTMLDivElement>(null);
+
+  const triggerNavigation = (key: string) => {
+    const navigatorContainer = navigatorRef.current?.querySelector('[tabindex="0"]') as HTMLElement | null;
+    if (navigatorContainer) {
+      navigatorContainer.focus();
+      const event = new KeyboardEvent('keydown', {
+        key: key,
+        bubbles: true,
+        cancelable: true
+      });
+      navigatorContainer.dispatchEvent(event);
+    }
+  };
 
 
   const details = useMemo(() => {
@@ -267,15 +281,15 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
         </Toolbar>
 
         <CardHeader header={<TagGroup>
-          <Tag icon={<ArrowLeftRegular />}> Parent</Tag>
-          <Tag icon={<ArrowRightRegular />}> First child</Tag>
-          <Tag icon={<ArrowUpRegular />}> Prev sibling</Tag>
-          <Tag icon={<ArrowDownRegular />}> Next sibling</Tag>
-          <Tag icon={<Text>Esc</Text>}>Clear</Tag>
+          <Tag icon={<ArrowUpRegular />} onClick={() => triggerNavigation('ArrowUp')} style={{ cursor: 'pointer' }}> Parent</Tag>
+          <Tag icon={<ArrowDownRegular />} onClick={() => triggerNavigation('ArrowDown')} style={{ cursor: 'pointer' }}> First child</Tag>
+          <Tag icon={<ArrowLeftRegular />} onClick={() => triggerNavigation('ArrowLeft')} style={{ cursor: 'pointer' }}> Prev sibling</Tag>
+          <Tag icon={<ArrowRightRegular />} onClick={() => triggerNavigation('ArrowRight')} style={{ cursor: 'pointer' }}> Next sibling</Tag>
+          <Tag icon={<Text>Esc</Text>} onClick={() => triggerNavigation('Escape')} style={{ cursor: 'pointer' }}>Clear</Tag>
         </TagGroup>}
         />
 
-        <DomNavigator onSelectedChange={(id) => { updateLocalState({ selectedNodeId: id }) }} selectedNodeId={localState.selectedNodeId} peerSelections={peerSelections}>
+        <DomNavigator ref={navigatorRef} onSelectedChange={(id) => { updateLocalState({ selectedNodeId: id }) }} selectedNodeId={localState.selectedNodeId} peerSelections={peerSelections}>
           <RenderedDocument tree={doc} />
         </DomNavigator>
 
