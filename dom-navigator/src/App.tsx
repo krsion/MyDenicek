@@ -89,6 +89,21 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
   // Edits to selectedNode will not be synced by Automerge. instead, use changeDoc(prev => ...) to update the document model
   const selectedNode: Node | undefined = selectedNodeGuid ? doc.nodes[selectedNodeGuid] : undefined;
   const selectedNodeFirstChildTag: string | undefined = (selectedNode && selectedNode.kind === "element") ? firstChildsTag(doc.nodes, selectedNode) : undefined;
+  const selectedNodeAttributes = (selectedNode && selectedNode.kind === "element") ? selectedNode.attrs : undefined;
+
+  const handleAttributeChange = (key: string, value: string | undefined) => {
+    if (!selectedNodeGuid) return;
+    modifyDoc((prev: JsonDoc) => {
+      const node = prev.nodes[selectedNodeGuid];
+      if (node && node.kind === "element") {
+        if (value === undefined) {
+          delete node.attrs[key];
+        } else {
+          node.attrs[key] = value;
+        }
+      }
+    });
+  };
 
   const patches = useMemo(() => {
     if (!snapshot) return [];
@@ -366,7 +381,11 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
           <RenderedDocument tree={doc} />
         </DomNavigator>
 
-        <ElementDetails details={details} />
+        <ElementDetails
+          details={details}
+          attributes={selectedNodeAttributes}
+          onAttributeChange={handleAttributeChange}
+        />
         {doc.transformations && doc.transformations.length > 0 && (
           <Card>
             <CardHeader header={<Text>Transformations</Text>} />
