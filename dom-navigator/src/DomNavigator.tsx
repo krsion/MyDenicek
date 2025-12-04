@@ -1,9 +1,17 @@
 
 
 import { makeStyles } from "@fluentui/react-components";
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 
 /** Wrap your content with <DomNavigator> to enable navigation/highlighting within it. */
+
+export interface DomNavigatorHandle {
+  navigateToParent: () => void;
+  navigateToFirstChild: () => void;
+  navigateToPrevSibling: () => void;
+  navigateToNextSibling: () => void;
+  clearSelection: () => void;
+}
 
 const useStyles = makeStyles({
   overlay: {
@@ -28,7 +36,7 @@ const useStyles = makeStyles({
   },
 });
 
-export const DomNavigator = React.forwardRef<HTMLDivElement, { children: React.ReactNode; onSelectedChange?: (nodeId: string | null) => void; selectedNodeId?: string | null, peerSelections?: { [peerId: string]: string | null } }>(({ children, onSelectedChange, selectedNodeId, peerSelections }, forwardedRef) => {
+export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: React.ReactNode; onSelectedChange?: (nodeId: string | null) => void; selectedNodeId?: string | null, peerSelections?: { [peerId: string]: string | null } }>(({ children, onSelectedChange, selectedNodeId, peerSelections }, forwardedRef) => {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [selected, setSelected] = useState<HTMLElement | null>(null);
@@ -326,16 +334,42 @@ export const DomNavigator = React.forwardRef<HTMLDivElement, { children: React.R
     onSelectedChange?.(e.target.getAttribute("data-node-guid") || null);
   }
 
+  // Helper function for programmatic navigation
+  const navigate = useCallback((getNext: (current: HTMLElement) => HTMLElement | null) => {
+    if (!selected) {
+      // No selection yet → start at the first child
+      const start = firstElementChildOf(containerRef.current);
+      if (start) {
+        setSelected(start);
+        onSelectedChange?.(start.getAttribute("data-node-guid") || null);
+      }
+      return;
+    }
+
+    const next = getNext(selected);
+    if (next && next !== selected) {
+      setSelected(next);
+      onSelectedChange?.(next.getAttribute("data-node-guid") || null);
+      next.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
+  }, [selected, onSelectedChange]);
+
+  // Expose navigation methods via ref
+  useImperativeHandle(forwardedRef, () => ({
+    navigateToParent: () => navigate(parentOf),
+    navigateToFirstChild: () => navigate(firstElementChildOf),
+    navigateToPrevSibling: () => navigate(prevSibling),
+    navigateToNextSibling: () => navigate(nextSibling),
+    clearSelection: () => {
+      setSelected(null);
+      setOverlay((o) => ({ ...o, visible: false }));
+      onSelectedChange?.(null);
+    }
+  }), [navigate, onSelectedChange]);
+
 
   return (
-    <div ref={(node) => {
-      wrapperRef.current = node;
-      if (typeof forwardedRef === 'function') {
-        forwardedRef(node);
-      } else if (forwardedRef) {
-        forwardedRef.current = node;
-      }
-    }}>
+    <div ref={wrapperRef}>
 
 
       {/* The navigable container */}

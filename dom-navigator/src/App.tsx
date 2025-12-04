@@ -6,7 +6,7 @@ import { useContext, useMemo, useRef, useState } from "react";
 
 import { AddNodePopoverButton } from "./AddNodePopoverButton";
 import { addElementChildNode, addSiblingNodeAfter, addSiblingNodeBefore, addTransformation, addValueChildNode, firstChildsTag, type JsonDoc, type Node, wrapNode } from "./Document.ts";
-import { DomNavigator } from "./DomNavigator";
+import { DomNavigator, type DomNavigatorHandle } from "./DomNavigator";
 import { ElementDetails } from "./ElementDetails.tsx";
 import { JsonView } from "./JsonView.tsx";
 import { RenderedDocument } from "./RenderedDocument.tsx";
@@ -44,18 +44,26 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
   }, [peerStates]);
   const [connected, setConnected] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const navigatorRef = useRef<HTMLDivElement>(null);
+  const navigatorRef = useRef<DomNavigatorHandle>(null);
 
-  const triggerNavigation = (key: string) => {
-    const navigatorContainer = navigatorRef.current?.querySelector('[tabindex="0"]') as HTMLElement | null;
-    if (navigatorContainer) {
-      navigatorContainer.focus();
-      const event = new KeyboardEvent('keydown', {
-        key: key,
-        bubbles: true,
-        cancelable: true
-      });
-      navigatorContainer.dispatchEvent(event);
+  const triggerNavigation = (action: 'parent' | 'child' | 'prev' | 'next' | 'clear') => {
+    if (!navigatorRef.current) return;
+    switch (action) {
+      case 'parent':
+        navigatorRef.current.navigateToParent();
+        break;
+      case 'child':
+        navigatorRef.current.navigateToFirstChild();
+        break;
+      case 'prev':
+        navigatorRef.current.navigateToPrevSibling();
+        break;
+      case 'next':
+        navigatorRef.current.navigateToNextSibling();
+        break;
+      case 'clear':
+        navigatorRef.current.clearSelection();
+        break;
     }
   };
 
@@ -281,11 +289,11 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
         </Toolbar>
 
         <CardHeader header={<TagGroup>
-          <Tag icon={<ArrowUpRegular />} onClick={() => triggerNavigation('ArrowUp')} style={{ cursor: 'pointer' }}> Parent</Tag>
-          <Tag icon={<ArrowDownRegular />} onClick={() => triggerNavigation('ArrowDown')} style={{ cursor: 'pointer' }}> First child</Tag>
-          <Tag icon={<ArrowLeftRegular />} onClick={() => triggerNavigation('ArrowLeft')} style={{ cursor: 'pointer' }}> Prev sibling</Tag>
-          <Tag icon={<ArrowRightRegular />} onClick={() => triggerNavigation('ArrowRight')} style={{ cursor: 'pointer' }}> Next sibling</Tag>
-          <Tag icon={<Text>Esc</Text>} onClick={() => triggerNavigation('Escape')} style={{ cursor: 'pointer' }}>Clear</Tag>
+          <Tag icon={<ArrowUpRegular />} onClick={() => triggerNavigation('parent')} style={{ cursor: 'pointer' }}> Parent</Tag>
+          <Tag icon={<ArrowDownRegular />} onClick={() => triggerNavigation('child')} style={{ cursor: 'pointer' }}> First child</Tag>
+          <Tag icon={<ArrowLeftRegular />} onClick={() => triggerNavigation('prev')} style={{ cursor: 'pointer' }}> Prev sibling</Tag>
+          <Tag icon={<ArrowRightRegular />} onClick={() => triggerNavigation('next')} style={{ cursor: 'pointer' }}> Next sibling</Tag>
+          <Tag icon={<Text>Esc</Text>} onClick={() => triggerNavigation('clear')} style={{ cursor: 'pointer' }}>Clear</Tag>
         </TagGroup>}
         />
 
