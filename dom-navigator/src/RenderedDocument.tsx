@@ -71,6 +71,16 @@ export function RenderedDocument({ tree }: { tree: JsonDoc; }) {
     }
     if (classNames.length > 0) attrs["className"] = mergeClasses(...classNames);
 
+    if (attrs["style"] && typeof attrs["style"] === "string") {
+      try {
+        attrs["style"] = JSON.parse(attrs["style"]);
+      } catch {
+        // If style is a string but not valid JSON, we remove it to avoid React warnings
+        // about style being a string.
+        delete attrs["style"];
+      }
+    }
+
     const renderedChildren: React.ReactNode[] = [];
     for (let i = 0; i < node.children.length; i++) {
       const child = node.children[i];

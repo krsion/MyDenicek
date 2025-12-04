@@ -1,11 +1,55 @@
 import { Button, Card, Input, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Text } from "@fluentui/react-components";
 import { AddRegular, DeleteRegular } from "@fluentui/react-icons";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+function AttributeRow({ attrKey, value, onSave, onDelete }: { attrKey: string, value: unknown, onSave: (key: string, value: unknown) => void, onDelete: (key: string) => void }) {
+  const [localValue, setLocalValue] = useState(typeof value === 'object' ? JSON.stringify(value) : String(value));
+
+  useEffect(() => {
+    setLocalValue(typeof value === 'object' ? JSON.stringify(value) : String(value));
+  }, [value]);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      let newValue: unknown = localValue;
+      if (attrKey === "style") {
+        try {
+          newValue = JSON.parse(localValue);
+        } catch {
+          // ignore
+        }
+      }
+      onSave(attrKey, newValue);
+    }
+  };
+
+  return (
+    <TableRow>
+      <TableCell>{attrKey}</TableCell>
+      <TableCell>
+        <Input
+          value={localValue}
+          onChange={(_e, data) => setLocalValue(data.value)}
+          onKeyDown={handleKeyDown}
+          size="small"
+        />
+      </TableCell>
+      <TableCell>
+        <Button
+          icon={<DeleteRegular />}
+          size="small"
+          appearance="subtle"
+          onClick={() => onDelete(attrKey)}
+        />
+      </TableCell>
+    </TableRow>
+  );
+}
 
 export function ElementDetails({ details, attributes, onAttributeChange }: {
   details: { tag: string; id: string | null; guid?: string | null; classes: string[]; width: number; height: number; dataTestId: string | null; value?: string | undefined; } | null,
   attributes?: Record<string, unknown> | undefined,
-  onAttributeChange?: ((key: string, value: string | undefined) => void) | undefined
+  onAttributeChange?: ((key: string, value: unknown | undefined) => void) | undefined
 }) {
   const [newAttrKey, setNewAttrKey] = useState("");
   const [newAttrValue, setNewAttrValue] = useState("");
@@ -59,24 +103,13 @@ export function ElementDetails({ details, attributes, onAttributeChange }: {
           </TableHeader>
           <TableBody>
             {Object.entries(attributes).map(([key, value]) => (
-              <TableRow key={key}>
-                <TableCell>{key}</TableCell>
-                <TableCell>
-                  <Input
-                    value={String(value)}
-                    onChange={(_e, data) => onAttributeChange(key, data.value)}
-                    size="small"
-                  />
-                </TableCell>
-                <TableCell>
-                  <Button
-                    icon={<DeleteRegular />}
-                    size="small"
-                    appearance="subtle"
-                    onClick={() => onAttributeChange(key, undefined)}
-                  />
-                </TableCell>
-              </TableRow>
+              <AttributeRow
+                key={key}
+                attrKey={key}
+                value={value}
+                onSave={onAttributeChange}
+                onDelete={(k) => onAttributeChange(k, undefined)}
+              />
             ))}
             <TableRow>
               <TableCell>

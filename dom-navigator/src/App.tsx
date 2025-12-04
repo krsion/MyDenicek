@@ -91,7 +91,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
   const selectedNodeFirstChildTag: string | undefined = (selectedNode && selectedNode.kind === "element") ? firstChildsTag(doc.nodes, selectedNode) : undefined;
   const selectedNodeAttributes = (selectedNode && selectedNode.kind === "element") ? selectedNode.attrs : undefined;
 
-  const handleAttributeChange = (key: string, value: string | undefined) => {
+  const handleAttributeChange = (key: string, value: unknown | undefined) => {
     if (!selectedNodeGuid) return;
     modifyDoc((prev: JsonDoc) => {
       const node = prev.nodes[selectedNodeGuid];
