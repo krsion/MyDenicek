@@ -1,6 +1,7 @@
+import { next as Automerge } from "@automerge/automerge";
 import { DocHandle, type PeerId, type Repo, RepoContext, useDocument, useLocalAwareness, useRemoteAwareness } from "@automerge/react";
 import { Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, Drawer, DrawerBody, DrawerHeader, DrawerHeaderTitle, Switch, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
-import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CodeRegular, EditRegular, HistoryRegular, RenameFilled, RenameRegular } from "@fluentui/react-icons";
+import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CameraRegular, CodeRegular, EditRegular, HistoryRegular, RenameFilled, RenameRegular } from "@fluentui/react-icons";
 import { useContext, useMemo, useState } from "react";
 
 import { AddNodePopoverButton } from "./AddNodePopoverButton";
@@ -15,6 +16,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
   const [doc, changeDoc] = useDocument<JsonDoc>(handle.url, { suspense: true });
   const [undoStack, setUndoStack] = useState<JsonDoc[]>([]);
   const [redoStack, setRedoStack] = useState<JsonDoc[]>([]);
+  const [snapshot, setSnapshot] = useState<JsonDoc | null>(null);
 
   const modifyDoc = (updater: (d: JsonDoc) => void) => {
     const snapshot = JSON.parse(JSON.stringify(doc));
@@ -66,6 +68,11 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
   // Edits to selectedNode will not be synced by Automerge. instead, use changeDoc(prev => ...) to update the document model
   const selectedNode: Node | undefined = selectedNodeGuid ? doc.nodes[selectedNodeGuid] : undefined;
   const selectedNodeFirstChildTag: string | undefined = (selectedNode && selectedNode.kind === "element") ? firstChildsTag(doc.nodes, selectedNode) : undefined;
+
+  const patches = useMemo(() => {
+    if (!snapshot) return [];
+    return Automerge.diff(doc, Automerge.getHeads(snapshot), Automerge.getHeads(doc));
+  }, [snapshot, doc]);
 
   return (
     <>
@@ -255,6 +262,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
               </DialogSurface>
             </Dialog>
             <ToolbarButton icon={<HistoryRegular />} onClick={() => setHistoryOpen(!historyOpen)}>History</ToolbarButton>
+            <ToolbarButton icon={<CameraRegular />} onClick={() => setSnapshot(doc)}>Snapshot</ToolbarButton>
           </ToolbarGroup>
         </Toolbar>
 
@@ -297,6 +305,30 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
             </Table>
           </Card>
 
+        )}
+
+        {snapshot && (
+          <Card>
+            <CardHeader header={<Text>Patches from Snapshot</Text>} action={<ToolbarButton icon={<CameraRegular />} onClick={() => setSnapshot(null)}>Clear</ToolbarButton>} />
+            <Table size="small">
+              <TableHeader>
+                <TableRow>
+                  <TableHeaderCell>Action</TableHeaderCell>
+                  <TableHeaderCell>Path</TableHeaderCell>
+                  <TableHeaderCell>Value</TableHeaderCell>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {patches.map((p, i) => (
+                  <TableRow key={i}>
+                    <TableCell>{p.action}</TableCell>
+                    <TableCell>{p.path.join("/")}</TableCell>
+                    <TableCell>{JSON.stringify((p as any).value)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
         )}
 
       </Card>
