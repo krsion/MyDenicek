@@ -1,7 +1,7 @@
 import { next as Automerge } from "@automerge/automerge";
 import { DocHandle, type PeerId, type Repo, RepoContext, useDocument, useLocalAwareness, useRemoteAwareness } from "@automerge/react";
-import { Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, Drawer, DrawerBody, DrawerHeader, DrawerHeaderTitle, Switch, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
-import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CameraRegular, CodeRegular, EditRegular, HistoryRegular, RenameFilled, RenameRegular } from "@fluentui/react-icons";
+import { Button, Card, CardHeader, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogTrigger, Drawer, DrawerBody, DrawerHeader, DrawerHeaderTitle, Field, Input, Switch, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
+import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CameraRegular, CodeRegular, EditRegular, HistoryRegular, KeyRegular, RenameFilled, RenameRegular } from "@fluentui/react-icons";
 import { useContext, useMemo, useState } from "react";
 
 import { AddNodePopoverButton } from "./AddNodePopoverButton";
@@ -44,6 +44,21 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
   }, [peerStates]);
   const [connected, setConnected] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [tokenDialogOpen, setTokenDialogOpen] = useState(false);
+  const [accessToken, setAccessToken] = useState<string>(
+    localStorage.getItem('automerge_access_token') || ''
+  );
+
+  const handleSaveToken = () => {
+    if (accessToken.trim()) {
+      localStorage.setItem('automerge_access_token', accessToken.trim());
+    } else {
+      localStorage.removeItem('automerge_access_token');
+    }
+    setTokenDialogOpen(false);
+    // Note: User will need to refresh the page for the new token to take effect
+    alert('Token saved! Please refresh the page for changes to take effect.');
+  };
 
 
   const details = useMemo(() => {
@@ -249,6 +264,39 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
               }}
               label={connected ? "Sync on" : "Sync off"}
             />
+            <Dialog open={tokenDialogOpen} onOpenChange={(_, data) => setTokenDialogOpen(data.open)}>
+              <DialogTrigger>
+                <Tooltip content="Configure Personal Access Token" relationship="label">
+                  <ToolbarButton icon={<KeyRegular />}>Token</ToolbarButton>
+                </Tooltip>
+              </DialogTrigger>
+              <DialogSurface>
+                <DialogBody>
+                  <DialogTitle>Personal Access Token</DialogTitle>
+                  <DialogContent>
+                    <Field label="Access Token" hint="Enter your personal access token for the Automerge sync server">
+                      <Input
+                        type="password"
+                        value={accessToken}
+                        onChange={(e) => setAccessToken(e.target.value)}
+                        placeholder="Enter token..."
+                      />
+                    </Field>
+                    <Text size={200} style={{ marginTop: '10px', display: 'block' }}>
+                      Note: The token will be stored in localStorage and used on next page refresh.
+                    </Text>
+                  </DialogContent>
+                  <DialogActions>
+                    <Button appearance="secondary" onClick={() => setTokenDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button appearance="primary" onClick={handleSaveToken}>
+                      Save
+                    </Button>
+                  </DialogActions>
+                </DialogBody>
+              </DialogSurface>
+            </Dialog>
             <Dialog>
               <DialogTrigger>
                 <ToolbarButton icon={<CodeRegular />}>Raw</ToolbarButton>

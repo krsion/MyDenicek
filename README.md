@@ -2,6 +2,17 @@
 - **Research Project Proposal:** [View PDF](https://github.com/krsion/MyDenicek/blob/main/proposal/proposal.pdf)
 - **Live Demo (WIP):** [Launch App](https://krsion.github.io/MyDenicek/)
 
+## Configuration
+
+### Personal Access Token for Sync Server
+
+The application supports authentication with the Automerge sync server using a personal access token. You can configure this in two ways:
+
+1. **Build-time Configuration**: Set the `VITE_AUTOMERGE_TOKEN` environment variable in a `.env` file
+2. **Runtime Configuration**: Use the "Token" button in the UI toolbar to configure the token at runtime
+
+See [dom-navigator/README.md](./dom-navigator/README.md) for detailed instructions.
+
 ## Internal State Representation
 The application is built on **Automerge**, which synchronizes JSON state using Conflict-free Replicated Data Types (CRDTs).
 

@@ -5,8 +5,41 @@ import { createRoot } from 'react-dom/client';
 
 import { App } from './App.tsx';
 import { initialDocument, type JsonDoc } from './Document.ts';
+
+// Get personal access token from environment variable or localStorage
+const getAccessToken = (): string | null => {
+  // First, try to get from localStorage (user can set at runtime)
+  const storedToken = localStorage.getItem('automerge_access_token');
+  if (storedToken) {
+    return storedToken;
+  }
+  
+  // Fall back to environment variable
+  const envToken = import.meta.env['VITE_AUTOMERGE_TOKEN'];
+  if (envToken) {
+    return envToken as string;
+  }
+  
+  return null;
+};
+
+// Build WebSocket URL with optional token
+const buildSyncUrl = (baseUrl: string, token: string | null): string => {
+  if (!token) {
+    return baseUrl;
+  }
+  
+  // Add token as query parameter
+  const url = new URL(baseUrl);
+  url.searchParams.set('token', token);
+  return url.toString();
+};
+
+const accessToken = getAccessToken();
+const syncUrl = buildSyncUrl("wss://sync.automerge.org/", accessToken);
+
 const repo = new Repo({
-  network: [new WebSocketClientAdapter("wss://sync.automerge.org/")],
+  network: [new WebSocketClientAdapter(syncUrl)],
   storage: new IndexedDBStorageAdapter()
 });
 
