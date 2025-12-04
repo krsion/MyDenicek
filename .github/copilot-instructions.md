@@ -30,6 +30,7 @@ MyDenicek is a local-first software implementation for editing DOM-like structur
   - **Rules:**
     - **Imports:** Sorted automatically via `eslint-plugin-simple-import-sort`.
     - **Unused Code:** `unused-imports/no-unused-imports` is an error. Unused variables must be prefixed with `_`.
+    - **No Any:** Usage of `any` is strictly prohibited. Use `unknown` or specific types instead.
 - **Testing:**
   - **E2E/Integration:** `npm run test` (Playwright).
   - **UI Mode:** `npm run test:ui`
