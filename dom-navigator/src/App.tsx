@@ -1,7 +1,7 @@
 import { next as Automerge, type Patch } from "@automerge/automerge";
 import { DocHandle, type PeerId, type Repo, RepoContext, useDocument, useLocalAwareness, useRemoteAwareness } from "@automerge/react";
-import { Card, CardHeader, Checkbox, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, Drawer, DrawerBody, DrawerHeader, DrawerHeaderTitle, Input, Switch, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
-import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CameraRegular, CodeRegular, EditRegular, HistoryRegular, PlayRegular, RecordRegular, RenameFilled, RenameRegular, StopRegular } from "@fluentui/react-icons";
+import { Card, CardHeader, Checkbox, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, DrawerBody, DrawerHeader, DrawerHeaderTitle, InlineDrawer, Input, Switch, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
+import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CameraRegular, CodeRegular, EditRegular, PlayRegular, RecordRegular, RenameFilled, RenameRegular, StopRegular } from "@fluentui/react-icons";
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import { AddNodePopoverButton } from "./AddNodePopoverButton";
@@ -9,6 +9,7 @@ import { addElementChildNode, addSiblingNodeAfter, addSiblingNodeBefore, addTran
 import { DomNavigator, type DomNavigatorHandle } from "./DomNavigator";
 import { ElementDetails } from "./ElementDetails.tsx";
 import { JsonView } from "./JsonView.tsx";
+import { RecordedScriptView } from "./RecordedScriptView";
 import { type RecordedAction, Recorder } from "./Recorder";
 import { RenderedDocument } from "./RenderedDocument.tsx";
 import { ToolbarPopoverButton } from "./ToolbarPopoverButton";
@@ -46,7 +47,6 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
     return selections;
   }, [peerStates]);
   const [connected, setConnected] = useState(true);
-  const [historyOpen, setHistoryOpen] = useState(false);
   const navigatorRef = useRef<DomNavigatorHandle>(null);
 
   const [recorder, setRecorder] = useState<Recorder | null>(null);
@@ -55,7 +55,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
   const startRecording = () => {
     if (!selectedNodeGuid) return;
     setRecorder(new Recorder(selectedNodeGuid));
-    setRecordedScript(null);
+    setRecordedScript([]);
   };
 
   const stopRecording = () => {
@@ -299,382 +299,387 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
   };
 
   return (
-    <>
-      <Card appearance="subtle">
-        <Toolbar style={{ display: "flex", justifyContent: "space-between" }}>
-          <ToolbarGroup>
-            <Tooltip content="Undo" relationship="label">
-              <ToolbarButton
-                icon={<ArrowUndoRegular />}
-                onClick={() => {
-                  if (undoStack.length === 0) return;
-                  const prevDoc = undoStack[undoStack.length - 1];
-                  if (!prevDoc) return;
-                  setUndoStack(stack => stack.slice(0, -1));
-                  setRedoStack(stack => [...stack, doc]);
-                  const currentHeads = Automerge.getHeads(doc);
-                  const prevHeads = Automerge.getHeads(prevDoc);
-                  const patches = Automerge.diff(doc, currentHeads, prevHeads);
+    <div style={{ display: "flex" }}>
+      <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column" }}>
+        <Card appearance="subtle" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+          <Toolbar style={{ display: "flex", justifyContent: "space-between" }}>
+            <ToolbarGroup>
+              <Tooltip content="Undo" relationship="label">
+                <ToolbarButton
+                  icon={<ArrowUndoRegular />}
+                  onClick={() => {
+                    if (undoStack.length === 0) return;
+                    const prevDoc = undoStack[undoStack.length - 1];
+                    if (!prevDoc) return;
+                    setUndoStack(stack => stack.slice(0, -1));
+                    setRedoStack(stack => [...stack, doc]);
+                    const currentHeads = Automerge.getHeads(doc);
+                    const prevHeads = Automerge.getHeads(prevDoc);
+                    const patches = Automerge.diff(doc, currentHeads, prevHeads);
 
-                  changeDoc((d) => {
-                    try {
-                      applyPatchesManual(d, patches);
-                    } catch (e) {
-                      console.error("Error applying patches:", e);
+                    changeDoc((d) => {
+                      try {
+                        applyPatchesManual(d, patches);
+                      } catch (e) {
+                        console.error("Error applying patches:", e);
+                      }
+                    });
+                    if (selectedNodeGuid) clickOnSelectedNode(selectedNodeGuid);
+
+                  }}
+                  disabled={undoStack.length === 0}
+                />
+              </Tooltip>
+              <Tooltip content="Redo" relationship="label">
+                <ToolbarButton
+                  icon={<ArrowRedoRegular />}
+                  onClick={() => {
+                    if (redoStack.length === 0) return;
+                    const nextDoc = redoStack[redoStack.length - 1];
+                    if (!nextDoc) return;
+                    setRedoStack(stack => stack.slice(0, -1));
+                    setUndoStack(stack => [...stack, doc]);
+                    const currentHeads = Automerge.getHeads(doc);
+                    const nextHeads = Automerge.getHeads(nextDoc);
+                    const patches = Automerge.diff(doc, currentHeads, nextHeads);
+
+                    changeDoc((d) => {
+                      try {
+                        applyPatchesManual(d, patches);
+                      } catch (e) {
+                        console.error("Error applying redo patches:", e);
+                      }
+                    });
+
+                    if (selectedNodeGuid) clickOnSelectedNode(selectedNodeGuid);
+                  }}
+                  disabled={redoStack.length === 0}
+                />
+              </Tooltip>
+              <ToolbarDivider />
+              <AddNodePopoverButton
+                disabled={selectedNode?.kind !== "element"}
+                initialValue={selectedNodeFirstChildTag || ""}
+                onAddChild={(content, isValue) => {
+                  if (selectedNode?.kind === "element") {
+                    let newId: string | undefined = undefined;
+                    modifyDoc((prev: JsonDoc) => {
+                      if (!selectedNodeGuid || prev.nodes[selectedNodeGuid]?.kind !== "element") return;
+                      if (isValue) {
+                        newId = addValueChildNode(prev, prev.nodes[selectedNodeGuid] as ElementNode, content).id;
+                      } else {
+                        newId = addElementChildNode(prev, prev.nodes[selectedNodeGuid] as ElementNode, content).id;
+                      }
+                    });
+                    if (newId) {
+                      updateLocalState({ selectedNodeId: newId });
+                      if (recorder && selectedNodeGuid) {
+                        recorder.recordAddChild(selectedNodeGuid, newId, isValue ? "value" : "element", content);
+                        setRecordedScript([...recorder.getActions()]);
+                      }
                     }
-                  });
-                  if (selectedNodeGuid) clickOnSelectedNode(selectedNodeGuid);
-
+                  }
                 }}
-                disabled={undoStack.length === 0}
-              />
-            </Tooltip>
-            <Tooltip content="Redo" relationship="label">
-              <ToolbarButton
-                icon={<ArrowRedoRegular />}
-                onClick={() => {
-                  if (redoStack.length === 0) return;
-                  const nextDoc = redoStack[redoStack.length - 1];
-                  if (!nextDoc) return;
-                  setRedoStack(stack => stack.slice(0, -1));
-                  setUndoStack(stack => [...stack, doc]);
-                  const currentHeads = Automerge.getHeads(doc);
-                  const nextHeads = Automerge.getHeads(nextDoc);
-                  const patches = Automerge.diff(doc, currentHeads, nextHeads);
-
-                  changeDoc((d) => {
-                    try {
-                      applyPatchesManual(d, patches);
-                    } catch (e) {
-                      console.error("Error applying redo patches:", e);
-                    }
-                  });
-
-                  if (selectedNodeGuid) clickOnSelectedNode(selectedNodeGuid);
-                }}
-                disabled={redoStack.length === 0}
-              />
-            </Tooltip>
-            <ToolbarDivider />
-            <AddNodePopoverButton
-              disabled={selectedNode?.kind !== "element"}
-              initialValue={selectedNodeFirstChildTag || ""}
-              onAddChild={(content, isValue) => {
-                if (selectedNode?.kind === "element") {
+                onAddBefore={() => {
+                  if (!selectedNodeGuid) return;
                   let newId: string | undefined = undefined;
                   modifyDoc((prev: JsonDoc) => {
-                    if (!selectedNodeGuid || prev.nodes[selectedNodeGuid]?.kind !== "element") return;
-                    if (isValue) {
-                      newId = addValueChildNode(prev, prev.nodes[selectedNodeGuid] as ElementNode, content).id;
-                    } else {
-                      newId = addElementChildNode(prev, prev.nodes[selectedNodeGuid] as ElementNode, content).id;
-                    }
+                    newId = addSiblingNodeBefore(prev.nodes, selectedNodeGuid);
                   });
                   if (newId) {
                     updateLocalState({ selectedNodeId: newId });
-                    if (recorder && selectedNodeGuid) {
-                      recorder.recordAddChild(selectedNodeGuid, newId, isValue ? "value" : "element", content);
-                    }
                   }
-                }
-              }}
-              onAddBefore={() => {
-                if (!selectedNodeGuid) return;
-                let newId: string | undefined = undefined;
-                modifyDoc((prev: JsonDoc) => {
-                  newId = addSiblingNodeBefore(prev.nodes, selectedNodeGuid);
-                });
-                if (newId) {
-                  updateLocalState({ selectedNodeId: newId });
-                }
 
-              }}
-              onAddAfter={() => {
-                if (!selectedNodeGuid) return;
-                let newId: string | undefined = undefined;
-                modifyDoc((prev: JsonDoc) => {
-                  newId = addSiblingNodeAfter(prev.nodes, selectedNodeGuid);
-                });
-                if (newId) {
-                  updateLocalState({ selectedNodeId: newId });
-                }
-              }}
-            />
-
-            {selectedNode?.kind === "value" && (
-              <ToolbarPopoverButton
-                text="Edit"
-                icon={<EditRegular />}
-                disabled={false}
-                ariaLabel="Edit"
-                initialValue={details?.value || ""}
-                onSubmit={(value) => {
+                }}
+                onAddAfter={() => {
+                  if (!selectedNodeGuid) return;
+                  let newId: string | undefined = undefined;
                   modifyDoc((prev: JsonDoc) => {
-                    if (!selectedNodeGuid || prev.nodes[selectedNodeGuid]?.kind !== "value") return;
-                    prev.nodes[selectedNodeGuid].value = value;
+                    newId = addSiblingNodeAfter(prev.nodes, selectedNodeGuid);
                   });
-                  if (recorder && selectedNodeGuid) {
-                    recorder.recordSetValue(selectedNodeGuid, value);
+                  if (newId) {
+                    updateLocalState({ selectedNodeId: newId });
                   }
                 }}
               />
-            ) ||
-              <ToolbarPopoverButton
-                text="Rename"
-                icon={<RenameRegular />}
-                disabled={!selectedNodeGuid || selectedNode?.kind !== "element"}
-                ariaLabel="Rename"
-                initialValue={details?.tag || ""}
-                onSubmit={(tag) => {
-                  if (selectedNode?.kind == "element") {
+
+              {selectedNode?.kind === "value" && (
+                <ToolbarPopoverButton
+                  text="Edit"
+                  icon={<EditRegular />}
+                  disabled={false}
+                  ariaLabel="Edit"
+                  initialValue={details?.value || ""}
+                  onSubmit={(value) => {
                     modifyDoc((prev: JsonDoc) => {
-                      if (!selectedNodeGuid || prev.nodes[selectedNodeGuid]?.kind !== "element") return;
-                      prev.nodes[selectedNodeGuid].tag = tag;
+                      if (!selectedNodeGuid || prev.nodes[selectedNodeGuid]?.kind !== "value") return;
+                      prev.nodes[selectedNodeGuid].value = value;
                     });
-                    if (selectedNodeGuid) clickOnSelectedNode(selectedNodeGuid);
                     if (recorder && selectedNodeGuid) {
-                      recorder.recordRename(selectedNodeGuid, tag);
+                      recorder.recordSetValue(selectedNodeGuid, value);
+                      setRecordedScript([...recorder.getActions()]);
                     }
+                  }}
+                />
+              ) ||
+                <ToolbarPopoverButton
+                  text="Rename"
+                  icon={<RenameRegular />}
+                  disabled={!selectedNodeGuid || selectedNode?.kind !== "element"}
+                  ariaLabel="Rename"
+                  initialValue={details?.tag || ""}
+                  onSubmit={(tag) => {
+                    if (selectedNode?.kind == "element") {
+                      modifyDoc((prev: JsonDoc) => {
+                        if (!selectedNodeGuid || prev.nodes[selectedNodeGuid]?.kind !== "element") return;
+                        prev.nodes[selectedNodeGuid].tag = tag;
+                      });
+                      if (selectedNodeGuid) clickOnSelectedNode(selectedNodeGuid);
+                      if (recorder && selectedNodeGuid) {
+                        recorder.recordRename(selectedNodeGuid, tag);
+                        setRecordedScript([...recorder.getActions()]);
+                      }
+                    }
+                  }}
+                />
+              }
+              <ToolbarPopoverButton
+                text="Wrap"
+                icon={<BackpackRegular />}
+                disabled={!selectedNodeGuid}
+                ariaLabel="Wrap"
+                onSubmit={(tag) => {
+                  modifyDoc((prev: JsonDoc) => {
+                    wrapNode(prev.nodes, selectedNodeGuid!, tag);
+                  });
+                  if (selectedNodeGuid) clickOnSelectedNode(selectedNodeGuid);
+                  if (recorder && selectedNodeGuid) {
+                    recorder.recordWrap(selectedNodeGuid, tag);
+                    setRecordedScript([...recorder.getActions()]);
                   }
                 }}
               />
-            }
-            <ToolbarPopoverButton
-              text="Wrap"
-              icon={<BackpackRegular />}
-              disabled={!selectedNodeGuid}
-              ariaLabel="Wrap"
-              onSubmit={(tag) => {
-                modifyDoc((prev: JsonDoc) => {
-                  wrapNode(prev.nodes, selectedNodeGuid!, tag);
-                });
-                if (selectedNodeGuid) clickOnSelectedNode(selectedNodeGuid);
-                if (recorder && selectedNodeGuid) {
-                  recorder.recordWrap(selectedNodeGuid, tag);
-                }
-              }}
-            />
-            <ToolbarDivider />
+              <ToolbarDivider />
 
-            <ToolbarPopoverButton
-              text="Rename all children"
-              icon={<RenameFilled />}
-              disabled={!selectedNodeGuid || !selectedNodeFirstChildTag}
-              initialValue={selectedNodeFirstChildTag || ""}
-              ariaLabel="Rename all children"
-              onSubmit={(tag) => {
-                modifyDoc((prev: JsonDoc) => {
-                  if (!selectedNodeGuid) return;
-                  addTransformation(prev, selectedNodeGuid!, "rename", tag);
-                });
-              }}
-            />
-
-            <ToolbarPopoverButton
-              text="Wrap all children"
-              icon={<BackpackFilled />}
-              disabled={!selectedNodeGuid || !selectedNodeFirstChildTag}
-              ariaLabel="Wrap all children"
-              onSubmit={(tag) => {
-                modifyDoc((prev: JsonDoc) => {
-                  if (!selectedNodeGuid) return;
-                  addTransformation(prev, selectedNodeGuid!, "wrap", tag);
-                });
-              }}
-            />
-          </ToolbarGroup>
-
-          <ToolbarGroup>
-            <Text>{peerId}</Text>
-            <Switch
-              checked={connected}
-              onChange={() => {
-                if (connected) {
-                  setConnected(false);
-                  onDisconnect();
-                } else {
-                  setConnected(true);
-                  onConnect();
-                }
-              }}
-              label={connected ? "Sync on" : "Sync off"}
-            />
-            <Dialog>
-              <DialogTrigger>
-                <ToolbarButton icon={<CodeRegular />}>Raw</ToolbarButton>
-              </DialogTrigger>
-              <DialogSurface style={{ width: 1000 }}>
-                <DialogBody>
-                  <DialogContent>
-                    <JsonView data={doc} />
-                  </DialogContent>
-                </DialogBody>
-              </DialogSurface>
-            </Dialog>
-            <ToolbarButton icon={<HistoryRegular />} onClick={() => setHistoryOpen(!historyOpen)}>History</ToolbarButton>
-            <ToolbarButton icon={<CameraRegular />} onClick={() => setSnapshot(doc)}>Snapshot</ToolbarButton>
-            <ToolbarDivider />
-            {!recorder ? (
-              <ToolbarButton icon={<RecordRegular />} onClick={startRecording} disabled={!selectedNodeGuid}>Record</ToolbarButton>
-            ) : (
-              <ToolbarButton icon={<StopRegular />} onClick={stopRecording}>Stop Recording</ToolbarButton>
-            )}
-            <ToolbarButton icon={<PlayRegular />} onClick={replay} disabled={!recordedScript || !selectedNodeGuid}>Replay</ToolbarButton>
-          </ToolbarGroup>
-        </Toolbar>
-
-        <CardHeader header={<TagGroup>
-          <Tag icon={<ArrowUpRegular />} onClick={() => triggerNavigation('parent')} style={{ cursor: 'pointer' }}> Parent</Tag>
-          <Tag icon={<ArrowDownRegular />} onClick={() => triggerNavigation('child')} style={{ cursor: 'pointer' }}> First child</Tag>
-          <Tag icon={<ArrowLeftRegular />} onClick={() => triggerNavigation('prev')} style={{ cursor: 'pointer' }}> Prev sibling</Tag>
-          <Tag icon={<ArrowRightRegular />} onClick={() => triggerNavigation('next')} style={{ cursor: 'pointer' }}> Next sibling</Tag>
-          <Tag icon={<Text>Esc</Text>} onClick={() => triggerNavigation('clear')} style={{ cursor: 'pointer' }}>Clear</Tag>
-        </TagGroup>}
-        />
-
-        <DomNavigator ref={navigatorRef} onSelectedChange={(id) => { updateLocalState({ selectedNodeId: id }) }} selectedNodeId={doc.nodes[localState.selectedNodeId!] ? localState.selectedNodeId : null} peerSelections={peerSelections}>
-          <RenderedDocument tree={doc} />
-        </DomNavigator>
-
-        <ElementDetails
-          details={details}
-          attributes={selectedNodeAttributes}
-          onAttributeChange={handleAttributeChange}
-        />
-        {doc.transformations && doc.transformations.length > 0 && (
-          <Card>
-            <CardHeader header={<Text>Transformations</Text>} />
-            <Table size="small">
-              <TableHeader>
-                <TableRow>
-                  <TableHeaderCell>Type</TableHeaderCell>
-                  <TableHeaderCell>Parent ID</TableHeaderCell>
-                  <TableHeaderCell>Value</TableHeaderCell>
-                  <TableHeaderCell>Version</TableHeaderCell>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {doc.transformations.map((t, i) => (
-                  <TableRow key={i}>
-                    <TableCell>{t.type}</TableCell>
-                    <TableCell>{t.parent}</TableCell>
-                    <TableCell>{t.tag}</TableCell>
-                    <TableCell>{t.version}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
-
-        )}
-
-        {snapshot && (
-          <Card>
-            <CardHeader header={<Text>Patches from Snapshot</Text>} action={<div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <ToolbarButton
-                icon={<ArrowRedoRegular />}
-                disabled={selectedPatchIndices.size === 0}
-                onClick={() => {
-                  const patchesToReplay = relevantPatches.filter((_, i) => selectedPatchIndices.has(i)).map(p => p.patch);
-                  modifyDoc(d => applyPatchesManual(d, patchesToReplay));
-                  setSelectedPatchIndices(new Set());
+              <ToolbarPopoverButton
+                text="Rename all children"
+                icon={<RenameFilled />}
+                disabled={!selectedNodeGuid || !selectedNodeFirstChildTag}
+                initialValue={selectedNodeFirstChildTag || ""}
+                ariaLabel="Rename all children"
+                onSubmit={(tag) => {
+                  modifyDoc((prev: JsonDoc) => {
+                    if (!selectedNodeGuid) return;
+                    addTransformation(prev, selectedNodeGuid!, "rename", tag);
+                  });
                 }}
-              >
-                Replay ({selectedPatchIndices.size})
-              </ToolbarButton>
-              <Switch label="Filter by selection" checked={filterPatches} onChange={(_, data) => setFilterPatches(data.checked)} />
-              <ToolbarButton icon={<CodeRegular />} onClick={() => setPatchesViewMode(patchesViewMode === 'table' ? 'json' : 'table')}>
-                {patchesViewMode === 'table' ? 'JSON' : 'Table'}
-              </ToolbarButton>
-              <ToolbarButton icon={<CameraRegular />} onClick={() => setSnapshot(null)}>Clear</ToolbarButton>
-            </div>} />
-            {patchesViewMode === 'json' ? (
-              <div style={{ maxHeight: '500px', overflow: 'auto' }}>
-                <JsonView data={relevantPatches.map(p => p.patch)} />
-              </div>
-            ) : (
+              />
+
+              <ToolbarPopoverButton
+                text="Wrap all children"
+                icon={<BackpackFilled />}
+                disabled={!selectedNodeGuid || !selectedNodeFirstChildTag}
+                ariaLabel="Wrap all children"
+                onSubmit={(tag) => {
+                  modifyDoc((prev: JsonDoc) => {
+                    if (!selectedNodeGuid) return;
+                    addTransformation(prev, selectedNodeGuid!, "wrap", tag);
+                  });
+                }}
+              />
+            </ToolbarGroup>
+
+            <ToolbarGroup>
+              <Text>{peerId}</Text>
+              <Switch
+                checked={connected}
+                onChange={() => {
+                  if (connected) {
+                    setConnected(false);
+                    onDisconnect();
+                  } else {
+                    setConnected(true);
+                    onConnect();
+                  }
+                }}
+                label={connected ? "Sync on" : "Sync off"}
+              />
+              <Dialog>
+                <DialogTrigger>
+                  <ToolbarButton icon={<CodeRegular />}>Raw</ToolbarButton>
+                </DialogTrigger>
+                <DialogSurface style={{ width: 1000 }}>
+                  <DialogBody>
+                    <DialogContent>
+                      <JsonView data={doc} />
+                    </DialogContent>
+                  </DialogBody>
+                </DialogSurface>
+              </Dialog>
+              <ToolbarButton icon={<CameraRegular />} onClick={() => setSnapshot(doc)}>Snapshot</ToolbarButton>
+              <ToolbarDivider />
+              {!recorder ? (
+                <ToolbarButton icon={<RecordRegular />} onClick={startRecording} disabled={!selectedNodeGuid}>Record</ToolbarButton>
+              ) : (
+                <ToolbarButton icon={<StopRegular />} onClick={stopRecording}>Stop Recording</ToolbarButton>
+              )}
+              <ToolbarButton icon={<PlayRegular />} onClick={() => {
+                replay();
+              }} disabled={!recordedScript || !selectedNodeGuid}>Replay</ToolbarButton>
+            </ToolbarGroup>
+          </Toolbar>
+
+          <CardHeader header={<TagGroup>
+            <Tag icon={<ArrowUpRegular />} onClick={() => triggerNavigation('parent')} style={{ cursor: 'pointer' }}> Parent</Tag>
+            <Tag icon={<ArrowDownRegular />} onClick={() => triggerNavigation('child')} style={{ cursor: 'pointer' }}> First child</Tag>
+            <Tag icon={<ArrowLeftRegular />} onClick={() => triggerNavigation('prev')} style={{ cursor: 'pointer' }}> Prev sibling</Tag>
+            <Tag icon={<ArrowRightRegular />} onClick={() => triggerNavigation('next')} style={{ cursor: 'pointer' }}> Next sibling</Tag>
+            <Tag icon={<Text>Esc</Text>} onClick={() => triggerNavigation('clear')} style={{ cursor: 'pointer' }}>Clear</Tag>
+          </TagGroup>}
+          />
+
+          <DomNavigator ref={navigatorRef} onSelectedChange={(id) => { updateLocalState({ selectedNodeId: id }) }} selectedNodeId={doc.nodes[localState.selectedNodeId!] ? localState.selectedNodeId : null} peerSelections={peerSelections}>
+            <RenderedDocument tree={doc} />
+          </DomNavigator>
+
+          <ElementDetails
+            details={details}
+            attributes={selectedNodeAttributes}
+            onAttributeChange={handleAttributeChange}
+          />
+          {doc.transformations && doc.transformations.length > 0 && (
+            <Card>
+              <CardHeader header={<Text>Transformations</Text>} />
               <Table size="small">
                 <TableHeader>
                   <TableRow>
-                    <TableHeaderCell>
-                      <Checkbox
-                        checked={relevantPatches.length > 0 && selectedPatchIndices.size === relevantPatches.length ? true : selectedPatchIndices.size > 0 ? "mixed" : false}
-                        onChange={(_, data) => {
-                          if (data.checked === true) {
-                            setSelectedPatchIndices(new Set(relevantPatches.map((_, i) => i)));
-                          } else {
-                            setSelectedPatchIndices(new Set());
-                          }
-                        }}
-                      />
-                    </TableHeaderCell>
-                    <TableHeaderCell>Action</TableHeaderCell>
-                    <TableHeaderCell>Path</TableHeaderCell>
+                    <TableHeaderCell>Type</TableHeaderCell>
+                    <TableHeaderCell>Parent ID</TableHeaderCell>
                     <TableHeaderCell>Value</TableHeaderCell>
+                    <TableHeaderCell>Version</TableHeaderCell>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {relevantPatches.map(({ patch: p, index: originalIndex }, i) => (
+                  {doc.transformations.map((t, i) => (
                     <TableRow key={i}>
-                      <TableCell>
-                        <Checkbox
-                          checked={selectedPatchIndices.has(i)}
-                          onChange={(_, data) => {
-                            const newSet = new Set(selectedPatchIndices);
-                            if (data.checked) {
-                              newSet.add(i);
-                            } else {
-                              newSet.delete(i);
-                            }
-                            setSelectedPatchIndices(newSet);
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell>{p.action}</TableCell>
-                      <TableCell>
-                        <Input
-                          style={{ width: '100%', minWidth: '300px' }}
-                          value={p.path.join("/")}
-                          onChange={(_, data) => {
-                            const newPath = data.value.split("/");
-                            updatePatch(originalIndex, { path: newPath });
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          style={{ width: '100%' }}
-                          value={JSON.stringify((p as { value?: unknown }).value)}
-                          onChange={(_, data) => {
-                            try {
-                              const newValue = JSON.parse(data.value);
-                              updatePatch(originalIndex, { value: newValue });
-                            } catch {
-                              // ignore invalid json while typing
-                            }
-                          }}
-                        />
-                      </TableCell>
+                      <TableCell>{t.type}</TableCell>
+                      <TableCell>{t.parent}</TableCell>
+                      <TableCell>{t.tag}</TableCell>
+                      <TableCell>{t.version}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
-            )}
-          </Card>
-        )}
+            </Card>
 
-      </Card>
-      <Drawer open={historyOpen} separator position="end" onOpenChange={(_, { open }) => {
-        setHistoryOpen(open);
+          )}
 
-      }}>
+          {snapshot && (
+            <Card>
+              <CardHeader header={<Text>Patches from Snapshot</Text>} action={<div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ToolbarButton
+                  icon={<ArrowRedoRegular />}
+                  disabled={selectedPatchIndices.size === 0}
+                  onClick={() => {
+                    const patchesToReplay = relevantPatches.filter((_, i) => selectedPatchIndices.has(i)).map(p => p.patch);
+                    modifyDoc(d => applyPatchesManual(d, patchesToReplay));
+                    setSelectedPatchIndices(new Set());
+                  }}
+                >
+                  Replay ({selectedPatchIndices.size})
+                </ToolbarButton>
+                <Switch label="Filter by selection" checked={filterPatches} onChange={(_, data) => setFilterPatches(data.checked)} />
+                <ToolbarButton icon={<CodeRegular />} onClick={() => setPatchesViewMode(patchesViewMode === 'table' ? 'json' : 'table')}>
+                  {patchesViewMode === 'table' ? 'JSON' : 'Table'}
+                </ToolbarButton>
+                <ToolbarButton icon={<CameraRegular />} onClick={() => setSnapshot(null)}>Clear</ToolbarButton>
+              </div>} />
+              {patchesViewMode === 'json' ? (
+                <div style={{ maxHeight: '500px', overflow: 'auto' }}>
+                  <JsonView data={relevantPatches.map(p => p.patch)} />
+                </div>
+              ) : (
+                <Table size="small">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHeaderCell>
+                        <Checkbox
+                          checked={relevantPatches.length > 0 && selectedPatchIndices.size === relevantPatches.length ? true : selectedPatchIndices.size > 0 ? "mixed" : false}
+                          onChange={(_, data) => {
+                            if (data.checked === true) {
+                              setSelectedPatchIndices(new Set(relevantPatches.map((_, i) => i)));
+                            } else {
+                              setSelectedPatchIndices(new Set());
+                            }
+                          }}
+                        />
+                      </TableHeaderCell>
+                      <TableHeaderCell>Action</TableHeaderCell>
+                      <TableHeaderCell>Path</TableHeaderCell>
+                      <TableHeaderCell>Value</TableHeaderCell>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {relevantPatches.map(({ patch: p, index: originalIndex }, i) => (
+                      <TableRow key={i}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedPatchIndices.has(i)}
+                            onChange={(_, data) => {
+                              const newSet = new Set(selectedPatchIndices);
+                              if (data.checked) {
+                                newSet.add(i);
+                              } else {
+                                newSet.delete(i);
+                              }
+                              setSelectedPatchIndices(newSet);
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell>{p.action}</TableCell>
+                        <TableCell>
+                          <Input
+                            style={{ width: '100%', minWidth: '300px' }}
+                            value={p.path.join("/")}
+                            onChange={(_, data) => {
+                              const newPath = data.value.split("/");
+                              updatePatch(originalIndex, { path: newPath });
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            style={{ width: '100%' }}
+                            value={JSON.stringify((p as { value?: unknown }).value)}
+                            onChange={(_, data) => {
+                              try {
+                                const newValue = JSON.parse(data.value);
+                                updatePatch(originalIndex, { value: newValue });
+                              } catch {
+                                // ignore invalid json while typing
+                              }
+                            }}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </Card>
+          )}
+
+        </Card>
+      </div>
+      <InlineDrawer open={(recordedScript !== null && recordedScript.length > 0) || recorder !== null} separator position="end">
         <DrawerHeader>
-          <DrawerHeaderTitle>History</DrawerHeaderTitle>
+          <DrawerHeaderTitle>Recording</DrawerHeaderTitle>
         </DrawerHeader>
         <DrawerBody>
+          <RecordedScriptView script={recordedScript || []} />
         </DrawerBody>
-      </Drawer>
-    </>
+      </InlineDrawer>
+    </div>
   );
 }
 
