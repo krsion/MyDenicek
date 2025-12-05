@@ -1,11 +1,11 @@
 import { next as Automerge, type Patch } from "@automerge/automerge";
 import { DocHandle, type PeerId, type Repo, RepoContext, useDocument, useLocalAwareness, useRemoteAwareness } from "@automerge/react";
-import { Card, CardHeader, Checkbox, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, Drawer, DrawerBody, DrawerHeader, DrawerHeaderTitle, Switch, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
+import { Card, CardHeader, Checkbox, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, Drawer, DrawerBody, DrawerHeader, DrawerHeaderTitle, Input, Switch, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
 import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CameraRegular, CodeRegular, EditRegular, HistoryRegular, RenameFilled, RenameRegular } from "@fluentui/react-icons";
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import { AddNodePopoverButton } from "./AddNodePopoverButton";
-import { addElementChildNode, addSiblingNodeAfter, addSiblingNodeBefore, addTransformation, addValueChildNode, firstChildsTag, type JsonDoc, type Node, wrapNode } from "./Document.ts";
+import { addElementChildNode, addSiblingNodeAfter, addSiblingNodeBefore, addTransformation, addValueChildNode, type ElementNode, firstChildsTag, type JsonDoc, type Node, wrapNode } from "./Document.ts";
 import { DomNavigator, type DomNavigatorHandle } from "./DomNavigator";
 import { ElementDetails } from "./ElementDetails.tsx";
 import { JsonView } from "./JsonView.tsx";
@@ -107,13 +107,19 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
     });
   };
 
-  const patches = useMemo(() => {
-    if (!snapshot) return [];
-    return Automerge.diff(doc, Automerge.getHeads(snapshot), Automerge.getHeads(doc));
+  const [patches, setPatches] = useState<Patch[]>([]);
+
+  useEffect(() => {
+    if (!snapshot) {
+      setPatches([]);
+      return;
+    }
+    setPatches(Automerge.diff(doc, Automerge.getHeads(snapshot), Automerge.getHeads(doc)));
   }, [snapshot, doc]);
 
   const relevantPatches = useMemo(() => {
-    if (!filterPatches || !selectedNodeGuid) return patches;
+    const allPatches = patches.map((p, i) => ({ patch: p, index: i }));
+    if (!filterPatches || !selectedNodeGuid) return allPatches;
 
     const relevantIds = new Set<string>();
     const stack = [selectedNodeGuid];
@@ -126,16 +132,16 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
       }
     }
 
-    return patches.filter(p => {
+    return allPatches.filter(({ patch: p }) => {
       // Check if the patch modifies a relevant node
       if (p.path.length > 1 && p.path[0] === 'nodes' && relevantIds.has(String(p.path[1]))) {
         return true;
       }
       // Check if the patch value involves a relevant node (e.g. adding it to a parent's children list)
-      // const val = (p as { value?: unknown }).value;
-      // if (typeof val === 'string' && relevantIds.has(val)) {
-      //   return true;
-      // }
+      const val = (p as { value?: unknown }).value;
+      if (typeof val === 'string' && relevantIds.has(val)) {
+        return true;
+      }
       return false;
     });
   }, [patches, filterPatches, selectedNodeGuid, doc]);
@@ -143,6 +149,14 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
   useEffect(() => {
     setSelectedPatchIndices(new Set());
   }, [relevantPatches]);
+
+  const updatePatch = (index: number, updates: Partial<Patch>) => {
+    setPatches(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index], ...updates } as Patch;
+      return next;
+    });
+  };
 
   const applyPatchesManual = (d: JsonDoc, patches: Patch[]) => {
     patches.forEach((patch, _i) => {
@@ -263,9 +277,9 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                   modifyDoc((prev: JsonDoc) => {
                     if (!selectedNodeGuid || prev.nodes[selectedNodeGuid]?.kind !== "element") return;
                     if (isValue) {
-                      newId = addValueChildNode(prev, prev.nodes[selectedNodeGuid], content);
+                      newId = addValueChildNode(prev, prev.nodes[selectedNodeGuid] as ElementNode, content).id;
                     } else {
-                      newId = addElementChildNode(prev, prev.nodes[selectedNodeGuid], content);
+                      newId = addElementChildNode(prev, prev.nodes[selectedNodeGuid] as ElementNode, content).id;
                     }
                   });
                   if (newId) {
@@ -454,7 +468,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                 icon={<ArrowRedoRegular />}
                 disabled={selectedPatchIndices.size === 0}
                 onClick={() => {
-                  const patchesToReplay = relevantPatches.filter((_, i) => selectedPatchIndices.has(i));
+                  const patchesToReplay = relevantPatches.filter((_, i) => selectedPatchIndices.has(i)).map(p => p.patch);
                   modifyDoc(d => applyPatchesManual(d, patchesToReplay));
                   setSelectedPatchIndices(new Set());
                 }}
@@ -467,9 +481,6 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
             <Table size="small">
               <TableHeader>
                 <TableRow>
-                  <TableHeaderCell>Action</TableHeaderCell>
-                  <TableHeaderCell>Path</TableHeaderCell>
-                  <TableHeaderCell>Value</TableHeaderCell>
                   <TableHeaderCell>
                     <Checkbox
                       checked={relevantPatches.length > 0 && selectedPatchIndices.size === relevantPatches.length ? true : selectedPatchIndices.size > 0 ? "mixed" : false}
@@ -482,14 +493,14 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                       }}
                     />
                   </TableHeaderCell>
+                  <TableHeaderCell>Action</TableHeaderCell>
+                  <TableHeaderCell>Path</TableHeaderCell>
+                  <TableHeaderCell>Value</TableHeaderCell>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {relevantPatches.map((p, i) => (
+                {relevantPatches.map(({ patch: p, index: originalIndex }, i) => (
                   <TableRow key={i}>
-                    <TableCell>{p.action}</TableCell>
-                    <TableCell>{p.path.join("/")}</TableCell>
-                    <TableCell>{JSON.stringify((p as { value?: unknown }).value)}</TableCell>
                     <TableCell>
                       <Checkbox
                         checked={selectedPatchIndices.has(i)}
@@ -501,6 +512,31 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                             newSet.delete(i);
                           }
                           setSelectedPatchIndices(newSet);
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell>{p.action}</TableCell>
+                    <TableCell>
+                      <Input
+                        style={{ width: '100%', minWidth: '300px' }}
+                        value={p.path.join("/")}
+                        onChange={(_, data) => {
+                          const newPath = data.value.split("/");
+                          updatePatch(originalIndex, { path: newPath });
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        style={{ width: '100%' }}
+                        value={JSON.stringify((p as { value?: unknown }).value)}
+                        onChange={(_, data) => {
+                          try {
+                            const newValue = JSON.parse(data.value);
+                            updatePatch(originalIndex, { value: newValue });
+                          } catch {
+                            // ignore invalid json while typing
+                          }
                         }}
                       />
                     </TableCell>
