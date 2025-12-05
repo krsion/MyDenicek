@@ -18,6 +18,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
   const [redoStack, setRedoStack] = useState<JsonDoc[]>([]);
   const [snapshot, setSnapshot] = useState<JsonDoc | null>(null);
   const [filterPatches, setFilterPatches] = useState(false);
+  const [patchesViewMode, setPatchesViewMode] = useState<'table' | 'json'>('table');
   const [selectedPatchIndices, setSelectedPatchIndices] = useState<Set<number>>(new Set());
 
   const modifyDoc = (updater: (d: JsonDoc) => void) => {
@@ -406,7 +407,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
               <DialogSurface style={{ width: 1000 }}>
                 <DialogBody>
                   <DialogContent>
-                    <JsonView doc={doc} />
+                    <JsonView data={doc} />
                   </DialogContent>
                 </DialogBody>
               </DialogSurface>
@@ -476,74 +477,83 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                 Replay ({selectedPatchIndices.size})
               </ToolbarButton>
               <Switch label="Filter by selection" checked={filterPatches} onChange={(_, data) => setFilterPatches(data.checked)} />
+              <ToolbarButton icon={<CodeRegular />} onClick={() => setPatchesViewMode(patchesViewMode === 'table' ? 'json' : 'table')}>
+                {patchesViewMode === 'table' ? 'JSON' : 'Table'}
+              </ToolbarButton>
               <ToolbarButton icon={<CameraRegular />} onClick={() => setSnapshot(null)}>Clear</ToolbarButton>
             </div>} />
-            <Table size="small">
-              <TableHeader>
-                <TableRow>
-                  <TableHeaderCell>
-                    <Checkbox
-                      checked={relevantPatches.length > 0 && selectedPatchIndices.size === relevantPatches.length ? true : selectedPatchIndices.size > 0 ? "mixed" : false}
-                      onChange={(_, data) => {
-                        if (data.checked === true) {
-                          setSelectedPatchIndices(new Set(relevantPatches.map((_, i) => i)));
-                        } else {
-                          setSelectedPatchIndices(new Set());
-                        }
-                      }}
-                    />
-                  </TableHeaderCell>
-                  <TableHeaderCell>Action</TableHeaderCell>
-                  <TableHeaderCell>Path</TableHeaderCell>
-                  <TableHeaderCell>Value</TableHeaderCell>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {relevantPatches.map(({ patch: p, index: originalIndex }, i) => (
-                  <TableRow key={i}>
-                    <TableCell>
+            {patchesViewMode === 'json' ? (
+              <div style={{ maxHeight: '500px', overflow: 'auto' }}>
+                <JsonView data={relevantPatches.map(p => p.patch)} />
+              </div>
+            ) : (
+              <Table size="small">
+                <TableHeader>
+                  <TableRow>
+                    <TableHeaderCell>
                       <Checkbox
-                        checked={selectedPatchIndices.has(i)}
+                        checked={relevantPatches.length > 0 && selectedPatchIndices.size === relevantPatches.length ? true : selectedPatchIndices.size > 0 ? "mixed" : false}
                         onChange={(_, data) => {
-                          const newSet = new Set(selectedPatchIndices);
-                          if (data.checked) {
-                            newSet.add(i);
+                          if (data.checked === true) {
+                            setSelectedPatchIndices(new Set(relevantPatches.map((_, i) => i)));
                           } else {
-                            newSet.delete(i);
-                          }
-                          setSelectedPatchIndices(newSet);
-                        }}
-                      />
-                    </TableCell>
-                    <TableCell>{p.action}</TableCell>
-                    <TableCell>
-                      <Input
-                        style={{ width: '100%', minWidth: '300px' }}
-                        value={p.path.join("/")}
-                        onChange={(_, data) => {
-                          const newPath = data.value.split("/");
-                          updatePatch(originalIndex, { path: newPath });
-                        }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        style={{ width: '100%' }}
-                        value={JSON.stringify((p as { value?: unknown }).value)}
-                        onChange={(_, data) => {
-                          try {
-                            const newValue = JSON.parse(data.value);
-                            updatePatch(originalIndex, { value: newValue });
-                          } catch {
-                            // ignore invalid json while typing
+                            setSelectedPatchIndices(new Set());
                           }
                         }}
                       />
-                    </TableCell>
+                    </TableHeaderCell>
+                    <TableHeaderCell>Action</TableHeaderCell>
+                    <TableHeaderCell>Path</TableHeaderCell>
+                    <TableHeaderCell>Value</TableHeaderCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {relevantPatches.map(({ patch: p, index: originalIndex }, i) => (
+                    <TableRow key={i}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedPatchIndices.has(i)}
+                          onChange={(_, data) => {
+                            const newSet = new Set(selectedPatchIndices);
+                            if (data.checked) {
+                              newSet.add(i);
+                            } else {
+                              newSet.delete(i);
+                            }
+                            setSelectedPatchIndices(newSet);
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>{p.action}</TableCell>
+                      <TableCell>
+                        <Input
+                          style={{ width: '100%', minWidth: '300px' }}
+                          value={p.path.join("/")}
+                          onChange={(_, data) => {
+                            const newPath = data.value.split("/");
+                            updatePatch(originalIndex, { path: newPath });
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          style={{ width: '100%' }}
+                          value={JSON.stringify((p as { value?: unknown }).value)}
+                          onChange={(_, data) => {
+                            try {
+                              const newValue = JSON.parse(data.value);
+                              updatePatch(originalIndex, { value: newValue });
+                            } catch {
+                              // ignore invalid json while typing
+                            }
+                          }}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </Card>
         )}
 

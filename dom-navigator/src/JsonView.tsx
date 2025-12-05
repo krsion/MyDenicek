@@ -2,19 +2,18 @@ import JsonViewEditor from '@uiw/react-json-view/editor';
 import { githubLightTheme } from '@uiw/react-json-view/githubLight';
 import { useEffect, useState } from "react";
 
-import type { JsonDoc } from "./Document";
 
-export const JsonView = ({ doc }: { doc: JsonDoc }) => {
-    const [currentDoc, setCurrentDoc] = useState<JsonDoc>(() => JSON.parse(JSON.stringify(doc)));
+export const JsonView = ({ data }: { data: unknown }) => {
+    const [currentData, setCurrentData] = useState<unknown>(() => JSON.parse(JSON.stringify(data)));
 
     useEffect(() => {
-        setCurrentDoc(JSON.parse(JSON.stringify(doc)));
-    }, [doc]);
+        setCurrentData(JSON.parse(JSON.stringify(data)));
+    }, [data]);
 
 
     return (
         <JsonViewEditor
-            value={currentDoc}
+            value={currentData as object}
             style={githubLightTheme}
             onEdit={() => true}
         />
