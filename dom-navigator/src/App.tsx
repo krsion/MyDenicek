@@ -1,7 +1,7 @@
 import { next as Automerge, type Patch } from "@automerge/automerge";
 import { DocHandle, type PeerId, type Repo, RepoContext, useDocument, useLocalAwareness, useRemoteAwareness } from "@automerge/react";
 import { Card, CardHeader, Checkbox, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, Drawer, DrawerBody, DrawerHeader, DrawerHeaderTitle, Input, Switch, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
-import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CameraRegular, CodeRegular, EditRegular, HistoryRegular, RenameFilled, RenameRegular } from "@fluentui/react-icons";
+import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CameraRegular, CodeRegular, EditRegular, HistoryRegular, PlayRegular, RecordRegular, RenameFilled, RenameRegular, StopRegular } from "@fluentui/react-icons";
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import { AddNodePopoverButton } from "./AddNodePopoverButton";
@@ -9,6 +9,7 @@ import { addElementChildNode, addSiblingNodeAfter, addSiblingNodeBefore, addTran
 import { DomNavigator, type DomNavigatorHandle } from "./DomNavigator";
 import { ElementDetails } from "./ElementDetails.tsx";
 import { JsonView } from "./JsonView.tsx";
+import { type RecordedAction, Recorder } from "./Recorder";
 import { RenderedDocument } from "./RenderedDocument.tsx";
 import { ToolbarPopoverButton } from "./ToolbarPopoverButton";
 
@@ -47,6 +48,92 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
   const [connected, setConnected] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(false);
   const navigatorRef = useRef<DomNavigatorHandle>(null);
+
+  const [recorder, setRecorder] = useState<Recorder | null>(null);
+  const [recordedScript, setRecordedScript] = useState<RecordedAction[] | null>(null);
+
+  const startRecording = () => {
+    if (!selectedNodeGuid) return;
+    setRecorder(new Recorder(selectedNodeGuid));
+    setRecordedScript(null);
+  };
+
+  const stopRecording = () => {
+    if (recorder) {
+      setRecordedScript(recorder.getActions());
+      setRecorder(null);
+    }
+  };
+
+  const replay = () => {
+    if (!recordedScript || !selectedNodeGuid) return;
+
+    modifyDoc((doc) => {
+      const replayMap: Record<string, string> = { "$0": selectedNodeGuid };
+
+      const resolve = (ref: string): string => {
+        if (replayMap[ref]) return replayMap[ref]!;
+        if (ref.startsWith("$")) return replayMap[ref] || ref;
+        // If it's a wrapper ref like w-$0, check if we have it mapped
+        if (ref.startsWith("w-")) {
+          // If we mapped "w-$0" explicitly (due to collision handling), return it
+          // Otherwise, try to resolve inner and prepend w-
+          const inner = resolve(ref.substring(2));
+          // If inner resolved to something different, try w-inner
+          // But wait, if we didn't map w-$0, it means we assume standard naming w-{ID}
+          return "w-" + inner;
+        }
+        if (ref.endsWith("_w")) {
+          const inner = resolve(ref.substring(0, ref.length - 2));
+          return inner + "_w";
+        }
+        return ref;
+      };
+      for (const action of recordedScript) {
+        if (action.type === "addChild") {
+          const parentId = resolve(action.parent);
+          const parentNode = doc.nodes[parentId];
+          if (parentNode?.kind === "element") {
+            let newId: string;
+            if (action.nodeType === "value") {
+              newId = addValueChildNode(doc, parentNode, action.content).id;
+            } else {
+              newId = addElementChildNode(doc, parentNode, action.content).id;
+            }
+            replayMap[action.newIdVar] = newId;
+          }
+        } else if (action.type === "setValue") {
+          const targetId = resolve(action.target);
+          const node = doc.nodes[targetId];
+          if (node?.kind === "value") {
+            node.value = action.value;
+          }
+        } else if (action.type === "wrap") {
+          const targetId = resolve(action.target);
+
+          // Predict the wrapper ID to map it
+          let wrapperId = "w-" + targetId;
+          while (doc.nodes[wrapperId]) wrapperId = wrapperId + "_w";
+
+          wrapNode(doc.nodes, targetId, action.wrapperTag);
+
+          // Map w-{targetRef} to wrapperId
+          // action.target is the ref, e.g. $0
+          // We need to handle collisions in the map key too, to match Recorder logic
+          let refKey = "w-" + action.target;
+          while (replayMap[refKey]) refKey = refKey + "_w";
+          replayMap[refKey] = wrapperId;
+
+        } else if (action.type === "rename") {
+          const targetId = resolve(action.target);
+          const node = doc.nodes[targetId];
+          if (node?.kind === "element") {
+            node.tag = action.newTag;
+          }
+        }
+      }
+    });
+  };
 
   const triggerNavigation = (action: 'parent' | 'child' | 'prev' | 'next' | 'clear') => {
     if (!navigatorRef.current) return;
@@ -285,6 +372,9 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                   });
                   if (newId) {
                     updateLocalState({ selectedNodeId: newId });
+                    if (recorder && selectedNodeGuid) {
+                      recorder.recordAddChild(selectedNodeGuid, newId, isValue ? "value" : "element", content);
+                    }
                   }
                 }
               }}
@@ -323,6 +413,9 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                     if (!selectedNodeGuid || prev.nodes[selectedNodeGuid]?.kind !== "value") return;
                     prev.nodes[selectedNodeGuid].value = value;
                   });
+                  if (recorder && selectedNodeGuid) {
+                    recorder.recordSetValue(selectedNodeGuid, value);
+                  }
                 }}
               />
             ) ||
@@ -339,6 +432,9 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                       prev.nodes[selectedNodeGuid].tag = tag;
                     });
                     if (selectedNodeGuid) clickOnSelectedNode(selectedNodeGuid);
+                    if (recorder && selectedNodeGuid) {
+                      recorder.recordRename(selectedNodeGuid, tag);
+                    }
                   }
                 }}
               />
@@ -353,6 +449,9 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                   wrapNode(prev.nodes, selectedNodeGuid!, tag);
                 });
                 if (selectedNodeGuid) clickOnSelectedNode(selectedNodeGuid);
+                if (recorder && selectedNodeGuid) {
+                  recorder.recordWrap(selectedNodeGuid, tag);
+                }
               }}
             />
             <ToolbarDivider />
@@ -414,6 +513,13 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
             </Dialog>
             <ToolbarButton icon={<HistoryRegular />} onClick={() => setHistoryOpen(!historyOpen)}>History</ToolbarButton>
             <ToolbarButton icon={<CameraRegular />} onClick={() => setSnapshot(doc)}>Snapshot</ToolbarButton>
+            <ToolbarDivider />
+            {!recorder ? (
+              <ToolbarButton icon={<RecordRegular />} onClick={startRecording} disabled={!selectedNodeGuid}>Record</ToolbarButton>
+            ) : (
+              <ToolbarButton icon={<StopRegular />} onClick={stopRecording}>Stop Recording</ToolbarButton>
+            )}
+            <ToolbarButton icon={<PlayRegular />} onClick={replay} disabled={!recordedScript || !selectedNodeGuid}>Replay</ToolbarButton>
           </ToolbarGroup>
         </Toolbar>
 

@@ -83,7 +83,7 @@ export function addTransformation(doc: JsonDoc, parent: string, type: "wrap" | "
   }
 }
 
-function addChildNode(nodes: Record<string, Node>, parent: ElementNode, child: Node) {
+export function addChildNode(nodes: Record<string, Node>, parent: ElementNode, child: Node) {
   const id = `n_${getUUID()}`;
   nodes[id] = child;
   parent.children.push(id);
