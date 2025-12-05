@@ -220,6 +220,32 @@ export function initialDocument(): JsonDoc | undefined {
                       })
                   })
              })
+             .addChild('article', d => {
+                 d.withAttrs({ style: { gridColumn: 'span 2' } })
+                  .addChild('h2', h => h.addValue('Table Data'))
+                  .addChild('table', t => {
+                      t.withAttrs({ border: '1', style: { width: '100%', borderCollapse: 'collapse' } })
+                       .addChild('thead', thead => {
+                           thead.addChild('tr', tr => {
+                               tr.addChild('th', th => th.addValue('Name'))
+                                 .addChild('th', th => th.addValue('Role'))
+                                 .addChild('th', th => th.addValue('Status'))
+                           })
+                       })
+                       .addChild('tbody', tbody => {
+                           tbody.addChild('tr', tr => {
+                               tr.addChild('td', td => td.addValue('Alice'))
+                                 .addChild('td', td => td.addValue('Developer'))
+                                 .addChild('td', td => td.addValue('Active'))
+                           })
+                           .addChild('tr', tr => {
+                               tr.addChild('td', td => td.addValue('Bob'))
+                                 .addChild('td', td => td.addValue('Designer'))
+                                 .addChild('td', td => td.addValue('Inactive'))
+                           })
+                       })
+                  })
+             })
     });
 
   return doc;
