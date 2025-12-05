@@ -1,8 +1,8 @@
 import { next as Automerge, type Patch } from "@automerge/automerge";
 import { DocHandle, type PeerId, type Repo, RepoContext, useDocument, useLocalAwareness, useRemoteAwareness } from "@automerge/react";
-import { Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, Drawer, DrawerBody, DrawerHeader, DrawerHeaderTitle, Switch, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
+import { Card, CardHeader, Checkbox, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, Drawer, DrawerBody, DrawerHeader, DrawerHeaderTitle, Switch, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
 import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CameraRegular, CodeRegular, EditRegular, HistoryRegular, RenameFilled, RenameRegular } from "@fluentui/react-icons";
-import { useContext, useMemo, useRef, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import { AddNodePopoverButton } from "./AddNodePopoverButton";
 import { addElementChildNode, addSiblingNodeAfter, addSiblingNodeBefore, addTransformation, addValueChildNode, firstChildsTag, type JsonDoc, type Node, wrapNode } from "./Document.ts";
@@ -18,6 +18,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
   const [redoStack, setRedoStack] = useState<JsonDoc[]>([]);
   const [snapshot, setSnapshot] = useState<JsonDoc | null>(null);
   const [filterPatches, setFilterPatches] = useState(false);
+  const [selectedPatchIndices, setSelectedPatchIndices] = useState<Set<number>>(new Set());
 
   const modifyDoc = (updater: (d: JsonDoc) => void) => {
     setUndoStack(prev => [...prev, doc]);
@@ -138,6 +139,10 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
       return false;
     });
   }, [patches, filterPatches, selectedNodeGuid, doc]);
+
+  useEffect(() => {
+    setSelectedPatchIndices(new Set());
+  }, [relevantPatches]);
 
   const applyPatchesManual = (d: JsonDoc, patches: Patch[]) => {
     patches.forEach((patch, _i) => {
@@ -444,13 +449,39 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
 
         {snapshot && (
           <Card>
-            <CardHeader header={<Text>Patches from Snapshot</Text>} action={<div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Switch label="Filter by selection" checked={filterPatches} onChange={(_, data) => setFilterPatches(data.checked)} /><ToolbarButton icon={<CameraRegular />} onClick={() => setSnapshot(null)}>Clear</ToolbarButton></div>} />
+            <CardHeader header={<Text>Patches from Snapshot</Text>} action={<div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <ToolbarButton
+                icon={<ArrowRedoRegular />}
+                disabled={selectedPatchIndices.size === 0}
+                onClick={() => {
+                  const patchesToReplay = relevantPatches.filter((_, i) => selectedPatchIndices.has(i));
+                  modifyDoc(d => applyPatchesManual(d, patchesToReplay));
+                  setSelectedPatchIndices(new Set());
+                }}
+              >
+                Replay ({selectedPatchIndices.size})
+              </ToolbarButton>
+              <Switch label="Filter by selection" checked={filterPatches} onChange={(_, data) => setFilterPatches(data.checked)} />
+              <ToolbarButton icon={<CameraRegular />} onClick={() => setSnapshot(null)}>Clear</ToolbarButton>
+            </div>} />
             <Table size="small">
               <TableHeader>
                 <TableRow>
                   <TableHeaderCell>Action</TableHeaderCell>
                   <TableHeaderCell>Path</TableHeaderCell>
                   <TableHeaderCell>Value</TableHeaderCell>
+                  <TableHeaderCell>
+                    <Checkbox
+                      checked={relevantPatches.length > 0 && selectedPatchIndices.size === relevantPatches.length ? true : selectedPatchIndices.size > 0 ? "mixed" : false}
+                      onChange={(_, data) => {
+                        if (data.checked === true) {
+                          setSelectedPatchIndices(new Set(relevantPatches.map((_, i) => i)));
+                        } else {
+                          setSelectedPatchIndices(new Set());
+                        }
+                      }}
+                    />
+                  </TableHeaderCell>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -459,6 +490,20 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                     <TableCell>{p.action}</TableCell>
                     <TableCell>{p.path.join("/")}</TableCell>
                     <TableCell>{JSON.stringify((p as { value?: unknown }).value)}</TableCell>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedPatchIndices.has(i)}
+                        onChange={(_, data) => {
+                          const newSet = new Set(selectedPatchIndices);
+                          if (data.checked) {
+                            newSet.add(i);
+                          } else {
+                            newSet.delete(i);
+                          }
+                          setSelectedPatchIndices(newSet);
+                        }}
+                      />
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
