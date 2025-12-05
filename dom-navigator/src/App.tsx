@@ -17,6 +17,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
   const [undoStack, setUndoStack] = useState<JsonDoc[]>([]);
   const [redoStack, setRedoStack] = useState<JsonDoc[]>([]);
   const [snapshot, setSnapshot] = useState<JsonDoc | null>(null);
+  const [filterPatches, setFilterPatches] = useState(false);
 
   const modifyDoc = (updater: (d: JsonDoc) => void) => {
     setUndoStack(prev => [...prev, doc]);
@@ -109,6 +110,34 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
     if (!snapshot) return [];
     return Automerge.diff(doc, Automerge.getHeads(snapshot), Automerge.getHeads(doc));
   }, [snapshot, doc]);
+
+  const relevantPatches = useMemo(() => {
+    if (!filterPatches || !selectedNodeGuid) return patches;
+
+    const relevantIds = new Set<string>();
+    const stack = [selectedNodeGuid];
+    while (stack.length > 0) {
+      const id = stack.pop()!;
+      relevantIds.add(id);
+      const node = doc.nodes[id];
+      if (node && node.kind === 'element') {
+        stack.push(...node.children);
+      }
+    }
+
+    return patches.filter(p => {
+      // Check if the patch modifies a relevant node
+      if (p.path.length > 1 && p.path[0] === 'nodes' && relevantIds.has(String(p.path[1]))) {
+        return true;
+      }
+      // Check if the patch value involves a relevant node (e.g. adding it to a parent's children list)
+      // const val = (p as { value?: unknown }).value;
+      // if (typeof val === 'string' && relevantIds.has(val)) {
+      //   return true;
+      // }
+      return false;
+    });
+  }, [patches, filterPatches, selectedNodeGuid, doc]);
 
   const applyPatchesManual = (d: JsonDoc, patches: Patch[]) => {
     patches.forEach((patch, _i) => {
@@ -415,7 +444,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
 
         {snapshot && (
           <Card>
-            <CardHeader header={<Text>Patches from Snapshot</Text>} action={<ToolbarButton icon={<CameraRegular />} onClick={() => setSnapshot(null)}>Clear</ToolbarButton>} />
+            <CardHeader header={<Text>Patches from Snapshot</Text>} action={<div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Switch label="Filter by selection" checked={filterPatches} onChange={(_, data) => setFilterPatches(data.checked)} /><ToolbarButton icon={<CameraRegular />} onClick={() => setSnapshot(null)}>Clear</ToolbarButton></div>} />
             <Table size="small">
               <TableHeader>
                 <TableRow>
@@ -425,7 +454,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {patches.map((p, i) => (
+                {relevantPatches.map((p, i) => (
                   <TableRow key={i}>
                     <TableCell>{p.action}</TableCell>
                     <TableCell>{p.path.join("/")}</TableCell>
