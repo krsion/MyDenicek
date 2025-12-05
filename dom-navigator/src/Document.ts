@@ -1,12 +1,12 @@
 
-type ElementNode = {
+export type ElementNode = {
   kind: "element";
   tag: string;
   attrs: Record<string, unknown>;
   children: string[];
 }
 
-type ValueNode = {
+export type ValueNode = {
   kind: "value";
   value: string;
 };
@@ -99,14 +99,58 @@ export function firstChildsTag(nodes: Record<string, Node>, node: ElementNode): 
   return undefined; 
 }
 
+export class NodeWrapper {
+  doc: JsonDoc;
+  id: string;
+
+  constructor(doc: JsonDoc, id: string) {
+    this.doc = doc;
+    this.id = id;
+  }
+
+  get node(): Node {
+    const n = this.doc.nodes[this.id];
+    if (!n) throw new Error(`Node ${this.id} not found`);
+    return n;
+  }
+
+  addChild(tag: string, setup?: (w: NodeWrapper) => void): NodeWrapper {
+    if (this.node.kind !== 'element') throw new Error("Cannot add child to value node");
+    const child = addElementChildNode(this.doc, this.node as ElementNode, tag);
+    if (setup) setup(child);
+    return this;
+  }
+
+  addValue(value: string): NodeWrapper {
+    if (this.node.kind !== 'element') throw new Error("Cannot add child to value node");
+    addValueChildNode(this.doc, this.node as ElementNode, value);
+    return this;
+  }
+  
+  addChildren(tags: string[]): NodeWrapper {
+      tags.forEach(tag => this.addChild(tag));
+      return this;
+  }
+  
+  withAttrs(attrs: Record<string, unknown>): NodeWrapper {
+      const n = this.node;
+      if (n.kind === 'element') {
+          n.attrs = { ...n.attrs, ...attrs };
+      }
+      return this;
+  }
+}
+
 export function addElementChildNode(doc: JsonDoc, parent: ElementNode, tag: string) {
   const node: Node = { kind: "element", tag, attrs: {}, children: [] };
-  return addChildNode(doc.nodes, parent, node);
+  const id = addChildNode(doc.nodes, parent, node);
+  return new NodeWrapper(doc, id);
 }
 
 export function addValueChildNode(doc: JsonDoc, parent: ElementNode, value: string) {
   const node: Node = { kind: "value", value };
-  return addChildNode(doc.nodes, parent, node);
+  const id = addChildNode(doc.nodes, parent, node);
+  return new NodeWrapper(doc, id);
 }
 
 function addSiblingNode(nodes: Record<string, Node>, relativeIndex: number, siblingId: string) {
@@ -130,49 +174,53 @@ export function addSiblingNodeAfter(nodes: Record<string, Node>, siblingId: stri
 }
 
 export function initialDocument(): JsonDoc | undefined {
+  const rootId = 'n-root';
   const nodes: Record<string, Node> = {
-      'n-root' : { kind: 'element', tag: 'section', attrs: {}, children: ['n-inner'] },
-      'n-inner' : { kind: 'element', tag: 'section', children: ['article-a', 'article-b', 'article-c'], attrs: { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }, 'data-testid': 'section' } },
-      'article-a' : { kind: 'element', tag: 'article', attrs: {}, children: ['h2-a', 'p-a', 'ul-a'] },
-      'h2-a' : { kind: 'element', tag: 'h2', attrs: {}, children: ['h2-a-val'] },
-      'h2-a-val': { kind: 'value', value: 'Article A' },
-      'p-a' : { kind: 'element', tag: 'p', attrs: {}, children: ['p-a-val'] },
-      'p-a-val': { kind: 'value', value: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.' },
-      'ul-a' : { kind: 'element', tag: 'ul', attrs: {}, children: ['li-a1', 'li-a2', 'li-a3'] },
-      'li-a1' : { kind: 'element', tag: 'li', attrs: {}, children: ['li-a1-val'] },
-      'li-a1-val': { kind: 'value', value: 'Item A1' },
-      'li-a2' : { kind: 'element', tag: 'li', attrs: {}, children: ['li-a2-val'] },
-      'li-a2-val': { kind: 'value', value: 'Item A2' },
-      'li-a3' : { kind: 'element', tag: 'li', attrs: {}, children: ['li-a3-val'] },
-      'li-a3-val': { kind: 'value', value: 'Item A3' },
-      'article-b' : { kind: 'element', tag: 'article', attrs: {}, children: ['h2-b', 'p-b', 'div-b-buttons'] },
-      'h2-b' : { kind: 'element', tag: 'h2', attrs: {}, children: ['h2-b-val'] },
-      'h2-b-val': { kind: 'value', value: 'Article B' },
-      'p-b' : { kind: 'element', tag: 'p', attrs: {}, children: ['p-b-val'] },
-      'p-b-val': { kind: 'value', value: 'Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.' },
-      'div-b-buttons' : { kind: 'element', tag: 'div', children: ['btn1', 'btn2', 'btn3'], attrs: { style: { display: 'flex', gap: 8 } } },
-      'btn1' : { kind: 'element', tag: 'button', attrs: {}, children: ['btn1-val'] },
-      'btn1-val': { kind: 'value', value: 'Button 1' },
-      'btn2' : { kind: 'element', tag: 'button', attrs: {}, children: ['btn2-val'] },
-      'btn2-val': { kind: 'value', value: 'Button 2' },
-      'btn3' : { kind: 'element', tag: 'button', attrs: {}, children: ['btn3-val'] },
-      'btn3-val': { kind: 'value', value: 'Button 3' },
-      'article-c' : { kind: 'element', tag: 'article', children: ['h2-c', 'grid-c'], attrs: { style: { gridColumn: 'span 2' } } },
-      'h2-c' : { kind: 'element', tag: 'h2', attrs: {}, children: ['h2-c-val'] },
-      'h2-c-val': { kind: 'value', value: 'Article C' },
-      'grid-c' : { kind: 'element', tag: 'div', children: ['box-1', 'box-2', 'box-3', 'box-4', 'box-5', 'box-6', 'box-7', 'box-8', 'box-9'], attrs: { style: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 } } },
+      [rootId]: { kind: 'element', tag: 'section', attrs: {}, children: [] }
   };
-  Array.from({ length: 9 }).map((_, i) => {
-      const boxId = `box-${i + 1}`;
-      const valId = `box-${i + 1}-val`;
-      nodes[boxId] = { kind: 'element', tag: 'div', attrs: { style: { padding: 12, background: '#f7f7f7', border: '1px dashed #ccc', borderRadius: 6 } }, children: [valId] };
-      nodes[valId] = { kind:'value', value: `Box ${i + 1}` };
-  });
 
-
-  return {
-    root: 'n-root',
+  const doc: JsonDoc = {
+    root: rootId,
     nodes,
     transformations: [],
   };
+
+  new NodeWrapper(doc, rootId)
+    .addChild('section', inner => {
+        inner.withAttrs({ style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }, 'data-testid': 'section' })
+             .addChild('article', a => {
+                 a.addChild('h2', h => h.addValue('Article A'))
+                  .addChild('p', p => p.addValue('Lorem ipsum dolor sit amet, consectetur adipiscing elit.'))
+                  .addChild('ul', ul => {
+                      ul.addChild('li', li => li.addValue('Item A1'))
+                        .addChild('li', li => li.addValue('Item A2'))
+                        .addChild('li', li => li.addValue('Item A3'))
+                  })
+             })
+             .addChild('article', b => {
+                 b.addChild('h2', h => h.addValue('Article B'))
+                  .addChild('p', p => p.addValue('Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.'))
+                  .addChild('div', div => {
+                      div.withAttrs({ style: { display: 'flex', gap: 8 } })
+                         .addChild('button', btn => btn.addValue('Button 1'))
+                         .addChild('button', btn => btn.addValue('Button 2'))
+                         .addChild('button', btn => btn.addValue('Button 3'))
+                  })
+             })
+             .addChild('article', c => {
+                 c.withAttrs({ style: { gridColumn: 'span 2' } })
+                  .addChild('h2', h => h.addValue('Article C'))
+                  .addChild('div', grid => {
+                      grid.withAttrs({ style: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 } });
+                      Array.from({ length: 9 }).forEach((_, i) => {
+                          grid.addChild('div', box => {
+                              box.withAttrs({ style: { padding: 12, background: '#f7f7f7', border: '1px dashed #ccc', borderRadius: 6 } })
+                                 .addValue(`Box ${i + 1}`)
+                          })
+                      })
+                  })
+             })
+    });
+
+  return doc;
 }
