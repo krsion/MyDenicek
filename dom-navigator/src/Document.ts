@@ -173,6 +173,75 @@ export function addSiblingNodeAfter(nodes: Record<string, Node>, siblingId: stri
   return addSiblingNode(nodes, 1, siblingId);
 }
 
+function buildParentMap(nodes: Record<string, Node>): Record<string, string> {
+  const parentMap: Record<string, string> = {};
+  for (const [parentId, node] of Object.entries(nodes)) {
+    if (node.kind === "element") {
+      for (const childId of node.children) {
+        parentMap[childId] = parentId;
+      }
+    }
+  }
+  return parentMap;
+}
+
+export function LowestCommonAncestor(doc: JsonDoc, nodeAId: string, nodeBId: string): string | null {
+  const parentMap = buildParentMap(doc.nodes);
+  
+  const ancestorsA = new Set<string>();
+  let currentA: string | undefined = nodeAId;
+  while (currentA) {
+    ancestorsA.add(currentA);
+    currentA = parentMap[currentA];
+  }
+
+  let currentB: string | undefined = nodeBId;
+  while (currentB) {
+    if (ancestorsA.has(currentB)) {
+      return currentB;
+    }
+    currentB = parentMap[currentB];
+  }
+
+  return doc.root;
+}
+
+export function generalizeSelection(doc: JsonDoc, nodeAId: string, nodeBId: string): string[] {
+  const lcaId = LowestCommonAncestor(doc, nodeAId, nodeBId);
+  if (!lcaId) return [];
+
+  const nodeA = doc.nodes[nodeAId];
+  const nodeB = doc.nodes[nodeBId];
+  if (!nodeA || !nodeB) return [];
+
+  const targetTags = new Set<string>();
+  if (nodeA.kind === 'element') targetTags.add(nodeA.tag);
+  if (nodeB.kind === 'element') targetTags.add(nodeB.tag);
+
+  const matchAllValues = nodeA.kind === 'value' || nodeB.kind === 'value';
+
+  const results: string[] = [];
+
+  function traverse(currentId: string) {
+    const node = doc.nodes[currentId];
+    if (!node) return;
+
+    if (node.kind === 'element') {
+      if (targetTags.has(node.tag)) {
+        results.push(currentId);
+      }
+      for (const childId of node.children) {
+        traverse(childId);
+      }
+    } else if (node.kind === 'value' && matchAllValues) {
+      results.push(currentId);
+    }
+  }
+
+  traverse(lcaId);
+  return results;
+}
+
 export function initialDocument(): JsonDoc | undefined {
   const rootId = 'n-root';
   const nodes: Record<string, Node> = {
