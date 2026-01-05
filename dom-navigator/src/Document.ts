@@ -220,19 +220,22 @@ export function LowestCommonAncestor(doc: JsonDoc, nodeIds: string[]): string | 
   return currentLca || null;
 }
 
-export function generalizeSelection(doc: JsonDoc, nodeAId: string, nodeBId: string): string[] {
-  const lcaId = LowestCommonAncestor(doc, [nodeAId, nodeBId]);
+export function generalizeSelection(doc: JsonDoc, nodeIds: string[]): string[] {
+  const lcaId = LowestCommonAncestor(doc, nodeIds);
   if (!lcaId) return [];
 
-  const nodeA = doc.nodes[nodeAId];
-  const nodeB = doc.nodes[nodeBId];
-  if (!nodeA || !nodeB) return [];
-
   const targetTags = new Set<string>();
-  if (nodeA.kind === 'element') targetTags.add(nodeA.tag);
-  if (nodeB.kind === 'element') targetTags.add(nodeB.tag);
+  let matchAllValues = false;
 
-  const matchAllValues = nodeA.kind === 'value' || nodeB.kind === 'value';
+  for (const id of nodeIds) {
+    const node = doc.nodes[id];
+    if (!node) continue;
+    if (node.kind === 'element') {
+      targetTags.add(node.tag);
+    } else if (node.kind === 'value') {
+      matchAllValues = true;
+    }
+  }
 
   const results: string[] = [];
 
