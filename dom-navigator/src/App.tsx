@@ -5,7 +5,7 @@ import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import { AddNodePopoverButton } from "./AddNodePopoverButton";
-import { addElementChildNode, addSiblingNodeAfter, addSiblingNodeBefore, addTransformation, addValueChildNode, type ElementNode, firstChildsTag, generalizeSelection, type JsonDoc, type Node, wrapNode } from "./Document.ts";
+import { addElementChildNode, addSiblingNodeAfter, addSiblingNodeBefore, addTransformation, addValueChildNode, firstChildsTag, generalizeSelection, type JsonDoc, type Node, wrapNode } from "./Document.ts";
 import { DomNavigator, type DomNavigatorHandle } from "./DomNavigator";
 import { ElementDetails } from "./ElementDetails.tsx";
 import { JsonView } from "./JsonView.tsx";
@@ -191,14 +191,16 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
   const selectedNodeAttributes = (selectedNode && selectedNode.kind === "element") ? selectedNode.attrs : undefined;
 
   const handleAttributeChange = (key: string, value: unknown | undefined) => {
-    if (!selectedNodeGuid) return;
+    if (selectedNodeGuids.length === 0) return;
     modifyDoc((prev: JsonDoc) => {
-      const node = prev.nodes[selectedNodeGuid];
-      if (node && node.kind === "element") {
-        if (value === undefined) {
-          delete node.attrs[key];
-        } else {
-          node.attrs[key] = value;
+      for (const id of selectedNodeGuids) {
+        const node = prev.nodes[id];
+        if (node && node.kind === "element") {
+          if (value === undefined) {
+            delete node.attrs[key];
+          } else {
+            node.attrs[key] = value;
+          }
         }
       }
     });
@@ -216,10 +218,10 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
 
   const relevantPatches = useMemo(() => {
     const allPatches = patches.map((p, i) => ({ patch: p, index: i }));
-    if (!filterPatches || !selectedNodeGuid) return allPatches;
+    if (!filterPatches || selectedNodeGuids.length === 0) return allPatches;
 
     const relevantIds = new Set<string>();
-    const stack = [selectedNodeGuid];
+    const stack = [...selectedNodeGuids];
     while (stack.length > 0) {
       const id = stack.pop()!;
       relevantIds.add(id);
@@ -241,7 +243,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
       }
       return false;
     });
-  }, [patches, filterPatches, selectedNodeGuid, doc]);
+  }, [patches, filterPatches, selectedNodeGuids, doc]);
 
   useEffect(() => {
     setSelectedPatchIndices(new Set());
@@ -370,44 +372,54 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                 disabled={selectedNode?.kind !== "element"}
                 initialValue={selectedNodeFirstChildTag || ""}
                 onAddChild={(content, isValue) => {
-                  if (selectedNode?.kind === "element") {
-                    let newId: string | undefined = undefined;
-                    modifyDoc((prev: JsonDoc) => {
-                      if (!selectedNodeGuid || prev.nodes[selectedNodeGuid]?.kind !== "element") return;
-                      if (isValue) {
-                        newId = addValueChildNode(prev, prev.nodes[selectedNodeGuid] as ElementNode, content).id;
-                      } else {
-                        newId = addElementChildNode(prev, prev.nodes[selectedNodeGuid] as ElementNode, content).id;
+                  const newIds: string[] = [];
+                  modifyDoc((prev: JsonDoc) => {
+                    for (const id of selectedNodeGuids) {
+                      const node = prev.nodes[id];
+                      if (node?.kind === "element") {
+                        if (isValue) {
+                          newIds.push(addValueChildNode(prev, node, content).id);
+                        } else {
+                          newIds.push(addElementChildNode(prev, node, content).id);
+                        }
                       }
-                    });
-                    if (newId) {
-                      updateLocalState({ selectedNodeId: newId });
-                      if (recorder && selectedNodeGuid) {
-                        recorder.recordAddChild(selectedNodeGuid, newId, isValue ? "value" : "element", content);
-                        setRecordedScript([...recorder.getActions()]);
-                      }
+                    }
+                  });
+                  if (newIds.length > 0) {
+                    updateLocalState({ selectedNodeIds: newIds });
+
+                    if (recorder && selectedNodeGuid) {
+                      // Recording only supports single action for now
+                      recorder.recordAddChild(selectedNodeGuid, newIds[newIds.length - 1], isValue ? "value" : "element", content);
+                      setRecordedScript([...recorder.getActions()]);
                     }
                   }
                 }}
                 onAddBefore={() => {
-                  if (!selectedNodeGuid) return;
-                  let newId: string | undefined = undefined;
+                  if (selectedNodeGuids.length === 0) return;
+                  const newIds: string[] = [];
                   modifyDoc((prev: JsonDoc) => {
-                    newId = addSiblingNodeBefore(prev.nodes, selectedNodeGuid);
+                    for (const id of selectedNodeGuids) {
+                      const newId = addSiblingNodeBefore(prev.nodes, id);
+                      if (newId) newIds.push(newId);
+                    }
                   });
-                  if (newId) {
-                    updateLocalState({ selectedNodeId: newId });
+                  if (newIds.length > 0) {
+                    updateLocalState({ selectedNodeIds: newIds });
                   }
 
                 }}
                 onAddAfter={() => {
-                  if (!selectedNodeGuid) return;
-                  let newId: string | undefined = undefined;
+                  if (selectedNodeGuids.length === 0) return;
+                  const newIds: string[] = [];
                   modifyDoc((prev: JsonDoc) => {
-                    newId = addSiblingNodeAfter(prev.nodes, selectedNodeGuid);
+                    for (const id of selectedNodeGuids) {
+                      const newId = addSiblingNodeAfter(prev.nodes, id);
+                      if (newId) newIds.push(newId);
+                    }
                   });
-                  if (newId) {
-                    updateLocalState({ selectedNodeId: newId });
+                  if (newIds.length > 0) {
+                    updateLocalState({ selectedNodeIds: newIds });
                   }
                 }}
               />
@@ -418,11 +430,15 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                   icon={<EditRegular />}
                   disabled={false}
                   ariaLabel="Edit"
+                  placeholder="Value content"
                   initialValue={details?.value || ""}
                   onSubmit={(value) => {
                     modifyDoc((prev: JsonDoc) => {
-                      if (!selectedNodeGuid || prev.nodes[selectedNodeGuid]?.kind !== "value") return;
-                      prev.nodes[selectedNodeGuid].value = value;
+                      for (const id of selectedNodeGuids) {
+                        if (prev.nodes[id]?.kind === "value") {
+                          prev.nodes[id].value = value;
+                        }
+                      }
                     });
                     if (recorder && selectedNodeGuid) {
                       recorder.recordSetValue(selectedNodeGuid, value);
@@ -436,18 +452,20 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                   icon={<RenameRegular />}
                   disabled={!selectedNodeGuid || selectedNode?.kind !== "element"}
                   ariaLabel="Rename"
+                  placeholder="Tag name (e.g. div)"
                   initialValue={details?.tag || ""}
                   onSubmit={(tag) => {
-                    if (selectedNode?.kind == "element") {
-                      modifyDoc((prev: JsonDoc) => {
-                        if (!selectedNodeGuid || prev.nodes[selectedNodeGuid]?.kind !== "element") return;
-                        prev.nodes[selectedNodeGuid].tag = tag;
-                      });
-                      if (selectedNodeGuid) clickOnSelectedNode(selectedNodeGuid);
-                      if (recorder && selectedNodeGuid) {
-                        recorder.recordRename(selectedNodeGuid, tag);
-                        setRecordedScript([...recorder.getActions()]);
+                    modifyDoc((prev: JsonDoc) => {
+                      for (const id of selectedNodeGuids) {
+                        if (prev.nodes[id]?.kind === "element") {
+                          prev.nodes[id].tag = tag;
+                        }
                       }
+                    });
+                    if (selectedNodeGuid) clickOnSelectedNode(selectedNodeGuid);
+                    if (recorder && selectedNodeGuid) {
+                      recorder.recordRename(selectedNodeGuid, tag);
+                      setRecordedScript([...recorder.getActions()]);
                     }
                   }}
                 />
@@ -459,7 +477,9 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                 ariaLabel="Wrap"
                 onSubmit={(tag) => {
                   modifyDoc((prev: JsonDoc) => {
-                    wrapNode(prev.nodes, selectedNodeGuid!, tag);
+                    for (const id of selectedNodeGuids) {
+                      wrapNode(prev.nodes, id, tag);
+                    }
                   });
                   if (selectedNodeGuid) clickOnSelectedNode(selectedNodeGuid);
                   if (recorder && selectedNodeGuid) {
@@ -478,8 +498,9 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                 ariaLabel="Rename all children"
                 onSubmit={(tag) => {
                   modifyDoc((prev: JsonDoc) => {
-                    if (!selectedNodeGuid) return;
-                    addTransformation(prev, selectedNodeGuid!, "rename", tag);
+                    for (const id of selectedNodeGuids) {
+                      addTransformation(prev, id, "rename", tag);
+                    }
                   });
                 }}
               />
@@ -491,8 +512,9 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                 ariaLabel="Wrap all children"
                 onSubmit={(tag) => {
                   modifyDoc((prev: JsonDoc) => {
-                    if (!selectedNodeGuid) return;
-                    addTransformation(prev, selectedNodeGuid!, "wrap", tag);
+                    for (const id of selectedNodeGuids) {
+                      addTransformation(prev, id, "wrap", tag);
+                    }
                   });
                 }}
               />
