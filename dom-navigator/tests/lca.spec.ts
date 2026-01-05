@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
-import { JsonDoc, LowestCommonAncestor } from '../src/Document';
+import { LowestCommonAncestor } from '../src/Document';
+import { JsonDoc } from '../src/types';
 
 test.describe('LowestCommonAncestor', () => {
   const doc: JsonDoc = {

@@ -4,7 +4,8 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { App } from './App.tsx';
-import { initialDocument, type JsonDoc } from './Document.ts';
+import { initialDocument } from './Document.ts';
+import type { JsonDoc } from './types';
 const repo = new Repo({
   network: [new WebSocketClientAdapter("wss://sync.automerge.org/")],
   storage: new IndexedDBStorageAdapter()

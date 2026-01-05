@@ -1,165 +1,49 @@
 import { next as Automerge, type Patch } from "@automerge/automerge";
-import { DocHandle, type PeerId, type Repo, RepoContext, useDocument, useLocalAwareness, useRemoteAwareness } from "@automerge/react";
+import { DocHandle } from "@automerge/react";
 import { Card, CardHeader, Checkbox, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, DrawerBody, DrawerHeader, DrawerHeaderTitle, InlineDrawer, Input, Switch, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
 import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CameraRegular, CodeRegular, EditRegular, PlayRegular, RecordRegular, RenameFilled, RenameRegular, StopRegular } from "@fluentui/react-icons";
-import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { AddNodePopoverButton } from "./AddNodePopoverButton";
-import { addElementChildNode, addSiblingNodeAfter, addSiblingNodeBefore, addTransformation, addValueChildNode, firstChildsTag, generalizeSelection, type JsonDoc, type Node, wrapNode } from "./Document.ts";
+import { firstChildsTag, generalizeSelection } from "./Document.ts";
 import { DomNavigator, type DomNavigatorHandle } from "./DomNavigator";
 import { ElementDetails } from "./ElementDetails.tsx";
+import { useDenicekDocument } from "./hooks/useDenicekDocument";
+import { useRecorder } from "./hooks/useRecorder";
+import { useSelection } from "./hooks/useSelection";
 import { JsonView } from "./JsonView.tsx";
 import { RecordedScriptView } from "./RecordedScriptView";
-import { type RecordedAction, Recorder } from "./Recorder";
 import { RenderedDocument } from "./RenderedDocument.tsx";
 import { ToolbarPopoverButton } from "./ToolbarPopoverButton";
+import type { JsonDoc, Node } from "./types";
 
-function calculateSplice(oldVal: string, newVal: string) {
-  let start = 0;
-  while (start < oldVal.length && start < newVal.length && oldVal[start] === newVal[start]) {
-    start++;
-  }
 
-  let oldEnd = oldVal.length;
-  let newEnd = newVal.length;
-
-  while (oldEnd > start && newEnd > start && oldVal[oldEnd - 1] === newVal[newEnd - 1]) {
-    oldEnd--;
-    newEnd--;
-  }
-
-  const deleteCount = oldEnd - start;
-  const insertText = newVal.slice(start, newEnd);
-
-  return { index: start, deleteCount, insertText };
-}
 
 export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<JsonDoc>, onConnect: () => void, onDisconnect: () => void }) => {
-  const [doc, changeDoc] = useDocument<JsonDoc>(handle.url, { suspense: true });
-  const [undoStack, setUndoStack] = useState<JsonDoc[]>([]);
-  const [redoStack, setRedoStack] = useState<JsonDoc[]>([]);
+  const { doc, undo, redo, canUndo, canRedo, updateAttribute, updateTag, wrapNodes, updateValue, addChildren, addSiblings, replayScript, addTransformation, applyPatches } = useDenicekDocument(handle);
+  const { selectedNodeIds, setSelectedNodeIds, peerSelections, peerId } = useSelection(handle);
+  const { isRecording, recordedScript, startRecording, stopRecording, recordAction } = useRecorder();
+
   const [snapshot, setSnapshot] = useState<JsonDoc | null>(null);
   const [filterPatches, setFilterPatches] = useState(false);
   const [patchesViewMode, setPatchesViewMode] = useState<'table' | 'json'>('table');
   const [selectedPatchIndices, setSelectedPatchIndices] = useState<Set<number>>(new Set());
 
-  const modifyDoc = (updater: (d: JsonDoc) => void) => {
-    setUndoStack(prev => [...prev, doc]);
-    setRedoStack([]);
-    changeDoc(updater);
-  };
-
-  const repo = useContext(RepoContext) as Repo | undefined;
-  const peerId: PeerId | null = repo?.peerId ?? null;
-
-  const [localState, updateLocalState] = useLocalAwareness({
-    handle: handle, userId: repo?.peerId as string, initialState: {
-      selectedNodeIds: [] as string[]
-    }
-  });
-
-  const [peerStates] = useRemoteAwareness({ handle: handle, localUserId: peerId as string, offlineTimeout: 1000 });
-  const peerSelections: { [peerId: string]: string[] | null } = useMemo(() => {
-    const selections: { [peerId: string]: string[] | null } = {};
-    Object.entries(peerStates).forEach(([peerId, state]) => {
-      if (state.selectedNodeIds && Array.isArray(state.selectedNodeIds)) {
-        selections[peerId] = state.selectedNodeIds;
-      } else if (state.selectedNodeId) {
-        // Backward compatibility
-        selections[peerId] = [state.selectedNodeId];
-      } else {
-        selections[peerId] = null;
-      }
-    });
-    return selections;
-  }, [peerStates]);
   const [connected, setConnected] = useState(true);
   const navigatorRef = useRef<DomNavigatorHandle>(null);
 
-  const [recorder, setRecorder] = useState<Recorder | null>(null);
-  const [recordedScript, setRecordedScript] = useState<RecordedAction[] | null>(null);
+  const selectedNodeGuids = selectedNodeIds;
+  const selectedNodeGuid = selectedNodeGuids.length > 0 ? selectedNodeGuids[selectedNodeGuids.length - 1] : undefined;
 
-  const startRecording = () => {
-    if (!selectedNodeGuid) return;
-    setRecorder(new Recorder(selectedNodeGuid));
-    setRecordedScript([]);
-  };
-
-  const stopRecording = () => {
-    if (recorder) {
-      setRecordedScript(recorder.getActions());
-      setRecorder(null);
+  const handleStartRecording = () => {
+    if (selectedNodeGuid) {
+      startRecording(selectedNodeGuid);
     }
   };
 
   const replay = () => {
     if (!recordedScript || !selectedNodeGuid) return;
-
-    modifyDoc((doc) => {
-      const replayMap: Record<string, string> = { "$0": selectedNodeGuid };
-
-      const resolve = (ref: string): string => {
-        if (replayMap[ref]) return replayMap[ref]!;
-        if (ref.startsWith("$")) return replayMap[ref] || ref;
-        // If it's a wrapper ref like w-$0, check if we have it mapped
-        if (ref.startsWith("w-")) {
-          // If we mapped "w-$0" explicitly (due to collision handling), return it
-          // Otherwise, try to resolve inner and prepend w-
-          const inner = resolve(ref.substring(2));
-          // If inner resolved to something different, try w-inner
-          // But wait, if we didn't map w-$0, it means we assume standard naming w-{ID}
-          return "w-" + inner;
-        }
-        if (ref.endsWith("_w")) {
-          const inner = resolve(ref.substring(0, ref.length - 2));
-          return inner + "_w";
-        }
-        return ref;
-      };
-      for (const action of recordedScript) {
-        if (action.type === "addChild") {
-          const parentId = resolve(action.parent);
-          const parentNode = doc.nodes[parentId];
-          if (parentNode?.kind === "element") {
-            let newId: string;
-            if (action.nodeType === "value") {
-              newId = addValueChildNode(doc, parentNode, action.content).id;
-            } else {
-              newId = addElementChildNode(doc, parentNode, action.content).id;
-            }
-            replayMap[action.newIdVar] = newId;
-          }
-        } else if (action.type === "setValue") {
-          const targetId = resolve(action.target);
-          const node = doc.nodes[targetId];
-          if (node?.kind === "value") {
-            node.value = action.value;
-          }
-        } else if (action.type === "wrap") {
-          const targetId = resolve(action.target);
-
-          // Predict the wrapper ID to map it
-          let wrapperId = "w-" + targetId;
-          while (doc.nodes[wrapperId]) wrapperId = wrapperId + "_w";
-
-          wrapNode(doc.nodes, targetId, action.wrapperTag);
-
-          // Map w-{targetRef} to wrapperId
-          // action.target is the ref, e.g. $0
-          // We need to handle collisions in the map key too, to match Recorder logic
-          let refKey = "w-" + action.target;
-          while (replayMap[refKey]) refKey = refKey + "_w";
-          replayMap[refKey] = wrapperId;
-
-        } else if (action.type === "rename") {
-          const targetId = resolve(action.target);
-          const node = doc.nodes[targetId];
-          if (node?.kind === "element") {
-            node.tag = action.newTag;
-          }
-        }
-      }
-    });
+    replayScript(recordedScript, selectedNodeGuid);
   };
 
   const triggerNavigation = (action: 'parent' | 'child' | 'prev' | 'next' | 'clear') => {
@@ -183,9 +67,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
     }
   };
 
-
-  const selectedNodeGuids: string[] = localState.selectedNodeIds || (localState.selectedNodeId ? [localState.selectedNodeId] : []);
-  const selectedNodeGuid: string | undefined = selectedNodeGuids.length > 0 ? selectedNodeGuids[selectedNodeGuids.length - 1] : undefined;
+  if (!doc) return <div>Loading...</div>;
 
   const details = useMemo(() => {
     const selectedEl = selectedNodeGuid ? document.querySelector(`[data-node-guid="${selectedNodeGuid}"]`) as HTMLElement | null : null;
@@ -212,18 +94,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
 
   const handleAttributeChange = (key: string, value: unknown | undefined) => {
     if (selectedNodeGuids.length === 0) return;
-    modifyDoc((prev: JsonDoc) => {
-      for (const id of selectedNodeGuids) {
-        const node = prev.nodes[id];
-        if (node && node.kind === "element") {
-          if (value === undefined) {
-            delete node.attrs[key];
-          } else {
-            node.attrs[key] = value;
-          }
-        }
-      }
-    });
+    updateAttribute(selectedNodeGuids, key, value);
   };
 
   const [patches, setPatches] = useState<Patch[]>([]);
@@ -265,10 +136,10 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
     });
   }, [patches, filterPatches, selectedNodeGuids, doc]);
 
-  useEffect(() => {
-    setSelectedPatchIndices(new Set());
-  }, [relevantPatches]);
-
+  // Reset selected patches when relevantPatches change (e.g., filter changes)
+  // This useEffect is intentionally placed after the useMemo for relevantPatches
+  // to ensure it runs when relevantPatches is updated.
+  useEffect(() => setSelectedPatchIndices(new Set()), [relevantPatches]);
   const updatePatch = (index: number, updates: Partial<Patch>) => {
     setPatches(prev => {
       const next = [...prev];
@@ -277,57 +148,6 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
     });
   };
 
-  const applyPatchesManual = (d: JsonDoc, patches: Patch[]) => {
-    patches.forEach((patch, _i) => {
-      let target: unknown = d;
-      const path = patch.path;
-      let i_path = 0;
-
-      // Traverse path until we hit a primitive or end of path
-      for (; i_path < path.length - 1; i_path++) {
-        const part = path[i_path]!;
-        const next = (target as Record<string | number, unknown>)[part];
-        if (typeof next === 'string') {
-          // Stop if next is string (primitive), so we can modify it on the parent
-          break;
-        }
-        target = next;
-      }
-
-      const key = path[i_path]!;
-      const remainingPath = path.slice(i_path + 1);
-      const targetRecord = target as Record<string | number, unknown>;
-      const targetArray = target as unknown[];
-
-      if (patch.action === 'del') {
-        if (Array.isArray(target)) {
-          targetArray.splice(key as number, 1);
-        } else {
-          delete targetRecord[key];
-        }
-      } else if (patch.action === 'put') {
-        targetRecord[key] = patch.value;
-      } else if (patch.action === 'insert') {
-        // Insert into array
-        targetArray.splice(key as number, 0, ...patch.values);
-      } else if (patch.action === 'splice') {
-        // Splice string or array
-        // If remainingPath has elements, the first one is likely the index
-        const index = remainingPath.length > 0 ? remainingPath[0] as number : key as number;
-        const value = patch.value;
-
-        if (typeof targetRecord[key] === 'string') {
-          const str = targetRecord[key] as string;
-          // Simple string splice simulation
-          targetRecord[key] = str.slice(0, index) + value + str.slice(index);
-        } else if (Array.isArray(targetRecord[key])) {
-          (targetRecord[key] as unknown[]).splice(index, 0, value);
-        } else if (Array.isArray(target) && patch.action === 'splice') {
-          (targetRecord[key] as unknown[]).splice(index, 0, value);
-        }
-      }
-    });
-  };
 
   return (
     <div style={{ display: "flex" }}>
@@ -339,52 +159,20 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                 <ToolbarButton
                   icon={<ArrowUndoRegular />}
                   onClick={() => {
-                    if (undoStack.length === 0) return;
-                    const prevDoc = undoStack[undoStack.length - 1];
-                    if (!prevDoc) return;
-                    setUndoStack(stack => stack.slice(0, -1));
-                    setRedoStack(stack => [...stack, doc]);
-                    const currentHeads = Automerge.getHeads(doc);
-                    const prevHeads = Automerge.getHeads(prevDoc);
-                    const patches = Automerge.diff(doc, currentHeads, prevHeads);
-
-                    changeDoc((d) => {
-                      try {
-                        applyPatchesManual(d, patches);
-                      } catch (e) {
-                        console.error("Error applying patches:", e);
-                      }
-                    });
+                    undo();
                     if (selectedNodeGuid) clickOnSelectedNode(selectedNodeGuid);
-
                   }}
-                  disabled={undoStack.length === 0}
+                  disabled={!canUndo}
                 />
               </Tooltip>
               <Tooltip content="Redo" relationship="label">
                 <ToolbarButton
                   icon={<ArrowRedoRegular />}
                   onClick={() => {
-                    if (redoStack.length === 0) return;
-                    const nextDoc = redoStack[redoStack.length - 1];
-                    if (!nextDoc) return;
-                    setRedoStack(stack => stack.slice(0, -1));
-                    setUndoStack(stack => [...stack, doc]);
-                    const currentHeads = Automerge.getHeads(doc);
-                    const nextHeads = Automerge.getHeads(nextDoc);
-                    const patches = Automerge.diff(doc, currentHeads, nextHeads);
-
-                    changeDoc((d) => {
-                      try {
-                        applyPatchesManual(d, patches);
-                      } catch (e) {
-                        console.error("Error applying redo patches:", e);
-                      }
-                    });
-
+                    redo();
                     if (selectedNodeGuid) clickOnSelectedNode(selectedNodeGuid);
                   }}
-                  disabled={redoStack.length === 0}
+                  disabled={!canRedo}
                 />
               </Tooltip>
               <ToolbarDivider />
@@ -392,54 +180,33 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                 disabled={selectedNode?.kind !== "element"}
                 initialValue={selectedNodeFirstChildTag || ""}
                 onAddChild={(content, isValue) => {
-                  const newIds: string[] = [];
-                  modifyDoc((prev: JsonDoc) => {
-                    for (const id of selectedNodeGuids) {
-                      const node = prev.nodes[id];
-                      if (node?.kind === "element") {
-                        if (isValue) {
-                          newIds.push(addValueChildNode(prev, node, content).id);
-                        } else {
-                          newIds.push(addElementChildNode(prev, node, content).id);
-                        }
-                      }
-                    }
-                  });
-                  if (newIds.length > 0) {
-                    updateLocalState({ selectedNodeIds: newIds });
+                  if (selectedNodeGuids.length === 0) return;
+                  const newIds = addChildren(selectedNodeGuids, isValue ? "value" : "element", content);
 
-                    if (recorder && selectedNodeGuid) {
+                  if (newIds.length > 0) {
+                    setSelectedNodeIds(newIds);
+
+                    if (isRecording && selectedNodeGuid) {
                       // Recording only supports single action for now
-                      recorder.recordAddChild(selectedNodeGuid, newIds[newIds.length - 1], isValue ? "value" : "element", content);
-                      setRecordedScript([...recorder.getActions()]);
+                      recordAction(r => r.recordAddChild(selectedNodeGuid!, newIds[newIds.length - 1]!, isValue ? "value" : "element", content));
                     }
                   }
                 }}
                 onAddBefore={() => {
                   if (selectedNodeGuids.length === 0) return;
-                  const newIds: string[] = [];
-                  modifyDoc((prev: JsonDoc) => {
-                    for (const id of selectedNodeGuids) {
-                      const newId = addSiblingNodeBefore(prev.nodes, id);
-                      if (newId) newIds.push(newId);
-                    }
-                  });
+                  const newIds = addSiblings(selectedNodeGuids, "before");
+
                   if (newIds.length > 0) {
-                    updateLocalState({ selectedNodeIds: newIds });
+                    setSelectedNodeIds(newIds);
                   }
 
                 }}
                 onAddAfter={() => {
                   if (selectedNodeGuids.length === 0) return;
-                  const newIds: string[] = [];
-                  modifyDoc((prev: JsonDoc) => {
-                    for (const id of selectedNodeGuids) {
-                      const newId = addSiblingNodeAfter(prev.nodes, id);
-                      if (newId) newIds.push(newId);
-                    }
-                  });
+                  const newIds = addSiblings(selectedNodeGuids, "after");
+
                   if (newIds.length > 0) {
-                    updateLocalState({ selectedNodeIds: newIds });
+                    setSelectedNodeIds(newIds);
                   }
                 }}
               />
@@ -454,27 +221,10 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                   initialValue={details?.value || ""}
                   onSubmit={(value) => {
                     const originalValue = details?.value || "";
-                    const { index, deleteCount, insertText } = calculateSplice(originalValue, value);
+                    updateValue(selectedNodeGuids, value, originalValue);
 
-                    modifyDoc((prev: JsonDoc) => {
-                      for (const id of selectedNodeGuids) {
-                        if (prev.nodes[id]?.kind === "value") {
-                          const node = prev.nodes[id];
-                          // If it's a full replacement of the source, treat it as a full replacement for targets too
-                          if (index === 0 && deleteCount === originalValue.length && insertText === value) {
-                            prev.nodes[id].value = value;
-                          } else {
-                            // Apply the splice relative to the node's content
-                            // Clamp index to the node's length to avoid out-of-bounds
-                            const safeIndex = Math.min(index, node.value.length);
-                            Automerge.splice(prev, ['nodes', id, 'value'], safeIndex, deleteCount, insertText);
-                          }
-                        }
-                      }
-                    });
-                    if (recorder && selectedNodeGuid) {
-                      recorder.recordSetValue(selectedNodeGuid, value);
-                      setRecordedScript([...recorder.getActions()]);
+                    if (isRecording && selectedNodeGuid) {
+                      recordAction(r => r.recordSetValue(selectedNodeGuid, value));
                     }
                   }}
                 />
@@ -487,17 +237,10 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                   placeholder="Tag name (e.g. div)"
                   initialValue={details?.tag || ""}
                   onSubmit={(tag) => {
-                    modifyDoc((prev: JsonDoc) => {
-                      for (const id of selectedNodeGuids) {
-                        if (prev.nodes[id]?.kind === "element") {
-                          prev.nodes[id].tag = tag;
-                        }
-                      }
-                    });
+                    updateTag(selectedNodeGuids, tag);
                     if (selectedNodeGuid) clickOnSelectedNode(selectedNodeGuid);
-                    if (recorder && selectedNodeGuid) {
-                      recorder.recordRename(selectedNodeGuid, tag);
-                      setRecordedScript([...recorder.getActions()]);
+                    if (isRecording && selectedNodeGuid) {
+                      recordAction(r => r.recordRename(selectedNodeGuid, tag));
                     }
                   }}
                 />
@@ -508,15 +251,10 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                 disabled={!selectedNodeGuid}
                 ariaLabel="Wrap"
                 onSubmit={(tag) => {
-                  modifyDoc((prev: JsonDoc) => {
-                    for (const id of selectedNodeGuids) {
-                      wrapNode(prev.nodes, id, tag);
-                    }
-                  });
+                  wrapNodes(selectedNodeGuids, tag);
                   if (selectedNodeGuid) clickOnSelectedNode(selectedNodeGuid);
-                  if (recorder && selectedNodeGuid) {
-                    recorder.recordWrap(selectedNodeGuid, tag);
-                    setRecordedScript([...recorder.getActions()]);
+                  if (isRecording && selectedNodeGuid) {
+                    recordAction(r => r.recordWrap(selectedNodeGuid, tag));
                   }
                 }}
               />
@@ -529,11 +267,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                 initialValue={selectedNodeFirstChildTag || ""}
                 ariaLabel="Rename all children"
                 onSubmit={(tag) => {
-                  modifyDoc((prev: JsonDoc) => {
-                    for (const id of selectedNodeGuids) {
-                      addTransformation(prev, id, "rename", tag);
-                    }
-                  });
+                  addTransformation(selectedNodeGuids, "rename", tag);
                 }}
               />
 
@@ -543,11 +277,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                 disabled={!selectedNodeGuid || !selectedNodeFirstChildTag}
                 ariaLabel="Wrap all children"
                 onSubmit={(tag) => {
-                  modifyDoc((prev: JsonDoc) => {
-                    for (const id of selectedNodeGuids) {
-                      addTransformation(prev, id, "wrap", tag);
-                    }
-                  });
+                  addTransformation(selectedNodeGuids, "wrap", tag);
                 }}
               />
             </ToolbarGroup>
@@ -581,8 +311,8 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
               </Dialog>
               <ToolbarButton icon={<CameraRegular />} onClick={() => setSnapshot(doc)}>Snapshot</ToolbarButton>
               <ToolbarDivider />
-              {!recorder ? (
-                <ToolbarButton icon={<RecordRegular />} onClick={startRecording} disabled={!selectedNodeGuid}>Record</ToolbarButton>
+              {!isRecording ? (
+                <ToolbarButton icon={<RecordRegular />} onClick={handleStartRecording} disabled={!selectedNodeGuid}>Record</ToolbarButton>
               ) : (
                 <ToolbarButton icon={<StopRegular />} onClick={stopRecording}>Stop Recording</ToolbarButton>
               )}
@@ -601,7 +331,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
           </TagGroup>}
           />
 
-          <DomNavigator ref={navigatorRef} onSelectedChange={(ids) => { updateLocalState({ selectedNodeIds: ids }) }} selectedNodeIds={selectedNodeGuids} peerSelections={peerSelections} generalizer={(ids) => generalizeSelection(doc, ids)}>
+          <DomNavigator ref={navigatorRef} onSelectedChange={(ids) => { setSelectedNodeIds(ids) }} selectedNodeIds={selectedNodeGuids} peerSelections={peerSelections} generalizer={(ids) => generalizeSelection(doc, ids)}>
             <RenderedDocument tree={doc} />
           </DomNavigator>
 
@@ -645,7 +375,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                   disabled={selectedPatchIndices.size === 0}
                   onClick={() => {
                     const patchesToReplay = relevantPatches.filter((_, i) => selectedPatchIndices.has(i)).map(p => p.patch);
-                    modifyDoc(d => applyPatchesManual(d, patchesToReplay));
+                    applyPatches(patchesToReplay);
                     setSelectedPatchIndices(new Set());
                   }}
                 >
@@ -734,7 +464,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
 
         </Card>
       </div>
-      <InlineDrawer open={(recordedScript !== null && recordedScript.length > 0) || recorder !== null} separator position="end">
+      <InlineDrawer open={(recordedScript !== null && recordedScript.length > 0) || isRecording} separator position="end">
         <DrawerHeader>
           <DrawerHeaderTitle>Recording</DrawerHeaderTitle>
         </DrawerHeader>

@@ -1,30 +1,6 @@
+import { type Patch } from "@automerge/automerge";
 
-export type ElementNode = {
-  kind: "element";
-  tag: string;
-  attrs: Record<string, unknown>;
-  children: string[];
-}
-
-export type ValueNode = {
-  kind: "value";
-  value: string;
-};
-
-export type Node = ElementNode | ValueNode;
-
-export type JsonDoc = {
-  root: string;
-  nodes: Record<string, Node>;
-  transformations: Transformation[];
-};
-
-type Transformation = {
-  parent: string;
-  version: number; // 1-based incrementing version for this parent
-  type: "wrap" | "rename";
-  tag: string;
-};
+import type { ElementNode, JsonDoc, Node, Transformation, ValueNode } from "./types";
 
 function parents(nodes: Record<string, Node>, childId: string): ElementNode[] {
   const parents = [];
@@ -335,4 +311,56 @@ export function initialDocument(): JsonDoc | undefined {
     });
 
   return doc;
+}
+
+export function applyPatchesManual(d: JsonDoc, patches: Patch[]) {
+  patches.forEach((patch, _i) => {
+    let target: unknown = d;
+    const path = patch.path;
+    let i_path = 0;
+
+    // Traverse path until we hit a primitive or end of path
+    for (; i_path < path.length - 1; i_path++) {
+      const part = path[i_path]!;
+      const next = (target as Record<string | number, unknown>)[part];
+      if (typeof next === 'string') {
+        // Stop if next is string (primitive), so we can modify it on the parent
+        break;
+      }
+      target = next;
+    }
+
+    const key = path[i_path]!;
+    const remainingPath = path.slice(i_path + 1);
+    const targetRecord = target as Record<string | number, unknown>;
+    const targetArray = target as unknown[];
+
+    if (patch.action === 'del') {
+      if (Array.isArray(target)) {
+        targetArray.splice(key as number, 1);
+      } else {
+        delete targetRecord[key];
+      }
+    } else if (patch.action === 'put') {
+      targetRecord[key] = patch.value;
+    } else if (patch.action === 'insert') {
+      // Insert into array
+      targetArray.splice(key as number, 0, ...patch.values);
+    } else if (patch.action === 'splice') {
+      // Splice string or array
+      // If remainingPath has elements, the first one is likely the index
+      const index = remainingPath.length > 0 ? remainingPath[0] as number : key as number;
+      const value = patch.value;
+
+      if (typeof targetRecord[key] === 'string') {
+        const str = targetRecord[key] as string;
+        // Simple string splice simulation
+        targetRecord[key] = str.slice(0, index) + value + str.slice(index);
+      } else if (Array.isArray(targetRecord[key])) {
+        (targetRecord[key] as unknown[]).splice(index, 0, value);
+      } else if (Array.isArray(target) && patch.action === 'splice') {
+        (targetRecord[key] as unknown[]).splice(index, 0, value);
+      }
+    }
+  });
 }

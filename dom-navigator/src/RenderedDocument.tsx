@@ -1,7 +1,7 @@
 import { makeStyles, mergeClasses } from "@fluentui/react-components";
 import React from "react";
 
-import { type JsonDoc } from "./Document.ts";
+import { type JsonDoc } from "./types";
 
 const useStyles = makeStyles({
   article: {
