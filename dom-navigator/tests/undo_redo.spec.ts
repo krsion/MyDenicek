@@ -20,13 +20,13 @@ test('Undo/Redo adds and removes a node', async ({ page }) => {
   await page.getByRole('button', { name: 'Add', exact: true }).click();
 
   // Verify value exists
-  await expect(page.locator('text=test-value-content')).toBeVisible();
+  await expect(page.locator('x-value').filter({ hasText: 'test-value-content' })).toBeVisible();
 
   // Undo (removes value node)
   await page.getByLabel('Undo').click();
-  await expect(page.locator('text=test-value-content')).not.toBeVisible();
+  await expect(page.locator('x-value').filter({ hasText: 'test-value-content' })).not.toBeVisible();
 
   // Redo (adds value back)
   await page.getByLabel('Redo').click();
-  await expect(page.locator('text=test-value-content')).toBeVisible();
+  await expect(page.locator('x-value').filter({ hasText: 'test-value-content' })).toBeVisible();
 });
