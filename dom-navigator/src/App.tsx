@@ -5,7 +5,7 @@ import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import { AddNodePopoverButton } from "./AddNodePopoverButton";
-import { addElementChildNode, addSiblingNodeAfter, addSiblingNodeBefore, addTransformation, addValueChildNode, type ElementNode, firstChildsTag, type JsonDoc, type Node, wrapNode } from "./Document.ts";
+import { addElementChildNode, addSiblingNodeAfter, addSiblingNodeBefore, addTransformation, addValueChildNode, type ElementNode, firstChildsTag, generalizeSelection, type JsonDoc, type Node, wrapNode } from "./Document.ts";
 import { DomNavigator, type DomNavigatorHandle } from "./DomNavigator";
 import { ElementDetails } from "./ElementDetails.tsx";
 import { JsonView } from "./JsonView.tsx";
@@ -34,15 +34,22 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
 
   const [localState, updateLocalState] = useLocalAwareness({
     handle: handle, userId: repo?.peerId as string, initialState: {
-      selectedNodeId: null
+      selectedNodeIds: [] as string[]
     }
   });
 
   const [peerStates] = useRemoteAwareness({ handle: handle, localUserId: peerId as string, offlineTimeout: 1000 });
-  const peerSelections: { [peerId: string]: string | null } = useMemo(() => {
-    const selections: { [peerId: string]: string | null } = {};
+  const peerSelections: { [peerId: string]: string[] | null } = useMemo(() => {
+    const selections: { [peerId: string]: string[] | null } = {};
     Object.entries(peerStates).forEach(([peerId, state]) => {
-      selections[peerId] = state.selectedNodeId || null;
+      if (state.selectedNodeIds && Array.isArray(state.selectedNodeIds)) {
+        selections[peerId] = state.selectedNodeIds;
+      } else if (state.selectedNodeId) {
+        // Backward compatibility
+        selections[peerId] = [state.selectedNodeId];
+      } else {
+        selections[peerId] = null;
+      }
     });
     return selections;
   }, [peerStates]);
@@ -157,8 +164,11 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
   };
 
 
+  const selectedNodeGuids: string[] = localState.selectedNodeIds || (localState.selectedNodeId ? [localState.selectedNodeId] : []);
+  const selectedNodeGuid: string | undefined = selectedNodeGuids.length > 0 ? selectedNodeGuids[selectedNodeGuids.length - 1] : undefined;
+
   const details = useMemo(() => {
-    const selectedEl = localState?.selectedNodeId ? document.querySelector(`[data-node-guid="${localState.selectedNodeId}"]`) as HTMLElement | null : null;
+    const selectedEl = selectedNodeGuid ? document.querySelector(`[data-node-guid="${selectedNodeGuid}"]`) as HTMLElement | null : null;
     if (!selectedEl) return null;
     const tag = selectedEl.tagName.toLowerCase();
     const id = selectedEl.id || null;
@@ -173,9 +183,8 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
     const value = modelNode?.kind === "value" ? (modelNode.value as string | undefined) : undefined;
 
     return { tag, id, guid, classes, width, height, dataTestId, value };
-  }, [localState?.selectedNodeId, doc]);
+  }, [selectedNodeGuid, doc]);
 
-  const selectedNodeGuid: string | undefined = localState.selectedNodeId || undefined;
   // Edits to selectedNode will not be synced by Automerge. instead, use changeDoc(prev => ...) to update the document model
   const selectedNode: Node | undefined = selectedNodeGuid ? doc.nodes[selectedNodeGuid] : undefined;
   const selectedNodeFirstChildTag: string | undefined = (selectedNode && selectedNode.kind === "element") ? firstChildsTag(doc.nodes, selectedNode) : undefined;
@@ -538,7 +547,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
           </TagGroup>}
           />
 
-          <DomNavigator ref={navigatorRef} onSelectedChange={(id) => { updateLocalState({ selectedNodeId: id }) }} selectedNodeId={doc.nodes[localState.selectedNodeId!] ? localState.selectedNodeId : null} peerSelections={peerSelections}>
+          <DomNavigator ref={navigatorRef} onSelectedChange={(ids) => { updateLocalState({ selectedNodeIds: ids }) }} selectedNodeIds={selectedNodeGuids} peerSelections={peerSelections} generalizer={(ids) => generalizeSelection(doc, ids)}>
             <RenderedDocument tree={doc} />
           </DomNavigator>
 

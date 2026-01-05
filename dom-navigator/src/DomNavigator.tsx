@@ -36,47 +36,63 @@ const useStyles = makeStyles({
   },
 });
 
-export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: React.ReactNode; onSelectedChange?: (nodeId: string | null) => void; selectedNodeId?: string | null, peerSelections?: { [peerId: string]: string | null } }>(({ children, onSelectedChange, selectedNodeId, peerSelections }, forwardedRef) => {
+export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: React.ReactNode; onSelectedChange?: (nodeIds: string[]) => void; selectedNodeIds?: string[], peerSelections?: { [peerId: string]: string[] | null }, generalizer?: (nodeIds: string[]) => string[] }>(({ children, onSelectedChange, selectedNodeIds, peerSelections, generalizer }, forwardedRef) => {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const [selected, setSelected] = useState<HTMLElement | null>(null);
-  const [overlay, setOverlay] = useState<{
+  const [selectedElements, setSelectedElements] = useState<HTMLElement[]>([]);
+  const [overlays, setOverlays] = useState<{
+    id: string;
     top: number;
     left: number;
     width: number;
     height: number;
     visible: boolean;
     label: string;
-  }>({ top: 0, left: 0, width: 0, height: 0, visible: false, label: "" });
+  }[]>([]);
 
   const [peerOverlays, setPeerOverlays] = useState<Record<string, {
+    id: string;
     top: number;
     left: number;
     width: number;
     height: number;
     visible: boolean;
     label?: string;
-  }>>({});
+  }[]>>({});
 
 
 
   const styles = useStyles();
 
-  const positionOverlay = useCallback((el: HTMLElement) => {
+  const computeOverlay = useCallback((el: HTMLElement) => {
     const wrapper = wrapperRef.current;
-    if (!wrapper) return;
+    if (!wrapper) return null;
     const s = el.getBoundingClientRect();
     const w = wrapper.getBoundingClientRect();
     const label = describe(el);
-    setOverlay({
+    return {
+      id: el.getAttribute("data-node-guid") || "",
       top: s.top - w.top,
       left: s.left - w.left,
       width: s.width,
       height: s.height,
       visible: true,
       label,
-    });
+    };
   }, []);
+
+  const updateOverlays = useCallback((elements: HTMLElement[]) => {
+    const newOverlays = elements.map(el => computeOverlay(el)).filter((o): o is NonNullable<typeof o> => o !== null);
+    setOverlays(newOverlays);
+  }, [computeOverlay]);
+
+  const updatePeerOverlays = useCallback((peerId: string, elements: HTMLElement[]) => {
+    const newOverlays = elements.map(el => computeOverlay(el)).filter((o): o is NonNullable<typeof o> => o !== null);
+    setPeerOverlays(p => ({
+      ...p,
+      [peerId]: newOverlays
+    }));
+  }, [computeOverlay]);
 
   const colorFromString = useCallback((s: string) => {
     // simple deterministic color based on string -> hue
@@ -90,31 +106,6 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: Rea
       fill: `hsl(${h} 70% 45% / 0.10)`,
       subtle: `hsl(${h} 70% 45% / 0.05)`,
     };
-  }, []);
-
-  const positionPeerOverlay = useCallback((peerId: string, el: HTMLElement | null) => {
-    const wrapper = wrapperRef.current;
-    if (!wrapper || !el) {
-      setPeerOverlays((p) => {
-        const next = { ...p };
-        delete next[peerId];
-        return next;
-      });
-      return;
-    }
-    const s = el.getBoundingClientRect();
-    const w = wrapper.getBoundingClientRect();
-    setPeerOverlays((p) => ({
-      ...p,
-      [peerId]: {
-        top: s.top - w.top,
-        left: s.left - w.left,
-        width: s.width,
-        height: s.height,
-        visible: true,
-        label: peerId,
-      },
-    }));
   }, []);
 
   // Focus the container so it can capture keyboard events
@@ -141,7 +132,7 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: Rea
   // Recompute overlay on scroll/resize
   useEffect(() => {
     function onWinChange() {
-      if (selected) positionOverlay(selected);
+      if (selectedElements.length > 0) updateOverlays(selectedElements);
     }
     window.addEventListener("scroll", onWinChange, { passive: true });
     window.addEventListener("resize", onWinChange, { passive: true });
@@ -149,7 +140,7 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: Rea
       window.removeEventListener("scroll", onWinChange);
       window.removeEventListener("resize", onWinChange);
     };
-  }, [positionOverlay, selected]);
+  }, [updateOverlays, selectedElements]);
 
   // Update peer overlays when peerSelections change or when the container updates
   useEffect(() => {
@@ -157,8 +148,8 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: Rea
     const root = containerRef.current;
     if (!root) return;
 
-    Object.entries(peerSelections).forEach(([peerId, nodeId]) => {
-      if (!nodeId) {
+    Object.entries(peerSelections).forEach(([peerId, nodeIds]) => {
+      if (!nodeIds || nodeIds.length === 0) {
         // clear overlay for this peer
         setPeerOverlays((p) => {
           const next = { ...p };
@@ -167,14 +158,17 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: Rea
         });
         return;
       }
-      const el = root.querySelector(`[data-node-guid="${nodeId}"]`) as HTMLElement | null;
-      if (el && withinContainer(el)) {
-        positionPeerOverlay(peerId, el);
-      } else {
-        positionPeerOverlay(peerId, null);
+
+      const elements: HTMLElement[] = [];
+      for (const id of nodeIds) {
+        const el = root.querySelector(`[data-node-guid="${id}"]`) as HTMLElement | null;
+        if (el && withinContainer(el)) {
+          elements.push(el);
+        }
       }
+      updatePeerOverlays(peerId, elements);
     });
-  }, [peerSelections, positionPeerOverlay]);
+  }, [peerSelections, updatePeerOverlays]);
 
   // Recompute peer overlays on scroll/resize
   useEffect(() => {
@@ -182,10 +176,16 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: Rea
       if (!peerSelections) return;
       const root = containerRef.current;
       if (!root) return;
-      Object.entries(peerSelections).forEach(([peerId, nodeId]) => {
-        if (!nodeId) return;
-        const el = root.querySelector(`[data-node-guid="${nodeId}"]`) as HTMLElement | null;
-        positionPeerOverlay(peerId, el);
+      Object.entries(peerSelections).forEach(([peerId, nodeIds]) => {
+        if (!nodeIds) return;
+        const elements: HTMLElement[] = [];
+        for (const id of nodeIds) {
+          const el = root.querySelector(`[data-node-guid="${id}"]`) as HTMLElement | null;
+          if (el && withinContainer(el)) {
+            elements.push(el);
+          }
+        }
+        updatePeerOverlays(peerId, elements);
       });
     }
     window.addEventListener("scroll", onWinChange, { passive: true });
@@ -194,30 +194,30 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: Rea
       window.removeEventListener("scroll", onWinChange);
       window.removeEventListener("resize", onWinChange);
     };
-  }, [peerSelections, positionPeerOverlay]);
+  }, [peerSelections, updatePeerOverlays]);
 
   useLayoutEffect(() => {
-    if (selected) positionOverlay(selected);
-  }, [positionOverlay, selected]);
+    if (selectedElements.length > 0) updateOverlays(selectedElements);
+  }, [updateOverlays, selectedElements]);
 
   // Recompute overlay when the selected element resizes (e.g. text edit changed dimensions)
   useEffect(() => {
-    if (!selected) return;
+    if (selectedElements.length === 0) return;
     // Use ResizeObserver when available to update overlay on size changes
     let ro: ResizeObserver | null = null;
     try {
-      ro = new ResizeObserver(() => positionOverlay(selected));
-      ro.observe(selected);
+      ro = new ResizeObserver(() => updateOverlays(selectedElements));
+      selectedElements.forEach(el => ro?.observe(el));
     } catch {
       // ResizeObserver may not be supported in some environments; fall back to window resize
-      const onWin = () => positionOverlay(selected);
+      const onWin = () => updateOverlays(selectedElements);
       window.addEventListener("resize", onWin, { passive: true });
       return () => window.removeEventListener("resize", onWin);
     }
     return () => {
       if (ro) ro.disconnect();
     };
-  }, [positionOverlay, selected]);
+  }, [updateOverlays, selectedElements]);
 
 
   function withinContainer(el: Element | null): el is HTMLElement {
@@ -255,23 +255,31 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: Rea
   // Sync selection from an external source (e.g. the app after adding a node)
   useEffect(() => {
     // If prop is not provided, do nothing
-    if (typeof selectedNodeId === "undefined") return;
-    if (selectedNodeId === null) {
-      setSelected(null);
-      setOverlay((o) => ({ ...o, visible: false }));
+    if (typeof selectedNodeIds === "undefined") return;
+    if (!selectedNodeIds || selectedNodeIds.length === 0) {
+      setSelectedElements([]);
+      setOverlays([]);
       return;
     }
-    // Find the element by data-node-guid within the container
+    // Find the elements by data-node-guid within the container
     const root = containerRef.current;
     if (!root) return;
-    const el = root.querySelector(`[data-node-guid="${selectedNodeId}"]`) as HTMLElement | null;
-    if (el && withinContainer(el)) {
-      setSelected(el);
-      positionOverlay(el);
+
+    const elements: HTMLElement[] = [];
+    for (const id of selectedNodeIds) {
+      const el = root.querySelector(`[data-node-guid="${id}"]`) as HTMLElement | null;
+      if (el && withinContainer(el)) {
+        elements.push(el);
+      }
+    }
+
+    if (elements.length > 0) {
+      setSelectedElements(elements);
+      updateOverlays(elements);
       // ensure keyboard focus for further navigation
       containerRef.current?.focus();
     }
-  }, [positionOverlay, selectedNodeId]);
+  }, [updateOverlays, selectedNodeIds]);
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (!containerRef.current) return;
@@ -282,46 +290,55 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: Rea
     }
 
     if (e.key === "Escape") {
-      setSelected(null);
-      setOverlay((o) => ({ ...o, visible: false }));
-      onSelectedChange?.(null);
+      setSelectedElements([]);
+      setOverlays([]);
+      onSelectedChange?.([]);
       return;
     }
 
-    if (!selected) {
+    if (selectedElements.length === 0) {
       // No selection yet → start at the container itself or its first child
       const start = firstElementChildOf(containerRef.current);
       if (start) {
-        setSelected(start);
-        onSelectedChange?.(start.getAttribute("data-node-guid") || null);
+        setSelectedElements([start]);
+        onSelectedChange?.([start.getAttribute("data-node-guid") || ""]);
       }
       return;
     }
 
+    // For navigation, we use the last selected element as the anchor
+    const anchor = selectedElements[selectedElements.length - 1];
+    if (!anchor) return;
     let next: HTMLElement | null = null;
 
     switch (e.key) {
       case "ArrowUp": {
-        next = parentOf(selected);
+        next = parentOf(anchor);
         break;
       }
       case "ArrowDown": {
-        next = firstElementChildOf(selected);
+        next = firstElementChildOf(anchor);
         break;
       }
       case "ArrowLeft": {
-        next = prevSibling(selected);
+        next = prevSibling(anchor);
         break;
       }
       case "ArrowRight": {
-        next = nextSibling(selected);
+        next = nextSibling(anchor);
         break;
       }
     }
 
-    if (next && next !== selected) {
-      setSelected(next);
-      onSelectedChange?.(next.getAttribute("data-node-guid") || null);
+    if (next && next !== anchor) {
+      // If shift is held, we might want to extend selection, but for now let's just move selection
+      // Or maybe we should support shift+arrow for range selection?
+      // The user asked for "either usimg some switch or while holding ctrl or shift" for selection.
+      // Standard behavior: Arrow keys move selection (clearing others). Shift+Arrow extends.
+
+      // For now, let's implement simple navigation that clears other selections
+      setSelectedElements([next]);
+      onSelectedChange?.([next.getAttribute("data-node-guid") || ""]);
       // Ensure the element is visible without jumping too much
       next.scrollIntoView({ block: "nearest", inline: "nearest" });
     }
@@ -330,29 +347,88 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: Rea
   function handleClick(e: React.MouseEvent) {
     if (!(e.target instanceof HTMLElement)) return;
     if (!withinContainer(e.target)) return;
-    setSelected(e.target);
-    onSelectedChange?.(e.target.getAttribute("data-node-guid") || null);
+
+    const target = e.target;
+    const targetId = target.getAttribute("data-node-guid");
+    if (!targetId) return;
+
+    let newSelection: HTMLElement[] = [];
+
+    if (e.ctrlKey || e.metaKey) {
+      // Toggle selection
+      if (selectedElements.some(el => el.getAttribute("data-node-guid") === targetId)) {
+        newSelection = selectedElements.filter(el => el.getAttribute("data-node-guid") !== targetId);
+      } else {
+        newSelection = [...selectedElements, target];
+      }
+    } else if (e.shiftKey && selectedElements.length > 0) {
+      const lastSelected = selectedElements[selectedElements.length - 1];
+      if (!lastSelected) {
+        newSelection = [target];
+      } else {
+        const lastId = lastSelected.getAttribute("data-node-guid");
+
+        if (generalizer && lastId && targetId) {
+          const generalizedIds = generalizer([lastId, targetId]);
+          const root = containerRef.current;
+          if (root) {
+            newSelection = generalizedIds.map(id => root.querySelector(`[data-node-guid="${id}"]`) as HTMLElement | null).filter((el): el is HTMLElement => !!el && withinContainer(el));
+          } else {
+            newSelection = [target];
+          }
+        } else {
+          // Range selection (simplified: just add range between last selected and current if they are siblings)
+          // Implementing full range selection in a tree is complex. 
+          // Let's try to find all elements between the last selected and the target in document order.
+
+          // Get all navigable elements in the container
+          const allNavigable = Array.from(containerRef.current?.querySelectorAll('[data-node-guid]') || []) as HTMLElement[];
+          const lastIndex = allNavigable.indexOf(lastSelected);
+          const targetIndex = allNavigable.indexOf(target);
+
+          if (lastIndex !== -1 && targetIndex !== -1) {
+            const start = Math.min(lastIndex, targetIndex);
+            const end = Math.max(lastIndex, targetIndex);
+            const range = allNavigable.slice(start, end + 1);
+
+            // Union with existing selection? Or replace? Standard is usually replace with range + anchor.
+            // But here we can just set the range.
+            newSelection = range;
+          } else {
+            newSelection = [target];
+          }
+        }
+      }
+    } else {
+      // Single selection
+      newSelection = [target];
+    }
+
+    setSelectedElements(newSelection);
+    onSelectedChange?.(newSelection.map(el => el.getAttribute("data-node-guid") || "").filter(Boolean));
   }
 
   // Helper function for programmatic navigation
   const navigate = useCallback((getNext: (current: HTMLElement) => HTMLElement | null) => {
-    if (!selected) {
+    if (selectedElements.length === 0) {
       // No selection yet → start at the first child
       const start = firstElementChildOf(containerRef.current);
       if (start) {
-        setSelected(start);
-        onSelectedChange?.(start.getAttribute("data-node-guid") || null);
+        setSelectedElements([start]);
+        onSelectedChange?.([start.getAttribute("data-node-guid") || ""]);
       }
       return;
     }
 
-    const next = getNext(selected);
-    if (next && next !== selected) {
-      setSelected(next);
-      onSelectedChange?.(next.getAttribute("data-node-guid") || null);
+    const anchor = selectedElements[selectedElements.length - 1];
+    if (!anchor) return;
+    const next = getNext(anchor);
+    if (next && next !== anchor) {
+      setSelectedElements([next]);
+      onSelectedChange?.([next.getAttribute("data-node-guid") || ""]);
       next.scrollIntoView({ block: "nearest", inline: "nearest" });
     }
-  }, [selected, onSelectedChange]);
+  }, [selectedElements, onSelectedChange]);
 
   // Expose navigation methods via ref
   useImperativeHandle(forwardedRef, () => ({
@@ -361,11 +437,18 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: Rea
     navigateToPrevSibling: () => navigate(prevSibling),
     navigateToNextSibling: () => navigate(nextSibling),
     clearSelection: () => {
-      setSelected(null);
-      setOverlay((o) => ({ ...o, visible: false }));
-      onSelectedChange?.(null);
+      setSelectedElements([]);
+      setOverlays([]);
+      onSelectedChange?.([]);
     }
   }), [navigate, onSelectedChange]);
+
+  function handleMouseDown(e: React.MouseEvent) {
+    // Prevent default text selection when holding Shift (or Ctrl/Meta for multi-select)
+    if (e.shiftKey || e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+    }
+  }
 
 
   return (
@@ -378,13 +461,15 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: Rea
         tabIndex={0}
         onKeyDown={handleKeyDown}
         onClick={handleClick}
+        onMouseDown={handleMouseDown}
       >
         {children}
       </div>
 
       {/* Absolute overlay highlighting the currently selected element */}
-      {overlay.visible && (
+      {overlays.map(overlay => (
         <div
+          key={overlay.id}
           aria-hidden
           className={styles.overlay}
           style={{
@@ -403,37 +488,39 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: Rea
             {overlay.label}
           </div>
         </div>
-      )}
+      ))}
 
       {/* Peer overlays: subtle, non-interactive highlights for remote selections */}
-      {Object.entries(peerOverlays).map(([peerId, o]) => {
-        if (!o.visible) return null;
+      {Object.entries(peerOverlays).flatMap(([peerId, overlays]) => {
         const colors = colorFromString(peerId);
-        return (
-          <div
-            key={`peer-${peerId}`}
-            aria-hidden
-            className={styles.overlay}
-            style={{
-              top: o.top,
-              left: o.left,
-              width: o.width,
-              height: o.height,
-              background: colors.fill,
-              boxShadow: `0 0 0 2px ${colors.subtle}`,
-              pointerEvents: "none",
-              transition: "all 120ms ease",
-            }}
-          >
+        return overlays.map(o => {
+          if (!o.visible) return null;
+          return (
             <div
-              data-testid={`peer-overlay-label-${peerId}`}
-              className={styles.overlayLabel}
-              style={{ background: colors.stroke, color: "#fff", fontSize: 11 }}
+              key={`peer-${peerId}-${o.id}`}
+              aria-hidden
+              className={styles.overlay}
+              style={{
+                top: o.top,
+                left: o.left,
+                width: o.width,
+                height: o.height,
+                background: colors.fill,
+                boxShadow: `0 0 0 2px ${colors.subtle}`,
+                pointerEvents: "none",
+                transition: "all 120ms ease",
+              }}
             >
-              {peerId}
+              <div
+                data-testid={`peer-overlay-label-${peerId}`}
+                className={styles.overlayLabel}
+                style={{ background: colors.stroke, color: "#fff", fontSize: 11 }}
+              >
+                {peerId}
+              </div>
             </div>
-          </div>
-        );
+          );
+        });
       })}
     </div>
   );
