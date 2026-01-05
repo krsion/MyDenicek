@@ -1,8 +1,8 @@
 import { next as Automerge, type Patch } from "@automerge/automerge";
 import { DocHandle, useDocument } from "@automerge/react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { addElementChildNode, addSiblingNodeAfter, addSiblingNodeBefore, addTransformation, addValueChildNode, applyPatchesManual, wrapNode } from "../Document";
+import { addElementChildNode, addSiblingNodeAfter, addSiblingNodeBefore, addTransformation, addValueChildNode, applyPatchesManual, getUUID, parents, wrapNode } from "../Document";
 import type { RecordedAction } from "../Recorder";
 import type { JsonDoc } from "../types";
 import { replayScript } from "../utils/replay";
@@ -33,38 +33,42 @@ export function useDenicekDocument(handle: DocHandle<JsonDoc>) {
   const [undoStack, setUndoStack] = useState<JsonDoc[]>([]);
   const [redoStack, setRedoStack] = useState<JsonDoc[]>([]);
 
+  const docRef = useRef<JsonDoc | undefined>(doc);
+  useEffect(() => { docRef.current = doc; }, [doc]);
+
   const modifyDoc = useCallback((updater: (d: JsonDoc) => void) => {
-    if (!doc) return;
-    setUndoStack(prev => [...prev, doc]);
+    if (!docRef.current) return;
+    const currentDoc = docRef.current;
+    setUndoStack(prev => [...prev, currentDoc]);
     setRedoStack([]);
     changeDoc(updater);
-  }, [doc, changeDoc]);
+  }, [changeDoc]);
 
   const undo = useCallback(() => {
-    if (undoStack.length === 0 || !doc) return;
+    if (undoStack.length === 0 || !docRef.current) return;
     const prevDoc = undoStack[undoStack.length - 1];
     setUndoStack(prev => prev.slice(0, -1));
-    setRedoStack(prev => [...prev, doc]);
+    setRedoStack(prev => [...prev, docRef.current!]);
     changeDoc(d => {
       const restored = JSON.parse(JSON.stringify(prevDoc));
       d.root = restored.root;
       d.nodes = restored.nodes;
       d.transformations = restored.transformations;
     });
-  }, [undoStack, doc, changeDoc]);
+  }, [undoStack, changeDoc]);
 
   const redo = useCallback(() => {
-    if (redoStack.length === 0 || !doc) return;
+    if (redoStack.length === 0 || !docRef.current) return;
     const nextDoc = redoStack[redoStack.length - 1];
     setRedoStack(prev => prev.slice(0, -1));
-    setUndoStack(prev => [...prev, doc]);
+    setUndoStack(prev => [...prev, docRef.current!]);
     changeDoc(d => {
       const restored = JSON.parse(JSON.stringify(nextDoc));
       d.root = restored.root;
       d.nodes = restored.nodes;
       d.transformations = restored.transformations;
     });
-  }, [redoStack, doc, changeDoc]);
+  }, [redoStack, changeDoc]);
 
   // Helper actions
   const updateAttribute = useCallback((nodeIds: string[], key: string, value: unknown | undefined) => {
@@ -127,17 +131,23 @@ export function useDenicekDocument(handle: DocHandle<JsonDoc>) {
 
   const addChildren = useCallback((parentIds: string[], type: "element" | "value", content: string) => {
     const newIds: string[] = [];
+    // Generate IDs upfront so we can return them synchronously
+    for (let i = 0; i < parentIds.length; i++) {
+      newIds.push(`n_${getUUID()}`);
+    }
+
     modifyDoc((prev) => {
-      for (const id of parentIds) {
+      parentIds.forEach((id, index) => {
         const node = prev.nodes[id];
+        const newId = newIds[index];
         if (node?.kind === "element") {
           if (type === "value") {
-            newIds.push(addValueChildNode(prev, node, content).id);
+            addValueChildNode(prev, node, content, newId);
           } else {
-            newIds.push(addElementChildNode(prev, node, content).id);
+            addElementChildNode(prev, node, content, newId);
           }
         }
-      }
+      });
     });
     return newIds;
   }, [modifyDoc]);
@@ -153,6 +163,20 @@ export function useDenicekDocument(handle: DocHandle<JsonDoc>) {
       }
     });
     return newIds;
+  }, [modifyDoc]);
+
+  const deleteNodes = useCallback((nodeIds: string[]) => {
+    modifyDoc((d) => {
+      for (const id of nodeIds) {
+        const parentNodes = parents(d.nodes, id);
+        for (const parent of parentNodes) {
+            const idx = parent.children.indexOf(id);
+            if (idx !== -1) {
+                parent.children.splice(idx, 1);
+            }
+        }
+      }
+    });
   }, [modifyDoc]);
 
   const replayScriptAction = useCallback((script: RecordedAction[], selectedNodeId: string) => {
@@ -187,6 +211,7 @@ export function useDenicekDocument(handle: DocHandle<JsonDoc>) {
     updateValue,
     addChildren,
     addSiblings,
+    deleteNodes,
     replayScript: replayScriptAction,
     addTransformation: addTransformationAction,
     applyPatches

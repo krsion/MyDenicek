@@ -4,6 +4,9 @@ import { useContext, useMemo } from "react";
 
 import type { JsonDoc } from "../types";
 
+const EMPTY_ARRAY: string[] = [];
+const INITIAL_STATE = { selectedNodeIds: [] as string[] };
+
 export function useSelection(handle: DocHandle<JsonDoc>) {
   const repo = useContext(RepoContext) as Repo | undefined;
   const peerId: PeerId | null = repo?.peerId ?? null;
@@ -11,9 +14,7 @@ export function useSelection(handle: DocHandle<JsonDoc>) {
   const [localState, updateLocalState] = useLocalAwareness({
     handle: handle,
     userId: repo?.peerId as string,
-    initialState: {
-      selectedNodeIds: [] as string[]
-    }
+    initialState: INITIAL_STATE
   });
 
   const [peerStates] = useRemoteAwareness({
@@ -34,7 +35,7 @@ export function useSelection(handle: DocHandle<JsonDoc>) {
     return selections;
   }, [peerStates]);
 
-  const selectedNodeIds = localState.selectedNodeIds || [];
+  const selectedNodeIds = localState.selectedNodeIds || EMPTY_ARRAY;
   
   const setSelectedNodeIds = (ids: string[]) => {
       updateLocalState({ selectedNodeIds: ids });

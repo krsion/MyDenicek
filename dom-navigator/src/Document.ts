@@ -2,7 +2,7 @@ import { type Patch } from "@automerge/automerge";
 
 import type { ElementNode, JsonDoc, Node, Transformation, ValueNode } from "./types";
 
-function parents(nodes: Record<string, Node>, childId: string): ElementNode[] {
+export function parents(nodes: Record<string, Node>, childId: string): ElementNode[] {
   const parents = [];
   for (const [_, parentNode] of Object.entries(nodes)) {
     if (parentNode.kind == "element" && parentNode.children.includes(childId)) {
@@ -24,7 +24,7 @@ function latestVersionForParent(doc: JsonDoc, parent: string | null) {
   return max;
 }
 
-const getUUID = () => {
+export const getUUID = () => {
   const c = (globalThis as unknown as { crypto?: { randomUUID?: () => string } }).crypto;
   return c && typeof c.randomUUID === 'function' ? c.randomUUID() : Date.now().toString(36);
 };
@@ -59,11 +59,11 @@ export function addTransformation(doc: JsonDoc, parent: string, type: "wrap" | "
   }
 }
 
-export function addChildNode(nodes: Record<string, Node>, parent: ElementNode, child: Node) {
-  const id = `n_${getUUID()}`;
-  nodes[id] = child;
-  parent.children.push(id);
-  return id;
+export function addChildNode(nodes: Record<string, Node>, parent: ElementNode, child: Node, id?: string) {
+  const newId = id || `n_${getUUID()}`;
+  nodes[newId] = child;
+  parent.children.push(newId);
+  return newId;
 }
 
 export function firstChildsTag(nodes: Record<string, Node>, node: ElementNode): string | undefined {
@@ -117,16 +117,16 @@ export class NodeWrapper {
   }
 }
 
-export function addElementChildNode(doc: JsonDoc, parent: ElementNode, tag: string) {
+export function addElementChildNode(doc: JsonDoc, parent: ElementNode, tag: string, id?: string) {
   const node: Node = { kind: "element", tag, attrs: {}, children: [] };
-  const id = addChildNode(doc.nodes, parent, node);
-  return new NodeWrapper(doc, id);
+  const newId = addChildNode(doc.nodes, parent, node, id);
+  return new NodeWrapper(doc, newId);
 }
 
-export function addValueChildNode(doc: JsonDoc, parent: ElementNode, value: string) {
+export function addValueChildNode(doc: JsonDoc, parent: ElementNode, value: string, id?: string) {
   const node: Node = { kind: "value", value };
-  const id = addChildNode(doc.nodes, parent, node);
-  return new NodeWrapper(doc, id);
+  const newId = addChildNode(doc.nodes, parent, node, id);
+  return new NodeWrapper(doc, newId);
 }
 
 function addSiblingNode(nodes: Record<string, Node>, relativeIndex: number, siblingId: string) {

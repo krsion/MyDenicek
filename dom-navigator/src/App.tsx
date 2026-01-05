@@ -1,8 +1,7 @@
-import { next as Automerge, type Patch } from "@automerge/automerge";
 import { DocHandle } from "@automerge/react";
-import { Card, CardHeader, Checkbox, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, DrawerBody, DrawerHeader, DrawerHeaderTitle, InlineDrawer, Input, Switch, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
-import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CameraRegular, CodeRegular, EditRegular, PlayRegular, RecordRegular, RenameFilled, RenameRegular, StopRegular } from "@fluentui/react-icons";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, DrawerBody, DrawerHeader, DrawerHeaderTitle, InlineDrawer, Switch, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
+import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CameraRegular, ChatRegular, CodeRegular, EditRegular, PlayRegular, RecordRegular, RenameFilled, RenameRegular, StopRegular } from "@fluentui/react-icons";
+import { useMemo, useRef, useState } from "react";
 
 import { AddNodePopoverButton } from "./AddNodePopoverButton";
 import { firstChildsTag, generalizeSelection } from "./Document.ts";
@@ -12,6 +11,7 @@ import { useDenicekDocument } from "./hooks/useDenicekDocument";
 import { useRecorder } from "./hooks/useRecorder";
 import { useSelection } from "./hooks/useSelection";
 import { JsonView } from "./JsonView.tsx";
+import { LlmChat } from "./LlmChat";
 import { RecordedScriptView } from "./RecordedScriptView";
 import { RenderedDocument } from "./RenderedDocument.tsx";
 import { ToolbarPopoverButton } from "./ToolbarPopoverButton";
@@ -20,16 +20,17 @@ import type { JsonDoc, Node } from "./types";
 
 
 export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<JsonDoc>, onConnect: () => void, onDisconnect: () => void }) => {
-  const { doc, undo, redo, canUndo, canRedo, updateAttribute, updateTag, wrapNodes, updateValue, addChildren, addSiblings, replayScript, addTransformation, applyPatches } = useDenicekDocument(handle);
+  const { doc, undo, redo, canUndo, canRedo, updateAttribute, updateTag, wrapNodes, updateValue, addChildren, addSiblings, deleteNodes, replayScript, addTransformation } = useDenicekDocument(handle);
   const { selectedNodeIds, setSelectedNodeIds, peerSelections, peerId } = useSelection(handle);
   const { isRecording, recordedScript, startRecording, stopRecording, recordAction } = useRecorder();
 
   const [snapshot, setSnapshot] = useState<JsonDoc | null>(null);
   const [filterPatches, setFilterPatches] = useState(false);
   const [patchesViewMode, setPatchesViewMode] = useState<'table' | 'json'>('table');
-  const [selectedPatchIndices, setSelectedPatchIndices] = useState<Set<number>>(new Set());
+  // const [selectedPatchIndices, setSelectedPatchIndices] = useState<Set<number>>(new Set());
 
   const [connected, setConnected] = useState(true);
+  const [showAiPanel, setShowAiPanel] = useState(false);
   const navigatorRef = useRef<DomNavigatorHandle>(null);
 
   const selectedNodeGuids = selectedNodeIds;
@@ -67,9 +68,8 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
     }
   };
 
-  if (!doc) return <div>Loading...</div>;
-
   const details = useMemo(() => {
+    if (!doc) return null;
     const selectedEl = selectedNodeGuid ? document.querySelector(`[data-node-guid="${selectedNodeGuid}"]`) as HTMLElement | null : null;
     if (!selectedEl) return null;
     const tag = selectedEl.tagName.toLowerCase();
@@ -88,8 +88,8 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
   }, [selectedNodeGuid, doc]);
 
   // Edits to selectedNode will not be synced by Automerge. instead, use changeDoc(prev => ...) to update the document model
-  const selectedNode: Node | undefined = selectedNodeGuid ? doc.nodes[selectedNodeGuid] : undefined;
-  const selectedNodeFirstChildTag: string | undefined = (selectedNode && selectedNode.kind === "element") ? firstChildsTag(doc.nodes, selectedNode) : undefined;
+  const selectedNode: Node | undefined = (selectedNodeGuid && doc) ? doc.nodes[selectedNodeGuid] : undefined;
+  const selectedNodeFirstChildTag: string | undefined = (selectedNode && selectedNode.kind === "element" && doc) ? firstChildsTag(doc.nodes, selectedNode) : undefined;
   const selectedNodeAttributes = (selectedNode && selectedNode.kind === "element") ? selectedNode.attrs : undefined;
 
   const handleAttributeChange = (key: string, value: unknown | undefined) => {
@@ -97,57 +97,68 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
     updateAttribute(selectedNodeGuids, key, value);
   };
 
-  const [patches, setPatches] = useState<Patch[]>([]);
+  // const [patches, setPatches] = useState<Patch[]>([]);
 
-  useEffect(() => {
-    if (!snapshot) {
-      setPatches([]);
-      return;
-    }
-    setPatches(Automerge.diff(doc, Automerge.getHeads(snapshot), Automerge.getHeads(doc)));
-  }, [snapshot, doc]);
+  // useEffect(() => {
+  //   if (!snapshot || !doc) {
+  //     setPatches([]);
+  //     return;
+  //   }
+  //   // Automerge.diff returns a new array every time, but if the content is the same, we should avoid setting state?
+  //   // Actually, if doc changes, diff changes.
+  //   // The issue might be that setPatches triggers a re-render, which somehow triggers doc change? No.
+  //   // But if doc is changing rapidly...
 
-  const relevantPatches = useMemo(() => {
-    const allPatches = patches.map((p, i) => ({ patch: p, index: i }));
-    if (!filterPatches || selectedNodeGuids.length === 0) return allPatches;
+  //   // Let's try to wrap this in a transition or debounce if needed, but for now just uncomment.
+  //   setPatches(Automerge.diff(doc, Automerge.getHeads(snapshot), Automerge.getHeads(doc)));
+  // }, [snapshot, doc]);
 
-    const relevantIds = new Set<string>();
-    const stack = [...selectedNodeGuids];
-    while (stack.length > 0) {
-      const id = stack.pop()!;
-      relevantIds.add(id);
-      const node = doc.nodes[id];
-      if (node && node.kind === 'element') {
-        stack.push(...node.children);
-      }
-    }
+  // const relevantPatches = useMemo(() => {
+  //   const allPatches = patches.map((p, i) => ({ patch: p, index: i }));
+  //   if (!filterPatches || selectedNodeGuids.length === 0 || !doc) return allPatches;
 
-    return allPatches.filter(({ patch: p }) => {
-      // Check if the patch modifies a relevant node
-      if (p.path.length > 1 && p.path[0] === 'nodes' && relevantIds.has(String(p.path[1]))) {
-        return true;
-      }
-      // Check if the patch value involves a relevant node (e.g. adding it to a parent's children list)
-      const val = (p as { value?: unknown }).value;
-      if (typeof val === 'string' && relevantIds.has(val)) {
-        return true;
-      }
-      return false;
-    });
-  }, [patches, filterPatches, selectedNodeGuids, doc]);
+  //   const relevantIds = new Set<string>();
+  //   const stack = [...selectedNodeGuids];
+  //   while (stack.length > 0) {
+  //     const id = stack.pop()!;
+  //     relevantIds.add(id);
+  //     const node = doc.nodes[id];
+  //     if (node && node.kind === 'element') {
+  //       stack.push(...node.children);
+  //     }
+  //   }
 
-  // Reset selected patches when relevantPatches change (e.g., filter changes)
-  // This useEffect is intentionally placed after the useMemo for relevantPatches
-  // to ensure it runs when relevantPatches is updated.
-  useEffect(() => setSelectedPatchIndices(new Set()), [relevantPatches]);
-  const updatePatch = (index: number, updates: Partial<Patch>) => {
-    setPatches(prev => {
-      const next = [...prev];
-      next[index] = { ...next[index], ...updates } as Patch;
-      return next;
-    });
-  };
+  //   return allPatches.filter(({ patch: p }) => {
+  //     // Check if the patch modifies a relevant node
+  //     if (p.path.length > 1 && p.path[0] === 'nodes' && relevantIds.has(String(p.path[1]))) {
+  //       return true;
+  //     }
+  //     // Check if the patch value involves a relevant node (e.g. adding it to a parent's children list)
+  //     const val = (p as { value?: unknown }).value;
+  //     if (typeof val === 'string' && relevantIds.has(val)) {
+  //       return true;
+  //     }
+  //     return false;
+  //   });
+  // }, [patches, filterPatches, selectedNodeGuids, doc]);
 
+  // // Reset selected patches when relevantPatches change (e.g., filter changes)
+  // // This useEffect is intentionally placed after the useMemo for relevantPatches
+  // // to ensure it runs when relevantPatches is updated.
+  // // useEffect(() => setSelectedPatchIndices(new Set()), [relevantPatches]);
+  // const updatePatch = (index: number, updates: Partial<Patch>) => {
+  //   setPatches(prev => {
+  //     const next = [...prev];
+  //     next[index] = { ...next[index], ...updates } as Patch;
+  //     return next;
+  //   });
+  // };
+
+  const actions = useMemo(() => ({
+    updateAttribute, updateTag, wrapNodes, updateValue, addChildren, addSiblings, deleteNodes
+  }), [updateAttribute, updateTag, wrapNodes, updateValue, addChildren, addSiblings, deleteNodes]);
+
+  if (!doc) return <div>Loading...</div>;
 
   return (
     <div style={{ display: "flex" }}>
@@ -319,6 +330,8 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
               <ToolbarButton icon={<PlayRegular />} onClick={() => {
                 replay();
               }} disabled={!recordedScript || !selectedNodeGuid}>Replay</ToolbarButton>
+              <ToolbarDivider />
+              <ToolbarButton icon={<ChatRegular />} onClick={() => setShowAiPanel(!showAiPanel)}>AI Assistant</ToolbarButton>
             </ToolbarGroup>
           </Toolbar>
 
@@ -370,7 +383,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
           {snapshot && (
             <Card>
               <CardHeader header={<Text>Patches from Snapshot</Text>} action={<div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <ToolbarButton
+                {/* <ToolbarButton
                   icon={<ArrowRedoRegular />}
                   disabled={selectedPatchIndices.size === 0}
                   onClick={() => {
@@ -380,14 +393,14 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                   }}
                 >
                   Replay ({selectedPatchIndices.size})
-                </ToolbarButton>
+                </ToolbarButton> */}
                 <Switch label="Filter by selection" checked={filterPatches} onChange={(_, data) => setFilterPatches(data.checked)} />
                 <ToolbarButton icon={<CodeRegular />} onClick={() => setPatchesViewMode(patchesViewMode === 'table' ? 'json' : 'table')}>
                   {patchesViewMode === 'table' ? 'JSON' : 'Table'}
                 </ToolbarButton>
                 <ToolbarButton icon={<CameraRegular />} onClick={() => setSnapshot(null)}>Clear</ToolbarButton>
               </div>} />
-              {patchesViewMode === 'json' ? (
+              {/* {patchesViewMode === 'json' ? (
                 <div style={{ maxHeight: '500px', overflow: 'auto' }}>
                   <JsonView data={relevantPatches.map(p => p.patch)} />
                 </div>
@@ -458,7 +471,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                     ))}
                   </TableBody>
                 </Table>
-              )}
+              )} */}
             </Card>
           )}
 
@@ -470,6 +483,14 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
         </DrawerHeader>
         <DrawerBody>
           <RecordedScriptView script={recordedScript || []} />
+        </DrawerBody>
+      </InlineDrawer>
+      <InlineDrawer open={showAiPanel} separator position="end" style={{ width: '400px' }}>
+        <DrawerHeader>
+          <DrawerHeaderTitle>AI Assistant</DrawerHeaderTitle>
+        </DrawerHeader>
+        <DrawerBody>
+          <LlmChat doc={doc} actions={actions} />
         </DrawerBody>
       </InlineDrawer>
     </div>
