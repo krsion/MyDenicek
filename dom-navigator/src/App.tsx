@@ -14,6 +14,26 @@ import { type RecordedAction, Recorder } from "./Recorder";
 import { RenderedDocument } from "./RenderedDocument.tsx";
 import { ToolbarPopoverButton } from "./ToolbarPopoverButton";
 
+function calculateSplice(oldVal: string, newVal: string) {
+  let start = 0;
+  while (start < oldVal.length && start < newVal.length && oldVal[start] === newVal[start]) {
+    start++;
+  }
+
+  let oldEnd = oldVal.length;
+  let newEnd = newVal.length;
+
+  while (oldEnd > start && newEnd > start && oldVal[oldEnd - 1] === newVal[newEnd - 1]) {
+    oldEnd--;
+    newEnd--;
+  }
+
+  const deleteCount = oldEnd - start;
+  const insertText = newVal.slice(start, newEnd);
+
+  return { index: start, deleteCount, insertText };
+}
+
 export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<JsonDoc>, onConnect: () => void, onDisconnect: () => void }) => {
   const [doc, changeDoc] = useDocument<JsonDoc>(handle.url, { suspense: true });
   const [undoStack, setUndoStack] = useState<JsonDoc[]>([]);
@@ -433,10 +453,22 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                   placeholder="Value content"
                   initialValue={details?.value || ""}
                   onSubmit={(value) => {
+                    const originalValue = details?.value || "";
+                    const { index, deleteCount, insertText } = calculateSplice(originalValue, value);
+
                     modifyDoc((prev: JsonDoc) => {
                       for (const id of selectedNodeGuids) {
                         if (prev.nodes[id]?.kind === "value") {
-                          prev.nodes[id].value = value;
+                          const node = prev.nodes[id];
+                          // If it's a full replacement of the source, treat it as a full replacement for targets too
+                          if (index === 0 && deleteCount === originalValue.length && insertText === value) {
+                            prev.nodes[id].value = value;
+                          } else {
+                            // Apply the splice relative to the node's content
+                            // Clamp index to the node's length to avoid out-of-bounds
+                            const safeIndex = Math.min(index, node.value.length);
+                            Automerge.splice(prev, ['nodes', id, 'value'], safeIndex, deleteCount, insertText);
+                          }
                         }
                       }
                     });
