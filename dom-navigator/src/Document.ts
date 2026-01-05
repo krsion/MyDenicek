@@ -185,29 +185,43 @@ function buildParentMap(nodes: Record<string, Node>): Record<string, string> {
   return parentMap;
 }
 
-export function LowestCommonAncestor(doc: JsonDoc, nodeAId: string, nodeBId: string): string | null {
+export function LowestCommonAncestor(doc: JsonDoc, nodeIds: string[]): string | null {
+  if (nodeIds.length === 0) return null;
   const parentMap = buildParentMap(doc.nodes);
   
-  const ancestorsA = new Set<string>();
-  let currentA: string | undefined = nodeAId;
-  while (currentA) {
-    ancestorsA.add(currentA);
-    currentA = parentMap[currentA];
-  }
+  let currentLca: string | undefined = nodeIds[0];
 
-  let currentB: string | undefined = nodeBId;
-  while (currentB) {
-    if (ancestorsA.has(currentB)) {
-      return currentB;
+  for (let i = 1; i < nodeIds.length; i++) {
+    if (!currentLca) break;
+    const nextNode = nodeIds[i];
+    
+    const ancestors = new Set<string>();
+    let curr: string | undefined = currentLca;
+    while (curr) {
+      ancestors.add(curr);
+      curr = parentMap[curr];
     }
-    currentB = parentMap[currentB];
+
+    let runner: string | undefined = nextNode;
+    let found = false;
+    while (runner) {
+      if (ancestors.has(runner)) {
+        currentLca = runner;
+        found = true;
+        break;
+      }
+      runner = parentMap[runner];
+    }
+    if (!found) {
+        currentLca = doc.root;
+    }
   }
 
-  return doc.root;
+  return currentLca || null;
 }
 
 export function generalizeSelection(doc: JsonDoc, nodeAId: string, nodeBId: string): string[] {
-  const lcaId = LowestCommonAncestor(doc, nodeAId, nodeBId);
+  const lcaId = LowestCommonAncestor(doc, [nodeAId, nodeBId]);
   if (!lcaId) return [];
 
   const nodeA = doc.nodes[nodeAId];
