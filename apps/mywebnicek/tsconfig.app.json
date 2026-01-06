@@ -34,6 +34,11 @@
     "allowUnreachableCode": false,
     "exactOptionalPropertyTypes": true,
     "noPropertyAccessFromIndexSignature": true,
+    "paths": {
+      "@mydenicek/core": [
+        "../../packages/mydenicek-core/src/index.ts"
+      ]
+    }
   },
   "include": [
     "src"
