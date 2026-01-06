@@ -19,19 +19,18 @@ jobs:
           node-version: '22.x'
 
       - name: Install dependencies
-        working-directory: ./mywebnicek
         run: |
           npm ci
 
       - name: Build
-        working-directory: ./mywebnicek
+        working-directory: ./apps/mywebnicek
         run: |
           npm run build
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
-          path: ./mywebnicek/dist
+          path: ./apps/mywebnicek/dist
 
   # Deploy job
   deploy:

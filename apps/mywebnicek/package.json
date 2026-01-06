@@ -15,6 +15,7 @@
     "@automerge/automerge": "^3.2.1",
     "@automerge/react": "^2.5.0",
     "@fluentui/react-components": "^9.72.7",
+    "@mydenicek/core": "*",
     "@uiw/react-json-view": "^2.0.0-alpha.39",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

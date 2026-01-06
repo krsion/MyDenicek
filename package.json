@@ -1,0 +1,11 @@
+{
+    "name": "mydenicek-monorepo",
+    "private": true,
+    "workspaces": [
+        "apps/*",
+        "packages/*"
+    ],
+    "scripts": {
+        "test": "npm test --workspaces"
+    }
+}
