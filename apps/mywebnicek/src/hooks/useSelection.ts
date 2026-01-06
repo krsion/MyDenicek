@@ -1,8 +1,7 @@
 import type { PeerId } from "@automerge/react";
 import { DocHandle, Repo, RepoContext, useLocalAwareness, useRemoteAwareness } from "@automerge/react";
+import type { JsonDoc } from "@mydenicek/core";
 import { useContext, useMemo } from "react";
-
-import type { JsonDoc } from "../types";
 
 const EMPTY_ARRAY: string[] = [];
 const INITIAL_STATE = { selectedNodeIds: [] as string[] };

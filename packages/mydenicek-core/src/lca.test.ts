@@ -1,9 +1,9 @@
-import { expect, test } from '@playwright/test';
+import { describe, expect, it } from 'vitest';
 
-import { LowestCommonAncestor } from '../src/Document';
-import { JsonDoc } from '../src/types';
+import { LowestCommonAncestor } from './Document';
+import { type JsonDoc } from './types';
 
-test.describe('LowestCommonAncestor', () => {
+describe('LowestCommonAncestor', () => {
   const doc: JsonDoc = {
     root: 'root',
     nodes: {
@@ -18,37 +18,37 @@ test.describe('LowestCommonAncestor', () => {
     transformations: []
   };
 
-  test('finds LCA of single node (itself)', () => {
+  it('finds LCA of single node (itself)', () => {
     expect(LowestCommonAncestor(doc, ['a'])).toBe('a');
     expect(LowestCommonAncestor(doc, ['root'])).toBe('root');
   });
 
-  test('finds LCA of two siblings', () => {
+  it('finds LCA of two siblings', () => {
     expect(LowestCommonAncestor(doc, ['a', 'b'])).toBe('root');
     expect(LowestCommonAncestor(doc, ['a1', 'a2'])).toBe('a');
   });
 
-  test('finds LCA of parent and child', () => {
+  it('finds LCA of parent and child', () => {
     expect(LowestCommonAncestor(doc, ['a', 'a1'])).toBe('a');
     expect(LowestCommonAncestor(doc, ['root', 'b1'])).toBe('root');
   });
 
-  test('finds LCA of nodes in different branches', () => {
+  it('finds LCA of nodes in different branches', () => {
     expect(LowestCommonAncestor(doc, ['a1', 'b1'])).toBe('root');
     expect(LowestCommonAncestor(doc, ['a2_1', 'b'])).toBe('root');
     expect(LowestCommonAncestor(doc, ['a2_1', 'a1'])).toBe('a');
   });
 
-  test('finds LCA of multiple nodes', () => {
+  it('finds LCA of multiple nodes', () => {
     expect(LowestCommonAncestor(doc, ['a1', 'a2_1', 'b1'])).toBe('root');
     expect(LowestCommonAncestor(doc, ['a1', 'a2', 'a2_1'])).toBe('a');
   });
 
-  test('returns null for empty list', () => {
+  it('returns null for empty list', () => {
     expect(LowestCommonAncestor(doc, [])).toBe(null);
   });
 
-  test('handles nodes that do not exist (fallback to root or behavior)', () => {
+  it('handles nodes that do not exist (fallback to root or behavior)', () => {
     // Current implementation relies on parentMap. If node not in map (e.g. root or non-existent), 
     // it might behave in specific ways.
     // Root is not a child of anyone, so parentMap['root'] is undefined.

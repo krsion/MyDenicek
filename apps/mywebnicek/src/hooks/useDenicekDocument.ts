@@ -1,10 +1,10 @@
 import { next as Automerge, type Patch } from "@automerge/automerge";
 import { DocHandle, useDocument } from "@automerge/react";
+import type { JsonDoc } from "@mydenicek/core";
+import { addElementChildNode, addSiblingNodeAfter, addSiblingNodeBefore, addTransformation, addValueChildNode, applyPatchesManual, getUUID, parents, wrapNode } from "@mydenicek/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { addElementChildNode, addSiblingNodeAfter, addSiblingNodeBefore, addTransformation, addValueChildNode, applyPatchesManual, getUUID, parents, wrapNode } from "../Document";
 import type { RecordedAction } from "../Recorder";
-import type { JsonDoc } from "../types";
 import { replayScript } from "../utils/replay";
 
 function calculateSplice(oldVal: string, newVal: string) {

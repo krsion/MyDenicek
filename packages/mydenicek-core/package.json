@@ -8,6 +8,9 @@
         "build": "tsc",
         "test": "vitest run"
     },
+    "dependencies": {
+        "@automerge/automerge": "^3.2.1"
+    },
     "devDependencies": {
         "typescript": "^5.0.0",
         "vitest": "^4.0.16"

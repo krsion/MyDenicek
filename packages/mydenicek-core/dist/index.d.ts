@@ -1,1 +1,2 @@
-export declare function helloWorld(): string;
+export * from './Document';
+export * from './types';

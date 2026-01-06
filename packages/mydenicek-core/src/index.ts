@@ -1,3 +1,3 @@
-export function helloWorld() {
-  return "Hello from mydenicek-core!";
-}
+export * from './Document';
+export * from './types';
+

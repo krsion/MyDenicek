@@ -1,6 +1,6 @@
+import { type JsonDoc } from '@mydenicek/core';
 import { useState } from 'react';
 
-import { type JsonDoc } from '../types';
 import { serializeDocument } from '../utils/llmSerializer';
 
 // Define the tools available to the LLM

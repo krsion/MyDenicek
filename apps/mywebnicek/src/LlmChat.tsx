@@ -1,9 +1,9 @@
 import { Button, Input, Spinner, Textarea } from "@fluentui/react-components";
 import { SendRegular } from "@fluentui/react-icons";
+import { type JsonDoc } from "@mydenicek/core";
 import { useState } from "react";
 
 import { type DenicekActions, useLlmController } from "./hooks/useLlmController";
-import { type JsonDoc } from "./types";
 
 interface LlmChatProps {
     doc: JsonDoc;

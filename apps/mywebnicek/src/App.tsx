@@ -1,11 +1,11 @@
 import { DocHandle } from "@automerge/react";
 import { Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, DrawerBody, DrawerHeader, DrawerHeaderTitle, InlineDrawer, Switch, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
 import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CameraRegular, ChatRegular, CodeRegular, EditRegular, PlayRegular, RecordRegular, RenameFilled, RenameRegular, StopRegular } from "@fluentui/react-icons";
-import { helloWorld } from "@mydenicek/core";
+import type { JsonDoc, Node } from "@mydenicek/core";
+import { firstChildsTag, generalizeSelection } from "@mydenicek/core";
 import { useMemo, useRef, useState } from "react";
 
 import { AddNodePopoverButton } from "./AddNodePopoverButton";
-import { firstChildsTag, generalizeSelection } from "./Document.ts";
 import { DomNavigator, type DomNavigatorHandle } from "./DomNavigator";
 import { ElementDetails } from "./ElementDetails.tsx";
 import { useDenicekDocument } from "./hooks/useDenicekDocument";
@@ -16,7 +16,6 @@ import { LlmChat } from "./LlmChat";
 import { RecordedScriptView } from "./RecordedScriptView";
 import { RenderedDocument } from "./RenderedDocument.tsx";
 import { ToolbarPopoverButton } from "./ToolbarPopoverButton";
-import type { JsonDoc, Node } from "./types";
 
 
 
@@ -69,7 +68,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
     }
   };
 
-  console.log(helloWorld());
+  // console.log(helloWorld());
 
   const details = useMemo(() => {
     if (!doc) return null;

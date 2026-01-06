@@ -1,11 +1,11 @@
 import { DocHandle, IndexedDBStorageAdapter, isValidAutomergeUrl, Repo, RepoContext, WebSocketClientAdapter } from '@automerge/react';
 import { FluentProvider, webLightTheme } from '@fluentui/react-components';
+import type { JsonDoc } from '@mydenicek/core';
+import { initialDocument } from '@mydenicek/core';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { App } from './App.tsx';
-import { initialDocument } from './Document.ts';
-import type { JsonDoc } from './types';
 const repo = new Repo({
   network: [new WebSocketClientAdapter("wss://sync.automerge.org/")],
   storage: new IndexedDBStorageAdapter()

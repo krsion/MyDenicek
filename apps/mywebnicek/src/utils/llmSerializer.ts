@@ -1,4 +1,4 @@
-import { type JsonDoc } from "../types";
+import { type JsonDoc } from "@mydenicek/core";
 
 export function serializeDocument(doc: JsonDoc): string {
   const nodes = doc.nodes;
