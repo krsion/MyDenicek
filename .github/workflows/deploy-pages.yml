@@ -31,6 +31,20 @@ jobs:
         run: |
           npm run build
 
+      - name: Run Unit Tests
+        run: |
+          npm run test -w packages/mydenicek-core
+
+      - name: Install Playwright Browsers
+        working-directory: ./apps/mywebnicek
+        run: |
+          npx playwright install --with-deps
+
+      - name: Run Playwright Tests
+        working-directory: ./apps/mywebnicek
+        run: |
+          npm run test
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
