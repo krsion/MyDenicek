@@ -1,7 +1,7 @@
-import type { JsonDoc } from "@mydenicek/core";
-import { addElementChildNode, addValueChildNode, wrapNode } from "@mydenicek/core";
+import { addElementChildNode, addValueChildNode, wrapNode } from "./Document";
+import type { JsonDoc } from "./types";
 
-import type { RecordedAction } from "../Recorder";
+import type { RecordedAction } from "./Recorder";
 
 export function replayScript(doc: JsonDoc, script: RecordedAction[], startNodeId: string) {
     const replayMap: Record<string, string> = { "$0": startNodeId };

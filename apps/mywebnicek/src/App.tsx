@@ -3,12 +3,12 @@ import { Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, Dia
 import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CameraRegular, ChatRegular, CodeRegular, EditRegular, PlayRegular, RecordRegular, RenameFilled, RenameRegular, StopRegular } from "@fluentui/react-icons";
 import type { JsonDoc, Node } from "@mydenicek/core";
 import { firstChildsTag, generalizeSelection } from "@mydenicek/core";
+import { useDenicekDocument } from "@mydenicek/react";
 import { useMemo, useRef, useState } from "react";
 
 import { AddNodePopoverButton } from "./AddNodePopoverButton";
 import { DomNavigator, type DomNavigatorHandle } from "./DomNavigator";
 import { ElementDetails } from "./ElementDetails.tsx";
-import { useDenicekDocument } from "./hooks/useDenicekDocument";
 import { useRecorder } from "./hooks/useRecorder";
 import { useSelection } from "./hooks/useSelection";
 import { JsonView } from "./JsonView.tsx";

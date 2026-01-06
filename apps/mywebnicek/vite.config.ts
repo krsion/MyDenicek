@@ -3,6 +3,7 @@ import path from "path"
 import { defineConfig } from 'vite'
 import topLevelAwait from 'vite-plugin-top-level-await'
 import wasm from 'vite-plugin-wasm'
+import tsconfigPaths from 'vite-tsconfig-paths'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -10,6 +11,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@mydenicek/core": path.resolve(__dirname, "../../packages/mydenicek-core/src/index.ts"),
+      "@mydenicek/react": path.resolve(__dirname, "../../packages/mydenicek-react/src/index.ts"),
     },
   },
   plugins: [
@@ -18,6 +20,7 @@ export default defineConfig({
         plugins: [['babel-plugin-react-compiler']],
       },
     }),
+    tsconfigPaths(),
     wasm(),
     topLevelAwait(),
   ],

@@ -1,7 +1,5 @@
+import { type RecordedAction, Recorder } from "@mydenicek/core";
 import { useCallback, useState } from "react";
-
-import type { RecordedAction } from "../Recorder";
-import { Recorder } from "../Recorder";
 
 export function useRecorder() {
   const [recorder, setRecorder] = useState<Recorder | null>(null);

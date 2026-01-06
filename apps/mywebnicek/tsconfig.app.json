@@ -37,6 +37,9 @@
     "paths": {
       "@mydenicek/core": [
         "../../packages/mydenicek-core/src/index.ts"
+      ],
+      "@mydenicek/react": [
+        "../../packages/mydenicek-react/src/index.ts"
       ]
     }
   },

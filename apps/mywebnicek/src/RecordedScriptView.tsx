@@ -1,6 +1,5 @@
 import { Card, CardHeader, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Text } from "@fluentui/react-components";
-
-import { type RecordedAction } from "./Recorder";
+import { type RecordedAction } from "@mydenicek/core";
 
 export const RecordedScriptView = ({ script }: { script: RecordedAction[] }) => {
     if (!script || script.length === 0) {
