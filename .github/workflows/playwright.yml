@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: dom-navigator
+        working-directory: mywebnicek
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-node@v4
@@ -25,5 +25,5 @@ jobs:
       if: ${{ !cancelled() }}
       with:
         name: playwright-report
-        path: dom-navigator/playwright-report/
+        path: mywebnicek/playwright-report/
         retention-days: 30

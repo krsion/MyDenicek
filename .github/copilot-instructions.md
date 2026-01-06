@@ -2,11 +2,11 @@
 
 ## Project Overview
 MyDenicek is a local-first software implementation for editing DOM-like structures using **Automerge** (CRDTs). The repository contains:
-- `dom-navigator/`: Main React application (Vite + TypeScript).
+- `mywebnicek/`: Main React application (Vite + TypeScript).
 - `grove-demo.py`: Python implementation of "Grove Calculus" for HTML representation.
 - `proposal/`: LaTeX research proposal.
 
-## `dom-navigator` (React App)
+## `mywebnicek` (React App)
 
 ### Architecture & Data Model
 - **State Management:** Uses `@automerge/react` (`useDocument`) for CRDT-based state.
