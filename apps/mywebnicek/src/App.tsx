@@ -1,13 +1,12 @@
 import { Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, DrawerBody, DrawerHeader, DrawerHeaderTitle, InlineDrawer, Switch, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
 import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CameraRegular, ChatRegular, CodeRegular, EditRegular, PlayRegular, RecordRegular, RenameFilled, RenameRegular, StopRegular } from "@fluentui/react-icons";
 import type { GeneralizedPatch, JsonDoc, Node } from "@mydenicek/core";
-import { useDenicekDocument } from "@mydenicek/react";
+import { useDenicekDocument, useSelection } from "@mydenicek/react";
 import { useMemo, useRef, useState } from "react";
 
 import { AddNodePopoverButton } from "./AddNodePopoverButton";
 import { DomNavigator, type DomNavigatorHandle } from "./DomNavigator";
 import { ElementDetails } from "./ElementDetails.tsx";
-import { useSelection } from "./hooks/useSelection";
 import { JsonView } from "./JsonView.tsx";
 import { LlmChat } from "./LlmChat";
 import { RecordedScriptView } from "./RecordedScriptView";
