@@ -5,6 +5,8 @@ import {
     Repo,
     RepoContext,
     useDocument,
+    useLocalAwareness,
+    useRemoteAwareness,
     WebSocketClientAdapter
 } from "@automerge/react";
 import { DenicekModel, DenicekStore, UndoManager, type JsonDoc } from "@mydenicek/core";
@@ -19,8 +21,11 @@ interface DenicekContextValue {
 }
 
 interface DenicekInternalContextValue {
-    handle: DocHandle<JsonDoc> | null;
-    repo: Repo | null;
+    doc: any | null;
+    selectedNodeIds: string[];
+    setSelectedNodeIds: (ids: string[]) => void;
+    remoteSelections: { [userId: string]: string[] | null };
+    userId: string | null;
 }
 
 export const DenicekContext = createContext<DenicekContextValue | null>(null);
@@ -61,7 +66,7 @@ function DenicekInternalProvider({ children, repo }: { children: ReactNode, repo
     const undoManager = useMemo(() => new UndoManager<JsonDoc>(), []);
 
     // Force re-render when store version changes
-    const [storeVersion, setStoreVersion] = useState(0);
+    const [, setStoreVersion] = useState(0);
 
     // DenicekStore instance
     const store = useMemo(() => new DenicekStore(undoManager, {
@@ -100,6 +105,38 @@ function DenicekInternalProvider({ children, repo }: { children: ReactNode, repo
         repo.networkSubsystem.adapters[0]?.disconnect();
     };
 
+    const userId = repo?.peerId ?? null;
+
+    const [localState, updateLocalState] = useLocalAwareness({
+        handle: handle as any,
+        userId: userId as string,
+        initialState: { selectedNodeIds: [] as string[] },
+    });
+
+    const [peerStates] = useRemoteAwareness({
+        handle: handle as any,
+        localUserId: userId as string,
+        offlineTimeout: 1000,
+    });
+
+    const selectedNodeIds = localState.selectedNodeIds || [];
+    const setSelectedNodeIds = (ids: string[]) => {
+        updateLocalState({ selectedNodeIds: ids });
+    };
+
+    const remoteSelections = useMemo(() => {
+        const selections: { [peerId: string]: string[] | null } = {};
+        Object.entries(peerStates).forEach(([peerId, state]) => {
+            const selected = (state as any)?.selectedNodeIds;
+            if (selected && Array.isArray(selected)) {
+                selections[peerId] = selected;
+            } else {
+                selections[peerId] = null;
+            }
+        });
+        return selections;
+    }, [peerStates]);
+
     const contextValue: DenicekContextValue = {
         model,
         store,
@@ -108,8 +145,11 @@ function DenicekInternalProvider({ children, repo }: { children: ReactNode, repo
     };
 
     const internalContextValue: DenicekInternalContextValue = {
-        handle,
-        repo
+        doc: handle,
+        selectedNodeIds,
+        setSelectedNodeIds,
+        remoteSelections,
+        userId
     };
 
     if (!handle) {

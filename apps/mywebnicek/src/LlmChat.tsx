@@ -1,9 +1,10 @@
 import { Button, Input, Spinner, Textarea } from "@fluentui/react-components";
 import { SendRegular } from "@fluentui/react-icons";
-import { type DenicekModel } from "@mydenicek/react";
+import { type DenicekActions, type DenicekModel } from "@mydenicek/react";
 import { useState } from "react";
 
-import { type DenicekActions, useLlmController } from "./hooks/useLlmController";
+// Remove internal hook type import
+import { useLlmController } from "./hooks/useLlmController";
 
 interface LlmChatProps {
     model: DenicekModel;

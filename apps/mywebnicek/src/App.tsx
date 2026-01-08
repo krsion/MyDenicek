@@ -1,7 +1,14 @@
 import { Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, DrawerBody, DrawerHeader, DrawerHeaderTitle, InlineDrawer, Switch, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
 import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CameraRegular, ChatRegular, CodeRegular, EditRegular, PlayRegular, RecordRegular, RenameFilled, RenameRegular, StopRegular } from "@fluentui/react-icons";
-import type { DenicekAction, JsonDoc, Node } from "@mydenicek/react";
-import { useDenicekDocument, useSelection } from "@mydenicek/react";
+import type { DenicekAction } from "@mydenicek/react";
+import {
+  useConnectivity,
+  useDocumentActions,
+  useDocumentState,
+  useRecording,
+  useSelectedNode,
+  useSelection
+} from "@mydenicek/react";
 import { useMemo, useRef, useState } from "react";
 
 import { AddNodePopoverButton } from "./AddNodePopoverButton";
@@ -13,29 +20,31 @@ import { RecordedScriptView } from "./RecordedScriptView";
 import { RenderedDocument } from "./RenderedDocument.tsx";
 import { ToolbarPopoverButton } from "./ToolbarPopoverButton";
 
-
-
 export const App = () => {
-  const { model, undo, redo, canUndo, canRedo, updateAttribute, updateTag, wrapNodes, updateValue, addChildren, addSiblings, deleteNodes, replayScript, addTransformation, isRecording, startRecording, stopRecording, connect, disconnect } = useDenicekDocument();
-  const { selectedNodeIds, setSelectedNodeIds, remoteSelections, userId } = useSelection();
+  const { model } = useDocumentState();
+  const {
+    undo, redo, canUndo, canRedo,
+    updateAttribute, updateTag, wrapNodes,
+    updateValue, addChildren, addSiblings,
+    deleteNodes, addTransformation
+  } = useDocumentActions();
+  const { isRecording, startRecording, stopRecording, replay } = useRecording();
+  const { connect, disconnect } = useConnectivity();
+  const { setSelectedNodeIds, remoteSelections, userId } = useSelection();
+  const { selectedNodeId, selectedNodeIds, node, details } = useSelectedNode();
 
   const [recordedScript, setRecordedScript] = useState<DenicekAction[] | null>(null);
-
-  const [snapshot, setSnapshot] = useState<JsonDoc | null>(null);
+  const [snapshot, setSnapshot] = useState<any | null>(null);
   const [filterPatches, setFilterPatches] = useState(false);
   const [patchesViewMode, setPatchesViewMode] = useState<'table' | 'json'>('table');
-
 
   const [connected, setConnected] = useState(true);
   const [showAiPanel, setShowAiPanel] = useState(false);
   const navigatorRef = useRef<DomNavigatorHandle>(null);
 
-  const selectedNodeGuids = selectedNodeIds;
-  const selectedNodeGuid = selectedNodeGuids.length > 0 ? selectedNodeGuids[selectedNodeGuids.length - 1] : undefined;
-
   const handleStartRecording = () => {
-    if (selectedNodeGuid) {
-      startRecording(selectedNodeGuid);
+    if (selectedNodeId) {
+      startRecording(selectedNodeId);
       setRecordedScript(null);
     }
   };
@@ -45,9 +54,9 @@ export const App = () => {
     setRecordedScript(script);
   };
 
-  const replay = () => {
-    if (!recordedScript || !selectedNodeGuid) return;
-    replayScript(recordedScript, selectedNodeGuid);
+  const handleReplay = () => {
+    if (!recordedScript || !selectedNodeId) return;
+    replay(recordedScript, selectedNodeId);
   };
 
   const triggerNavigation = (action: 'parent' | 'child' | 'prev' | 'next' | 'clear') => {
@@ -71,42 +80,21 @@ export const App = () => {
     }
   };
 
-  // console.log(helloWorld());
-
-  const details = useMemo(() => {
-    if (!model) return null;
-    const selectedEl = selectedNodeGuid ? document.querySelector(`[data-node-guid="${selectedNodeGuid}"]`) as HTMLElement | null : null;
-    if (!selectedEl) return null;
-    const tag = selectedEl.tagName.toLowerCase();
-    const id = selectedEl.id || null;
-    const classes = Array.from(selectedEl.classList);
-    const rect = selectedEl.getBoundingClientRect();
-    const width = Math.round(rect.width);
-    const height = Math.round(rect.height);
-    const dataTestId = selectedEl.getAttribute("data-testid");
-    const guid = selectedEl.getAttribute("data-node-guid") || null;
-    // pull the node.value from the document model if available
-    const modelNode = guid ? model.getNode(guid) : undefined;
-    const value = modelNode?.kind === "value" ? (modelNode.value as string | undefined) : undefined;
-
-    return { tag, id, guid, classes, width, height, dataTestId, value };
-  }, [selectedNodeGuid, model]);
-
-  // Edits to selectedNode will not be synced by Automerge. instead, use changeDoc(prev => ...) to update the document model
-  const selectedNode: Node | undefined = (selectedNodeGuid && model) ? model.getNode(selectedNodeGuid) : undefined;
-  const selectedNodeFirstChildTag: string | undefined = (selectedNode && selectedNode.kind === "element" && model) ? model.getFirstChildTag(selectedNode) : undefined;
-  const selectedNodeAttributes = (selectedNode && selectedNode.kind === "element") ? selectedNode.attrs : undefined;
-
   const handleAttributeChange = (key: string, value: unknown | undefined) => {
-    if (selectedNodeGuids.length === 0) return;
-    updateAttribute(selectedNodeGuids, key, value);
+    if (selectedNodeIds.length === 0) return;
+    updateAttribute(selectedNodeIds, key, value);
   };
 
-  const actions = useMemo(() => ({
-    updateAttribute, updateTag, wrapNodes, updateValue, addChildren, addSiblings, deleteNodes
-  }), [updateAttribute, updateTag, wrapNodes, updateValue, addChildren, addSiblings, deleteNodes]);
+  const docActions = useMemo(() => ({
+    undo, redo, canUndo, canRedo,
+    updateAttribute, updateTag, wrapNodes, updateValue, addChildren, addSiblings, deleteNodes, addTransformation
+  }), [undo, redo, canUndo, canRedo, updateAttribute, updateTag, wrapNodes, updateValue, addChildren, addSiblings, deleteNodes, addTransformation]);
 
   if (!model) return <div>Loading...</div>;
+
+  const selectedNodeFirstChildTag = (node && node.kind === "element") ? model.getFirstChildTag(node) : undefined;
+  const selectedNodeAttributes = (node && node.kind === "element") ? node.attrs : undefined;
+
 
   return (
     <div style={{ display: "flex" }}>
@@ -119,7 +107,7 @@ export const App = () => {
                   icon={<ArrowUndoRegular />}
                   onClick={() => {
                     undo();
-                    if (selectedNodeGuid) clickOnSelectedNode(selectedNodeGuid);
+                    if (selectedNodeId) clickOnSelectedNode(selectedNodeId);
                   }}
                   disabled={!canUndo}
                 />
@@ -129,43 +117,41 @@ export const App = () => {
                   icon={<ArrowRedoRegular />}
                   onClick={() => {
                     redo();
-                    if (selectedNodeGuid) clickOnSelectedNode(selectedNodeGuid);
+                    if (selectedNodeId) clickOnSelectedNode(selectedNodeId);
                   }}
                   disabled={!canRedo}
                 />
               </Tooltip>
               <ToolbarDivider />
               <AddNodePopoverButton
-                disabled={selectedNode?.kind !== "element"}
+                disabled={node?.kind !== "element"}
                 initialValue={selectedNodeFirstChildTag || ""}
                 onAddChild={(content, isValue) => {
-                  if (selectedNodeGuids.length === 0) return;
-                  const newIds = addChildren(selectedNodeGuids, isValue ? "value" : "element", content);
-
+                  if (selectedNodeIds.length === 0) return;
+                  const newIds = addChildren(selectedNodeIds, isValue ? "value" : "element", content);
+                  if (newIds.length > 0) setSelectedNodeIds(newIds);
+                }}
+                onAddBefore={(content, _isValue) => {
+                  if (selectedNodeIds.length === 0) return;
+                  const newIds = addSiblings(selectedNodeIds, "before");
+                  // If content was provided, update it immediately
                   if (newIds.length > 0) {
+                    updateValue(newIds, content, "");
                     setSelectedNodeIds(newIds);
                   }
                 }}
-                onAddBefore={() => {
-                  if (selectedNodeGuids.length === 0) return;
-                  const newIds = addSiblings(selectedNodeGuids, "before");
-
+                onAddAfter={(content, _isValue) => {
+                  if (selectedNodeIds.length === 0) return;
+                  const newIds = addSiblings(selectedNodeIds, "after");
+                  // If content was provided, update it immediately
                   if (newIds.length > 0) {
-                    setSelectedNodeIds(newIds);
-                  }
-
-                }}
-                onAddAfter={() => {
-                  if (selectedNodeGuids.length === 0) return;
-                  const newIds = addSiblings(selectedNodeGuids, "after");
-
-                  if (newIds.length > 0) {
+                    updateValue(newIds, content, "");
                     setSelectedNodeIds(newIds);
                   }
                 }}
               />
 
-              {selectedNode?.kind === "value" && (
+              {node?.kind === "value" ? (
                 <ToolbarPopoverButton
                   text="Edit"
                   icon={<EditRegular />}
@@ -175,31 +161,31 @@ export const App = () => {
                   initialValue={details?.value || ""}
                   onSubmit={(value) => {
                     const originalValue = details?.value || "";
-                    updateValue(selectedNodeGuids, value, originalValue);
+                    updateValue(selectedNodeIds, value, originalValue);
                   }}
                 />
-              ) ||
+              ) : (
                 <ToolbarPopoverButton
                   text="Rename"
                   icon={<RenameRegular />}
-                  disabled={!selectedNodeGuid || selectedNode?.kind !== "element"}
+                  disabled={!selectedNodeId || node?.kind !== "element"}
                   ariaLabel="Rename"
                   placeholder="Tag name (e.g. div)"
-                  initialValue={details?.tag || ""}
+                  initialValue={details?.tag || details?.dom?.tagName || ""}
                   onSubmit={(tag) => {
-                    updateTag(selectedNodeGuids, tag);
-                    if (selectedNodeGuid) clickOnSelectedNode(selectedNodeGuid);
+                    updateTag(selectedNodeIds, tag);
+                    if (selectedNodeId) clickOnSelectedNode(selectedNodeId);
                   }}
                 />
-              }
+              )}
               <ToolbarPopoverButton
                 text="Wrap"
                 icon={<BackpackRegular />}
-                disabled={!selectedNodeGuid}
+                disabled={!selectedNodeId}
                 ariaLabel="Wrap"
                 onSubmit={(tag) => {
-                  wrapNodes(selectedNodeGuids, tag);
-                  if (selectedNodeGuid) clickOnSelectedNode(selectedNodeGuid);
+                  wrapNodes(selectedNodeIds, tag);
+                  if (selectedNodeId) clickOnSelectedNode(selectedNodeId);
                 }}
               />
               <ToolbarDivider />
@@ -207,21 +193,21 @@ export const App = () => {
               <ToolbarPopoverButton
                 text="Rename all children"
                 icon={<RenameFilled />}
-                disabled={!selectedNodeGuid || !selectedNodeFirstChildTag}
+                disabled={!selectedNodeId || !selectedNodeFirstChildTag}
                 initialValue={selectedNodeFirstChildTag || ""}
                 ariaLabel="Rename all children"
                 onSubmit={(tag) => {
-                  addTransformation(selectedNodeGuids, "rename", tag);
+                  addTransformation(selectedNodeIds, "rename", tag);
                 }}
               />
 
               <ToolbarPopoverButton
                 text="Wrap all children"
                 icon={<BackpackFilled />}
-                disabled={!selectedNodeGuid || !selectedNodeFirstChildTag}
+                disabled={!selectedNodeId || !selectedNodeFirstChildTag}
                 ariaLabel="Wrap all children"
                 onSubmit={(tag) => {
-                  addTransformation(selectedNodeGuids, "wrap", tag);
+                  addTransformation(selectedNodeIds, "wrap", tag);
                 }}
               />
             </ToolbarGroup>
@@ -256,13 +242,11 @@ export const App = () => {
               <ToolbarButton icon={<CameraRegular />} onClick={() => setSnapshot(model.getSnapshot())}>Snapshot</ToolbarButton>
               <ToolbarDivider />
               {!isRecording ? (
-                <ToolbarButton icon={<RecordRegular />} onClick={handleStartRecording} disabled={!selectedNodeGuid}>Record</ToolbarButton>
+                <ToolbarButton icon={<RecordRegular />} onClick={handleStartRecording} disabled={!selectedNodeId}>Record</ToolbarButton>
               ) : (
                 <ToolbarButton icon={<StopRegular />} onClick={handleStopRecording}>Stop Recording</ToolbarButton>
               )}
-              <ToolbarButton icon={<PlayRegular />} onClick={() => {
-                replay();
-              }} disabled={!recordedScript || !selectedNodeGuid}>Replay</ToolbarButton>
+              <ToolbarButton icon={<PlayRegular />} onClick={handleReplay} disabled={!recordedScript || !selectedNodeId}>Replay</ToolbarButton>
               <ToolbarDivider />
               <ToolbarButton icon={<ChatRegular />} onClick={() => setShowAiPanel(!showAiPanel)}>AI Assistant</ToolbarButton>
             </ToolbarGroup>
@@ -277,7 +261,7 @@ export const App = () => {
           </TagGroup>}
           />
 
-          <DomNavigator ref={navigatorRef} onSelectedChange={(ids) => { setSelectedNodeIds(ids) }} selectedNodeIds={selectedNodeGuids} remoteSelections={remoteSelections} generalizer={(ids) => model.generalizeSelection(ids)}>
+          <DomNavigator ref={navigatorRef} onSelectedChange={(ids) => { setSelectedNodeIds(ids) }} selectedNodeIds={selectedNodeIds} remoteSelections={remoteSelections} generalizer={(ids) => model.generalizeSelection(ids)}>
             <RenderedDocument model={model} />
           </DomNavigator>
 
@@ -286,6 +270,7 @@ export const App = () => {
             attributes={selectedNodeAttributes}
             onAttributeChange={handleAttributeChange}
           />
+
           {model.transformations && model.transformations.length > 0 && (
             <Card>
               <CardHeader header={<Text>Transformations</Text>} />
@@ -310,23 +295,19 @@ export const App = () => {
                 </TableBody>
               </Table>
             </Card>
-
           )}
 
           {snapshot && (
             <Card>
               <CardHeader header={<Text>Patches from Snapshot</Text>} action={<div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-
                 <Switch label="Filter by selection" checked={filterPatches} onChange={(_, data) => setFilterPatches(data.checked)} />
                 <ToolbarButton icon={<CodeRegular />} onClick={() => setPatchesViewMode(patchesViewMode === 'table' ? 'json' : 'table')}>
                   {patchesViewMode === 'table' ? 'JSON' : 'Table'}
                 </ToolbarButton>
                 <ToolbarButton icon={<CameraRegular />} onClick={() => setSnapshot(null)}>Clear</ToolbarButton>
               </div>} />
-
             </Card>
           )}
-
         </Card>
       </div>
       <InlineDrawer open={(recordedScript !== null && recordedScript.length > 0) || isRecording} separator position="end">
@@ -342,7 +323,7 @@ export const App = () => {
           <DrawerHeaderTitle>AI Assistant</DrawerHeaderTitle>
         </DrawerHeader>
         <DrawerBody>
-          <LlmChat model={model} actions={actions} />
+          <LlmChat model={model} actions={docActions as any} />
         </DrawerBody>
       </InlineDrawer>
     </div>

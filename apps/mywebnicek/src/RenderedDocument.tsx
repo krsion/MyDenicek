@@ -1,5 +1,6 @@
 import { makeStyles, mergeClasses } from "@fluentui/react-components";
 import { type DenicekModel } from "@mydenicek/core";
+import { DENICEK_NODE_ID_ATTR } from "@mydenicek/react";
 import React from "react";
 
 const useStyles = makeStyles({
@@ -50,10 +51,10 @@ export function RenderedDocument({ model }: { model: DenicekModel; }) {
     if (!node) return undefined;
 
     if (node.kind === "value") {
-      return React.createElement('x-value', { 'data-node-guid': id }, node.value);
+      return React.createElement('x-value', { [DENICEK_NODE_ID_ATTR]: id }, node.value);
     }
 
-    const attrs = { ...(node.attrs || {}), "data-node-guid": id } as Record<string, unknown>;
+    const attrs = { ...(node.attrs || {}), [DENICEK_NODE_ID_ATTR]: id } as Record<string, unknown>;
 
     const classNames = [];
     if (node.tag === "article") classNames.push(styles.article);

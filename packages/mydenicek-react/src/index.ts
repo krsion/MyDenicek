@@ -1,6 +1,10 @@
 export { DenicekModel, DenicekStore } from '@mydenicek/core';
 export type { DenicekAction, ElementNode, GeneralizedPatch, Heads, JsonDoc, Node, ValueNode } from '@mydenicek/core';
+export { DENICEK_NODE_ID_ATTR } from './constants';
 export { DenicekProvider } from './DenicekProvider';
-export { useDenicekDocument } from './useDenicekDocument';
+export {
+    useConnectivity, useDenicekDocument, useDocumentActions, useDocumentState, useRecording, type DenicekActions
+} from './useDenicekDocument';
+export { useSelectedNode, type SelectedNodeDetails } from './useSelectedNode';
 export { useSelection } from './useSelection';
 

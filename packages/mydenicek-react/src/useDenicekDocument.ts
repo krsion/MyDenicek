@@ -1,20 +1,33 @@
 import type { DenicekAction } from "@mydenicek/core";
-import {
-  replayScript
-} from "@mydenicek/core";
 import { useCallback, useContext } from "react";
 import { DenicekContext, DenicekInternalContext } from "./DenicekProvider";
 
-export function useDenicekDocument() {
+export function useDocumentState() {
   const context = useContext(DenicekContext);
-  const internalContext = useContext(DenicekInternalContext);
-
-  if (!context || !internalContext) {
-    throw new Error("useDenicekDocument must be used within a DenicekProvider");
+  if (!context) {
+    throw new Error("useDocumentState must be used within a DenicekProvider");
   }
+  return {
+    model: context.model,
+    store: context.store,
+  };
+}
 
-  const { model, store, connect, disconnect } = context;
-  const { handle } = internalContext;
+export function useConnectivity() {
+  const context = useContext(DenicekContext);
+  if (!context) {
+    throw new Error("useConnectivity must be used within a DenicekProvider");
+  }
+  return {
+    connect: context.connect,
+    disconnect: context.disconnect,
+  };
+}
+
+export function useRecording() {
+  const { store } = useDocumentState();
+  const internalContext = useContext(DenicekInternalContext);
+  const doc = internalContext?.doc;
 
   const startRecording = useCallback((startNodeId: string) => {
     store.startRecording(startNodeId);
@@ -24,50 +37,66 @@ export function useDenicekDocument() {
     return store.stopRecording();
   }, [store]);
 
+  const replay = useCallback((script: DenicekAction[], startNodeId: string) => {
+    store.replay(doc, script, startNodeId);
+  }, [store, doc]);
+
+  return {
+    isRecording: store.isRecording,
+    startRecording,
+    stopRecording,
+    replay,
+  };
+}
+
+export function useDocumentActions() {
+  const { store } = useDocumentState();
+  const internalContext = useContext(DenicekInternalContext);
+  const doc = internalContext?.doc;
+
   const undo = useCallback(() => {
-    store.undo(handle);
-  }, [handle, store]);
+    store.undo(doc);
+  }, [doc, store]);
 
   const redo = useCallback(() => {
-    store.redo(handle);
-  }, [handle, store]);
+    store.redo(doc);
+  }, [doc, store]);
 
-  // Helper actions
-  const updateAttributeAction = useCallback((nodeIds: string[], key: string, value: unknown | undefined) => {
-    store.modify(handle, (model) => {
+  const updateAttribute = useCallback((nodeIds: string[], key: string, value: unknown | undefined) => {
+    store.modify(doc, (model) => {
       for (const id of nodeIds) {
         model.updateAttribute(id, key, value);
       }
     });
-  }, [handle, store]);
+  }, [doc, store]);
 
-  const updateTagAction = useCallback((nodeIds: string[], newTag: string) => {
-    store.modify(handle, (model) => {
+  const updateTag = useCallback((nodeIds: string[], newTag: string) => {
+    store.modify(doc, (model) => {
       for (const id of nodeIds) {
         model.updateTag(id, newTag);
       }
     });
-  }, [handle, store]);
+  }, [doc, store]);
 
-  const wrapNodesAction = useCallback((nodeIds: string[], wrapperTag: string) => {
-    store.modifyTransaction(handle, (model) => {
+  const wrapNodes = useCallback((nodeIds: string[], wrapperTag: string) => {
+    store.modifyTransaction(doc, (model) => {
       for (const id of nodeIds) {
         model.wrapNode(id, wrapperTag);
       }
     });
-  }, [handle, store]);
+  }, [doc, store]);
 
-  const updateValueAction = useCallback((nodeIds: string[], newValue: string, originalValue: string) => {
-    store.modify(handle, (model) => {
+  const updateValue = useCallback((nodeIds: string[], newValue: string, originalValue: string) => {
+    store.modify(doc, (model) => {
       for (const id of nodeIds) {
         model.updateValue(id, newValue, originalValue);
       }
     });
-  }, [handle, store]);
+  }, [doc, store]);
 
   const addChildren = useCallback((parentIds: string[], type: "element" | "value", content: string) => {
     const newIds: string[] = [];    
-    store.modifyTransaction(handle, (model) => {
+    store.modifyTransaction(doc, (model) => {
       parentIds.forEach((id) => {
         const node = model.getNode(id);
         if (node?.kind === "element") {
@@ -82,11 +111,11 @@ export function useDenicekDocument() {
       });
     });
     return newIds;
-  }, [handle, store]);
+  }, [doc, store]);
 
   const addSiblings = useCallback((referenceIds: string[], position: "before" | "after") => {
     const newIds: string[] = [];
-    store.modifyTransaction(handle, (model) => {
+    store.modifyTransaction(doc, (model) => {
       for (const id of referenceIds) {
         const newId = position === "before" 
           ? model.addSiblingNodeBefore(id)
@@ -95,51 +124,53 @@ export function useDenicekDocument() {
       }
     });
     return newIds;
-  }, [handle, store]);
+  }, [doc, store]);
 
-  const deleteNodesAction = useCallback((nodeIds: string[]) => {
-    store.modifyTransaction(handle, (model) => {
+  const deleteNodes = useCallback((nodeIds: string[]) => {
+    store.modifyTransaction(doc, (model) => {
       for (const id of nodeIds) {
         model.deleteNode(id);
       }
     });
-  }, [handle, store]);
+  }, [doc, store]);
 
-  const replayScriptAction = useCallback((script: DenicekAction[], selectedNodeId: string) => {
-    if (!handle) return;
-    handle.change((d) => {
-        replayScript(d, script as any, selectedNodeId);
-    });
-  }, [handle]);
-
-  const addTransformationAction = useCallback((ids: string[], type: "rename" | "wrap", tag: string) => {
-    store.modifyTransaction(handle, (model) => {
+  const addTransformation = useCallback((ids: string[], type: "rename" | "wrap", tag: string) => {
+    store.modifyTransaction(doc, (model) => {
       for (const id of ids) {
         model.addTransformation(id, type, tag);
       }
     });
-  }, [handle, store]);
-
+  }, [doc, store]);
 
   return {
-    model,
     undo,
     redo,
     canUndo: store.undoManager.canUndo,
     canRedo: store.undoManager.canRedo,
-    updateAttribute: updateAttributeAction,
-    updateTag: updateTagAction,
-    wrapNodes: wrapNodesAction,
-    updateValue: updateValueAction,
+    updateAttribute,
+    updateTag,
+    wrapNodes,
+    updateValue,
     addChildren,
     addSiblings,
-    deleteNodes: deleteNodesAction,
-    replayScript: replayScriptAction,
-    addTransformation: addTransformationAction,
-    startRecording,
-    stopRecording,
-    isRecording: store.isRecording,
-    connect,
-    disconnect
+    deleteNodes,
+    addTransformation,
+  };
+}
+
+export type DenicekActions = ReturnType<typeof useDocumentActions>;
+
+export function useDenicekDocument() {
+  const { model } = useDocumentState();
+  const connectivity = useConnectivity();
+  const recording = useRecording();
+  const actions = useDocumentActions();
+
+  return {
+    model,
+    ...connectivity,
+    ...recording,
+    ...actions,
+    replayScript: recording.replay, // for backward compatibility
   };
 }

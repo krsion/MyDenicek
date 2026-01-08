@@ -1,14 +1,15 @@
 import { DenicekModel } from "./DenicekModel";
 import { Recorder } from "./Recorder";
+import { replayScript } from "./replay";
+import type { GeneralizedPatch, JsonDoc } from "./types";
 import { UndoManager } from "./UndoManager";
-import { JsonDoc } from "./types";
 
 /**
- * Interface for a document handle that supports changes with patch callbacks.
- * This abstracts away DocHandle from @automerge/automerge-repo.
+ * Interface for a document that supports changes with patch callbacks.
+ * This abstracts away details of the underlying storage (like Automerge).
  */
-export interface AnyDocHandle {
-    change: (fn: (d: any) => void, options?: { patchCallback?: (patches: any[], info: any) => void }) => void;
+export interface AnyDenicekDoc {
+    change: (fn: (d: JsonDoc) => void, options?: { patchCallback?: (patches: any[], info: any) => void }) => void;
 }
 
 export interface StoreOptions {
@@ -22,11 +23,16 @@ export interface StoreOptions {
 export class DenicekStore {
     private recorder: Recorder | null = null;
     private undoRedoVersion = 0;
+    public readonly undoManager: UndoManager<JsonDoc>;
+    private options: StoreOptions;
 
     constructor(
-        public readonly undoManager: UndoManager<JsonDoc>,
-        private options: StoreOptions = {}
-    ) {}
+        undoManager: UndoManager<JsonDoc>,
+        options: StoreOptions = {}
+    ) {
+        this.undoManager = undoManager;
+        this.options = options;
+    }
 
     private notifyChange() {
         this.undoRedoVersion++;
@@ -50,9 +56,9 @@ export class DenicekStore {
     /**
      * Executes a single change on the document.
      */
-    modify(handle: AnyDocHandle | null | undefined, updater: (model: DenicekModel) => void) {
-        if (!handle) return;
-        handle.change((d: JsonDoc) => {
+    modify(doc: AnyDenicekDoc | null | undefined, updater: (model: DenicekModel) => void) {
+        if (!doc) return;
+        doc.change((d: JsonDoc) => {
             const changeModel = new DenicekModel(d);
             updater(changeModel);
         }, {
@@ -71,10 +77,10 @@ export class DenicekStore {
     /**
      * Executes multiple changes grouped into a single undo step.
      */
-    modifyTransaction(handle: AnyDocHandle | null | undefined, updater: (model: DenicekModel) => void) {
-        if (!handle) return;
+    modifyTransaction(doc: AnyDenicekDoc | null | undefined, updater: (model: DenicekModel) => void) {
+        if (!doc) return;
         this.undoManager.startTransaction();
-        handle.change((d: JsonDoc) => {
+        doc.change((d: JsonDoc) => {
             const changeModel = new DenicekModel(d);
             updater(changeModel);
         }, {
@@ -89,12 +95,12 @@ export class DenicekStore {
         this.notifyChange();
     }
 
-    undo(handle: AnyDocHandle | null | undefined) {
-        if (!handle) return;
+    undo(doc: AnyDenicekDoc | null | undefined) {
+        if (!doc) return;
         const entry = this.undoManager.popUndo();
         if (!entry) return;
 
-        handle.change((d: JsonDoc) => {
+        doc.change((d: JsonDoc) => {
             this.undoManager.applyPatches(d, entry.inversePatches);
         }, {
             patchCallback: (patches: any, info: any) => {
@@ -104,17 +110,25 @@ export class DenicekStore {
         this.notifyChange();
     }
 
-    redo(handle: AnyDocHandle | null | undefined) {
-        if (!handle) return;
+    redo(doc: AnyDenicekDoc | null | undefined) {
+        if (!doc) return;
         const entry = this.undoManager.popRedo();
         if (!entry) return;
 
-        handle.change((d: JsonDoc) => {
+        doc.change((d: JsonDoc) => {
             this.undoManager.applyPatches(d, entry.inversePatches);
         }, {
             patchCallback: (patches: any, info: any) => {
                 this.undoManager.pushUndo(info.before as JsonDoc, patches);
             }
+        });
+        this.notifyChange();
+    }
+
+    replay(doc: AnyDenicekDoc | null | undefined, script: GeneralizedPatch[], startNodeId: string) {
+        if (!doc) return;
+        doc.change((d: JsonDoc) => {
+            replayScript(d, script, startNodeId);
         });
         this.notifyChange();
     }

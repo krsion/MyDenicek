@@ -1,5 +1,6 @@
 import { Button, Card, Input, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Text } from "@fluentui/react-components";
 import { AddRegular, DeleteRegular } from "@fluentui/react-icons";
+import type { SelectedNodeDetails } from "@mydenicek/react";
 import { useEffect, useState } from "react";
 
 function AttributeRow({ attrKey, value, onSave, onDelete }: { attrKey: string, value: unknown, onSave: (key: string, value: unknown) => void, onDelete: (key: string) => void }) {
@@ -47,7 +48,7 @@ function AttributeRow({ attrKey, value, onSave, onDelete }: { attrKey: string, v
 }
 
 export function ElementDetails({ details, attributes, onAttributeChange }: {
-  details: { tag: string; id: string | null; guid?: string | null; classes: string[]; width: number; height: number; dataTestId: string | null; value?: string | undefined; } | null,
+  details: SelectedNodeDetails | null | undefined,
   attributes?: Record<string, unknown> | undefined,
   onAttributeChange?: ((key: string, value: unknown | undefined) => void) | undefined
 }) {
@@ -56,36 +57,39 @@ export function ElementDetails({ details, attributes, onAttributeChange }: {
 
   if (!details) return null;
 
+  const displayTag = details.tag || details.dom?.tagName || "";
+  const displayValue = details.value;
+  const classes = details.dom?.classes || [];
+  const width = details.dom?.width || 0;
+  const height = details.dom?.height || 0;
+  const dataTestId = details.attrs?.["data-testid"] || null;
+
   return <Card>
     <Table size="extra-small">
       <TableBody>
         <TableRow>
           <TableCell>Tag</TableCell>
-          <TableCell>{details.tag}</TableCell>
+          <TableCell>{displayTag}</TableCell>
         </TableRow>
         <TableRow>
           <TableCell>GUID</TableCell>
-          <TableCell>{details.guid ?? <span style={{ color: "#999" }}>(none)</span>}</TableCell>
-        </TableRow>
-        <TableRow>
-          <TableCell>Id</TableCell>
           <TableCell>{details.id ?? <span style={{ color: "#999" }}>(none)</span>}</TableCell>
         </TableRow>
         <TableRow>
           <TableCell>Classes</TableCell>
-          <TableCell>{details.classes.length ? details.classes.join(" ") : <span style={{ color: "#999" }}>(none)</span>}</TableCell>
+          <TableCell>{classes.length ? classes.join(" ") : <span style={{ color: "#999" }}>(none)</span>}</TableCell>
         </TableRow>
         <TableRow>
           <TableCell>Size</TableCell>
-          <TableCell>{details.width} × {details.height}px</TableCell>
+          <TableCell>{width} × {height}px</TableCell>
         </TableRow>
         <TableRow>
           <TableCell>data-testid</TableCell>
-          <TableCell>{details.dataTestId ?? <span style={{ color: "#999" }}>(none)</span>}</TableCell>
+          <TableCell>{dataTestId ?? <span style={{ color: "#999" }}>(none)</span>}</TableCell>
         </TableRow>
         <TableRow>
           <TableCell>Value</TableCell>
-          <TableCell>{details.value ?? <span style={{ color: "#999" }}>(empty)</span>}</TableCell>
+          <TableCell>{displayValue ?? <span style={{ color: "#999" }}>(empty)</span>}</TableCell>
         </TableRow>
       </TableBody>
     </Table>

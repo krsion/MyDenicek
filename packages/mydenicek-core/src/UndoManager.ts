@@ -1,5 +1,5 @@
 import { next as Automerge, type Doc } from "@automerge/automerge";
-import { GeneralizedPatch, Heads } from "./types";
+import type { GeneralizedPatch, Heads } from "./types";
 
 /**
  * An entry in the undo/redo stack containing the inverse patches
@@ -44,7 +44,7 @@ function setValueAtPath(doc: unknown, path: (string | number)[], value: unknown)
 /**
  * Deletes a value at a given path in a mutable document.
  */
-function deleteAtPath(doc: unknown, path: (string | number)[]): void {
+function deleteAtPath(doc: unknown, path: (string | number)[], length?: number): void {
   if (path.length === 0) return;
   
   let current: unknown = doc;
@@ -56,7 +56,7 @@ function deleteAtPath(doc: unknown, path: (string | number)[]): void {
   
   const lastKey = path[path.length - 1]!;
   if (Array.isArray(current) && typeof lastKey === 'number') {
-    current.splice(lastKey, 1);
+    current.splice(lastKey, length || 1);
   } else {
     delete (current as Record<string | number, unknown>)[lastKey];
   }
@@ -120,7 +120,7 @@ function invertSinglePatch(beforeDoc: unknown, patch: GeneralizedPatch): General
       const index = patch.path[patch.path.length - 1];
       if (typeof index === 'number') {
         // Create a del patch for each inserted value
-        return { action: 'del', path: patch.path, length: patch.values?.length };
+        return { action: 'del', path: patch.path, length: patch.values?.length || 0 };
       }
       return null;
     }
@@ -190,7 +190,7 @@ function applyPatchToCopy(doc: unknown, patch: GeneralizedPatch): void {
         const newStr = parentValue.slice(0, index) + parentValue.slice(index + length);
         setValueAtPath(doc, parentPath, newStr);
       } else {
-        deleteAtPath(doc, patch.path);
+        deleteAtPath(doc, patch.path, patch.length);
       }
       break;
     }
@@ -237,7 +237,7 @@ export function applyPatches<T>(doc: T, patches: GeneralizedPatch[]): void {
             ? patch.length : 1;
           Automerge.splice(doc as any, parentPath, index, length, '');
         } else {
-          deleteAtPath(doc, patch.path);
+          deleteAtPath(doc, patch.path, patch.length);
         }
         break;
       }
