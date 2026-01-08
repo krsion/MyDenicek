@@ -1,0 +1,31 @@
+{
+    "name": "denicek-mcp-server",
+    "version": "0.0.1",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "start": "node dist/index.js",
+        "start:http": "node dist/gpt-server.js",
+        "build": "tsc",
+        "dev": "tsc --watch"
+    },
+    "dependencies": {
+        "@automerge/automerge": "^3.2.1",
+        "@automerge/automerge-repo": "^1.2.0",
+        "@automerge/automerge-repo-network-websocket": "^1.2.0",
+        "@automerge/automerge-repo-storage-nodefs": "^1.2.0",
+        "@modelcontextprotocol/sdk": "^1.0.1",
+        "@mydenicek/core": "*",
+        "@mydenicek/mcp": "*",
+        "@types/cors": "^2.8.19",
+        "@types/express": "^5.0.6",
+        "cors": "^2.8.5",
+        "express": "^5.2.1",
+        "isomorphic-ws": "^5.0.0",
+        "zod": "^3.23.8"
+    },
+    "devDependencies": {
+        "@types/node": "^22.0.0",
+        "typescript": "^5.5.0"
+    }
+}

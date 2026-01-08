@@ -1,6 +1,39 @@
-import { type Patch } from "@automerge/automerge";
+import { next as Automerge, type Patch } from "@automerge/automerge";
 
 import type { ElementNode, JsonDoc, Node, Transformation, ValueNode } from "./types";
+
+export function calculateSplice(oldVal: string, newVal: string) {
+  let start = 0;
+  while (start < oldVal.length && start < newVal.length && oldVal[start] === newVal[start]) {
+    start++;
+  }
+
+  let oldEnd = oldVal.length;
+  let newEnd = newVal.length;
+
+  while (oldEnd > start && newEnd > start && oldVal[oldEnd - 1] === newVal[newEnd - 1]) {
+    oldEnd--;
+    newEnd--;
+  }
+
+  const deleteCount = oldEnd - start;
+  const insertText = newVal.slice(start, newEnd);
+
+  return { index: start, deleteCount, insertText };
+}
+
+export function updateValue(doc: JsonDoc, id: string, newValue: string, originalValue: string) {
+    const { index, deleteCount, insertText } = calculateSplice(originalValue, newValue);
+    const node = doc.nodes[id];
+    if (node?.kind === "value") {
+        if (index === 0 && deleteCount === originalValue.length && insertText === newValue) {
+            node.value = newValue;
+        } else {
+            const safeIndex = Math.min(index, node.value.length);
+            Automerge.splice(doc, ['nodes', id, 'value'], safeIndex, deleteCount, insertText);
+        }
+    }
+}
 
 export function parents(nodes: Record<string, Node>, childId: string): ElementNode[] {
   const parents = [];
@@ -12,9 +45,34 @@ export function parents(nodes: Record<string, Node>, childId: string): ElementNo
   return parents;
 }
 
-/**
- * Loops through transformations to find the latest transformation version for a given parent.
- */
+export function updateAttribute(nodes: Record<string, Node>, id: string, key: string, value: unknown | undefined) {
+  const node = nodes[id];
+  if (node && node.kind === "element") {
+    if (value === undefined) {
+      delete node.attrs[key];
+    } else {
+      node.attrs[key] = value;
+    }
+  }
+}
+
+export function updateTag(nodes: Record<string, Node>, id: string, newTag: string) {
+  const node = nodes[id];
+  if (node && node.kind === "element") {
+    node.tag = newTag;
+  }
+}
+
+export function deleteNode(nodes: Record<string, Node>, id: string) {
+  const parentNodes = parents(nodes, id);
+  for (const parent of parentNodes) {
+      const idx = parent.children.indexOf(id);
+      if (idx !== -1) {
+          parent.children.splice(idx, 1);
+      }
+  }
+}
+
 function latestVersionForParent(doc: JsonDoc, parent: string | null) {
   const t = doc.transformations || [];
   let max = 0;

@@ -12,6 +12,7 @@ export default defineConfig({
     alias: {
       "@mydenicek/core": path.resolve(__dirname, "../../packages/mydenicek-core/src/index.ts"),
       "@mydenicek/react": path.resolve(__dirname, "../../packages/mydenicek-react/src/index.ts"),
+      "@mydenicek/mcp": path.resolve(__dirname, "../../packages/mydenicek-mcp/src/index.ts"),
     },
   },
   plugins: [

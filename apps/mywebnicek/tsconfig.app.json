@@ -40,6 +40,9 @@
       ],
       "@mydenicek/react": [
         "../../packages/mydenicek-react/src/index.ts"
+      ],
+      "@mydenicek/mcp": [
+        "../../packages/mydenicek-mcp/src/index.ts"
       ]
     }
   },
