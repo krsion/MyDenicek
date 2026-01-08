@@ -1,34 +1,23 @@
-import { DocHandle, useDocument } from "@automerge/react";
 import type { GeneralizedPatch, JsonDoc } from "@mydenicek/core";
 import {
   DenicekModel,
   Recorder,
-  replayScript,
-  UndoManager
+  replayScript
 } from "@mydenicek/core";
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useRef, useState } from "react";
 import { DenicekContext } from "./DenicekProvider";
 
-export function useDenicekDocument(handleOrUndefined?: DocHandle<JsonDoc>) {
+export function useDenicekDocument() {
   const context = useContext(DenicekContext);
-  const handle = handleOrUndefined || context?.handle;
 
-  if (!handle) {
-    throw new Error("useDenicekDocument requires a handle argument or must be used within a DenicekProvider");
+  if (!context) {
+    throw new Error("useDenicekDocument must be used within a DenicekProvider");
   }
-  const [doc] = useDocument<JsonDoc>(handle.url);
-  
-  // Create a read-only model wrapper around the current document state
-  const model = useMemo(() => doc ? new DenicekModel(doc) : undefined, [doc]);
-  
-  // UndoManager instance - stable across renders
-  const undoManager = useMemo(() => new UndoManager<JsonDoc>(), []);
-  
+
+  const { model, undoManager, connect, disconnect, _internal: { handle } } = context;
+
   // Force re-render when undo/redo state changes
   const [, setUndoRedoVersion] = useState(0);
-
-  const docRef = useRef<JsonDoc | undefined>(doc);
-  useEffect(() => { docRef.current = doc; }, [doc]);
 
   /**
    * Performs a tracked change that can be undone.
@@ -54,6 +43,7 @@ export function useDenicekDocument(handleOrUndefined?: DocHandle<JsonDoc>) {
    * Uses DocHandle.change with patchCallback to capture patches for undo.
    */
   const modifyDoc = useCallback((updater: (model: DenicekModel) => void) => {
+    if (!handle) return;
     handle.change((d) => {
       const changeModel = new DenicekModel(d);
       updater(changeModel);
@@ -76,6 +66,7 @@ export function useDenicekDocument(handleOrUndefined?: DocHandle<JsonDoc>) {
    * Performs a tracked transaction that groups multiple changes into one undo step.
    */
   const modifyDocTransaction = useCallback((updater: (model: DenicekModel) => void) => {
+    if (!handle) return;
     undoManager.startTransaction();
     handle.change((d) => {
       const changeModel = new DenicekModel(d);
@@ -94,6 +85,7 @@ export function useDenicekDocument(handleOrUndefined?: DocHandle<JsonDoc>) {
   }, [handle, undoManager]);
 
   const undo = useCallback(() => {
+    if (!handle) return;
     const entry = undoManager.popUndo();
     if (!entry) return;
 
@@ -109,6 +101,7 @@ export function useDenicekDocument(handleOrUndefined?: DocHandle<JsonDoc>) {
   }, [handle, undoManager]);
 
   const redo = useCallback(() => {
+    if (!handle) return;
     const entry = undoManager.popRedo();
     if (!entry) return;
 
@@ -199,14 +192,11 @@ export function useDenicekDocument(handleOrUndefined?: DocHandle<JsonDoc>) {
   }, [modifyDocTransaction]);
 
   const replayScriptAction = useCallback((script: GeneralizedPatch[], selectedNodeId: string) => {
-    // Replay script needs access to the raw doc because it's in core and expects JsonDoc?
-    // replayScript signature: (doc: JsonDoc, ...)
-    // But since we are inside handle.change, we have the mutable doc.
-    // We can pass `d` directly.
+    if (!handle) return;
     handle.change((d) => {
         replayScript(d, script, selectedNodeId);
     });
-  }, [handle]); // Note: replayScript is imported from core, so we stick to its signature which takes JsonDoc
+  }, [handle]);
 
   const addTransformationAction = useCallback((ids: string[], type: "rename" | "wrap", tag: string) => {
     modifyDocTransaction((model) => {
@@ -235,7 +225,7 @@ export function useDenicekDocument(handleOrUndefined?: DocHandle<JsonDoc>) {
     startRecording,
     stopRecording,
     isRecording,
-    connect: context?.connect || (() => {}),
-    disconnect: context?.disconnect || (() => {})
+    connect,
+    disconnect
   };
 }

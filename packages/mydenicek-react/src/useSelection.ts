@@ -1,24 +1,26 @@
 import {
-    DocHandle,
     type PeerId,
-    Repo,
-    RepoContext,
     useLocalAwareness,
-    useRemoteAwareness,
+    useRemoteAwareness
 } from "@automerge/react";
-import type { JsonDoc } from "@mydenicek/core";
 import { useContext, useMemo } from "react";
 import { DenicekContext } from "./DenicekProvider";
 
 const EMPTY_ARRAY: string[] = [];
 const INITIAL_STATE = { selectedNodeIds: [] as string[] };
 
-export function useSelection(handleOrUndefined?: DocHandle<JsonDoc>) {
+export function useSelection() {
   const context = useContext(DenicekContext);
-  const handle = handleOrUndefined || context?.handle;
-  if (!handle) throw new Error("useSelection: No handle provided");
+  
+  if (!context) {
+    throw new Error("useSelection: No context provided. Must be used within DenicekProvider.");
+  }
 
-  const repo = useContext(RepoContext) as Repo | undefined;
+  const { _internal: { handle, repo } } = context;
+
+  if (!handle) {
+      throw new Error("useSelection: No handle provided. Must be used within DenicekProvider.");
+  }
 
   const peerId: PeerId | null = repo?.peerId ?? null;
 

@@ -4,27 +4,26 @@ import {
     isValidAutomergeUrl,
     Repo,
     RepoContext,
+    useDocument,
     WebSocketClientAdapter
 } from "@automerge/react";
-import { DenicekModel, type JsonDoc } from "@mydenicek/core";
-import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from "react";
+import { DenicekModel, UndoManager, type JsonDoc } from "@mydenicek/core";
+import { createContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
-// Context to provide the current document handle
+// Context to provide the current document state and actions
 interface DenicekContextValue {
-    handle: DocHandle<JsonDoc> | null;
+    model: DenicekModel | undefined;
+    undoManager: UndoManager<JsonDoc>;
     connect: () => void;
     disconnect: () => void;
+    // Internal use for specialized hooks
+    _internal: {
+        handle: DocHandle<JsonDoc> | null;
+        repo: Repo | null;
+    };
 }
 
 export const DenicekContext = createContext<DenicekContextValue | null>(null);
-
-export const useDenicekContext = () => {
-    const context = useContext(DenicekContext);
-    if (!context) {
-        throw new Error("useDenicekContext must be used within a DenicekProvider");
-    }
-    return context;
-};
 
 interface DenicekProviderProps {
     children: ReactNode;
@@ -33,11 +32,6 @@ interface DenicekProviderProps {
      * Default: "wss://sync.automerge.org/"
      */
     syncUrl?: string;
-    /**
-     * Optional appId for differentiating storage if needed.
-     * Currently not strictly used by IndexedDB adapter in this implementation but good practice for future.
-     */
-    appId?: string;
 }
 
 export function DenicekProvider({
@@ -51,6 +45,19 @@ export function DenicekProvider({
             storage: new IndexedDBStorageAdapter(),
         });
     }, [syncUrl]);
+
+    return (
+        <RepoContext.Provider value={repo}>
+            <DenicekInternalProvider repo={repo}>
+                {children}
+            </DenicekInternalProvider>
+        </RepoContext.Provider>
+    );
+}
+
+function DenicekInternalProvider({ children, repo }: { children: ReactNode, repo: Repo }) {
+    // UndoManager instance - stable across renders
+    const undoManager = useMemo(() => new UndoManager<JsonDoc>(), []);
 
     const [handle, setHandle] = useState<DocHandle<JsonDoc> | null>(null);
 
@@ -71,9 +78,10 @@ export function DenicekProvider({
         initDocument();
     }, [repo]);
 
-    if (!handle) {
-        return null; // Or a loading spinner if preferred, but null blocks rendering children until ready
-    }
+    const [doc] = useDocument<JsonDoc>(handle?.url);
+
+    // Create a read-only model wrapper around the current document state
+    const model = useMemo(() => doc ? new DenicekModel(doc) : undefined, [doc]);
 
     const connect = () => {
         repo.networkSubsystem.adapters[0]?.connect(repo.peerId);
@@ -83,11 +91,24 @@ export function DenicekProvider({
         repo.networkSubsystem.adapters[0]?.disconnect();
     };
 
+    const contextValue: DenicekContextValue = {
+        model,
+        undoManager,
+        connect,
+        disconnect,
+        _internal: {
+            handle,
+            repo
+        }
+    };
+
+    if (!handle) {
+        return null; // Or a loading spinner if preferred
+    }
+
     return (
-        <RepoContext.Provider value={repo}>
-            <DenicekContext.Provider value={{ handle, connect, disconnect }}>
-                {children}
-            </DenicekContext.Provider>
-        </RepoContext.Provider>
+        <DenicekContext.Provider value={contextValue}>
+            {children}
+        </DenicekContext.Provider>
     );
 }
