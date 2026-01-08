@@ -28,9 +28,9 @@ export function replayScript(doc: JsonDoc, script: RecordedAction[], startNodeId
             if (parentNode?.kind === "element") {
                 let newId: string;
                 if (action.nodeType === "value") {
-                    newId = addValueChildNode(doc, parentNode, action.content).id;
+                    newId = addValueChildNode(doc, parentNode, action.content);
                 } else {
-                    newId = addElementChildNode(doc, parentNode, action.content).id;
+                    newId = addElementChildNode(doc, parentNode, action.content);
                 }
                 replayMap[action.newIdVar] = newId;
             }

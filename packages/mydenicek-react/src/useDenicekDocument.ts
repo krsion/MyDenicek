@@ -1,21 +1,19 @@
-import { type Patch } from "@automerge/automerge";
 import { DocHandle, useDocument } from "@automerge/react";
 import type { JsonDoc, RecordedAction } from "@mydenicek/core";
 import {
-    addElementChildNode,
-    addSiblingNodeAfter,
-    addSiblingNodeBefore,
-    addTransformation,
-    addValueChildNode,
-    applyPatchesManual,
-    deleteNode,
-    getUUID,
-    replayScript,
-    UndoManager,
-    updateAttribute,
-    updateTag,
-    updateValue,
-    wrapNode
+  addElementChildNode,
+  addSiblingNodeAfter,
+  addSiblingNodeBefore,
+  addTransformation,
+  addValueChildNode,
+  deleteNode,
+  getUUID,
+  replayScript,
+  UndoManager,
+  updateAttribute,
+  updateTag,
+  updateValue,
+  wrapNode
 } from "@mydenicek/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -26,7 +24,7 @@ export function useDenicekDocument(handle: DocHandle<JsonDoc>) {
   const undoManager = useMemo(() => new UndoManager<JsonDoc>(), []);
   
   // Force re-render when undo/redo state changes
-  const [undoRedoVersion, setUndoRedoVersion] = useState(0);
+  const [, setUndoRedoVersion] = useState(0);
 
   const docRef = useRef<JsonDoc | undefined>(doc);
   useEffect(() => { docRef.current = doc; }, [doc]);
@@ -185,11 +183,6 @@ export function useDenicekDocument(handle: DocHandle<JsonDoc>) {
     });
   }, [modifyDocTransaction]);
 
-  const applyPatches = useCallback((patches: Patch[]) => {
-    modifyDoc((d) => {
-      applyPatchesManual(d, patches);
-    });
-  }, [modifyDoc]);
 
   return {
     doc,
@@ -205,7 +198,6 @@ export function useDenicekDocument(handle: DocHandle<JsonDoc>) {
     addSiblings,
     deleteNodes: deleteNodesAction,
     replayScript: replayScriptAction,
-    addTransformation: addTransformationAction,
-    applyPatches
+    addTransformation: addTransformationAction
   };
 }

@@ -27,7 +27,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
   const [snapshot, setSnapshot] = useState<JsonDoc | null>(null);
   const [filterPatches, setFilterPatches] = useState(false);
   const [patchesViewMode, setPatchesViewMode] = useState<'table' | 'json'>('table');
-  // const [selectedPatchIndices, setSelectedPatchIndices] = useState<Set<number>>(new Set());
+
 
   const [connected, setConnected] = useState(true);
   const [showAiPanel, setShowAiPanel] = useState(false);
@@ -98,63 +98,6 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
     if (selectedNodeGuids.length === 0) return;
     updateAttribute(selectedNodeGuids, key, value);
   };
-
-  // const [patches, setPatches] = useState<Patch[]>([]);
-
-  // useEffect(() => {
-  //   if (!snapshot || !doc) {
-  //     setPatches([]);
-  //     return;
-  //   }
-  //   // Automerge.diff returns a new array every time, but if the content is the same, we should avoid setting state?
-  //   // Actually, if doc changes, diff changes.
-  //   // The issue might be that setPatches triggers a re-render, which somehow triggers doc change? No.
-  //   // But if doc is changing rapidly...
-
-  //   // Let's try to wrap this in a transition or debounce if needed, but for now just uncomment.
-  //   setPatches(Automerge.diff(doc, Automerge.getHeads(snapshot), Automerge.getHeads(doc)));
-  // }, [snapshot, doc]);
-
-  // const relevantPatches = useMemo(() => {
-  //   const allPatches = patches.map((p, i) => ({ patch: p, index: i }));
-  //   if (!filterPatches || selectedNodeGuids.length === 0 || !doc) return allPatches;
-
-  //   const relevantIds = new Set<string>();
-  //   const stack = [...selectedNodeGuids];
-  //   while (stack.length > 0) {
-  //     const id = stack.pop()!;
-  //     relevantIds.add(id);
-  //     const node = doc.nodes[id];
-  //     if (node && node.kind === 'element') {
-  //       stack.push(...node.children);
-  //     }
-  //   }
-
-  //   return allPatches.filter(({ patch: p }) => {
-  //     // Check if the patch modifies a relevant node
-  //     if (p.path.length > 1 && p.path[0] === 'nodes' && relevantIds.has(String(p.path[1]))) {
-  //       return true;
-  //     }
-  //     // Check if the patch value involves a relevant node (e.g. adding it to a parent's children list)
-  //     const val = (p as { value?: unknown }).value;
-  //     if (typeof val === 'string' && relevantIds.has(val)) {
-  //       return true;
-  //     }
-  //     return false;
-  //   });
-  // }, [patches, filterPatches, selectedNodeGuids, doc]);
-
-  // // Reset selected patches when relevantPatches change (e.g., filter changes)
-  // // This useEffect is intentionally placed after the useMemo for relevantPatches
-  // // to ensure it runs when relevantPatches is updated.
-  // // useEffect(() => setSelectedPatchIndices(new Set()), [relevantPatches]);
-  // const updatePatch = (index: number, updates: Partial<Patch>) => {
-  //   setPatches(prev => {
-  //     const next = [...prev];
-  //     next[index] = { ...next[index], ...updates } as Patch;
-  //     return next;
-  //   });
-  // };
 
   const actions = useMemo(() => ({
     updateAttribute, updateTag, wrapNodes, updateValue, addChildren, addSiblings, deleteNodes
@@ -385,95 +328,14 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
           {snapshot && (
             <Card>
               <CardHeader header={<Text>Patches from Snapshot</Text>} action={<div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                {/* <ToolbarButton
-                  icon={<ArrowRedoRegular />}
-                  disabled={selectedPatchIndices.size === 0}
-                  onClick={() => {
-                    const patchesToReplay = relevantPatches.filter((_, i) => selectedPatchIndices.has(i)).map(p => p.patch);
-                    applyPatches(patchesToReplay);
-                    setSelectedPatchIndices(new Set());
-                  }}
-                >
-                  Replay ({selectedPatchIndices.size})
-                </ToolbarButton> */}
+
                 <Switch label="Filter by selection" checked={filterPatches} onChange={(_, data) => setFilterPatches(data.checked)} />
                 <ToolbarButton icon={<CodeRegular />} onClick={() => setPatchesViewMode(patchesViewMode === 'table' ? 'json' : 'table')}>
                   {patchesViewMode === 'table' ? 'JSON' : 'Table'}
                 </ToolbarButton>
                 <ToolbarButton icon={<CameraRegular />} onClick={() => setSnapshot(null)}>Clear</ToolbarButton>
               </div>} />
-              {/* {patchesViewMode === 'json' ? (
-                <div style={{ maxHeight: '500px', overflow: 'auto' }}>
-                  <JsonView data={relevantPatches.map(p => p.patch)} />
-                </div>
-              ) : (
-                <Table size="small">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHeaderCell>
-                        <Checkbox
-                          checked={relevantPatches.length > 0 && selectedPatchIndices.size === relevantPatches.length ? true : selectedPatchIndices.size > 0 ? "mixed" : false}
-                          onChange={(_, data) => {
-                            if (data.checked === true) {
-                              setSelectedPatchIndices(new Set(relevantPatches.map((_, i) => i)));
-                            } else {
-                              setSelectedPatchIndices(new Set());
-                            }
-                          }}
-                        />
-                      </TableHeaderCell>
-                      <TableHeaderCell>Action</TableHeaderCell>
-                      <TableHeaderCell>Path</TableHeaderCell>
-                      <TableHeaderCell>Value</TableHeaderCell>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {relevantPatches.map(({ patch: p, index: originalIndex }, i) => (
-                      <TableRow key={i}>
-                        <TableCell>
-                          <Checkbox
-                            checked={selectedPatchIndices.has(i)}
-                            onChange={(_, data) => {
-                              const newSet = new Set(selectedPatchIndices);
-                              if (data.checked) {
-                                newSet.add(i);
-                              } else {
-                                newSet.delete(i);
-                              }
-                              setSelectedPatchIndices(newSet);
-                            }}
-                          />
-                        </TableCell>
-                        <TableCell>{p.action}</TableCell>
-                        <TableCell>
-                          <Input
-                            style={{ width: '100%', minWidth: '300px' }}
-                            value={p.path.join("/")}
-                            onChange={(_, data) => {
-                              const newPath = data.value.split("/");
-                              updatePatch(originalIndex, { path: newPath });
-                            }}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            style={{ width: '100%' }}
-                            value={JSON.stringify((p as { value?: unknown }).value)}
-                            onChange={(_, data) => {
-                              try {
-                                const newValue = JSON.parse(data.value);
-                                updatePatch(originalIndex, { value: newValue });
-                              } catch {
-                                // ignore invalid json while typing
-                              }
-                            }}
-                          />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )} */}
+
             </Card>
           )}
 

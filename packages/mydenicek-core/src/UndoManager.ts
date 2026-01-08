@@ -1,3 +1,4 @@
+
 import { next as Automerge, type Doc, type Heads, type Patch } from "@automerge/automerge";
 
 /**
@@ -31,12 +32,12 @@ function setValueAtPath(doc: unknown, path: (string | number)[], value: unknown)
   
   let current: unknown = doc;
   for (let i = 0; i < path.length - 1; i++) {
-    const key = path[i];
+    const key = path[i]!;
     current = (current as Record<string | number, unknown>)[key];
     if (current === null || current === undefined) return;
   }
   
-  const lastKey = path[path.length - 1];
+  const lastKey = path[path.length - 1]!;
   (current as Record<string | number, unknown>)[lastKey] = value;
 }
 
@@ -48,12 +49,12 @@ function deleteAtPath(doc: unknown, path: (string | number)[]): void {
   
   let current: unknown = doc;
   for (let i = 0; i < path.length - 1; i++) {
-    const key = path[i];
+    const key = path[i]!;
     current = (current as Record<string | number, unknown>)[key];
     if (current === null || current === undefined) return;
   }
   
-  const lastKey = path[path.length - 1];
+  const lastKey = path[path.length - 1]!;
   if (Array.isArray(current) && typeof lastKey === 'number') {
     current.splice(lastKey, 1);
   } else {
@@ -126,7 +127,7 @@ function invertSinglePatch(beforeDoc: unknown, patch: Patch): Patch | null {
     case 'splice': {
       // For string splices (insert only), the inverse is to delete the inserted text
       // We store the length to delete as a custom property
-      const index = patch.path[patch.path.length - 1] as number;
+
       const insertedLength = patch.value.length;
       // To undo: delete the inserted chars (length = insertedLength) and insert nothing
       return { 
@@ -323,7 +324,7 @@ export class UndoManager<T> {
    * @param fn Function that performs multiple changes
    * @returns The final document after all changes
    */
-  transaction(doc: Doc<T>, fn: (change: (d: Doc<T>, changeFn: (d: T) => void) => Doc<T>) => Doc<T>): Doc<T> {
+  transaction(_doc: Doc<T>, fn: (change: (d: Doc<T>, changeFn: (d: T) => void) => Doc<T>) => Doc<T>): Doc<T> {
     // Start transaction
     this.transactionPatches = [];
     this.transactionHeads = null;

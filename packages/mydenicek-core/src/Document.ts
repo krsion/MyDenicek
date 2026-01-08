@@ -1,8 +1,8 @@
-import { next as Automerge, type Patch } from "@automerge/automerge";
+import { next as Automerge } from "@automerge/automerge";
 
 import type { ElementNode, JsonDoc, Node, Transformation, ValueNode } from "./types";
 
-export function calculateSplice(oldVal: string, newVal: string) {
+function calculateSplice(oldVal: string, newVal: string) {
   let start = 0;
   while (start < oldVal.length && start < newVal.length && oldVal[start] === newVal[start]) {
     start++;
@@ -133,58 +133,18 @@ export function firstChildsTag(nodes: Record<string, Node>, node: ElementNode): 
   return undefined; 
 }
 
-export class NodeWrapper {
-  doc: JsonDoc;
-  id: string;
 
-  constructor(doc: JsonDoc, id: string) {
-    this.doc = doc;
-    this.id = id;
-  }
-
-  get node(): Node {
-    const n = this.doc.nodes[this.id];
-    if (!n) throw new Error(`Node ${this.id} not found`);
-    return n;
-  }
-
-  addChild(tag: string, setup?: (w: NodeWrapper) => void): NodeWrapper {
-    if (this.node.kind !== 'element') throw new Error("Cannot add child to value node");
-    const child = addElementChildNode(this.doc, this.node as ElementNode, tag);
-    if (setup) setup(child);
-    return this;
-  }
-
-  addValue(value: string): NodeWrapper {
-    if (this.node.kind !== 'element') throw new Error("Cannot add child to value node");
-    addValueChildNode(this.doc, this.node as ElementNode, value);
-    return this;
-  }
-  
-  addChildren(tags: string[]): NodeWrapper {
-      tags.forEach(tag => this.addChild(tag));
-      return this;
-  }
-  
-  withAttrs(attrs: Record<string, unknown>): NodeWrapper {
-      const n = this.node;
-      if (n.kind === 'element') {
-          n.attrs = { ...n.attrs, ...attrs };
-      }
-      return this;
-  }
-}
 
 export function addElementChildNode(doc: JsonDoc, parent: ElementNode, tag: string, id?: string) {
   const node: Node = { kind: "element", tag, attrs: {}, children: [] };
   const newId = addChildNode(doc.nodes, parent, node, id);
-  return new NodeWrapper(doc, newId);
+  return newId;
 }
 
 export function addValueChildNode(doc: JsonDoc, parent: ElementNode, value: string, id?: string) {
   const node: Node = { kind: "value", value };
   const newId = addChildNode(doc.nodes, parent, node, id);
-  return new NodeWrapper(doc, newId);
+  return newId;
 }
 
 function addSiblingNode(nodes: Record<string, Node>, relativeIndex: number, siblingId: string) {
@@ -305,120 +265,84 @@ export function initialDocument(): JsonDoc | undefined {
     transformations: [],
   };
 
-  new NodeWrapper(doc, rootId)
-    .addChild('section', inner => {
-        inner.withAttrs({ style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }, 'data-testid': 'section' })
-             .addChild('article', a => {
-                 a.addChild('h2', h => h.addValue('Article A'))
-                  .addChild('p', p => p.addValue('Lorem ipsum dolor sit amet, consectetur adipiscing elit.'))
-                  .addChild('ul', ul => {
-                      ul.addChild('li', li => li.addValue('Item A1'))
-                        .addChild('li', li => li.addValue('Item A2'))
-                        .addChild('li', li => li.addValue('Item A3'))
-                  })
-             })
-             .addChild('article', b => {
-                 b.addChild('h2', h => h.addValue('Article B'))
-                  .addChild('p', p => p.addValue('Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.'))
-                  .addChild('div', div => {
-                      div.withAttrs({ style: { display: 'flex', gap: 8 } })
-                         .addChild('button', btn => btn.addValue('Button 1'))
-                         .addChild('button', btn => btn.addValue('Button 2'))
-                         .addChild('button', btn => btn.addValue('Button 3'))
-                  })
-             })
-             .addChild('article', c => {
-                 c.withAttrs({ style: { gridColumn: 'span 2' } })
-                  .addChild('h2', h => h.addValue('Article C'))
-                  .addChild('div', grid => {
-                      grid.withAttrs({ style: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 } });
-                      Array.from({ length: 9 }).forEach((_, i) => {
-                          grid.addChild('div', box => {
-                              box.withAttrs({ style: { padding: 12, background: '#f7f7f7', border: '1px dashed #ccc', borderRadius: 6 } })
-                                 .addValue(`Box ${i + 1}`)
-                          })
-                      })
-                  })
-             })
-             .addChild('article', d => {
-                 d.withAttrs({ style: { gridColumn: 'span 2' } })
-                  .addChild('h2', h => h.addValue('Table Data'))
-                  .addChild('table', t => {
-                      t.withAttrs({ border: '1', style: { width: '100%', borderCollapse: 'collapse' } })
-                       .addChild('thead', thead => {
-                           thead.addChild('tr', tr => {
-                               tr.addChild('th', th => th.addValue('Name'))
-                                 .addChild('th', th => th.addValue('Role'))
-                                 .addChild('th', th => th.addValue('Status'))
-                           })
-                       })
-                       .addChild('tbody', tbody => {
-                           tbody.addChild('tr', tr => {
-                               tr.addChild('td', td => td.addValue('Alice'))
-                                 .addChild('td', td => td.addValue('Developer'))
-                                 .addChild('td', td => td.addValue('Active'))
-                           })
-                           .addChild('tr', tr => {
-                               tr.addChild('td', td => td.addValue('Bob'))
-                                 .addChild('td', td => td.addValue('Designer'))
-                                 .addChild('td', td => td.addValue('Inactive'))
-                           })
-                       })
-                  })
-             })
-    });
+  function add(parentId: string, tag: string, setup?: (id: string, node: ElementNode) => void) {
+      const parentNode = nodes[parentId] as ElementNode;
+      const id = addElementChildNode(doc, parentNode, tag);
+      if (setup) setup(id, nodes[id] as ElementNode);
+      return id;
+  }
+
+  function addVal(parentId: string, value: string) {
+      const parentNode = nodes[parentId] as ElementNode;
+      return addValueChildNode(doc, parentNode, value);
+  }
+
+  add(rootId, 'section', (sectionId, sectionNode) => {
+      sectionNode.attrs = { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }, 'data-testid': 'section' };
+      
+      add(sectionId, 'article', (aId) => {
+          add(aId, 'h2', (hId) => addVal(hId, 'Article A'));
+          add(aId, 'p', (pId) => addVal(pId, 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.'));
+          add(aId, 'ul', (ulId) => {
+              add(ulId, 'li', (liId) => addVal(liId, 'Item A1'));
+              add(ulId, 'li', (liId) => addVal(liId, 'Item A2'));
+              add(ulId, 'li', (liId) => addVal(liId, 'Item A3'));
+          });
+      });
+
+      add(sectionId, 'article', (bId) => {
+          add(bId, 'h2', (hId) => addVal(hId, 'Article B'));
+          add(bId, 'p', (pId) => addVal(pId, 'Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.'));
+          add(bId, 'div', (divId, divNode) => {
+              divNode.attrs = { style: { display: 'flex', gap: 8 } };
+              add(divId, 'button', (btnId) => addVal(btnId, 'Button 1'));
+              add(divId, 'button', (btnId) => addVal(btnId, 'Button 2'));
+              add(divId, 'button', (btnId) => addVal(btnId, 'Button 3'));
+          });
+      });
+
+      add(sectionId, 'article', (cId, cNode) => {
+          cNode.attrs = { style: { gridColumn: 'span 2' } };
+          add(cId, 'h2', (hId) => addVal(hId, 'Article C'));
+          add(cId, 'div', (gridId, gridNode) => {
+              gridNode.attrs = { style: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 } };
+              Array.from({ length: 9 }).forEach((_, i) => {
+                  add(gridId, 'div', (boxId, boxNode) => {
+                      boxNode.attrs = { style: { padding: 12, background: '#f7f7f7', border: '1px dashed #ccc', borderRadius: 6 } };
+                      addVal(boxId, `Box ${i + 1}`);
+                  });
+              });
+          });
+      });
+
+      add(sectionId, 'article', (dId, dNode) => {
+          dNode.attrs = { style: { gridColumn: 'span 2' } };
+          add(dId, 'h2', (hId) => addVal(hId, 'Table Data'));
+          add(dId, 'table', (tId, tNode) => {
+              tNode.attrs = { border: '1', style: { width: '100%', borderCollapse: 'collapse' } };
+              add(tId, 'thead', (theadId) => {
+                  add(theadId, 'tr', (trId) => {
+                      add(trId, 'th', (thId) => addVal(thId, 'Name'));
+                      add(trId, 'th', (thId) => addVal(thId, 'Role'));
+                      add(trId, 'th', (thId) => addVal(thId, 'Status'));
+                  });
+              });
+              add(tId, 'tbody', (tbodyId) => {
+                  add(tbodyId, 'tr', (trId) => {
+                      add(trId, 'td', (tdId) => addVal(tdId, 'Alice'));
+                      add(trId, 'td', (tdId) => addVal(tdId, 'Developer'));
+                      add(trId, 'td', (tdId) => addVal(tdId, 'Active'));
+                  });
+                  add(tbodyId, 'tr', (trId) => {
+                      add(trId, 'td', (tdId) => addVal(tdId, 'Bob'));
+                      add(trId, 'td', (tdId) => addVal(tdId, 'Designer'));
+                      add(trId, 'td', (tdId) => addVal(tdId, 'Inactive'));
+                  });
+              });
+          });
+      });
+  });
 
   return doc;
 }
 
-export function applyPatchesManual(d: JsonDoc, patches: Patch[]) {
-  patches.forEach((patch, _i) => {
-    let target: unknown = d;
-    const path = patch.path;
-    let i_path = 0;
-
-    // Traverse path until we hit a primitive or end of path
-    for (; i_path < path.length - 1; i_path++) {
-      const part = path[i_path]!;
-      const next = (target as Record<string | number, unknown>)[part];
-      if (typeof next === 'string') {
-        // Stop if next is string (primitive), so we can modify it on the parent
-        break;
-      }
-      target = next;
-    }
-
-    const key = path[i_path]!;
-    const remainingPath = path.slice(i_path + 1);
-    const targetRecord = target as Record<string | number, unknown>;
-    const targetArray = target as unknown[];
-
-    if (patch.action === 'del') {
-      if (Array.isArray(target)) {
-        targetArray.splice(key as number, 1);
-      } else {
-        delete targetRecord[key];
-      }
-    } else if (patch.action === 'put') {
-      targetRecord[key] = patch.value;
-    } else if (patch.action === 'insert') {
-      // Insert into array
-      targetArray.splice(key as number, 0, ...patch.values);
-    } else if (patch.action === 'splice') {
-      // Splice string or array
-      // If remainingPath has elements, the first one is likely the index
-      const index = remainingPath.length > 0 ? remainingPath[0] as number : key as number;
-      const value = patch.value;
-
-      if (typeof targetRecord[key] === 'string') {
-        const str = targetRecord[key] as string;
-        // Simple string splice simulation
-        targetRecord[key] = str.slice(0, index) + value + str.slice(index);
-      } else if (Array.isArray(targetRecord[key])) {
-        (targetRecord[key] as unknown[]).splice(index, 0, value);
-      } else if (Array.isArray(target) && patch.action === 'splice') {
-        (targetRecord[key] as unknown[]).splice(index, 0, value);
-      }
-    }
-  });
-}
