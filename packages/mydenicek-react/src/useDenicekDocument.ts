@@ -1,50 +1,95 @@
 import { type Patch } from "@automerge/automerge";
 import { DocHandle, useDocument } from "@automerge/react";
 import type { JsonDoc, RecordedAction } from "@mydenicek/core";
-import { addElementChildNode, addSiblingNodeAfter, addSiblingNodeBefore, addTransformation, addValueChildNode, applyPatchesManual, deleteNode, getUUID, replayScript, updateAttribute, updateTag, updateValue, wrapNode } from "@mydenicek/core";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+    addElementChildNode,
+    addSiblingNodeAfter,
+    addSiblingNodeBefore,
+    addTransformation,
+    addValueChildNode,
+    applyPatchesManual,
+    deleteNode,
+    getUUID,
+    replayScript,
+    UndoManager,
+    updateAttribute,
+    updateTag,
+    updateValue,
+    wrapNode
+} from "@mydenicek/core";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 export function useDenicekDocument(handle: DocHandle<JsonDoc>) {
-  const [doc, changeDoc] = useDocument<JsonDoc>(handle.url);
-  const [undoStack, setUndoStack] = useState<JsonDoc[]>([]);
-  const [redoStack, setRedoStack] = useState<JsonDoc[]>([]);
+  const [doc] = useDocument<JsonDoc>(handle.url);
+  
+  // UndoManager instance - stable across renders
+  const undoManager = useMemo(() => new UndoManager<JsonDoc>(), []);
+  
+  // Force re-render when undo/redo state changes
+  const [undoRedoVersion, setUndoRedoVersion] = useState(0);
 
   const docRef = useRef<JsonDoc | undefined>(doc);
   useEffect(() => { docRef.current = doc; }, [doc]);
 
+  /**
+   * Performs a tracked change that can be undone.
+   * Uses DocHandle.change with patchCallback to capture patches for undo.
+   */
   const modifyDoc = useCallback((updater: (d: JsonDoc) => void) => {
-    if (!docRef.current) return;
-    const currentDoc = docRef.current;
-    setUndoStack(prev => [...prev, currentDoc]);
-    setRedoStack([]);
-    changeDoc(updater);
-  }, [changeDoc]);
+    handle.change(updater, {
+      patchCallback: (patches, info) => {
+        // Store the inverse patches for undo
+        const undoEntry = undoManager.captureForUndo(info.before as JsonDoc, patches);
+        if (undoEntry) {
+          setUndoRedoVersion(v => v + 1);
+        }
+      }
+    });
+  }, [handle, undoManager]);
+
+  /**
+   * Performs a tracked transaction that groups multiple changes into one undo step.
+   */
+  const modifyDocTransaction = useCallback((updater: (d: JsonDoc) => void) => {
+    undoManager.startTransaction();
+    handle.change(updater, {
+      patchCallback: (patches, info) => {
+        undoManager.addToTransaction(info.before as JsonDoc, patches);
+      }
+    });
+    undoManager.endTransaction();
+    setUndoRedoVersion(v => v + 1);
+  }, [handle, undoManager]);
 
   const undo = useCallback(() => {
-    if (undoStack.length === 0 || !docRef.current) return;
-    const prevDoc = undoStack[undoStack.length - 1];
-    setUndoStack(prev => prev.slice(0, -1));
-    setRedoStack(prev => [...prev, docRef.current!]);
-    changeDoc(d => {
-      const restored = JSON.parse(JSON.stringify(prevDoc));
-      d.root = restored.root;
-      d.nodes = restored.nodes;
-      d.transformations = restored.transformations;
+    const entry = undoManager.popUndo();
+    if (!entry) return;
+
+    handle.change((d) => {
+      undoManager.applyInversePatches(d, entry.inversePatches);
+    }, {
+      patchCallback: (patches, info) => {
+        // Capture redo patches
+        undoManager.pushRedo(info.before as JsonDoc, patches);
+      }
     });
-  }, [undoStack, changeDoc]);
+    setUndoRedoVersion(v => v + 1);
+  }, [handle, undoManager]);
 
   const redo = useCallback(() => {
-    if (redoStack.length === 0 || !docRef.current) return;
-    const nextDoc = redoStack[redoStack.length - 1];
-    setRedoStack(prev => prev.slice(0, -1));
-    setUndoStack(prev => [...prev, docRef.current!]);
-    changeDoc(d => {
-      const restored = JSON.parse(JSON.stringify(nextDoc));
-      d.root = restored.root;
-      d.nodes = restored.nodes;
-      d.transformations = restored.transformations;
+    const entry = undoManager.popRedo();
+    if (!entry) return;
+
+    handle.change((d) => {
+      undoManager.applyInversePatches(d, entry.inversePatches);
+    }, {
+      patchCallback: (patches, info) => {
+        // Capture undo patches
+        undoManager.pushUndo(info.before as JsonDoc, patches);
+      }
     });
-  }, [redoStack, changeDoc]);
+    setUndoRedoVersion(v => v + 1);
+  }, [handle, undoManager]);
 
   // Helper actions
   const updateAttributeAction = useCallback((nodeIds: string[], key: string, value: unknown | undefined) => {
@@ -63,13 +108,14 @@ export function useDenicekDocument(handle: DocHandle<JsonDoc>) {
     });
   }, [modifyDoc]);
 
-  const wrapNodes = useCallback((nodeIds: string[], wrapperTag: string) => {
-      modifyDoc((d) => {
-          for (const id of nodeIds) {
-              wrapNode(d.nodes, id, wrapperTag);
-          }
-      });
-  }, [modifyDoc]);
+  const wrapNodesAction = useCallback((nodeIds: string[], wrapperTag: string) => {
+    // Wrap multiple nodes in a single undo step
+    modifyDocTransaction((d) => {
+      for (const id of nodeIds) {
+        wrapNode(d.nodes, id, wrapperTag);
+      }
+    });
+  }, [modifyDocTransaction]);
 
   const updateValueAction = useCallback((nodeIds: string[], newValue: string, originalValue: string) => {
     modifyDoc((prev) => {
@@ -86,7 +132,8 @@ export function useDenicekDocument(handle: DocHandle<JsonDoc>) {
       newIds.push(`n_${getUUID()}`);
     }
 
-    modifyDoc((prev) => {
+    // Multiple operations - use transaction
+    modifyDocTransaction((prev) => {
       parentIds.forEach((id, index) => {
         const node = prev.nodes[id];
         const newId = newIds[index];
@@ -100,11 +147,11 @@ export function useDenicekDocument(handle: DocHandle<JsonDoc>) {
       });
     });
     return newIds;
-  }, [modifyDoc]);
+  }, [modifyDocTransaction]);
 
   const addSiblings = useCallback((referenceIds: string[], position: "before" | "after") => {
     const newIds: string[] = [];
-    modifyDoc((prev) => {
+    modifyDocTransaction((prev) => {
       for (const id of referenceIds) {
         const newId = position === "before" 
           ? addSiblingNodeBefore(prev.nodes, id)
@@ -113,15 +160,16 @@ export function useDenicekDocument(handle: DocHandle<JsonDoc>) {
       }
     });
     return newIds;
-  }, [modifyDoc]);
+  }, [modifyDocTransaction]);
 
-  const deleteNodes = useCallback((nodeIds: string[]) => {
-    modifyDoc((d) => {
+  const deleteNodesAction = useCallback((nodeIds: string[]) => {
+    // Delete multiple nodes in a single undo step
+    modifyDocTransaction((d) => {
       for (const id of nodeIds) {
         deleteNode(d.nodes, id);
       }
     });
-  }, [modifyDoc]);
+  }, [modifyDocTransaction]);
 
   const replayScriptAction = useCallback((script: RecordedAction[], selectedNodeId: string) => {
     modifyDoc((doc) => {
@@ -130,12 +178,12 @@ export function useDenicekDocument(handle: DocHandle<JsonDoc>) {
   }, [modifyDoc]);
 
   const addTransformationAction = useCallback((ids: string[], type: "rename" | "wrap", tag: string) => {
-    modifyDoc((prev) => {
+    modifyDocTransaction((prev) => {
       for (const id of ids) {
         addTransformation(prev, id, type, tag);
       }
     });
-  }, [modifyDoc]);
+  }, [modifyDocTransaction]);
 
   const applyPatches = useCallback((patches: Patch[]) => {
     modifyDoc((d) => {
@@ -147,15 +195,15 @@ export function useDenicekDocument(handle: DocHandle<JsonDoc>) {
     doc,
     undo,
     redo,
-    canUndo: undoStack.length > 0,
-    canRedo: redoStack.length > 0,
+    canUndo: undoManager.canUndo,
+    canRedo: undoManager.canRedo,
     updateAttribute: updateAttributeAction,
     updateTag: updateTagAction,
-    wrapNodes,
+    wrapNodes: wrapNodesAction,
     updateValue: updateValueAction,
     addChildren,
     addSiblings,
-    deleteNodes,
+    deleteNodes: deleteNodesAction,
     replayScript: replayScriptAction,
     addTransformation: addTransformationAction,
     applyPatches
