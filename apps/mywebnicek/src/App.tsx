@@ -1,15 +1,13 @@
 import { DocHandle } from "@automerge/react";
 import { Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, DrawerBody, DrawerHeader, DrawerHeaderTitle, InlineDrawer, Switch, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
 import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CameraRegular, ChatRegular, CodeRegular, EditRegular, PlayRegular, RecordRegular, RenameFilled, RenameRegular, StopRegular } from "@fluentui/react-icons";
-import type { JsonDoc, Node } from "@mydenicek/core";
-import { firstChildsTag, generalizeSelection } from "@mydenicek/core";
+import type { GeneralizedPatch, JsonDoc, Node } from "@mydenicek/core";
 import { useDenicekDocument } from "@mydenicek/react";
 import { useMemo, useRef, useState } from "react";
 
 import { AddNodePopoverButton } from "./AddNodePopoverButton";
 import { DomNavigator, type DomNavigatorHandle } from "./DomNavigator";
 import { ElementDetails } from "./ElementDetails.tsx";
-import { useRecorder } from "./hooks/useRecorder";
 import { useSelection } from "./hooks/useSelection";
 import { JsonView } from "./JsonView.tsx";
 import { LlmChat } from "./LlmChat";
@@ -20,9 +18,10 @@ import { ToolbarPopoverButton } from "./ToolbarPopoverButton";
 
 
 export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<JsonDoc>, onConnect: () => void, onDisconnect: () => void }) => {
-  const { doc, undo, redo, canUndo, canRedo, updateAttribute, updateTag, wrapNodes, updateValue, addChildren, addSiblings, deleteNodes, replayScript, addTransformation } = useDenicekDocument(handle);
+  const { model, undo, redo, canUndo, canRedo, updateAttribute, updateTag, wrapNodes, updateValue, addChildren, addSiblings, deleteNodes, replayScript, addTransformation, isRecording, startRecording, stopRecording } = useDenicekDocument(handle);
   const { selectedNodeIds, setSelectedNodeIds, peerSelections, peerId } = useSelection(handle);
-  const { isRecording, recordedScript, startRecording, stopRecording, recordAction } = useRecorder();
+
+  const [recordedScript, setRecordedScript] = useState<GeneralizedPatch[] | null>(null);
 
   const [snapshot, setSnapshot] = useState<JsonDoc | null>(null);
   const [filterPatches, setFilterPatches] = useState(false);
@@ -39,7 +38,13 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
   const handleStartRecording = () => {
     if (selectedNodeGuid) {
       startRecording(selectedNodeGuid);
+      setRecordedScript(null);
     }
+  };
+
+  const handleStopRecording = () => {
+    const script = stopRecording();
+    setRecordedScript(script);
   };
 
   const replay = () => {
@@ -71,7 +76,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
   // console.log(helloWorld());
 
   const details = useMemo(() => {
-    if (!doc) return null;
+    if (!model) return null;
     const selectedEl = selectedNodeGuid ? document.querySelector(`[data-node-guid="${selectedNodeGuid}"]`) as HTMLElement | null : null;
     if (!selectedEl) return null;
     const tag = selectedEl.tagName.toLowerCase();
@@ -83,15 +88,15 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
     const dataTestId = selectedEl.getAttribute("data-testid");
     const guid = selectedEl.getAttribute("data-node-guid") || null;
     // pull the node.value from the document model if available
-    const modelNode = guid ? doc.nodes[guid] : undefined;
+    const modelNode = guid ? model.getNode(guid) : undefined;
     const value = modelNode?.kind === "value" ? (modelNode.value as string | undefined) : undefined;
 
     return { tag, id, guid, classes, width, height, dataTestId, value };
-  }, [selectedNodeGuid, doc]);
+  }, [selectedNodeGuid, model]);
 
   // Edits to selectedNode will not be synced by Automerge. instead, use changeDoc(prev => ...) to update the document model
-  const selectedNode: Node | undefined = (selectedNodeGuid && doc) ? doc.nodes[selectedNodeGuid] : undefined;
-  const selectedNodeFirstChildTag: string | undefined = (selectedNode && selectedNode.kind === "element" && doc) ? firstChildsTag(doc.nodes, selectedNode) : undefined;
+  const selectedNode: Node | undefined = (selectedNodeGuid && model) ? model.getNode(selectedNodeGuid) : undefined;
+  const selectedNodeFirstChildTag: string | undefined = (selectedNode && selectedNode.kind === "element" && model) ? model.getFirstChildTag(selectedNode) : undefined;
   const selectedNodeAttributes = (selectedNode && selectedNode.kind === "element") ? selectedNode.attrs : undefined;
 
   const handleAttributeChange = (key: string, value: unknown | undefined) => {
@@ -103,7 +108,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
     updateAttribute, updateTag, wrapNodes, updateValue, addChildren, addSiblings, deleteNodes
   }), [updateAttribute, updateTag, wrapNodes, updateValue, addChildren, addSiblings, deleteNodes]);
 
-  if (!doc) return <div>Loading...</div>;
+  if (!model) return <div>Loading...</div>;
 
   return (
     <div style={{ display: "flex" }}>
@@ -141,11 +146,6 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
 
                   if (newIds.length > 0) {
                     setSelectedNodeIds(newIds);
-
-                    if (isRecording && selectedNodeGuid) {
-                      // Recording only supports single action for now
-                      recordAction(r => r.recordAddChild(selectedNodeGuid!, newIds[newIds.length - 1]!, isValue ? "value" : "element", content));
-                    }
                   }
                 }}
                 onAddBefore={() => {
@@ -178,10 +178,6 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                   onSubmit={(value) => {
                     const originalValue = details?.value || "";
                     updateValue(selectedNodeGuids, value, originalValue);
-
-                    if (isRecording && selectedNodeGuid) {
-                      recordAction(r => r.recordSetValue(selectedNodeGuid, value));
-                    }
                   }}
                 />
               ) ||
@@ -195,9 +191,6 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                   onSubmit={(tag) => {
                     updateTag(selectedNodeGuids, tag);
                     if (selectedNodeGuid) clickOnSelectedNode(selectedNodeGuid);
-                    if (isRecording && selectedNodeGuid) {
-                      recordAction(r => r.recordRename(selectedNodeGuid, tag));
-                    }
                   }}
                 />
               }
@@ -209,9 +202,6 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                 onSubmit={(tag) => {
                   wrapNodes(selectedNodeGuids, tag);
                   if (selectedNodeGuid) clickOnSelectedNode(selectedNodeGuid);
-                  if (isRecording && selectedNodeGuid) {
-                    recordAction(r => r.recordWrap(selectedNodeGuid, tag));
-                  }
                 }}
               />
               <ToolbarDivider />
@@ -260,17 +250,17 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                 <DialogSurface style={{ width: 1000 }}>
                   <DialogBody>
                     <DialogContent>
-                      <JsonView data={doc} />
+                      <JsonView data={model.getSnapshot()} />
                     </DialogContent>
                   </DialogBody>
                 </DialogSurface>
               </Dialog>
-              <ToolbarButton icon={<CameraRegular />} onClick={() => setSnapshot(doc)}>Snapshot</ToolbarButton>
+              <ToolbarButton icon={<CameraRegular />} onClick={() => setSnapshot(model.getSnapshot())}>Snapshot</ToolbarButton>
               <ToolbarDivider />
               {!isRecording ? (
                 <ToolbarButton icon={<RecordRegular />} onClick={handleStartRecording} disabled={!selectedNodeGuid}>Record</ToolbarButton>
               ) : (
-                <ToolbarButton icon={<StopRegular />} onClick={stopRecording}>Stop Recording</ToolbarButton>
+                <ToolbarButton icon={<StopRegular />} onClick={handleStopRecording}>Stop Recording</ToolbarButton>
               )}
               <ToolbarButton icon={<PlayRegular />} onClick={() => {
                 replay();
@@ -289,8 +279,8 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
           </TagGroup>}
           />
 
-          <DomNavigator ref={navigatorRef} onSelectedChange={(ids) => { setSelectedNodeIds(ids) }} selectedNodeIds={selectedNodeGuids} peerSelections={peerSelections} generalizer={(ids) => generalizeSelection(doc, ids)}>
-            <RenderedDocument tree={doc} />
+          <DomNavigator ref={navigatorRef} onSelectedChange={(ids) => { setSelectedNodeIds(ids) }} selectedNodeIds={selectedNodeGuids} peerSelections={peerSelections} generalizer={(ids) => model.generalizeSelection(ids)}>
+            <RenderedDocument model={model} />
           </DomNavigator>
 
           <ElementDetails
@@ -298,7 +288,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
             attributes={selectedNodeAttributes}
             onAttributeChange={handleAttributeChange}
           />
-          {doc.transformations && doc.transformations.length > 0 && (
+          {model.transformations && model.transformations.length > 0 && (
             <Card>
               <CardHeader header={<Text>Transformations</Text>} />
               <Table size="small">
@@ -311,7 +301,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {doc.transformations.map((t, i) => (
+                  {model.transformations.map((t, i) => (
                     <TableRow key={i}>
                       <TableCell>{t.type}</TableCell>
                       <TableCell>{t.parent}</TableCell>
@@ -354,7 +344,7 @@ export const App = ({ handle, onConnect, onDisconnect }: { handle: DocHandle<Jso
           <DrawerHeaderTitle>AI Assistant</DrawerHeaderTitle>
         </DrawerHeader>
         <DrawerBody>
-          <LlmChat doc={doc} actions={actions} />
+          <LlmChat model={model} actions={actions} />
         </DrawerBody>
       </InlineDrawer>
     </div>

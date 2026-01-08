@@ -1,67 +1,71 @@
 
-export type RecordedAction =
-  | { type: "addChild"; parent: string; newIdVar: string; nodeType: "value" | "element"; content: string }
-  | { type: "setValue"; target: string; value: string }
-  | { type: "wrap"; target: string; wrapperTag: string }
-  | { type: "rename"; target: string; newTag: string };
+import type { Patch, Prop } from "@automerge/automerge";
+
+export type GeneralizedPatch = Omit<Patch, 'path'> & { path: (string | number)[], values?: unknown[], value?: unknown };
 
 export class Recorder {
-  private idMap: Record<string, string> = {}; // ID -> Var
+  private idMap: Record<string, string> = {}; // ID -> Var ($0, $1...)
   private varCounter = 0;
-  private actions: RecordedAction[] = [];
+  private actions: GeneralizedPatch[] = [];
 
   constructor(startNodeId: string) {
     this.idMap[startNodeId] = "$0";
     this.varCounter = 1;
   }
 
-  getRef(id: string): string {
-    if (this.idMap[id]) return this.idMap[id];
-    
-    // Handle wrappers: w-ID -> w-{Ref}
-    // We assume standard wrapping naming convention w-{targetId}
-    // This handles simple cases. Nested wrappers or collisions might need more complex logic
-    // but for the demo this is likely sufficient if we assume deterministic behavior.
-    if (id.startsWith("w-")) {
-        const innerId = id.substring(2);
-        const innerRef = this.getRef(innerId);
-        if (innerRef !== innerId) {
-            return "w-" + innerRef;
-        }
+  private generalizeProp(prop: Prop): Prop {
+    if (typeof prop === 'string' && this.idMap[prop]) {
+        return this.idMap[prop];
     }
-
-    // Handle collision suffixes: ID_w -> {Ref}_w
-    if (id.endsWith("_w")) {
-        const innerId = id.substring(0, id.length - 2);
-        const innerRef = this.getRef(innerId);
-        if (innerRef !== innerId) {
-            return innerRef + "_w";
-        }
+    // Check if prop is a "new" ID that marks a creation or reference
+    // Valid IDs in our system start with 'n_' or 'w-'
+    if (typeof prop === 'string' && (prop.startsWith("n_") || prop.startsWith("w-"))) {
+         if (!this.idMap[prop]) {
+             this.idMap[prop] = "$" + this.varCounter++;
+         }
+         return this.idMap[prop];
     }
-    
-    return id;
+    return prop;
   }
 
-  recordAddChild(parentId: string, newId: string, nodeType: "value" | "element", content: string) {
-    const parentRef = this.getRef(parentId);
-    const newVar = "$" + this.varCounter++;
-    this.idMap[newId] = newVar;
-    this.actions.push({ type: "addChild", parent: parentRef, newIdVar: newVar, nodeType, content });
+  private generalizePath(path: Prop[]): Prop[] {
+    return path.map(p => this.generalizeProp(p));
   }
-
-  recordSetValue(targetId: string, value: string) {
-    const targetRef = this.getRef(targetId);
-    this.actions.push({ type: "setValue", target: targetRef, value });
+  
+  private generalizeValue(value: unknown): unknown {
+      if (typeof value === 'string') {
+          // If value is a stored ID (e.g. from idMap), return the variable
+          if (this.idMap[value]) return this.idMap[value];
+          // Otherwise keep value as is (identifiers in values will be generalized if they were defined before)
+          return value;
+      }
+      if (Array.isArray(value)) {
+          return value.map(v => this.generalizeValue(v));
+      }
+      if (typeof value === 'object' && value !== null) {
+          const newObj: Record<string, unknown> = {};
+          for (const k in value) {
+              newObj[k] = this.generalizeValue((value as Record<string, unknown>)[k]);
+          }
+           return newObj;
+      }
+      return value;
   }
-
-  recordWrap(targetId: string, wrapperTag: string) {
-    const targetRef = this.getRef(targetId);
-    this.actions.push({ type: "wrap", target: targetRef, wrapperTag });
-  }
-
-  recordRename(targetId: string, newTag: string) {
-    const targetRef = this.getRef(targetId);
-    this.actions.push({ type: "rename", target: targetRef, newTag });
+  
+  
+  addPatches(patches: Patch[]) {
+      for (const patch of patches) {
+          const newPatch: GeneralizedPatch = { ...patch, path: this.generalizePath(patch.path) };
+          
+          if (patch.action === 'put' || patch.action === 'splice') {
+              newPatch.value = this.generalizeValue(patch.value);
+          }
+          if (patch.action === 'insert') {
+              newPatch.values = patch.values.map(v => this.generalizeValue(v));
+          }
+          
+          this.actions.push(newPatch);
+      }
   }
 
   getActions() {

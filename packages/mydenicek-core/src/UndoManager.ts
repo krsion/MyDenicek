@@ -214,9 +214,9 @@ function applyPatchToCopy(doc: unknown, patch: Patch): void {
 }
 
 /**
- * Applies inverse patches to an Automerge document.
+ * Applies patches to an Automerge document.
  */
-function applyInversePatches<T>(doc: T, patches: Patch[]): void {
+export function applyPatches<T>(doc: T, patches: Patch[]): void {
   for (const patch of patches) {
     switch (patch.action) {
       case 'put':
@@ -256,6 +256,8 @@ function applyInversePatches<T>(doc: T, patches: Patch[]): void {
     }
   }
 }
+
+
 
 /**
  * A framework-agnostic undo manager that tracks local changes
@@ -370,7 +372,7 @@ export class UndoManager<T> {
         },
       },
       (d) => {
-        applyInversePatches(d, entry.inversePatches);
+        applyPatches(d, entry.inversePatches);
       }
     );
 
@@ -402,7 +404,7 @@ export class UndoManager<T> {
         },
       },
       (d) => {
-        applyInversePatches(d, entry.inversePatches);
+        applyPatches(d, entry.inversePatches);
       }
     );
 
@@ -526,12 +528,12 @@ export class UndoManager<T> {
   }
 
   /**
-   * Apply inverse patches to a mutable document.
-   * Use this within a change callback to apply undo/redo patches.
+   * Apply patches to a mutable document.
+   * Use this within a change callback to apply undo/redo/replay patches.
    * @param doc The mutable document within a change callback
-   * @param patches The inverse patches to apply
+   * @param patches The patches to apply
    */
-  applyInversePatches(doc: T, patches: Patch[]): void {
-    applyInversePatches(doc, patches);
+  applyPatches(doc: T, patches: Patch[]): void {
+    applyPatches(doc, patches);
   }
 }

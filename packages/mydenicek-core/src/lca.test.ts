@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { LowestCommonAncestor } from './Document';
+import { DenicekModel } from './DenicekModel';
 import { type JsonDoc } from './types';
 
 describe('LowestCommonAncestor', () => {
@@ -19,33 +19,33 @@ describe('LowestCommonAncestor', () => {
   };
 
   it('finds LCA of single node (itself)', () => {
-    expect(LowestCommonAncestor(doc, ['a'])).toBe('a');
-    expect(LowestCommonAncestor(doc, ['root'])).toBe('root');
+    expect(DenicekModel.LowestCommonAncestor(doc, ['a'])).toBe('a');
+    expect(DenicekModel.LowestCommonAncestor(doc, ['root'])).toBe('root');
   });
 
   it('finds LCA of two siblings', () => {
-    expect(LowestCommonAncestor(doc, ['a', 'b'])).toBe('root');
-    expect(LowestCommonAncestor(doc, ['a1', 'a2'])).toBe('a');
+    expect(DenicekModel.LowestCommonAncestor(doc, ['a', 'b'])).toBe('root');
+    expect(DenicekModel.LowestCommonAncestor(doc, ['a1', 'a2'])).toBe('a');
   });
 
   it('finds LCA of parent and child', () => {
-    expect(LowestCommonAncestor(doc, ['a', 'a1'])).toBe('a');
-    expect(LowestCommonAncestor(doc, ['root', 'b1'])).toBe('root');
+    expect(DenicekModel.LowestCommonAncestor(doc, ['a', 'a1'])).toBe('a');
+    expect(DenicekModel.LowestCommonAncestor(doc, ['root', 'b1'])).toBe('root');
   });
 
   it('finds LCA of nodes in different branches', () => {
-    expect(LowestCommonAncestor(doc, ['a1', 'b1'])).toBe('root');
-    expect(LowestCommonAncestor(doc, ['a2_1', 'b'])).toBe('root');
-    expect(LowestCommonAncestor(doc, ['a2_1', 'a1'])).toBe('a');
+    expect(DenicekModel.LowestCommonAncestor(doc, ['a1', 'b1'])).toBe('root');
+    expect(DenicekModel.LowestCommonAncestor(doc, ['a2_1', 'b'])).toBe('root');
+    expect(DenicekModel.LowestCommonAncestor(doc, ['a2_1', 'a1'])).toBe('a');
   });
 
   it('finds LCA of multiple nodes', () => {
-    expect(LowestCommonAncestor(doc, ['a1', 'a2_1', 'b1'])).toBe('root');
-    expect(LowestCommonAncestor(doc, ['a1', 'a2', 'a2_1'])).toBe('a');
+    expect(DenicekModel.LowestCommonAncestor(doc, ['a1', 'a2_1', 'b1'])).toBe('root');
+    expect(DenicekModel.LowestCommonAncestor(doc, ['a1', 'a2', 'a2_1'])).toBe('a');
   });
 
   it('returns null for empty list', () => {
-    expect(LowestCommonAncestor(doc, [])).toBe(null);
+    expect(DenicekModel.LowestCommonAncestor(doc, [])).toBe(null);
   });
 
   it('handles nodes that do not exist (fallback to root or behavior)', () => {
@@ -59,6 +59,6 @@ describe('LowestCommonAncestor', () => {
     // 'a' walks up to 'root'. No match with {'x'}.
     // It falls back to doc.root in the loop if not found.
     
-    expect(LowestCommonAncestor(doc, ['x', 'a'])).toBe('root'); 
+    expect(DenicekModel.LowestCommonAncestor(doc, ['x', 'a'])).toBe('root'); 
   });
 });

@@ -1,4 +1,4 @@
-import { type JsonDoc } from '@mydenicek/core';
+import { type DenicekModel } from '@mydenicek/core';
 import { DENICEK_TOOLS, type DenicekActions, serializeDocument } from '@mydenicek/mcp';
 import { useState } from 'react';
 
@@ -14,7 +14,7 @@ interface Message {
 }
 
 export function useLlmController(
-  doc: JsonDoc,
+  model: DenicekModel,
   actions: DenicekActions,
   apiKey: string
 ) {
@@ -28,7 +28,7 @@ export function useLlmController(
     }
 
     setIsLoading(true);
-    const docXml = serializeDocument(doc);
+    const docXml = serializeDocument(model.getSnapshot());
     
     const systemPrompt = `You are an assistant that helps edit a structured document. 
 The document is represented as a tree of nodes. There are two types of nodes:

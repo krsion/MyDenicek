@@ -1,24 +1,18 @@
 import { DocHandle, useDocument } from "@automerge/react";
-import type { JsonDoc, RecordedAction } from "@mydenicek/core";
+import type { GeneralizedPatch, JsonDoc } from "@mydenicek/core";
 import {
-  addElementChildNode,
-  addSiblingNodeAfter,
-  addSiblingNodeBefore,
-  addTransformation,
-  addValueChildNode,
-  deleteNode,
-  getUUID,
+  DenicekModel,
+  Recorder,
   replayScript,
-  UndoManager,
-  updateAttribute,
-  updateTag,
-  updateValue,
-  wrapNode
+  UndoManager
 } from "@mydenicek/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 export function useDenicekDocument(handle: DocHandle<JsonDoc>) {
   const [doc] = useDocument<JsonDoc>(handle.url);
+  
+  // Create a read-only model wrapper around the current document state
+  const model = useMemo(() => doc ? new DenicekModel(doc) : undefined, [doc]);
   
   // UndoManager instance - stable across renders
   const undoManager = useMemo(() => new UndoManager<JsonDoc>(), []);
@@ -33,13 +27,39 @@ export function useDenicekDocument(handle: DocHandle<JsonDoc>) {
    * Performs a tracked change that can be undone.
    * Uses DocHandle.change with patchCallback to capture patches for undo.
    */
-  const modifyDoc = useCallback((updater: (d: JsonDoc) => void) => {
-    handle.change(updater, {
+  const recorderRef = useRef<Recorder | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+
+  const startRecording = useCallback((startNodeId: string) => {
+    recorderRef.current = new Recorder(startNodeId);
+    setIsRecording(true);
+  }, []);
+
+  const stopRecording = useCallback(() => {
+    const script = recorderRef.current?.getActions() || [];
+    recorderRef.current = null;
+    setIsRecording(false);
+    return script;
+  }, []);
+
+  /**
+   * Performs a tracked change that can be undone.
+   * Uses DocHandle.change with patchCallback to capture patches for undo.
+   */
+  const modifyDoc = useCallback((updater: (model: DenicekModel) => void) => {
+    handle.change((d) => {
+      const changeModel = new DenicekModel(d);
+      updater(changeModel);
+    }, {
       patchCallback: (patches, info) => {
         // Store the inverse patches for undo
         const undoEntry = undoManager.captureForUndo(info.before as JsonDoc, patches);
         if (undoEntry) {
           setUndoRedoVersion(v => v + 1);
+        }
+        // Record patches if recording
+        if (recorderRef.current) {
+             recorderRef.current.addPatches(patches);
         }
       }
     });
@@ -48,11 +68,18 @@ export function useDenicekDocument(handle: DocHandle<JsonDoc>) {
   /**
    * Performs a tracked transaction that groups multiple changes into one undo step.
    */
-  const modifyDocTransaction = useCallback((updater: (d: JsonDoc) => void) => {
+  const modifyDocTransaction = useCallback((updater: (model: DenicekModel) => void) => {
     undoManager.startTransaction();
-    handle.change(updater, {
+    handle.change((d) => {
+      const changeModel = new DenicekModel(d);
+      updater(changeModel);
+    }, {
       patchCallback: (patches, info) => {
         undoManager.addToTransaction(info.before as JsonDoc, patches);
+        // Record patches if recording
+        if (recorderRef.current) {
+             recorderRef.current.addPatches(patches);
+        }
       }
     });
     undoManager.endTransaction();
@@ -64,7 +91,7 @@ export function useDenicekDocument(handle: DocHandle<JsonDoc>) {
     if (!entry) return;
 
     handle.change((d) => {
-      undoManager.applyInversePatches(d, entry.inversePatches);
+      undoManager.applyPatches(d, entry.inversePatches);
     }, {
       patchCallback: (patches, info) => {
         // Capture redo patches
@@ -79,7 +106,7 @@ export function useDenicekDocument(handle: DocHandle<JsonDoc>) {
     if (!entry) return;
 
     handle.change((d) => {
-      undoManager.applyInversePatches(d, entry.inversePatches);
+      undoManager.applyPatches(d, entry.inversePatches);
     }, {
       patchCallback: (patches, info) => {
         // Capture undo patches
@@ -91,56 +118,51 @@ export function useDenicekDocument(handle: DocHandle<JsonDoc>) {
 
   // Helper actions
   const updateAttributeAction = useCallback((nodeIds: string[], key: string, value: unknown | undefined) => {
-    modifyDoc((d) => {
+    modifyDoc((model) => {
       for (const id of nodeIds) {
-        updateAttribute(d.nodes, id, key, value);
+        model.updateAttribute(id, key, value);
       }
     });
   }, [modifyDoc]);
 
   const updateTagAction = useCallback((nodeIds: string[], newTag: string) => {
-    modifyDoc((d) => {
+    modifyDoc((model) => {
       for (const id of nodeIds) {
-        updateTag(d.nodes, id, newTag);
+        model.updateTag(id, newTag);
       }
     });
   }, [modifyDoc]);
 
   const wrapNodesAction = useCallback((nodeIds: string[], wrapperTag: string) => {
     // Wrap multiple nodes in a single undo step
-    modifyDocTransaction((d) => {
+    modifyDocTransaction((model) => {
       for (const id of nodeIds) {
-        wrapNode(d.nodes, id, wrapperTag);
+        model.wrapNode(id, wrapperTag);
       }
     });
   }, [modifyDocTransaction]);
 
   const updateValueAction = useCallback((nodeIds: string[], newValue: string, originalValue: string) => {
-    modifyDoc((prev) => {
+    modifyDoc((model) => {
       for (const id of nodeIds) {
-        updateValue(prev, id, newValue, originalValue);
+        model.updateValue(id, newValue, originalValue);
       }
     });
   }, [modifyDoc]);
 
   const addChildren = useCallback((parentIds: string[], type: "element" | "value", content: string) => {
-    const newIds: string[] = [];
-    // Generate IDs upfront so we can return them synchronously
-    for (let i = 0; i < parentIds.length; i++) {
-      newIds.push(`n_${getUUID()}`);
-    }
-
-    // Multiple operations - use transaction
-    modifyDocTransaction((prev) => {
-      parentIds.forEach((id, index) => {
-        const node = prev.nodes[id];
-        const newId = newIds[index];
+    const newIds: string[] = [];    
+    modifyDocTransaction((model) => {
+      parentIds.forEach((id) => {
+        const node = model.getNode(id);
         if (node?.kind === "element") {
+          let newId: string;
           if (type === "value") {
-            addValueChildNode(prev, node, content, newId);
+             newId = model.addValueChildNode(node, content);
           } else {
-            addElementChildNode(prev, node, content, newId);
+             newId = model.addElementChildNode(node, content);
           }
+          newIds.push(newId);
         }
       });
     });
@@ -149,11 +171,11 @@ export function useDenicekDocument(handle: DocHandle<JsonDoc>) {
 
   const addSiblings = useCallback((referenceIds: string[], position: "before" | "after") => {
     const newIds: string[] = [];
-    modifyDocTransaction((prev) => {
+    modifyDocTransaction((model) => {
       for (const id of referenceIds) {
         const newId = position === "before" 
-          ? addSiblingNodeBefore(prev.nodes, id)
-          : addSiblingNodeAfter(prev.nodes, id);
+          ? model.addSiblingNodeBefore(id)
+          : model.addSiblingNodeAfter(id);
         if (newId) newIds.push(newId);
       }
     });
@@ -162,30 +184,34 @@ export function useDenicekDocument(handle: DocHandle<JsonDoc>) {
 
   const deleteNodesAction = useCallback((nodeIds: string[]) => {
     // Delete multiple nodes in a single undo step
-    modifyDocTransaction((d) => {
+    modifyDocTransaction((model) => {
       for (const id of nodeIds) {
-        deleteNode(d.nodes, id);
+        model.deleteNode(id);
       }
     });
   }, [modifyDocTransaction]);
 
-  const replayScriptAction = useCallback((script: RecordedAction[], selectedNodeId: string) => {
-    modifyDoc((doc) => {
-      replayScript(doc, script, selectedNodeId);
+  const replayScriptAction = useCallback((script: GeneralizedPatch[], selectedNodeId: string) => {
+    // Replay script needs access to the raw doc because it's in core and expects JsonDoc?
+    // replayScript signature: (doc: JsonDoc, ...)
+    // But since we are inside handle.change, we have the mutable doc.
+    // We can pass `d` directly.
+    handle.change((d) => {
+        replayScript(d, script, selectedNodeId);
     });
-  }, [modifyDoc]);
+  }, [handle]); // Note: replayScript is imported from core, so we stick to its signature which takes JsonDoc
 
   const addTransformationAction = useCallback((ids: string[], type: "rename" | "wrap", tag: string) => {
-    modifyDocTransaction((prev) => {
+    modifyDocTransaction((model) => {
       for (const id of ids) {
-        addTransformation(prev, id, type, tag);
+        model.addTransformation(id, type, tag);
       }
     });
   }, [modifyDocTransaction]);
 
 
   return {
-    doc,
+    model,
     undo,
     redo,
     canUndo: undoManager.canUndo,
@@ -198,6 +224,9 @@ export function useDenicekDocument(handle: DocHandle<JsonDoc>) {
     addSiblings,
     deleteNodes: deleteNodesAction,
     replayScript: replayScriptAction,
-    addTransformation: addTransformationAction
+    addTransformation: addTransformationAction,
+    startRecording,
+    stopRecording,
+    isRecording
   };
 }

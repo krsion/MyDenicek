@@ -1,62 +1,59 @@
-import { addElementChildNode, addValueChildNode, wrapNode } from "./Document";
-import type { JsonDoc } from "./types";
+import type { GeneralizedPatch } from "./Recorder";
+import { type JsonDoc } from "./types";
+import { applyPatches } from "./UndoManager";
 
-import type { RecordedAction } from "./Recorder";
-
-export function replayScript(doc: JsonDoc, script: RecordedAction[], startNodeId: string) {
+export function replayScript(doc: JsonDoc, script: GeneralizedPatch[], startNodeId: string): void {
     const replayMap: Record<string, string> = { "$0": startNodeId };
-
-    const resolve = (ref: string): string => {
-        if (replayMap[ref]) return replayMap[ref]!;
-        if (ref.startsWith("$")) return replayMap[ref] || ref;
-        
-        if (ref.startsWith("w-")) {
-            const inner = resolve(ref.substring(2));
-            return "w-" + inner;
+    
+    // Resolves property keys, generating new IDs for unknown variables (e.g., $1 -> n_newuuid)
+    const resolveProp = (p: string | number): string | number => {
+        if (typeof p === 'string' && p.startsWith("$")) {
+             if (replayMap[p]) return replayMap[p];
+             
+             // Generate new ID for encountered variable definition
+             replayMap[p] = `n_${getUUID()}`;
+             return replayMap[p];
         }
-        if (ref.endsWith("_w")) {
-            const inner = resolve(ref.substring(0, ref.length - 2));
-            return inner + "_w";
-        }
-        return ref;
+        return p;
+    };
+    
+    // Recursively resolves values replacing variables with actual IDs
+    const resolveValue = (v: unknown): unknown => {
+         if (typeof v === 'string' && v.startsWith("$")) {
+             return replayMap[v] || v; 
+         }
+         if (Array.isArray(v)) return v.map(resolveValue);
+         if (typeof v === 'object' && v !== null) {
+              const newObj: any = {};
+              for (const k in v) {
+                  newObj[k] = resolveValue((v as any)[k]);
+              }
+              return newObj;
+         }
+         return v;
     };
 
-    for (const action of script) {
-        if (action.type === "addChild") {
-            const parentId = resolve(action.parent);
-            const parentNode = doc.nodes[parentId];
-            if (parentNode?.kind === "element") {
-                let newId: string;
-                if (action.nodeType === "value") {
-                    newId = addValueChildNode(doc, parentNode, action.content);
-                } else {
-                    newId = addElementChildNode(doc, parentNode, action.content);
-                }
-                replayMap[action.newIdVar] = newId;
-            }
-        } else if (action.type === "setValue") {
-            const targetId = resolve(action.target);
-            const node = doc.nodes[targetId];
-            if (node?.kind === "value") {
-                node.value = action.value;
-            }
-        } else if (action.type === "wrap") {
-            const targetId = resolve(action.target);
-            let wrapperId = "w-" + targetId;
-            while (doc.nodes[wrapperId]) wrapperId = wrapperId + "_w";
-
-            wrapNode(doc.nodes, targetId, action.wrapperTag);
-
-            let refKey = "w-" + action.target;
-            while (replayMap[refKey]) refKey = refKey + "_w";
-            replayMap[refKey] = wrapperId;
-
-        } else if (action.type === "rename") {
-            const targetId = resolve(action.target);
-            const node = doc.nodes[targetId];
-            if (node?.kind === "element") {
-                node.tag = action.newTag;
-            }
+    const resolvedPatches = script.map(patch => {
+        const path = patch.path.map(p => resolveProp(p));
+        
+        let value = patch.value;
+        let values = patch.values;
+        
+        if (patch.action === 'put' || patch.action === 'splice') {
+             value = resolveValue(patch.value);
         }
-    }
+        if (patch.action === 'insert') {
+             values = patch.values?.map(v => resolveValue(v));
+        }
+
+        return { ...patch, path, value, values } as any; 
+    });
+
+    applyPatches(doc, resolvedPatches);
 }
+
+// Helper
+const getUUID = () => {
+  const c = (globalThis as unknown as { crypto?: { randomUUID?: () => string } }).crypto;
+  return c && typeof c.randomUUID === 'function' ? c.randomUUID() : Math.random().toString(36).slice(2);
+};

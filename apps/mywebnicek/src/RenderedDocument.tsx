@@ -1,5 +1,5 @@
 import { makeStyles, mergeClasses } from "@fluentui/react-components";
-import { type JsonDoc } from "@mydenicek/core";
+import { type DenicekModel } from "@mydenicek/core";
 import React from "react";
 
 const useStyles = makeStyles({
@@ -42,11 +42,11 @@ const useStyles = makeStyles({
 });
 
 
-export function RenderedDocument({ tree }: { tree: JsonDoc; }) {
+export function RenderedDocument({ model }: { model: DenicekModel; }) {
   const styles = useStyles();
 
   function renderById(id: string, path: string): React.ReactNode {
-    const node = tree.nodes[id];
+    const node = model.getNode(id);
     if (!node) return undefined;
 
     if (node.kind === "value") {
@@ -91,5 +91,8 @@ export function RenderedDocument({ tree }: { tree: JsonDoc; }) {
     return React.createElement(node.tag, attrs as Record<string, unknown>, ...renderedChildren);
   }
 
-  return <>{renderById(tree.root!, "")}</>;
+  // Model might not be ready initially if doc is loading
+  if (!model) return null;
+
+  return <>{renderById(model.rootId, "")}</>;
 }

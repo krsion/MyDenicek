@@ -1,7 +1,7 @@
 import { Card, CardHeader, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Text } from "@fluentui/react-components";
-import { type RecordedAction } from "@mydenicek/core";
+import { type GeneralizedPatch } from "@mydenicek/core";
 
-export const RecordedScriptView = ({ script }: { script: RecordedAction[] }) => {
+export const RecordedScriptView = ({ script }: { script: GeneralizedPatch[] }) => {
     if (!script || script.length === 0) {
         return (
             <Card>
@@ -20,18 +20,19 @@ export const RecordedScriptView = ({ script }: { script: RecordedAction[] }) => 
                 <TableHeader>
                     <TableRow>
                         <TableHeaderCell>Action</TableHeaderCell>
-                        <TableHeaderCell>Details</TableHeaderCell>
+                        <TableHeaderCell>Path</TableHeaderCell>
+                        <TableHeaderCell>Value</TableHeaderCell>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {script.map((action, i) => (
+                    {script.map((patch, i) => (
                         <TableRow key={i}>
-                            <TableCell>{action.type}</TableCell>
+                            <TableCell>{patch.action}</TableCell>
+                            <TableCell>{patch.path.join('/')}</TableCell>
                             <TableCell>
-                                {action.type === "addChild" && `Add ${action.nodeType} "${action.content}" to ${action.parent} -> ${action.newIdVar}`}
-                                {action.type === "setValue" && `Set ${action.target} to "${action.value}"`}
-                                {action.type === "wrap" && `Wrap ${action.target} in <${action.wrapperTag}>`}
-                                {action.type === "rename" && `Rename ${action.target} to <${action.newTag}>`}
+                                <span style={{ fontFamily: 'monospace', fontSize: '10px' }}>
+                                    {JSON.stringify((patch as any).value || (patch as any).values)}
+                                </span>
                             </TableCell>
                         </TableRow>
                     ))}

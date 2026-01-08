@@ -1,7 +1,6 @@
 import { DocHandle, IndexedDBStorageAdapter, isValidAutomergeUrl, Repo, RepoContext, WebSocketClientAdapter } from '@automerge/react';
 import { FluentProvider, webLightTheme } from '@fluentui/react-components';
-import type { JsonDoc } from '@mydenicek/core';
-import { initialDocument } from '@mydenicek/core';
+import { DenicekModel, type JsonDoc } from '@mydenicek/core';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
@@ -18,7 +17,7 @@ let handle: DocHandle<JsonDoc>;
 if (isValidAutomergeUrl(locationHash)) {
   handle = await repo.find(locationHash)
 } else {
-  handle = repo.create<JsonDoc>(initialDocument());
+  handle = repo.create<JsonDoc>(DenicekModel.createInitialDocument());
   document.location.hash = handle.url;
 }
 
