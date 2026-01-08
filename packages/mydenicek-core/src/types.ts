@@ -1,6 +1,16 @@
-import { next as Automerge } from "@automerge/automerge";
+export type PatchAction = "put" | "del" | "insert" | "splice" | "inc";
 
-export type GeneralizedPatch = Omit<Automerge.Patch, 'path'> & { path: (string | number)[], values?: unknown[], value?: unknown };
+export type Heads = string[];
+
+export interface GeneralizedPatch {
+  action: PatchAction;
+  path: (string | number)[];
+  value?: any;
+  values?: any[];
+  length?: number;
+  _deleteLength?: number; // Internal for undo/redo splice logic
+}
+
 export type DenicekAction = GeneralizedPatch;
 
 export type ElementNode = {

@@ -7,13 +7,13 @@ import {
     useDocument,
     WebSocketClientAdapter
 } from "@automerge/react";
-import { DenicekModel, UndoManager, type JsonDoc } from "@mydenicek/core";
+import { DenicekModel, DenicekStore, UndoManager, type JsonDoc } from "@mydenicek/core";
 import { createContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
 // Context to provide the current document state and actions
 interface DenicekContextValue {
     model: DenicekModel | undefined;
-    undoManager: UndoManager<JsonDoc>;
+    store: DenicekStore;
     connect: () => void;
     disconnect: () => void;
 }
@@ -60,6 +60,14 @@ function DenicekInternalProvider({ children, repo }: { children: ReactNode, repo
     // UndoManager instance - stable across renders
     const undoManager = useMemo(() => new UndoManager<JsonDoc>(), []);
 
+    // Force re-render when store version changes
+    const [storeVersion, setStoreVersion] = useState(0);
+
+    // DenicekStore instance
+    const store = useMemo(() => new DenicekStore(undoManager, {
+        onVersionChange: (v) => setStoreVersion(v)
+    }), [undoManager]);
+
     const [handle, setHandle] = useState<DocHandle<JsonDoc> | null>(null);
 
     useEffect(() => {
@@ -94,7 +102,7 @@ function DenicekInternalProvider({ children, repo }: { children: ReactNode, repo
 
     const contextValue: DenicekContextValue = {
         model,
-        undoManager,
+        store,
         connect,
         disconnect,
     };

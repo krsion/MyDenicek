@@ -1,4 +1,5 @@
-import { next as Automerge, type Doc, type Heads } from "@automerge/automerge";
+import { next as Automerge, type Doc } from "@automerge/automerge";
+import { GeneralizedPatch, Heads } from "./types";
 
 /**
  * An entry in the undo/redo stack containing the inverse patches
@@ -6,7 +7,7 @@ import { next as Automerge, type Doc, type Heads } from "@automerge/automerge";
  */
 export interface UndoEntry {
   /** Inverse patches to apply */
-  inversePatches: Automerge.Patch[];
+  inversePatches: GeneralizedPatch[];
   /** Heads at the time of the original change (for conflict-aware undo) */
   heads: Heads;
 }
@@ -82,10 +83,10 @@ function insertAtPath(doc: unknown, path: (string | number)[], index: number, va
  * Computes inverse patches for undoing a set of patches.
  * This must be called with the document state BEFORE the patches were applied.
  */
-function computeInversePatches(beforeDoc: unknown, patches: Automerge.Patch[]): Automerge.Patch[] {
+function computeInversePatches(beforeDoc: unknown, patches: GeneralizedPatch[]): GeneralizedPatch[] {
   // We need to process patches in order, updating a copy of the doc
   // to get correct inverse patches for each step
-  const inversePatches: Automerge.Patch[] = [];
+  const inversePatches: GeneralizedPatch[] = [];
   let docCopy = JSON.parse(JSON.stringify(beforeDoc));
 
   for (const patch of patches) {
@@ -104,7 +105,7 @@ function computeInversePatches(beforeDoc: unknown, patches: Automerge.Patch[]): 
 /**
  * Inverts a single patch given the document state before it was applied.
  */
-function invertSinglePatch(beforeDoc: unknown, patch: Automerge.Patch): Automerge.Patch | null {
+function invertSinglePatch(beforeDoc: unknown, patch: GeneralizedPatch): GeneralizedPatch | null {
   switch (patch.action) {
     case 'put': {
       const oldValue = getValueAtPath(beforeDoc, patch.path);
@@ -119,7 +120,7 @@ function invertSinglePatch(beforeDoc: unknown, patch: Automerge.Patch): Automerg
       const index = patch.path[patch.path.length - 1];
       if (typeof index === 'number') {
         // Create a del patch for each inserted value
-        return { action: 'del', path: patch.path, length: patch.values.length };
+        return { action: 'del', path: patch.path, length: patch.values?.length };
       }
       return null;
     }
@@ -135,7 +136,7 @@ function invertSinglePatch(beforeDoc: unknown, patch: Automerge.Patch): Automerg
         value: '',  // Insert nothing
         // Custom property to track how many chars to delete
         _deleteLength: insertedLength
-      } as Automerge.Patch;
+      };
     }
     case 'del': {
       // Check if this is a string deletion by looking at the parent path
@@ -153,7 +154,7 @@ function invertSinglePatch(beforeDoc: unknown, patch: Automerge.Patch): Automerg
           path: patch.path, 
           value: deletedText,
           _deleteLength: 0  // Don't delete anything, just insert
-        } as Automerge.Patch;
+        };
       }
       // Object/array deletion
       const oldValue = getValueAtPath(beforeDoc, patch.path);
@@ -170,7 +171,7 @@ function invertSinglePatch(beforeDoc: unknown, patch: Automerge.Patch): Automerg
 /**
  * Applies a patch to a plain JS object copy (for tracking state during inversion).
  */
-function applyPatchToCopy(doc: unknown, patch: Automerge.Patch): void {
+function applyPatchToCopy(doc: unknown, patch: GeneralizedPatch): void {
   switch (patch.action) {
     case 'put':
       setValueAtPath(doc, patch.path, patch.value);
@@ -184,8 +185,8 @@ function applyPatchToCopy(doc: unknown, patch: Automerge.Patch): void {
       if (typeof parentValue === 'string' && typeof index === 'number') {
         // String deletion - splice out the characters
         // Length defaults to 1 for single-char deletions (no length property)
-        const length = ('length' in patch && typeof (patch as unknown as {length: number}).length === 'number') 
-          ? (patch as unknown as {length: number}).length : 1;
+        const length = ('length' in patch && typeof patch.length === 'number') 
+          ? patch.length : 1;
         const newStr = parentValue.slice(0, index) + parentValue.slice(index + length);
         setValueAtPath(doc, parentPath, newStr);
       } else {
@@ -196,7 +197,9 @@ function applyPatchToCopy(doc: unknown, patch: Automerge.Patch): void {
     case 'insert': {
       const parentPath = patch.path.slice(0, -1);
       const index = patch.path[patch.path.length - 1] as number;
-      insertAtPath(doc, parentPath, index, patch.values);
+      if (patch.values) {
+        insertAtPath(doc, parentPath, index, patch.values);
+      }
       break;
     }
     case 'splice': {
@@ -215,7 +218,7 @@ function applyPatchToCopy(doc: unknown, patch: Automerge.Patch): void {
 /**
  * Applies patches to an Automerge document.
  */
-export function applyPatches<T>(doc: T, patches: Automerge.Patch[]): void {
+export function applyPatches<T>(doc: T, patches: GeneralizedPatch[]): void {
   for (const patch of patches) {
     switch (patch.action) {
       case 'put':
@@ -230,9 +233,9 @@ export function applyPatches<T>(doc: T, patches: Automerge.Patch[]): void {
         if (typeof parentValue === 'string' && typeof index === 'number') {
           // String deletion - use Automerge.splice
           // Length defaults to 1 for single-char deletions (no length property)
-          const length = ('length' in patch && typeof (patch as unknown as {length: number}).length === 'number')
-            ? (patch as unknown as {length: number}).length : 1;
-          Automerge.splice(doc as Doc<T>, parentPath, index, length, '');
+          const length = ('length' in patch && typeof patch.length === 'number')
+            ? patch.length : 1;
+          Automerge.splice(doc as any, parentPath, index, length, '');
         } else {
           deleteAtPath(doc, patch.path);
         }
@@ -241,15 +244,17 @@ export function applyPatches<T>(doc: T, patches: Automerge.Patch[]): void {
       case 'insert': {
         const parentPath = patch.path.slice(0, -1);
         const index = patch.path[patch.path.length - 1] as number;
-        insertAtPath(doc, parentPath, index, patch.values);
+        if (patch.values) {
+          insertAtPath(doc, parentPath, index, patch.values);
+        }
         break;
       }
       case 'splice': {
         // Use Automerge.splice for proper CRDT string operations
         const parentPath = patch.path.slice(0, -1);
         const index = patch.path[patch.path.length - 1] as number;
-        const deleteLength = (patch as Automerge.Patch & { _deleteLength?: number })._deleteLength ?? patch.value.length;
-        Automerge.splice(doc as Doc<T>, parentPath, index, deleteLength, patch.value);
+        const deleteLength = patch._deleteLength ?? patch.value.length;
+        Automerge.splice(doc as any, parentPath, index, deleteLength, patch.value);
         break;
       }
     }
@@ -265,7 +270,7 @@ export function applyPatches<T>(doc: T, patches: Automerge.Patch[]): void {
 export class UndoManager<T> {
   private undoStack: UndoEntry[] = [];
   private redoStack: UndoEntry[] = [];
-  private transactionPatches: Automerge.Patch[] | null = null;
+  private transactionPatches: GeneralizedPatch[] | null = null;
   private transactionHeads: Heads | null = null;
 
   /**
@@ -290,13 +295,13 @@ export class UndoManager<T> {
    */
   change(doc: Doc<T>, changeFn: (d: T) => void): Doc<T> {
     const headsBefore = Automerge.getHeads(doc);
-    let inversePatches: Automerge.Patch[] = [];
+    let inversePatches: GeneralizedPatch[] = [];
 
     const newDoc = Automerge.change(
       doc,
       {
         patchCallback: (patches, info) => {
-          inversePatches = computeInversePatches(info.before, patches);
+          inversePatches = computeInversePatches(info.before, patches as any);
         },
       },
       changeFn
@@ -361,13 +366,13 @@ export class UndoManager<T> {
     if (!entry) return null;
 
     const headsBefore = Automerge.getHeads(doc);
-    let redoPatches: Automerge.Patch[] = [];
+    let redoPatches: GeneralizedPatch[] = [];
 
     const newDoc = Automerge.change(
       doc,
       {
         patchCallback: (patches, info) => {
-          redoPatches = computeInversePatches(info.before, patches);
+          redoPatches = computeInversePatches(info.before, patches as any);
         },
       },
       (d) => {
@@ -393,13 +398,13 @@ export class UndoManager<T> {
     if (!entry) return null;
 
     const headsBefore = Automerge.getHeads(doc);
-    let undoPatches: Automerge.Patch[] = [];
+    let undoPatches: GeneralizedPatch[] = [];
 
     const newDoc = Automerge.change(
       doc,
       {
         patchCallback: (patches, info) => {
-          undoPatches = computeInversePatches(info.before, patches);
+          undoPatches = computeInversePatches(info.before, patches as any);
         },
       },
       (d) => {
@@ -433,7 +438,7 @@ export class UndoManager<T> {
    * @param patches The patches from the change
    * @returns The undo entry if patches were captured, or null
    */
-  captureForUndo(beforeDoc: T, patches: Automerge.Patch[]): UndoEntry | null {
+  captureForUndo(beforeDoc: T, patches: GeneralizedPatch[]): UndoEntry | null {
     const inversePatches = computeInversePatches(beforeDoc, patches);
     if (inversePatches.length === 0) return null;
 
@@ -465,7 +470,7 @@ export class UndoManager<T> {
    * @param beforeDoc The document state before the change
    * @param patches The patches from the change
    */
-  addToTransaction(beforeDoc: T, patches: Automerge.Patch[]): void {
+  addToTransaction(beforeDoc: T, patches: GeneralizedPatch[]): void {
     if (this.transactionPatches === null) return;
     const inversePatches = computeInversePatches(beforeDoc, patches);
     this.transactionPatches.push(...inversePatches);
@@ -507,7 +512,7 @@ export class UndoManager<T> {
    * @param beforeDoc The document state before the change  
    * @param patches The patches from applying the undo
    */
-  pushUndo(beforeDoc: T, patches: Automerge.Patch[]): void {
+  pushUndo(beforeDoc: T, patches: GeneralizedPatch[]): void {
     const inversePatches = computeInversePatches(beforeDoc, patches);
     if (inversePatches.length > 0) {
       this.undoStack.push({ inversePatches, heads: [] });
@@ -519,7 +524,7 @@ export class UndoManager<T> {
    * @param beforeDoc The document state before the change
    * @param patches The patches from applying the undo
    */
-  pushRedo(beforeDoc: T, patches: Automerge.Patch[]): void {
+  pushRedo(beforeDoc: T, patches: GeneralizedPatch[]): void {
     const inversePatches = computeInversePatches(beforeDoc, patches);
     if (inversePatches.length > 0) {
       this.redoStack.push({ inversePatches, heads: [] });
@@ -532,7 +537,7 @@ export class UndoManager<T> {
    * @param doc The mutable document within a change callback
    * @param patches The patches to apply
    */
-  applyPatches(doc: T, patches: Automerge.Patch[]): void {
+  applyPatches(doc: T, patches: GeneralizedPatch[]): void {
     applyPatches(doc, patches);
   }
 }

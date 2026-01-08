@@ -53,13 +53,19 @@ export class Recorder {
   
   addPatches(patches: Patch[]) {
       for (const patch of patches) {
-          const newPatch: GeneralizedPatch = { ...patch, path: this.generalizePath(patch.path) };
+          const newPatch: GeneralizedPatch = { 
+              action: patch.action as any, 
+              path: this.generalizePath(patch.path) as (string | number)[] 
+          };
           
           if (patch.action === 'put' || patch.action === 'splice') {
               newPatch.value = this.generalizeValue(patch.value);
           }
           if (patch.action === 'insert') {
               newPatch.values = patch.values.map(v => this.generalizeValue(v));
+          }
+          if ('length' in patch) {
+              newPatch.length = patch.length as number;
           }
           
           this.actions.push(newPatch);
