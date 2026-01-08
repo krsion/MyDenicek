@@ -6,9 +6,16 @@ import {
   replayScript,
   UndoManager
 } from "@mydenicek/core";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { DenicekContext } from "./DenicekProvider";
 
-export function useDenicekDocument(handle: DocHandle<JsonDoc>) {
+export function useDenicekDocument(handleOrUndefined?: DocHandle<JsonDoc>) {
+  const context = useContext(DenicekContext);
+  const handle = handleOrUndefined || context?.handle;
+
+  if (!handle) {
+    throw new Error("useDenicekDocument requires a handle argument or must be used within a DenicekProvider");
+  }
   const [doc] = useDocument<JsonDoc>(handle.url);
   
   // Create a read-only model wrapper around the current document state
@@ -227,6 +234,8 @@ export function useDenicekDocument(handle: DocHandle<JsonDoc>) {
     addTransformation: addTransformationAction,
     startRecording,
     stopRecording,
-    isRecording
+    isRecording,
+    connect: context?.connect || (() => {}),
+    disconnect: context?.disconnect || (() => {})
   };
 }
