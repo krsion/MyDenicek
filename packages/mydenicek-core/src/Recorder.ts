@@ -1,7 +1,5 @@
-
 import type { Patch, Prop } from "@automerge/automerge";
-
-export type GeneralizedPatch = Omit<Patch, 'path'> & { path: (string | number)[], values?: unknown[], value?: unknown };
+import type { GeneralizedPatch } from "./types";
 
 export class Recorder {
   private idMap: Record<string, string> = {}; // ID -> Var ($0, $1...)

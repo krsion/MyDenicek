@@ -1,6 +1,6 @@
 import { Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, DrawerBody, DrawerHeader, DrawerHeaderTitle, InlineDrawer, Switch, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
 import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CameraRegular, ChatRegular, CodeRegular, EditRegular, PlayRegular, RecordRegular, RenameFilled, RenameRegular, StopRegular } from "@fluentui/react-icons";
-import type { GeneralizedPatch, JsonDoc, Node } from "@mydenicek/core";
+import type { DenicekAction, JsonDoc, Node } from "@mydenicek/react";
 import { useDenicekDocument, useSelection } from "@mydenicek/react";
 import { useMemo, useRef, useState } from "react";
 
@@ -17,9 +17,9 @@ import { ToolbarPopoverButton } from "./ToolbarPopoverButton";
 
 export const App = () => {
   const { model, undo, redo, canUndo, canRedo, updateAttribute, updateTag, wrapNodes, updateValue, addChildren, addSiblings, deleteNodes, replayScript, addTransformation, isRecording, startRecording, stopRecording, connect, disconnect } = useDenicekDocument();
-  const { selectedNodeIds, setSelectedNodeIds, peerSelections, peerId } = useSelection();
+  const { selectedNodeIds, setSelectedNodeIds, remoteSelections, userId } = useSelection();
 
-  const [recordedScript, setRecordedScript] = useState<GeneralizedPatch[] | null>(null);
+  const [recordedScript, setRecordedScript] = useState<DenicekAction[] | null>(null);
 
   const [snapshot, setSnapshot] = useState<JsonDoc | null>(null);
   const [filterPatches, setFilterPatches] = useState(false);
@@ -227,7 +227,7 @@ export const App = () => {
             </ToolbarGroup>
 
             <ToolbarGroup>
-              <Text>{peerId}</Text>
+              <Text>{userId}</Text>
               <Switch
                 checked={connected}
                 onChange={() => {
@@ -277,7 +277,7 @@ export const App = () => {
           </TagGroup>}
           />
 
-          <DomNavigator ref={navigatorRef} onSelectedChange={(ids) => { setSelectedNodeIds(ids) }} selectedNodeIds={selectedNodeGuids} peerSelections={peerSelections} generalizer={(ids) => model.generalizeSelection(ids)}>
+          <DomNavigator ref={navigatorRef} onSelectedChange={(ids) => { setSelectedNodeIds(ids) }} selectedNodeIds={selectedNodeGuids} remoteSelections={remoteSelections} generalizer={(ids) => model.generalizeSelection(ids)}>
             <RenderedDocument model={model} />
           </DomNavigator>
 

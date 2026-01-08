@@ -1,9 +1,9 @@
-export type { ElementNode, JsonDoc, Node, Transformation, ValueNode } from './types';
+export type { DenicekAction, ElementNode, GeneralizedPatch, JsonDoc, Node, Transformation, ValueNode } from './types';
 
 
 
 export { DenicekModel } from './DenicekModel';
-export { Recorder, type GeneralizedPatch } from './Recorder';
+export { Recorder } from './Recorder';
 export { replayScript } from './replay';
 export { applyPatches, UndoManager, type UndoEntry } from './UndoManager';
 

@@ -1,7 +1,7 @@
 import { Card, CardHeader, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Text } from "@fluentui/react-components";
-import { type GeneralizedPatch } from "@mydenicek/core";
+import { type DenicekAction } from "@mydenicek/react";
 
-export const RecordedScriptView = ({ script }: { script: GeneralizedPatch[] }) => {
+export const RecordedScriptView = ({ script }: { script: DenicekAction[] }) => {
     if (!script || script.length === 0) {
         return (
             <Card>

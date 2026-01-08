@@ -1,4 +1,4 @@
-import type { GeneralizedPatch } from "./Recorder";
+import type { GeneralizedPatch } from "./types";
 import { type JsonDoc } from "./types";
 import { applyPatches } from "./UndoManager";
 

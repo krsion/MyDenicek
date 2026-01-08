@@ -36,7 +36,7 @@ const useStyles = makeStyles({
   },
 });
 
-export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: React.ReactNode; onSelectedChange?: (nodeIds: string[]) => void; selectedNodeIds?: string[], peerSelections?: { [peerId: string]: string[] | null }, generalizer?: (nodeIds: string[]) => string[] }>(({ children, onSelectedChange, selectedNodeIds, peerSelections, generalizer }, forwardedRef) => {
+export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: React.ReactNode; onSelectedChange?: (nodeIds: string[]) => void; selectedNodeIds?: string[], remoteSelections?: { [userId: string]: string[] | null }, generalizer?: (nodeIds: string[]) => string[] }>(({ children, onSelectedChange, selectedNodeIds, remoteSelections, generalizer }, forwardedRef) => {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [selectedElements, setSelectedElements] = useState<HTMLElement[]>([]);
@@ -142,18 +142,18 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: Rea
     };
   }, [updateOverlays, selectedElements]);
 
-  // Update peer overlays when peerSelections change or when the container updates
+  // Update peer overlays when remoteSelections change or when the container updates
   useEffect(() => {
-    if (!peerSelections) return;
+    if (!remoteSelections) return;
     const root = containerRef.current;
     if (!root) return;
 
-    Object.entries(peerSelections).forEach(([peerId, nodeIds]) => {
+    Object.entries(remoteSelections).forEach(([userId, nodeIds]) => {
       if (!nodeIds || nodeIds.length === 0) {
         // clear overlay for this peer
         setPeerOverlays((p) => {
           const next = { ...p };
-          delete next[peerId];
+          delete next[userId];
           return next;
         });
         return;
@@ -166,17 +166,17 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: Rea
           elements.push(el);
         }
       }
-      updatePeerOverlays(peerId, elements);
+      updatePeerOverlays(userId, elements);
     });
-  }, [peerSelections, updatePeerOverlays]);
+  }, [remoteSelections, updatePeerOverlays]);
 
   // Recompute peer overlays on scroll/resize
   useEffect(() => {
     function onWinChange() {
-      if (!peerSelections) return;
+      if (!remoteSelections) return;
       const root = containerRef.current;
       if (!root) return;
-      Object.entries(peerSelections).forEach(([peerId, nodeIds]) => {
+      Object.entries(remoteSelections).forEach(([userId, nodeIds]) => {
         if (!nodeIds) return;
         const elements: HTMLElement[] = [];
         for (const id of nodeIds) {
@@ -185,7 +185,7 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: Rea
             elements.push(el);
           }
         }
-        updatePeerOverlays(peerId, elements);
+        updatePeerOverlays(userId, elements);
       });
     }
     window.addEventListener("scroll", onWinChange, { passive: true });
@@ -194,7 +194,7 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: Rea
       window.removeEventListener("scroll", onWinChange);
       window.removeEventListener("resize", onWinChange);
     };
-  }, [peerSelections, updatePeerOverlays]);
+  }, [remoteSelections, updatePeerOverlays]);
 
   useLayoutEffect(() => {
     if (selectedElements.length > 0) updateOverlays(selectedElements);

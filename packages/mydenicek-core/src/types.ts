@@ -1,3 +1,8 @@
+import { next as Automerge } from "@automerge/automerge";
+
+export type GeneralizedPatch = Omit<Automerge.Patch, 'path'> & { path: (string | number)[], values?: unknown[], value?: unknown };
+export type DenicekAction = GeneralizedPatch;
+
 export type ElementNode = {
   kind: "element";
   tag: string;

@@ -16,14 +16,15 @@ interface DenicekContextValue {
     undoManager: UndoManager<JsonDoc>;
     connect: () => void;
     disconnect: () => void;
-    // Internal use for specialized hooks
-    _internal: {
-        handle: DocHandle<JsonDoc> | null;
-        repo: Repo | null;
-    };
+}
+
+interface DenicekInternalContextValue {
+    handle: DocHandle<JsonDoc> | null;
+    repo: Repo | null;
 }
 
 export const DenicekContext = createContext<DenicekContextValue | null>(null);
+export const DenicekInternalContext = createContext<DenicekInternalContextValue | null>(null);
 
 interface DenicekProviderProps {
     children: ReactNode;
@@ -96,10 +97,11 @@ function DenicekInternalProvider({ children, repo }: { children: ReactNode, repo
         undoManager,
         connect,
         disconnect,
-        _internal: {
-            handle,
-            repo
-        }
+    };
+
+    const internalContextValue: DenicekInternalContextValue = {
+        handle,
+        repo
     };
 
     if (!handle) {
@@ -107,8 +109,10 @@ function DenicekInternalProvider({ children, repo }: { children: ReactNode, repo
     }
 
     return (
-        <DenicekContext.Provider value={contextValue}>
-            {children}
-        </DenicekContext.Provider>
+        <DenicekInternalContext.Provider value={internalContextValue}>
+            <DenicekContext.Provider value={contextValue}>
+                {children}
+            </DenicekContext.Provider>
+        </DenicekInternalContext.Provider>
     );
 }

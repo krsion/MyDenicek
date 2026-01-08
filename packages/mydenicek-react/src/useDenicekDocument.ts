@@ -1,20 +1,22 @@
-import type { GeneralizedPatch, JsonDoc } from "@mydenicek/core";
+import type { DenicekAction, GeneralizedPatch, JsonDoc } from "@mydenicek/core";
 import {
-  DenicekModel,
-  Recorder,
-  replayScript
+    DenicekModel,
+    Recorder,
+    replayScript
 } from "@mydenicek/core";
 import { useCallback, useContext, useRef, useState } from "react";
-import { DenicekContext } from "./DenicekProvider";
+import { DenicekContext, DenicekInternalContext } from "./DenicekProvider";
 
 export function useDenicekDocument() {
   const context = useContext(DenicekContext);
+  const internalContext = useContext(DenicekInternalContext);
 
-  if (!context) {
+  if (!context || !internalContext) {
     throw new Error("useDenicekDocument must be used within a DenicekProvider");
   }
 
-  const { model, undoManager, connect, disconnect, _internal: { handle } } = context;
+  const { model, undoManager, connect, disconnect } = context;
+  const { handle } = internalContext;
 
   // Force re-render when undo/redo state changes
   const [, setUndoRedoVersion] = useState(0);
@@ -191,10 +193,10 @@ export function useDenicekDocument() {
     });
   }, [modifyDocTransaction]);
 
-  const replayScriptAction = useCallback((script: GeneralizedPatch[], selectedNodeId: string) => {
+  const replayScriptAction = useCallback((script: DenicekAction[], selectedNodeId: string) => {
     if (!handle) return;
     handle.change((d) => {
-        replayScript(d, script, selectedNodeId);
+        replayScript(d, script as GeneralizedPatch[], selectedNodeId);
     });
   }, [handle]);
 
