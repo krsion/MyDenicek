@@ -94,6 +94,14 @@ function DenicekInternalProvider({ children, repo }: { children: ReactNode, repo
 
     const [doc] = useDocument<JsonDoc>(handle?.url);
 
+    // Apply pending transformations after each sync/change
+    // This ensures newly added children from remote peers get transformations applied
+    useEffect(() => {
+        if (handle && doc) {
+            store.applyPendingTransformations(handle);
+        }
+    }, [handle, doc, store]);
+
     // Create a read-only model wrapper around the current document state
     const model = useMemo(() => doc ? new DenicekModel(doc) : undefined, [doc]);
 

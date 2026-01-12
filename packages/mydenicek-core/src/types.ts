@@ -18,11 +18,15 @@ export type ElementNode = {
   tag: string;
   attrs: Record<string, unknown>;
   children: string[];
+  /** Tracks the highest transformation version applied to this node from its parent. Default 0. */
+  version?: number;
 }
 
 export type ValueNode = {
   kind: "value";
   value: string;
+  /** Tracks the highest transformation version applied to this node from its parent. Default 0. */
+  version?: number;
 };
 
 export type Node = ElementNode | ValueNode;

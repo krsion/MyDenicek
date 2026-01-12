@@ -132,4 +132,17 @@ export class DenicekStore {
         });
         this.notifyChange();
     }
+
+    /**
+     * Applies all pending transformations to the document.
+     * Should be called after each Automerge sync to handle newly added children
+     * that may need transformations applied.
+     */
+    applyPendingTransformations(doc: AnyDenicekDoc | null | undefined) {
+        if (!doc) return;
+        doc.change((d: JsonDoc) => {
+            const changeModel = new DenicekModel(d);
+            changeModel.applyAllPendingTransformations();
+        });
+    }
 }

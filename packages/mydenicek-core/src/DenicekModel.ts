@@ -149,16 +149,60 @@ export class DenicekModel {
     const t: Transformation = { parent, version: current + 1, type, tag };
     this.doc.transformations.push(t);
 
-    const children = nodes[parent].children;
+    // Apply transformation to all current children
+    this.applyTransformationsToChildren(parent);
+  }
 
-    for (const childId of children) {
+  /**
+   * Applies all pending transformations to children of a given parent.
+   * Should be called after sync to handle newly added children.
+   */
+  applyTransformationsToChildren(parentId: string): void {
+    const nodes = this.doc.nodes;
+    const parentNode = nodes[parentId];
+    if (parentNode?.kind !== "element") return;
+
+    const transformations = (this.doc.transformations || [])
+      .filter(t => t.parent === parentId)
+      .sort((a, b) => a.version - b.version);
+
+    if (transformations.length === 0) return;
+
+    // We need to iterate over a copy since wrap modifies the children array
+    const childrenSnapshot = [...parentNode.children];
+
+    for (const childId of childrenSnapshot) {
       const childNode = nodes[childId];
-      if (t.type === "rename" && childNode?.kind === "element") {
-        childNode.tag = t.tag;
+      if (!childNode) continue;
+
+      const childVersion = childNode.version ?? 0;
+      
+      // Find transformations that haven't been applied to this child yet
+      const pendingTransformations = transformations.filter(t => t.version > childVersion);
+      
+      for (const t of pendingTransformations) {
+        if (t.type === "rename" && childNode.kind === "element") {
+          childNode.tag = t.tag;
+        }
+        if (t.type === "wrap") {
+          this.wrapNode(childId, t.tag);
+        }
+        // Update child's version to the latest applied transformation
+        childNode.version = t.version;
       }
-      if (t.type === "wrap") {
-        this.wrapNode(childId, t.tag);
-      }
+    }
+  }
+
+  /**
+   * Applies all pending transformations across the entire document.
+   * Should be called after each Automerge sync to handle new children.
+   */
+  applyAllPendingTransformations(): void {
+    const transformations = this.doc.transformations || [];
+    const parentIds = new Set(transformations.map(t => t.parent));
+    
+    for (const parentId of parentIds) {
+      this.applyTransformationsToChildren(parentId);
     }
   }
 
