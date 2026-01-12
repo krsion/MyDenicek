@@ -35,7 +35,7 @@ export class DenicekModel {
 
   getParents(childId: string): ElementNode[] {
     const parents: ElementNode[] = [];
-    for (const [_, parentNode] of Object.entries(this.doc.nodes)) {
+    for (const [_, parentNode] of Object.entries(this.doc.nodes) as [string, Node][]) {
       if (parentNode.kind === "element" && parentNode.children.includes(childId)) {
         parents.push(parentNode);
       }
@@ -338,7 +338,7 @@ export class DenicekModel {
 
   private buildParentMap(): Record<string, string> {
       const parentMap: Record<string, string> = {};
-      for (const [parentId, node] of Object.entries(this.doc.nodes)) {
+      for (const [parentId, node] of Object.entries(this.doc.nodes) as [string, Node][]) {
         if (node.kind === "element") {
           for (const childId of node.children) {
             parentMap[childId] = parentId;

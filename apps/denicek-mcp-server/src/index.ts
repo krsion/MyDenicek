@@ -1,10 +1,10 @@
+import type { AnyDocumentId } from "@automerge/automerge-repo";
 import { Repo } from "@automerge/automerge-repo";
 import { BrowserWebSocketClientAdapter } from "@automerge/automerge-repo-network-websocket";
 import { NodeFSStorageAdapter } from "@automerge/automerge-repo-storage-nodefs";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListResourcesRequestSchema, ListToolsRequestSchema, ReadResourceRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import type { AnyDocumentId } from "@automerge/automerge-repo";
 import {
     type JsonDoc
 } from "@mydenicek/core";

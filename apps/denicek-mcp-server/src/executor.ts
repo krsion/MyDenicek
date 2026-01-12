@@ -1,14 +1,7 @@
 import type { DocHandle } from "@automerge/automerge-repo";
 import {
-    addElementChildNode,
-    addValueChildNode,
-    deleteNode,
-    getUUID,
+    DenicekModel,
     type JsonDoc,
-    updateAttribute,
-    updateTag,
-    updateValue,
-    wrapNode,
 } from "@mydenicek/core";
 
 export type DenicekToolName =
@@ -56,13 +49,15 @@ export async function executeToolAction(
     let result = "";
 
     handle.change((doc: JsonDoc) => {
+        const model = new DenicekModel(doc);
+
         switch (name) {
             case "updateAttribute": {
                 const nodeIds = requireStringArray(args.nodeIds, "nodeIds");
                 const key = requireString(args.key, "key");
                 const value = args.value as unknown | undefined;
                 for (const id of nodeIds) {
-                    updateAttribute(doc.nodes, id, key, value);
+                    model.updateAttribute(id, key, value);
                 }
                 result = `Updated attribute ${key} on ${nodeIds.length} nodes.`;
                 break;
@@ -71,7 +66,7 @@ export async function executeToolAction(
                 const nodeIds = requireStringArray(args.nodeIds, "nodeIds");
                 const newTag = requireString(args.newTag, "newTag");
                 for (const id of nodeIds) {
-                    updateTag(doc.nodes, id, newTag);
+                    model.updateTag(id, newTag);
                 }
                 result = `Updated tag to ${newTag} on ${nodeIds.length} nodes.`;
                 break;
@@ -80,7 +75,7 @@ export async function executeToolAction(
                 const nodeIds = requireStringArray(args.nodeIds, "nodeIds");
                 const wrapperTag = requireString(args.wrapperTag, "wrapperTag");
                 for (const id of nodeIds) {
-                    wrapNode(doc.nodes, id, wrapperTag);
+                    model.wrapNode(id, wrapperTag);
                 }
                 result = `Wrapped ${nodeIds.length} nodes with ${wrapperTag}.`;
                 break;
@@ -90,7 +85,7 @@ export async function executeToolAction(
                 const newValue = requireString(args.newValue, "newValue");
                 const originalValue = requireString(args.originalValue, "originalValue");
                 for (const id of nodeIds) {
-                    updateValue(doc, id, newValue, originalValue);
+                    model.updateValue(id, newValue, originalValue);
                 }
                 result = `Updated text content on ${nodeIds.length} nodes.`;
                 break;
@@ -100,19 +95,13 @@ export async function executeToolAction(
                 const type = requireElementOrValue(args.type);
                 const content = requireString(args.content, "content");
 
-                const newIds: string[] = [];
-                for (let i = 0; i < parentIds.length; i++) {
-                    newIds.push(`n_${getUUID()}`);
-                }
-
-                parentIds.forEach((id, index) => {
-                    const node = doc.nodes[id];
-                    const newId = newIds[index];
+                parentIds.forEach((id) => {
+                    const node = model.getNode(id);
                     if (node?.kind === "element") {
                         if (type === "value") {
-                            addValueChildNode(doc, node, content, newId);
+                            model.addValueChildNode(node, content);
                         } else {
-                            addElementChildNode(doc, node, content, newId);
+                            model.addElementChildNode(node, content);
                         }
                     }
                 });
@@ -122,7 +111,7 @@ export async function executeToolAction(
             case "deleteNodes": {
                 const nodeIds = requireStringArray(args.nodeIds, "nodeIds");
                 for (const id of nodeIds) {
-                    deleteNode(doc.nodes, id);
+                    model.deleteNode(id);
                 }
                 result = `Deleted ${nodeIds.length} nodes.`;
                 break;

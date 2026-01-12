@@ -1,7 +1,17 @@
+// Classes
 export { DenicekModel } from './DenicekModel';
 export { DenicekStore } from './DenicekStore';
-export { Recorder } from './Recorder';
-export { replayScript } from './replay';
-export type { DenicekAction, ElementNode, GeneralizedPatch, Heads, JsonDoc, Node, Transformation, ValueNode } from './types';
-export { applyPatches, UndoManager, type UndoEntry } from './UndoManager';
+export { UndoManager } from './UndoManager';
+
+// Types - Public API
+export type {
+    DenicekAction,
+    ElementNode,
+    JsonDoc,
+    Node,
+    ValueNode
+} from './types';
+
+// Types - Advanced usage
+export type { AnyDenicekDoc, StoreOptions } from './DenicekStore';
 

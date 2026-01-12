@@ -1,4 +1,4 @@
-import type { DenicekAction } from "@mydenicek/core";
+import type { DenicekAction, DenicekModel } from "@mydenicek/core";
 import { useCallback, useContext } from "react";
 import { DenicekContext, DenicekInternalContext } from "./DenicekProvider";
 
@@ -63,7 +63,7 @@ export function useDocumentActions() {
   }, [doc, store]);
 
   const updateAttribute = useCallback((nodeIds: string[], key: string, value: unknown | undefined) => {
-    store.modify(doc, (model) => {
+    store.modify(doc, (model: DenicekModel) => {
       for (const id of nodeIds) {
         model.updateAttribute(id, key, value);
       }
@@ -71,7 +71,7 @@ export function useDocumentActions() {
   }, [doc, store]);
 
   const updateTag = useCallback((nodeIds: string[], newTag: string) => {
-    store.modify(doc, (model) => {
+    store.modify(doc, (model: DenicekModel) => {
       for (const id of nodeIds) {
         model.updateTag(id, newTag);
       }
@@ -79,7 +79,7 @@ export function useDocumentActions() {
   }, [doc, store]);
 
   const wrapNodes = useCallback((nodeIds: string[], wrapperTag: string) => {
-    store.modifyTransaction(doc, (model) => {
+    store.modifyTransaction(doc, (model: DenicekModel) => {
       for (const id of nodeIds) {
         model.wrapNode(id, wrapperTag);
       }
@@ -87,7 +87,7 @@ export function useDocumentActions() {
   }, [doc, store]);
 
   const updateValue = useCallback((nodeIds: string[], newValue: string, originalValue: string) => {
-    store.modify(doc, (model) => {
+    store.modify(doc, (model: DenicekModel) => {
       for (const id of nodeIds) {
         model.updateValue(id, newValue, originalValue);
       }
@@ -96,7 +96,7 @@ export function useDocumentActions() {
 
   const addChildren = useCallback((parentIds: string[], type: "element" | "value", content: string) => {
     const newIds: string[] = [];    
-    store.modifyTransaction(doc, (model) => {
+    store.modifyTransaction(doc, (model: DenicekModel) => {
       parentIds.forEach((id) => {
         const node = model.getNode(id);
         if (node?.kind === "element") {
@@ -115,7 +115,7 @@ export function useDocumentActions() {
 
   const addSiblings = useCallback((referenceIds: string[], position: "before" | "after") => {
     const newIds: string[] = [];
-    store.modifyTransaction(doc, (model) => {
+    store.modifyTransaction(doc, (model: DenicekModel) => {
       for (const id of referenceIds) {
         const newId = position === "before" 
           ? model.addSiblingNodeBefore(id)
@@ -127,7 +127,7 @@ export function useDocumentActions() {
   }, [doc, store]);
 
   const deleteNodes = useCallback((nodeIds: string[]) => {
-    store.modifyTransaction(doc, (model) => {
+    store.modifyTransaction(doc, (model: DenicekModel) => {
       for (const id of nodeIds) {
         model.deleteNode(id);
       }
@@ -135,7 +135,7 @@ export function useDocumentActions() {
   }, [doc, store]);
 
   const addTransformation = useCallback((ids: string[], type: "rename" | "wrap", tag: string) => {
-    store.modifyTransaction(doc, (model) => {
+    store.modifyTransaction(doc, (model: DenicekModel) => {
       for (const id of ids) {
         model.addTransformation(id, type, tag);
       }
