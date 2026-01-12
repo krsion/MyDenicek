@@ -26,7 +26,8 @@ export class DenicekModel {
   }
 
   get transformations(): Transformation[] {
-    return this.doc.transformations || [];
+    const t = this.doc.transformations || {};
+    return Object.values(t);
   }
 
   getSnapshot(): JsonDoc {
@@ -146,23 +147,30 @@ export class DenicekModel {
     if (nodes[parent]?.kind !== "element") return;
 
     const current = this.latestVersionForParent(parent);
-    const t: Transformation = { parent, version: current + 1, type, tag };
-    this.doc.transformations.push(t);
+    const version = current + 1;
+    const t: Transformation = { parent, version, type, tag };
+    const key = `${parent}:${version}`;
+    
+    if (!this.doc.transformations) {
+      this.doc.transformations = {};
+    }
+    this.doc.transformations[key] = t;
 
     // Apply transformation to all current children
     this.applyTransformationsToChildren(parent);
   }
 
   /**
-   * Applies all pending transformations to children of a given parent.
-   * Should be called after sync to handle newly added children.
+   * Applies pending transformations to children of a given parent.
+   * Uses >= comparison: applies to children where childVersion < t.version.
+   * Children added after transformations have version = latestVersion + 1, so they're skipped.
    */
   applyTransformationsToChildren(parentId: string): void {
     const nodes = this.doc.nodes;
     const parentNode = nodes[parentId];
     if (parentNode?.kind !== "element") return;
 
-    const transformations = (this.doc.transformations || [])
+    const transformations = Object.values(this.doc.transformations || {})
       .filter(t => t.parent === parentId)
       .sort((a, b) => a.version - b.version);
 
@@ -177,15 +185,24 @@ export class DenicekModel {
 
       const childVersion = childNode.version ?? 0;
       
-      // Find transformations that haven't been applied to this child yet
-      const pendingTransformations = transformations.filter(t => t.version > childVersion);
-      
-      for (const t of pendingTransformations) {
+      for (const t of transformations) {
+        // Skip if child version is >= transformation version (already processed or added after)
+        if (childVersion >= t.version) continue;
+        
         if (t.type === "rename" && childNode.kind === "element") {
           childNode.tag = t.tag;
         }
         if (t.type === "wrap") {
-          this.wrapNode(childId, t.tag);
+          // Check if already wrapped with correct tag (idempotent)
+          const parents = this.getParents(childId);
+          const alreadyWrapped = parents.some(p => 
+            p.tag === t.tag && 
+            p.children.length === 1 && 
+            p.children[0] === childId
+          );
+          if (!alreadyWrapped) {
+            this.wrapNode(childId, t.tag);
+          }
         }
         // Update child's version to the latest applied transformation
         childNode.version = t.version;
@@ -198,7 +215,7 @@ export class DenicekModel {
    * Should be called after each Automerge sync to handle new children.
    */
   applyAllPendingTransformations(): void {
-    const transformations = this.doc.transformations || [];
+    const transformations = Object.values(this.doc.transformations || {});
     const parentIds = new Set(transformations.map(t => t.parent));
     
     for (const parentId of parentIds) {
@@ -207,7 +224,7 @@ export class DenicekModel {
   }
 
   private latestVersionForParent(parent: string | null): number {
-    const t = this.doc.transformations || [];
+    const t = Object.values(this.doc.transformations || {});
     let max = 0;
     for (const x of t) {
       if (x.parent === parent && x.version > max) max = x.version;
@@ -215,8 +232,26 @@ export class DenicekModel {
     return max;
   }
 
+  private getNodeId(node: Node): string | undefined {
+    for (const [id, n] of Object.entries(this.doc.nodes)) {
+      if (n === node) return id;
+    }
+    return undefined;
+  }
+
   addChildNode(parent: ElementNode, child: Node, id?: string): string {
     const newId = id || `n_${this.getUUID()}`;
+    
+    // Set version to parent's latest transformation version + 1
+    // so existing transformations won't be applied to this new child
+    const parentId = this.getNodeId(parent);
+    if (parentId) {
+      const latestVersion = this.latestVersionForParent(parentId);
+      if (latestVersion > 0) {
+        child.version = latestVersion + 1;
+      }
+    }
+    
     this.doc.nodes[newId] = child;
     parent.children.push(newId);
     return newId;
@@ -248,11 +283,21 @@ export class DenicekModel {
       : { kind: "value", value: (sibling as ValueNode).value };
       
     const id = `n_${this.getUUID()}`;
-    this.doc.nodes[id] = node;
     
-    for (const parent of this.getParents(siblingId)) {
+    // Set version based on parent's latest transformation + 1
+    const parents = this.getParents(siblingId);
+    for (const parent of parents) {
+      const parentId = this.getNodeId(parent);
+      if (parentId) {
+        const latestVersion = this.latestVersionForParent(parentId);
+        if (latestVersion > 0) {
+          node.version = latestVersion + 1;
+        }
+      }
       parent.children.splice(parent.children.indexOf(siblingId) + relativeIndex, 0, id);
     }
+    
+    this.doc.nodes[id] = node;
     return id;
   }
 
@@ -401,7 +446,7 @@ export class DenicekModel {
       const doc: JsonDoc = {
         root: rootId,
         nodes,
-        transformations: [],
+        transformations: {},
       };
     
       const model = new DenicekModel(doc);

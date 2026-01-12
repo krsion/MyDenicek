@@ -15,7 +15,7 @@ describe('LowestCommonAncestor', () => {
       'a2_1': { kind: 'value', value: 'deep' },
       'b1': { kind: 'value', value: 'text2' },
     },
-    transformations: []
+    transformations: {}
   };
 
   it('finds LCA of single node (itself)', () => {

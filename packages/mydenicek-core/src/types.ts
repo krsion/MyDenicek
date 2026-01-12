@@ -31,10 +31,16 @@ export type ValueNode = {
 
 export type Node = ElementNode | ValueNode;
 
+/**
+ * Key format: "${parent}:${version}" - ensures unique transformation per parent+version
+ */
+export type TransformationKey = string;
+
 export type JsonDoc = {
   root: string;
   nodes: Record<string, Node>;
-  transformations: Transformation[];
+  /** Keyed by "${parent}:${version}" to ensure no duplicate versions per parent */
+  transformations: Record<TransformationKey, Transformation>;
 };
 
 export type Transformation = {

@@ -1,6 +1,6 @@
 import { Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, DrawerBody, DrawerHeader, DrawerHeaderTitle, InlineDrawer, Switch, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
 import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CameraRegular, ChatRegular, CodeRegular, EditRegular, PlayRegular, RecordRegular, RenameFilled, RenameRegular, StopRegular } from "@fluentui/react-icons";
-import type { DenicekAction } from "@mydenicek/react";
+import type { DenicekAction, DenicekActions, JsonDoc } from "@mydenicek/react";
 import {
   useConnectivity,
   useDocumentActions,
@@ -34,7 +34,7 @@ export const App = () => {
   const { selectedNodeId, selectedNodeIds, node, details } = useSelectedNode();
 
   const [recordedScript, setRecordedScript] = useState<DenicekAction[] | null>(null);
-  const [snapshot, setSnapshot] = useState<any | null>(null);
+  const [snapshot, setSnapshot] = useState<JsonDoc | null>(null);
   const [filterPatches, setFilterPatches] = useState(false);
   const [patchesViewMode, setPatchesViewMode] = useState<'table' | 'json'>('table');
 
@@ -85,7 +85,7 @@ export const App = () => {
     updateAttribute(selectedNodeIds, key, value);
   };
 
-  const docActions = useMemo(() => ({
+  const docActions: DenicekActions = useMemo(() => ({
     undo, redo, canUndo, canRedo,
     updateAttribute, updateTag, wrapNodes, updateValue, addChildren, addSiblings, deleteNodes, addTransformation
   }), [undo, redo, canUndo, canRedo, updateAttribute, updateTag, wrapNodes, updateValue, addChildren, addSiblings, deleteNodes, addTransformation]);
@@ -323,7 +323,7 @@ export const App = () => {
           <DrawerHeaderTitle>AI Assistant</DrawerHeaderTitle>
         </DrawerHeader>
         <DrawerBody>
-          <LlmChat model={model} actions={docActions as any} />
+          <LlmChat model={model} actions={docActions} />
         </DrawerBody>
       </InlineDrawer>
     </div>
