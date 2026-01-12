@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test('Undo/Redo adds and removes a node', async ({ page }) => {
-  await page.goto('http://localhost:5173/');
+  await page.goto('/');
 
   // Wait for initial content and select a container (article)
   const article = page.locator('article').first();

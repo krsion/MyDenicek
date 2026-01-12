@@ -291,9 +291,9 @@ describe("Sync and Conflict Resolution", () => {
         model.addTransformation("root", "rename", "span");
       });
 
-      // Verify both have the same key before sync
-      expect(Object.keys(docA.transformations)).toEqual(["root:1"]);
-      expect(Object.keys(docB.transformations)).toEqual(["root:1"]);
+      // Verify both have the same key before sync (new format: lca:tag:depth:version)
+      expect(Object.keys(docA.transformations)).toEqual(["root:*:*:1"]);
+      expect(Object.keys(docB.transformations)).toEqual(["root:*:*:1"]);
 
       // Sync
       [docA, docB] = syncDocuments(docA, docB);
@@ -304,14 +304,14 @@ describe("Sync and Conflict Resolution", () => {
 
       // Only 1 transformation survives (LWW picks one)
       expect(Object.keys(docA.transformations).length).toBe(1);
-      expect(Object.keys(docA.transformations)).toEqual(["root:1"]);
+      expect(Object.keys(docA.transformations)).toEqual(["root:*:*:1"]);
 
       // The surviving transformation should be one of the two
-      const survivingTag = docA.transformations["root:1"].tag;
+      const survivingTag = docA.transformations["root:*:*:1"].tag;
       expect(["div", "span"]).toContain(survivingTag);
 
       // Both peers agree on which transformation survived
-      expect(docB.transformations["root:1"].tag).toBe(survivingTag);
+      expect(docB.transformations["root:*:*:1"].tag).toBe(survivingTag);
 
       // IMPORTANT: After concurrent transformations with the same version,
       // both peers have consistent state (LWW on both transformation and tag)
@@ -360,11 +360,11 @@ describe("Sync and Conflict Resolution", () => {
       docB = applyTransformationsAfterSync(docB);
 
       // LWW picks one transformation (either article or section)
-      const survivingTag = docA.transformations["root:1"].tag;
+      const survivingTag = docA.transformations["root:*:*:1"].tag;
       expect(["article", "section"]).toContain(survivingTag);
 
       // Both peers should agree on transformation
-      expect(docB.transformations["root:1"].tag).toBe(survivingTag);
+      expect(docB.transformations["root:*:*:1"].tag).toBe(survivingTag);
 
       // QUESTION: Does the wrapper tag match the surviving transformation?
       // After LWW merge, both wrapper nodes' tags are subject to LWW too
@@ -557,8 +557,8 @@ describe("Sync and Conflict Resolution", () => {
       expect((doc.nodes["li1"] as ElementNode).tag).toBe("span");
       expect(doc.nodes["li1"].version).toBe(2);
       expect(Object.keys(doc.transformations).length).toBe(2);
-      expect(doc.transformations["root:1"].version).toBe(1);
-      expect(doc.transformations["root:2"].version).toBe(2);
+      expect(doc.transformations["root:*:*:1"].version).toBe(1);
+      expect(doc.transformations["root:*:*:2"].version).toBe(2);
     });
 
     test("locally added child after transformation gets parent's latest version", () => {
@@ -613,6 +613,123 @@ describe("Sync and Conflict Resolution", () => {
       // New sibling should have version 2 (latestVersion + 1, so it won't be affected by old transformations)
       expect(doc.nodes[newSiblingId!].version).toBe(2);
       expect((doc.nodes[newSiblingId!] as ElementNode).tag).toBe("div"); // Copied from sibling which was already transformed
+    });
+  });
+
+  describe("Selector-based Transformations", () => {
+    test("transformation with selectorTag only matches specific tags", () => {
+      // Create document with mixed element types
+      const doc: JsonDoc = {
+        root: "root",
+        nodes: {
+          root: { kind: "element", tag: "article", attrs: {}, children: ["p1", "div1", "p2"] },
+          p1: { kind: "element", tag: "p", attrs: {}, children: ["text1"] },
+          div1: { kind: "element", tag: "div", attrs: {}, children: ["text2"] },
+          p2: { kind: "element", tag: "p", attrs: {}, children: ["text3"] },
+          text1: { kind: "value", value: "Text 1" },
+          text2: { kind: "value", value: "Text 2" },
+          text3: { kind: "value", value: "Text 3" },
+        },
+        transformations: {},
+      };
+      
+      let amDoc = Automerge.from(doc);
+      
+      // Add transformation that only targets 'p' elements
+      amDoc = Automerge.change(amDoc, (d) => {
+        const model = new DenicekModel(d);
+        model.addTransformation("root", "rename", "paragraph", { selectorTag: "p" });
+      });
+      
+      // Only p elements should be renamed
+      expect((amDoc.nodes["p1"] as ElementNode).tag).toBe("paragraph");
+      expect((amDoc.nodes["div1"] as ElementNode).tag).toBe("div"); // unchanged
+      expect((amDoc.nodes["p2"] as ElementNode).tag).toBe("paragraph");
+    });
+
+    test("transformation with selectorDepth only matches specific depth", () => {
+      // Create nested document
+      const doc: JsonDoc = {
+        root: "root",
+        nodes: {
+          root: { kind: "element", tag: "article", attrs: {}, children: ["section1"] },
+          section1: { kind: "element", tag: "div", attrs: {}, children: ["nested1"] },
+          nested1: { kind: "element", tag: "div", attrs: {}, children: ["text1"] },
+          text1: { kind: "value", value: "Text 1" },
+        },
+        transformations: {},
+      };
+      
+      let amDoc = Automerge.from(doc);
+      
+      // Add transformation that only targets depth 1
+      amDoc = Automerge.change(amDoc, (d) => {
+        const model = new DenicekModel(d);
+        model.addTransformation("root", "rename", "first-level", { selectorDepth: 1 });
+      });
+      
+      // Only depth 1 should be renamed
+      expect((amDoc.nodes["section1"] as ElementNode).tag).toBe("first-level");
+      expect((amDoc.nodes["nested1"] as ElementNode).tag).toBe("div"); // depth 2, unchanged
+    });
+
+    test("transformation with both selectorTag and selectorDepth", () => {
+      // Create document with li elements at different depths
+      const doc: JsonDoc = {
+        root: "root",
+        nodes: {
+          root: { kind: "element", tag: "ul", attrs: {}, children: ["li1", "nested"] },
+          li1: { kind: "element", tag: "li", attrs: {}, children: ["text1"] },
+          nested: { kind: "element", tag: "div", attrs: {}, children: ["li2"] },
+          li2: { kind: "element", tag: "li", attrs: {}, children: ["text2"] },
+          text1: { kind: "value", value: "Item 1" },
+          text2: { kind: "value", value: "Item 2" },
+        },
+        transformations: {},
+      };
+      
+      let amDoc = Automerge.from(doc);
+      
+      // Add transformation that targets 'li' at depth 1
+      amDoc = Automerge.change(amDoc, (d) => {
+        const model = new DenicekModel(d);
+        model.addTransformation("root", "rename", "list-item", { selectorTag: "li", selectorDepth: 1 });
+      });
+      
+      // Only li at depth 1 should be renamed
+      expect((amDoc.nodes["li1"] as ElementNode).tag).toBe("list-item");
+      expect((amDoc.nodes["nested"] as ElementNode).tag).toBe("div"); // not li, unchanged
+      expect((amDoc.nodes["li2"] as ElementNode).tag).toBe("li"); // li but at depth 2, unchanged
+    });
+
+    test("generalizeSelectionWithInfo returns correct selector info", () => {
+      const doc: JsonDoc = {
+        root: "root",
+        nodes: {
+          root: { kind: "element", tag: "ul", attrs: {}, children: ["li1", "li2", "li3"] },
+          li1: { kind: "element", tag: "li", attrs: {}, children: ["text1"] },
+          li2: { kind: "element", tag: "li", attrs: {}, children: ["text2"] },
+          li3: { kind: "element", tag: "li", attrs: {}, children: ["text3"] },
+          text1: { kind: "value", value: "Item 1" },
+          text2: { kind: "value", value: "Item 2" },
+          text3: { kind: "value", value: "Item 3" },
+        },
+        transformations: {},
+      };
+      
+      const amDoc = Automerge.from(doc);
+      const model = new DenicekModel(amDoc);
+      
+      // Select just li1
+      const info = model.generalizeSelectionWithInfo(["li1"]);
+      
+      expect(info.lcaId).toBe("root");
+      expect(info.selectorTag).toBe("li");
+      expect(info.selectorDepth).toBe(1);
+      expect(info.matchingNodeIds).toContain("li1");
+      expect(info.matchingNodeIds).toContain("li2");
+      expect(info.matchingNodeIds).toContain("li3");
+      expect(info.matchingNodeIds.length).toBe(3);
     });
   });
 });

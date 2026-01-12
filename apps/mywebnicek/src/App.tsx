@@ -26,7 +26,7 @@ export const App = () => {
     undo, redo, canUndo, canRedo,
     updateAttribute, updateTag, wrapNodes,
     updateValue, addChildren, addSiblings,
-    deleteNodes, addTransformation
+    deleteNodes, addTransformation, addGeneralizedTransformation
   } = useDocumentActions();
   const { isRecording, startRecording, stopRecording, replay } = useRecording();
   const { connect, disconnect } = useConnectivity();
@@ -87,8 +87,8 @@ export const App = () => {
 
   const docActions: DenicekActions = useMemo(() => ({
     undo, redo, canUndo, canRedo,
-    updateAttribute, updateTag, wrapNodes, updateValue, addChildren, addSiblings, deleteNodes, addTransformation
-  }), [undo, redo, canUndo, canRedo, updateAttribute, updateTag, wrapNodes, updateValue, addChildren, addSiblings, deleteNodes, addTransformation]);
+    updateAttribute, updateTag, wrapNodes, updateValue, addChildren, addSiblings, deleteNodes, addTransformation, addGeneralizedTransformation
+  }), [undo, redo, canUndo, canRedo, updateAttribute, updateTag, wrapNodes, updateValue, addChildren, addSiblings, deleteNodes, addTransformation, addGeneralizedTransformation]);
 
   if (!model) return <div>Loading...</div>;
 
@@ -191,23 +191,23 @@ export const App = () => {
               <ToolbarDivider />
 
               <ToolbarPopoverButton
-                text="Rename all children"
+                text="Rename all"
                 icon={<RenameFilled />}
-                disabled={!selectedNodeId || !selectedNodeFirstChildTag}
-                initialValue={selectedNodeFirstChildTag || ""}
-                ariaLabel="Rename all children"
+                disabled={!selectedNodeId}
+                initialValue={(node?.kind === "element") ? node.tag : ""}
+                ariaLabel="Rename all matching"
                 onSubmit={(tag) => {
-                  addTransformation(selectedNodeIds, "rename", tag);
+                  addGeneralizedTransformation(selectedNodeIds, "rename", tag);
                 }}
               />
 
               <ToolbarPopoverButton
-                text="Wrap all children"
+                text="Wrap all"
                 icon={<BackpackFilled />}
-                disabled={!selectedNodeId || !selectedNodeFirstChildTag}
-                ariaLabel="Wrap all children"
+                disabled={!selectedNodeId}
+                ariaLabel="Wrap all matching"
                 onSubmit={(tag) => {
-                  addTransformation(selectedNodeIds, "wrap", tag);
+                  addGeneralizedTransformation(selectedNodeIds, "wrap", tag);
                 }}
               />
             </ToolbarGroup>
@@ -278,8 +278,9 @@ export const App = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHeaderCell>Type</TableHeaderCell>
-                    <TableHeaderCell>Parent ID</TableHeaderCell>
-                    <TableHeaderCell>Value</TableHeaderCell>
+                    <TableHeaderCell>LCA</TableHeaderCell>
+                    <TableHeaderCell>Selector</TableHeaderCell>
+                    <TableHeaderCell>Tag</TableHeaderCell>
                     <TableHeaderCell>Version</TableHeaderCell>
                   </TableRow>
                 </TableHeader>
@@ -287,7 +288,8 @@ export const App = () => {
                   {model.transformations.map((t, i) => (
                     <TableRow key={i}>
                       <TableCell>{t.type}</TableCell>
-                      <TableCell>{t.parent}</TableCell>
+                      <TableCell>{t.lca}</TableCell>
+                      <TableCell>{`${t.selectorTag ?? '*'}:${t.selectorDepth ?? '*'}`}</TableCell>
                       <TableCell>{t.tag}</TableCell>
                       <TableCell>{t.version}</TableCell>
                     </TableRow>

@@ -142,6 +142,23 @@ export function useDocumentActions() {
     });
   }, [doc, store]);
 
+  /**
+   * Adds a transformation that applies to all nodes matching the generalized selection.
+   * Uses the LCA and selector info from generalizeSelectionWithInfo to create
+   * a transformation with appropriate selectorTag and selectorDepth.
+   */
+  const addGeneralizedTransformation = useCallback((selectedIds: string[], type: "rename" | "wrap", tag: string) => {
+    store.modifyTransaction(doc, (model: DenicekModel) => {
+      const info = model.generalizeSelectionWithInfo(selectedIds);
+      if (!info.lcaId) return;
+      
+      model.addTransformation(info.lcaId, type, tag, {
+        selectorTag: info.selectorTag,
+        selectorDepth: info.selectorDepth,
+      });
+    });
+  }, [doc, store]);
+
   return {
     undo,
     redo,
@@ -155,6 +172,7 @@ export function useDocumentActions() {
     addSiblings,
     deleteNodes,
     addTransformation,
+    addGeneralizedTransformation,
   };
 }
 

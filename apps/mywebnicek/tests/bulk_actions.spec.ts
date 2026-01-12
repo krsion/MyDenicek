@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test('Bulk Rename elements', async ({ page }) => {
-  await page.goto('http://localhost:5173/');
+  await page.goto('/');
 
   const box1Value = page.locator('x-value', { hasText: 'Box 1' });
   const box2Value = page.locator('x-value', { hasText: 'Box 2' });
@@ -27,7 +27,7 @@ test('Bulk Rename elements', async ({ page }) => {
 });
 
 test('Bulk Edit values', async ({ page }) => {
-  await page.goto('http://localhost:5173/');
+  await page.goto('/');
 
   const text1 = page.locator('x-value', { hasText: 'Box 1' });
   const text2 = page.locator('x-value', { hasText: 'Box 2' });
