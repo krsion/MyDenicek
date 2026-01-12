@@ -256,42 +256,83 @@ export class DenicekModel {
   }
 
   generalizeSelection(nodeIds: string[]): string[] {
+    if (nodeIds.length === 0) return [];
+    
     const lcaId = this.findLowestCommonAncestor(nodeIds);
     if (!lcaId) return [];
-  
-    const targetTags = new Set<string>();
-    let matchAllValues = false;
-  
+
+    const parentMap = this.buildParentMap();
+
+    // Calculate depth of a node from the LCA
+    const getDepthFromLca = (nodeId: string): number => {
+      let depth = 0;
+      let current: string | undefined = nodeId;
+      while (current && current !== lcaId) {
+        depth++;
+        current = parentMap[current];
+      }
+      return current === lcaId ? depth : -1;
+    };
+
+    // Gather tags and depths from selected nodes
+    const selectedTags = new Set<string>();
+    const selectedDepths = new Set<number>();
+    let hasValues = false;
+
     for (const id of nodeIds) {
       const node = this.doc.nodes[id];
       if (!node) continue;
+      
+      const depth = getDepthFromLca(id);
+      if (depth >= 0) selectedDepths.add(depth);
+
       if (node.kind === 'element') {
-        targetTags.add(node.tag);
+        selectedTags.add(node.tag);
       } else if (node.kind === 'value') {
-        matchAllValues = true;
+        hasValues = true;
       }
     }
-  
+
+    const allSameTag = selectedTags.size === 1 && !hasValues;
+    const allSameDepth = selectedDepths.size === 1;
+
+    // Case 4: Different tags AND different depths → return only selected nodes
+    if (!allSameTag && !allSameDepth) {
+      return [...nodeIds];
+    }
+
+    const targetTag = allSameTag ? [...selectedTags][0] : null;
+    const targetDepth = allSameDepth ? [...selectedDepths][0] : null;
+
     const results: string[] = [];
-  
-    // Helper to access `this`
-    const traverse = (currentId: string) => {
+
+    const traverse = (currentId: string, currentDepth: number) => {
       const node = this.doc.nodes[currentId];
       if (!node) return;
-  
+
       if (node.kind === 'element') {
-        if (targetTags.has(node.tag)) {
+        const tagMatches = targetTag === null || node.tag === targetTag;
+        const depthMatches = targetDepth === null || currentDepth === targetDepth;
+
+        // Case 1: Same tag + same depth → match both
+        // Case 2: Same tag + different depth → match tag only (targetDepth is null)
+        // Case 3: Different tag + same depth → match depth only (targetTag is null)
+        if (tagMatches && depthMatches) {
           results.push(currentId);
         }
+
         for (const childId of node.children) {
-          traverse(childId);
+          traverse(childId, currentDepth + 1);
         }
-      } else if (node.kind === 'value' && matchAllValues) {
-        results.push(currentId);
+      } else if (node.kind === 'value' && hasValues) {
+        const depthMatches = targetDepth === null || currentDepth === targetDepth;
+        if (depthMatches) {
+          results.push(currentId);
+        }
       }
-    }
-  
-    traverse(lcaId);
+    };
+
+    traverse(lcaId, 0);
     return results;
   }
 
