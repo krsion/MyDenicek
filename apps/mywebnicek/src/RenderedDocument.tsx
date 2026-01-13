@@ -89,7 +89,10 @@ export function RenderedDocument({ model }: { model: DenicekModel; }) {
       if (React.isValidElement(rendered)) renderedChildren.push(React.cloneElement(rendered as React.ReactElement<unknown>, { key: child }));
       else renderedChildren.push(rendered);
     }
-    return React.createElement(node.tag, attrs as Record<string, unknown>, ...renderedChildren);
+    
+    // Guard against empty tag names which cause React errors
+    const tagName = node.tag || 'div';
+    return React.createElement(tagName, attrs as Record<string, unknown>, ...renderedChildren);
   }
 
   // Model might not be ready initially if doc is loading

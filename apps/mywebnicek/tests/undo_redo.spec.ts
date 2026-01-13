@@ -15,7 +15,7 @@ test('Undo/Redo adds and removes a node', async ({ page }) => {
 
   // Add a child value node
   await page.getByRole('button', { name: 'Add element' }).click();
-  await page.getByLabel('Value').check();
+  await page.getByRole('radio', { name: 'Value' }).check();
   await page.getByPlaceholder('Value content').fill('test-value-content');
   await page.getByRole('button', { name: 'Add', exact: true }).click();
 

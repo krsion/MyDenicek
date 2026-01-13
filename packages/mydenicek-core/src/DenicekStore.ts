@@ -41,11 +41,13 @@ export class DenicekStore {
 
     startRecording(startNodeId: string) {
         this.recorder = new Recorder(startNodeId);
+        this.notifyChange();
     }
 
     stopRecording() {
         const script = this.recorder?.getActions() || [];
         this.recorder = null;
+        this.notifyChange();
         return script;
     }
 

@@ -65,6 +65,13 @@ export function replayScript(doc: JsonDoc, script: GeneralizedPatch[], startNode
 
     // Track variable counter for new node IDs
     let varCounter = 1;
+    
+    /**
+     * Generate a new unique node ID for replay.
+     */
+    const generateNewNodeId = (): string => {
+        return `n_${crypto.randomUUID()}`;
+    };
 
     for (const patch of script) {
         const resolvedPath = resolvePath(patch.path);
@@ -77,31 +84,51 @@ export function replayScript(doc: JsonDoc, script: GeneralizedPatch[], startNode
                 // Path: ["nodes", nodeId, "attrs", key] for attribute updates
                 // Path: ["nodes", nodeId] for new node creation
                 if (resolvedPath[0] === "nodes" && resolvedPath.length >= 2) {
-                    const nodeId = resolvedPath[1] as string;
+                    let nodeId = resolvedPath[1] as string;
+                    const origId = patch.path[1];
 
+                    // If this is a new node creation with an unmapped variable, generate a new ID
                     if (resolvedPath.length === 2) {
+                        if (typeof origId === "string" && origId.startsWith("$") && !replayMap[origId]) {
+                            // Generate a new node ID for this variable
+                            nodeId = generateNewNodeId();
+                            replayMap[origId] = nodeId;
+                        }
+                        
                         // Creating a new node
                         const resolvedValue = resolveValue(patch.value);
                         doc.nodes[nodeId] = resolvedValue as typeof doc.nodes[string];
-
-                        // If the original path had a variable, map it
-                        const origId = patch.path[1];
-                        if (typeof origId === "string" && origId.startsWith("$") && !replayMap[origId]) {
-                            replayMap[origId] = nodeId;
-                        }
                     } else if (resolvedPath[2] === "value") {
+                        // Skip empty value puts - Automerge initializes strings before splicing
+                        if (patch.value === undefined || patch.value === null || patch.value === "") {
+                            break;
+                        }
                         const node = doc.nodes[nodeId];
                         if (node?.kind === "value") {
                             node.value = resolveValue(patch.value) as string;
                         }
                     } else if (resolvedPath[2] === "tag") {
+                        // Skip empty tag puts - Automerge initializes strings before splicing
+                        if (patch.value === undefined || patch.value === null || patch.value === "") {
+                            break;
+                        }
                         const node = doc.nodes[nodeId];
                         if (node?.kind === "element") {
                             node.tag = resolveValue(patch.value) as string;
                         }
-                    } else if (resolvedPath[2] === "attrs" && resolvedPath.length >= 4) {
-                        const key = resolvedPath[3] as string;
-                        model.updateAttribute(nodeId, key, resolveValue(patch.value));
+                    } else if (resolvedPath[2] === "kind") {
+                        // Skip kind puts - the initial put already has the kind, and 
+                        // Automerge's empty put + splice pattern would overwrite it
+                        break;
+                    } else if (resolvedPath[2] === "attrs") {
+                        if (resolvedPath.length >= 4) {
+                            const key = resolvedPath[3] as string;
+                            model.updateAttribute(nodeId, key, resolveValue(patch.value));
+                        }
+                        // Skip `put nodes/$1/attrs {}` - initial put already has attrs
+                    } else if (resolvedPath[2] === "children") {
+                        // Skip `put nodes/$1/children []` - initial put already has children
+                        // Children are managed via insert/splice
                     }
                 }
                 break;
@@ -147,17 +174,52 @@ export function replayScript(doc: JsonDoc, script: GeneralizedPatch[], startNode
             }
 
             case "splice": {
-                // Handle splicing (used for text edits in value nodes)
-                // Path: ["nodes", nodeId, "value"]
-                if (resolvedPath[0] === "nodes" && resolvedPath[2] === "value") {
+                // Handle splicing (used for text edits in value nodes, string properties like tag/kind,
+                // and Automerge's way of filling in node IDs in children arrays)
+                if (resolvedPath[0] === "nodes") {
                     const nodeId = resolvedPath[1] as string;
                     const node = doc.nodes[nodeId];
-                    if (node?.kind === "value" && typeof patch.value === "string") {
-                        // The splice patch contains: path to string, index is in path[3], value is insert text
+                    
+                    if (resolvedPath[2] === "value" && node?.kind === "value" && typeof patch.value === "string") {
+                        // Splice into a value node's value string
                         const index = (resolvedPath[3] as number) ?? 0;
                         const deleteCount = patch.length ?? 0;
                         const insertText = patch.value;
-                        node.value = node.value.slice(0, index) + insertText + node.value.slice(index + deleteCount);
+                        const currentValue = node.value || "";
+                        // Skip if this is Automerge's "initialize then fill" pattern and value is already set
+                        if (index === 0 && deleteCount === 0 && currentValue === insertText) {
+                            break;
+                        }
+                        node.value = currentValue.slice(0, index) + insertText + currentValue.slice(index + deleteCount);
+                    } else if (resolvedPath[2] === "tag" && node?.kind === "element" && typeof patch.value === "string") {
+                        // Splice into an element node's tag string
+                        const index = (resolvedPath[3] as number) ?? 0;
+                        const deleteCount = patch.length ?? 0;
+                        const insertText = patch.value;
+                        const currentTag = node.tag || "";
+                        // Skip if this is Automerge's "initialize then fill" pattern and tag is already set
+                        if (index === 0 && deleteCount === 0 && currentTag === insertText) {
+                            break;
+                        }
+                        node.tag = currentTag.slice(0, index) + insertText + currentTag.slice(index + deleteCount);
+                    } else if (resolvedPath[2] === "kind" && node && typeof patch.value === "string") {
+                        // Skip kind splices - the kind is set correctly by the initial put
+                        // Automerge's splice would duplicate it (e.g., "element" -> "elementelement")
+                        break;
+                    } else if (resolvedPath[2] === "children" && node?.kind === "element" && resolvedPath.length >= 4) {
+                        // Splice into a children array element
+                        // Path: ["nodes", nodeId, "children", index, charIndex]
+                        // This is Automerge's way of filling in a child node ID after inserting an empty string
+                        const childIndex = resolvedPath[3] as number;
+                        const charIndex = (resolvedPath[4] as number) ?? 0;
+                        
+                        if (childIndex < node.children.length && typeof patch.value === "string") {
+                            // Resolve the value (which may be a variable like "$1")
+                            const resolvedValue = resolveValue(patch.value) as string;
+                            const currentValue = node.children[childIndex] || "";
+                            const deleteCount = patch.length ?? 0;
+                            node.children[childIndex] = currentValue.slice(0, charIndex) + resolvedValue + currentValue.slice(charIndex + deleteCount);
+                        }
                     }
                 }
                 break;

@@ -13,6 +13,8 @@
     - **Unused Code:** `unused-imports/no-unused-imports` is an error. Unused variables must be prefixed with `_`.
     - **No Any:** Usage of `any` is strictly prohibited. Use `unknown` or specific types instead.
 - **Testing:**
+  - Always write tests for new features and bug fixes.
+  - Always test UI features in Playwright.
   - **E2E/Integration:** `npm run test` (Playwright).
   - **UI Mode:** `npm run test:ui`
   - Tests are located in `tests/` and configured in `playwright.config.ts`.
