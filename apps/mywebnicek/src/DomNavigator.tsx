@@ -284,10 +284,12 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: Rea
   function handleKeyDown(e: React.KeyboardEvent) {
     if (!containerRef.current) return;
 
-    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Escape"].includes(e.key)) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
+    // Only handle specific navigation keys
+    const navigationKeys = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Escape"];
+    if (!navigationKeys.includes(e.key)) return;
+
+    e.preventDefault();
+    e.stopPropagation();
 
     if (e.key === "Escape") {
       setSelectedElements([]);

@@ -1,5 +1,5 @@
 import { Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, DrawerBody, DrawerHeader, DrawerHeaderTitle, InlineDrawer, Switch, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
-import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CameraRegular, ChatRegular, CodeRegular, EditFilled, EditRegular, PlayRegular, RecordRegular, RenameFilled, RenameRegular, StopRegular } from "@fluentui/react-icons";
+import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CameraRegular, ChatRegular, ClipboardPasteRegular, CodeRegular, CopyRegular, EditFilled, EditRegular, PlayRegular, RecordRegular, RenameFilled, RenameRegular, StopRegular } from "@fluentui/react-icons";
 import type { DenicekAction, DenicekActions, JsonDoc } from "@mydenicek/react";
 import {
   useConnectivity,
@@ -9,7 +9,7 @@ import {
   useSelectedNode,
   useSelection
 } from "@mydenicek/react";
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AddNodePopoverButton } from "./AddNodePopoverButton";
 import { DomNavigator, type DomNavigatorHandle } from "./DomNavigator";
@@ -85,6 +85,44 @@ export const App = () => {
     if (selectedNodeIds.length === 0) return;
     updateAttribute(selectedNodeIds, key, value);
   };
+
+  // Clipboard state for copy/paste of input values
+  const [clipboardValue, setClipboardValue] = useState<string | null>(null);
+
+  // Check if selected node is an input element
+  const isInputSelected = node?.kind === "element" && node.tag === "input";
+  // Check if selected node is a value node
+  const isValueSelected = node?.kind === "value";
+
+  const handleCopyFromInput = useCallback(() => {
+    if (!selectedNodeId || !isInputSelected) return;
+    const inputEl = document.querySelector(`[data-node-guid="${selectedNodeId}"]`) as HTMLInputElement | null;
+    if (!inputEl) return;
+    setClipboardValue(inputEl.value);
+  }, [selectedNodeId, isInputSelected]);
+
+  const handlePasteToValue = useCallback(() => {
+    if (!selectedNodeId || !isValueSelected || clipboardValue === null) return;
+    const valueNode = model?.getNode(selectedNodeId);
+    const originalValue = valueNode?.kind === "value" ? valueNode.value : "";
+    updateValue([selectedNodeId], clipboardValue, originalValue);
+  }, [selectedNodeId, isValueSelected, clipboardValue, model, updateValue]);
+
+  // Keyboard shortcuts for Ctrl+C and Ctrl+V
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "c" && isInputSelected) {
+        e.preventDefault();
+        handleCopyFromInput();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "v" && isValueSelected && clipboardValue !== null) {
+        e.preventDefault();
+        handlePasteToValue();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isInputSelected, isValueSelected, clipboardValue, handleCopyFromInput, handlePasteToValue]);
 
   const docActions: DenicekActions = useMemo(() => ({
     undo, redo, canUndo, canRedo,
@@ -208,6 +246,23 @@ export const App = () => {
                   }}
                 />
               )}
+
+              <Tooltip content="Copy input value (Ctrl+C)" relationship="label">
+                <ToolbarButton
+                  icon={<CopyRegular />}
+                  disabled={!isInputSelected}
+                  onClick={handleCopyFromInput}
+                />
+              </Tooltip>
+
+
+              <Tooltip content={`Paste value (Ctrl+V)`} relationship="label">
+                <ToolbarButton
+                  icon={<ClipboardPasteRegular />}
+                  onClick={handlePasteToValue}
+                  disabled={!isValueSelected || clipboardValue === null}
+                />
+              </Tooltip>
 
               {isGeneralizedSelection && node?.kind === "element" && (
                 <ToolbarPopoverButton
