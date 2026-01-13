@@ -1,14 +1,36 @@
 import { next as Automerge } from "@automerge/automerge";
-import type { AppliedTransformations, ElementNode, JsonDoc, Node, Transformation, ValueNode } from "./types";
+import type { ElementNode, JsonDoc, Node, Transformation, ValueNode } from "./types";
 
 /**
- * Options for adding a transformation
+ * Splice info for edit transformations.
+ */
+export interface SpliceInfo {
+  /** Index in the string where the splice starts */
+  index: number;
+  /** Number of characters to delete */
+  deleteCount: number;
+  /** Text to insert at the index */
+  insertText: string;
+}
+
+/**
+ * Options for adding a transformation.
+ * Includes both selector options (which nodes to match) and payload options (what to do).
  */
 export interface AddTransformationOptions {
+  // === Selector options ===
   /** Only apply to descendants matching this tag */
   selectorTag?: string;
   /** Only apply to descendants at this depth from LCA (1 = direct children) */
   selectorDepth?: number;
+  /** Only apply to nodes of this kind (element or value) */
+  selectorKind?: "element" | "value";
+
+  // === Payload options (depends on transformation type) ===
+  /** The tag to use for wrap/rename transformations */
+  tag?: string;
+  /** Splice info for edit transformations */
+  splice?: SpliceInfo;
 }
 
 export class DenicekModel {
@@ -77,37 +99,17 @@ export class DenicekModel {
     return c && typeof c.randomUUID === 'function' ? c.randomUUID() : `uuid-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   }
 
-  updateValue(id: string, newValue: string, originalValue: string): void {
-    const { index, deleteCount, insertText } = this.calculateSplice(originalValue, newValue);
+  /**
+   * Applies a splice operation to a value node.
+   * This is a primitive operation - callers should calculate the splice info externally.
+   */
+  spliceValue(id: string, index: number, deleteCount: number, insertText: string): void {
     const node = this.doc.nodes[id];
     if (node?.kind === "value") {
-      if (index === 0 && deleteCount === originalValue.length && insertText === newValue) {
-        node.value = newValue;
-      } else {
-        const safeIndex = Math.min(index, node.value.length);
-        Automerge.splice(this.doc, ['nodes', id, 'value'], safeIndex, deleteCount, insertText);
-      }
+      const safeIndex = Math.min(index, node.value.length);
+      const safeDeleteCount = Math.min(deleteCount, node.value.length - safeIndex);
+      Automerge.splice(this.doc, ['nodes', id, 'value'], safeIndex, safeDeleteCount, insertText);
     }
-  }
-
-  private calculateSplice(oldVal: string, newVal: string) {
-    let start = 0;
-    while (start < oldVal.length && start < newVal.length && oldVal[start] === newVal[start]) {
-      start++;
-    }
-
-    let oldEnd = oldVal.length;
-    let newEnd = newVal.length;
-
-    while (oldEnd > start && newEnd > start && oldVal[oldEnd - 1] === newVal[newEnd - 1]) {
-      oldEnd--;
-      newEnd--;
-    }
-
-    const deleteCount = oldEnd - start;
-    const insertText = newVal.slice(start, newEnd);
-
-    return { index: start, deleteCount, insertText };
   }
 
   updateAttribute(id: string, key: string, value: unknown | undefined): void {
@@ -240,8 +242,11 @@ export class DenicekModel {
 
   /**
    * Adds a transformation for descendants of the given LCA.
+   * 
+   * For 'wrap' and 'rename': pass options.tag
+   * For 'edit': pass options.splice (pre-calculated splice info)
    */
-  addTransformation(lca: string, type: "wrap" | "rename", tag: string, options: AddTransformationOptions = {}): void {
+  addTransformation(lca: string, type: "wrap" | "rename" | "edit", options: AddTransformationOptions = {}): void {
     const nodes = this.doc.nodes;
     if (nodes[lca]?.kind !== "element") return;
 
@@ -253,13 +258,24 @@ export class DenicekModel {
       lca,
       version,
       type,
-      tag,
     };
+
+    // Add payload based on type
+    if ((type === "wrap" || type === "rename") && options.tag !== undefined) {
+      t.tag = options.tag;
+    } else if (type === "edit" && options.splice !== undefined) {
+      t.splice = options.splice;
+    }
+
+    // Add selector options
     if (options.selectorTag !== undefined) {
       t.selectorTag = options.selectorTag;
     }
     if (options.selectorDepth !== undefined) {
       t.selectorDepth = options.selectorDepth;
+    }
+    if (options.selectorKind !== undefined) {
+      t.selectorKind = options.selectorKind;
     }
     
     const key = this.getTransformationKey(t);
@@ -315,7 +331,14 @@ export class DenicekModel {
     const depth = this.getDepthFromAncestor(nodeId, t.lca);
     if (depth === undefined || depth === 0) return { matches: false, depth: 0 }; // not a descendant or is the LCA itself
     
-    // Check tag selector
+    // Check kind selector (element vs value)
+    if (t.selectorKind !== undefined) {
+      if (node.kind !== t.selectorKind) {
+        return { matches: false, depth };
+      }
+    }
+    
+    // Check tag selector (only applies to elements)
     if (t.selectorTag !== undefined) {
       if (node.kind !== "element" || node.tag !== t.selectorTag) {
         return { matches: false, depth };
@@ -408,9 +431,9 @@ export class DenicekModel {
     }
     
     // Apply the new transformation
-    if (t.type === "rename" && node.kind === "element") {
+    if (t.type === "rename" && node.kind === "element" && t.tag) {
       node.tag = t.tag;
-    } else if (t.type === "wrap") {
+    } else if (t.type === "wrap" && t.tag) {
       // Check if already wrapped with correct tag (idempotent)
       const parents = this.getParents(nodeId);
       const alreadyWrapped = parents.some(p => 
@@ -421,6 +444,12 @@ export class DenicekModel {
       if (!alreadyWrapped) {
         this.wrapNode(nodeId, t.tag);
       }
+    } else if (t.type === "edit" && node.kind === "value" && t.splice) {
+      // Apply smart splice to value node
+      const { index, deleteCount, insertText } = t.splice;
+      const safeIndex = Math.min(index, node.value.length);
+      const safeDeleteCount = Math.min(deleteCount, node.value.length - safeIndex);
+      Automerge.splice(this.doc, ['nodes', nodeId, 'value'], safeIndex, safeDeleteCount, insertText);
     }
     
     // Record that this transformation was applied
@@ -648,15 +677,16 @@ export class DenicekModel {
     lcaId: string | null;
     selectorTag: string | undefined;
     selectorDepth: number | undefined;
+    selectorKind: "element" | "value" | undefined;
     matchingNodeIds: string[];
   } {
     if (nodeIds.length === 0) {
-      return { lcaId: null, selectorTag: undefined, selectorDepth: undefined, matchingNodeIds: [] };
+      return { lcaId: null, selectorTag: undefined, selectorDepth: undefined, selectorKind: undefined, matchingNodeIds: [] };
     }
     
     let lcaId = this.findLowestCommonAncestor(nodeIds);
     if (!lcaId) {
-      return { lcaId: null, selectorTag: undefined, selectorDepth: undefined, matchingNodeIds: [] };
+      return { lcaId: null, selectorTag: undefined, selectorDepth: undefined, selectorKind: undefined, matchingNodeIds: [] };
     }
 
     const parentMap = this.buildParentMap();
@@ -678,10 +708,11 @@ export class DenicekModel {
       return current === lcaId ? depth : -1;
     };
 
-    // Gather tags and depths from selected nodes
+    // Gather tags, depths, and kinds from selected nodes
     const selectedTags = new Set<string>();
     const selectedDepths = new Set<number>();
     let hasValues = false;
+    let hasElements = false;
 
     for (const id of nodeIds) {
       const node = this.doc.nodes[id];
@@ -692,6 +723,7 @@ export class DenicekModel {
 
       if (node.kind === 'element') {
         selectedTags.add(node.tag);
+        hasElements = true;
       } else if (node.kind === 'value') {
         hasValues = true;
       }
@@ -699,13 +731,21 @@ export class DenicekModel {
 
     const allSameTag = selectedTags.size === 1 && !hasValues;
     const allSameDepth = selectedDepths.size === 1;
+    
+    // Determine selectorKind: if all selected are values, use "value"; if all are elements, use "element"
+    // If mixed, don't set selectorKind
+    const selectorKind: "element" | "value" | undefined = 
+      (hasValues && !hasElements) ? "value" : 
+      (hasElements && !hasValues) ? "element" : 
+      undefined;
 
     // Case 4: Different tags AND different depths → no generalization
     if (!allSameTag && !allSameDepth) {
       return { 
         lcaId, 
         selectorTag: undefined, 
-        selectorDepth: undefined, 
+        selectorDepth: undefined,
+        selectorKind,
         matchingNodeIds: [...nodeIds] 
       };
     }
@@ -722,24 +762,26 @@ export class DenicekModel {
       if (node.kind === 'element') {
         const tagMatches = selectorTag === undefined || node.tag === selectorTag;
         const depthMatches = selectorDepth === undefined || currentDepth === selectorDepth;
+        const kindMatches = selectorKind === undefined || selectorKind === 'element';
 
-        if (tagMatches && depthMatches && currentDepth > 0) {
+        if (tagMatches && depthMatches && kindMatches && currentDepth > 0) {
           results.push(currentId);
         }
 
         for (const childId of node.children) {
           traverse(childId, currentDepth + 1);
         }
-      } else if (node.kind === 'value' && hasValues) {
+      } else if (node.kind === 'value') {
         const depthMatches = selectorDepth === undefined || currentDepth === selectorDepth;
-        if (depthMatches && currentDepth > 0) {
+        const kindMatches = selectorKind === undefined || selectorKind === 'value';
+        if (depthMatches && kindMatches && currentDepth > 0) {
           results.push(currentId);
         }
       }
     };
 
     traverse(lcaId, 0);
-    return { lcaId, selectorTag, selectorDepth, matchingNodeIds: results };
+    return { lcaId, selectorTag, selectorDepth, selectorKind, matchingNodeIds: results };
   }
 
   generalizeSelection(nodeIds: string[]): string[] {

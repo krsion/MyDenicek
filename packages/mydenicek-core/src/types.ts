@@ -66,11 +66,22 @@ export type Transformation = {
   /** Version number for this LCA+selector combination */
   version: number;
   /** Type of transformation */
-  type: "wrap" | "rename";
+  type: "wrap" | "rename" | "edit";
   /** The new tag to apply (for rename) or wrapper tag (for wrap) */
-  tag: string;
+  tag?: string;
   /** Optional: only apply to children matching this tag */
   selectorTag?: string;
   /** Optional: only apply to descendants at this depth from LCA (1 = direct children) */
   selectorDepth?: number;
+  /** Optional: only apply to nodes of this kind ("element" or "value") */
+  selectorKind?: "element" | "value";
+  /** For 'edit' transformations: the splice operation details */
+  splice?: {
+    /** Index in the string where the splice starts */
+    index: number;
+    /** Number of characters to delete */
+    deleteCount: number;
+    /** Text to insert at the index */
+    insertText: string;
+  };
 };

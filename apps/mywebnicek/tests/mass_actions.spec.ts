@@ -5,16 +5,20 @@ test.describe('Mass Actions (Generalized Transformations)', () => {
     await page.goto('/');
   });
 
-  test('Rename all - renames all li elements when selecting li items', async ({ page }) => {
-    // Select first li element in the first article
+  test('Rename all - renames all li elements when selecting li items with Shift+click', async ({ page }) => {
+    // Select first and second li elements with Shift+click to trigger generalized selection
     const item1 = page.locator('x-value', { hasText: 'Item A1' });
+    const item2 = page.locator('x-value', { hasText: 'Item A2' });
     await expect(item1).toBeVisible();
+    await expect(item2).toBeVisible();
     
-    // Click on the li parent
+    // Click on the li parents
     const li1 = item1.locator('xpath=..');
+    const li2 = item2.locator('xpath=..');
     await li1.click();
+    await li2.click({ modifiers: ['Shift'] }); // Shift+click triggers generalized selection
     
-    // Click "Rename all" button
+    // Click "Rename all" button (should now be visible)
     const renameAllBtn = page.getByLabel('Rename all matching', { exact: true });
     await expect(renameAllBtn).toBeEnabled();
     await renameAllBtn.click();
@@ -33,8 +37,25 @@ test.describe('Mass Actions (Generalized Transformations)', () => {
     await expect(page.locator('ul > list-item')).toHaveCount(3);
   });
 
-  test('Rename all - renames matching elements at same depth when multi-selecting', async ({ page }) => {
-    // Select two li items at same depth (will generalize to all li at that depth)
+  test('Regular click shows Rename button (not Rename all)', async ({ page }) => {
+    // Select a single element with regular click
+    const item1 = page.locator('x-value', { hasText: 'Item A1' });
+    await expect(item1).toBeVisible();
+    
+    const li1 = item1.locator('xpath=..');
+    await li1.click();
+    
+    // "Rename" button should be visible
+    const renameBtn = page.getByLabel('Rename', { exact: true });
+    await expect(renameBtn).toBeEnabled();
+    
+    // "Rename all" button should NOT be visible
+    const renameAllBtn = page.getByLabel('Rename all matching', { exact: true });
+    await expect(renameAllBtn).not.toBeVisible();
+  });
+
+  test('Ctrl+click multi-select shows Rename button (not Rename all)', async ({ page }) => {
+    // Select two li items at same depth with Ctrl+click (regular multi-select, not generalized)
     const item1 = page.locator('x-value', { hasText: 'Item A1' });
     const item2 = page.locator('x-value', { hasText: 'Item A2' });
     
@@ -44,33 +65,31 @@ test.describe('Mass Actions (Generalized Transformations)', () => {
     const li1 = item1.locator('xpath=..');
     const li2 = item2.locator('xpath=..');
     
-    // Multi-select with Ctrl+Click
+    // Multi-select with Ctrl+Click (not Shift)
     await li1.click();
     await li2.click({ modifiers: ['Control'] });
     
-    // Click "Rename all" button
+    // "Rename" button should be visible
+    const renameBtn = page.getByLabel('Rename', { exact: true });
+    await expect(renameBtn).toBeEnabled();
+    
+    // "Rename all" button should NOT be visible
     const renameAllBtn = page.getByLabel('Rename all matching', { exact: true });
-    await expect(renameAllBtn).toBeEnabled();
-    await renameAllBtn.click();
-    
-    // Enter new tag name in the popover
-    const popoverInput = page.locator('.fui-PopoverSurface input');
-    await expect(popoverInput).toBeVisible();
-    await popoverInput.fill('renamed-li');
-    await popoverInput.press('Enter');
-    
-    // All 3 li items in the ul should be renamed
-    await expect(page.locator('ul > renamed-li')).toHaveCount(3);
+    await expect(renameAllBtn).not.toBeVisible();
   });
 
-  test('Wrap all - wraps li elements', async ({ page }) => {
-    // Select an li element
+  test('Wrap all - wraps li elements with Shift+click selection', async ({ page }) => {
+    // Select two li elements with Shift+click to trigger generalized selection
     const item1 = page.locator('x-value', { hasText: 'Item A1' });
+    const item2 = page.locator('x-value', { hasText: 'Item A2' });
     await expect(item1).toBeVisible();
+    await expect(item2).toBeVisible();
     
-    // Get the li parent and click it
+    // Get the li parents and Shift+click
     const li1 = item1.locator('xpath=..');
+    const li2 = item2.locator('xpath=..');
     await li1.click();
+    await li2.click({ modifiers: ['Shift'] });
     
     // Click "Wrap all" button
     const wrapAllBtn = page.getByLabel('Wrap all matching', { exact: true });
@@ -90,11 +109,14 @@ test.describe('Mass Actions (Generalized Transformations)', () => {
     await expect(page.locator('li-wrapper > li')).toHaveCount(3);
   });
 
-  test('Wrap all - wraps h2 elements', async ({ page }) => {
-    // Select an h2 from first article
+  test('Wrap all - wraps h2 elements with Shift+click on two articles', async ({ page }) => {
+    // Select h2 from first and second article with Shift+click
     const h2_articleA = page.locator('h2', { hasText: 'Article A' });
+    const h2_articleB = page.locator('h2', { hasText: 'Article B' });
     await expect(h2_articleA).toBeVisible();
+    await expect(h2_articleB).toBeVisible();
     await h2_articleA.click();
+    await h2_articleB.click({ modifiers: ['Shift'] });
     
     // Click "Wrap all" button
     const wrapAllBtn = page.getByLabel('Wrap all matching', { exact: true });
@@ -107,15 +129,18 @@ test.describe('Mass Actions (Generalized Transformations)', () => {
     await popoverInput.fill('heading-wrapper');
     await popoverInput.press('Enter');
     
-    // The h2 should be wrapped
+    // Multiple h2 elements should be wrapped
     await expect(page.locator('article heading-wrapper > h2').first()).toBeVisible();
   });
 
   test.skip('Rename all shows initial value based on selected element tag', async ({ page }) => {
-    // Select a p element
-    const paragraph = page.locator('p', { hasText: 'Lorem ipsum' });
-    await expect(paragraph).toBeVisible();
-    await paragraph.click();
+    // Select two p elements with Shift+click
+    const paragraph1 = page.locator('p', { hasText: 'Lorem ipsum' });
+    const paragraph2 = page.locator('p', { hasText: 'Sed do eiusmod' });
+    await expect(paragraph1).toBeVisible();
+    await expect(paragraph2).toBeVisible();
+    await paragraph1.click();
+    await paragraph2.click({ modifiers: ['Shift'] });
     
     // Click "Rename all" button
     const renameAllBtn = page.getByLabel('Rename all matching', { exact: true });
@@ -131,10 +156,13 @@ test.describe('Mass Actions (Generalized Transformations)', () => {
   });
 
   test('Transformation is recorded and shown in transformations table', async ({ page }) => {
-    // Select an li element
-    const item = page.locator('x-value', { hasText: 'Item A1' });
-    const li = item.locator('xpath=..');
-    await li.click();
+    // Select two li elements with Shift+click
+    const item1 = page.locator('x-value', { hasText: 'Item A1' });
+    const item2 = page.locator('x-value', { hasText: 'Item A2' });
+    const li1 = item1.locator('xpath=..');
+    const li2 = item2.locator('xpath=..');
+    await li1.click();
+    await li2.click({ modifiers: ['Shift'] });
     
     // Rename all
     const renameAllBtn = page.getByLabel('Rename all matching', { exact: true });
@@ -157,8 +185,8 @@ test.describe('Mass Actions (Generalized Transformations)', () => {
     await expect(table.locator('td', { hasText: 'rename' })).toBeVisible();
   });
 
-  test('Rename all renames all boxes in grid', async ({ page }) => {
-    // Multi-select two box divs at same depth
+  test('Rename all renames all boxes in grid with Shift+click', async ({ page }) => {
+    // Shift+click two box divs to trigger generalized selection
     const box1 = page.locator('x-value', { hasText: 'Box 1' });
     const box3 = page.locator('x-value', { hasText: 'Box 3' });
     
@@ -169,7 +197,7 @@ test.describe('Mass Actions (Generalized Transformations)', () => {
     const div3 = box3.locator('xpath=..');
     
     await div1.click();
-    await div3.click({ modifiers: ['Control'] });
+    await div3.click({ modifiers: ['Shift'] });
     
     // Click "Rename all"
     const renameAllBtn = page.getByLabel('Rename all matching', { exact: true });

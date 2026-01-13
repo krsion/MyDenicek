@@ -36,7 +36,7 @@ const useStyles = makeStyles({
   },
 });
 
-export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: React.ReactNode; onSelectedChange?: (nodeIds: string[]) => void; selectedNodeIds?: string[], remoteSelections?: { [userId: string]: string[] | null }, generalizer?: (nodeIds: string[]) => string[] }>(({ children, onSelectedChange, selectedNodeIds, remoteSelections, generalizer }, forwardedRef) => {
+export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: React.ReactNode; onSelectedChange?: (nodeIds: string[], isGeneralized: boolean) => void; selectedNodeIds?: string[], remoteSelections?: { [userId: string]: string[] | null }, generalizer?: (nodeIds: string[]) => string[] }>(({ children, onSelectedChange, selectedNodeIds, remoteSelections, generalizer }, forwardedRef) => {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [selectedElements, setSelectedElements] = useState<HTMLElement[]>([]);
@@ -292,7 +292,7 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: Rea
     if (e.key === "Escape") {
       setSelectedElements([]);
       setOverlays([]);
-      onSelectedChange?.([]);
+      onSelectedChange?.([], false);
       return;
     }
 
@@ -301,7 +301,7 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: Rea
       const start = firstElementChildOf(containerRef.current);
       if (start) {
         setSelectedElements([start]);
-        onSelectedChange?.([start.getAttribute("data-node-guid") || ""]);
+        onSelectedChange?.([start.getAttribute("data-node-guid") || ""], false);
       }
       return;
     }
@@ -338,7 +338,7 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: Rea
 
       // For now, let's implement simple navigation that clears other selections
       setSelectedElements([next]);
-      onSelectedChange?.([next.getAttribute("data-node-guid") || ""]);
+      onSelectedChange?.([next.getAttribute("data-node-guid") || ""], false);
       // Ensure the element is visible without jumping too much
       next.scrollIntoView({ block: "nearest", inline: "nearest" });
     }
@@ -373,6 +373,11 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: Rea
           const root = containerRef.current;
           if (root) {
             newSelection = generalizedIds.map(id => root.querySelector(`[data-node-guid="${id}"]`) as HTMLElement | null).filter((el): el is HTMLElement => !!el && withinContainer(el));
+            // This is a generalized selection
+            setSelectedElements(newSelection);
+            const ids = newSelection.map(el => el.getAttribute("data-node-guid")).filter((id): id is string => !!id);
+            onSelectedChange?.(ids, true);
+            return;
           } else {
             newSelection = [target];
           }
@@ -405,7 +410,7 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: Rea
     }
 
     setSelectedElements(newSelection);
-    onSelectedChange?.(newSelection.map(el => el.getAttribute("data-node-guid") || "").filter(Boolean));
+    onSelectedChange?.(newSelection.map(el => el.getAttribute("data-node-guid") || "").filter(Boolean), false);
   }
 
   // Helper function for programmatic navigation
@@ -415,7 +420,7 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: Rea
       const start = firstElementChildOf(containerRef.current);
       if (start) {
         setSelectedElements([start]);
-        onSelectedChange?.([start.getAttribute("data-node-guid") || ""]);
+        onSelectedChange?.([start.getAttribute("data-node-guid") || ""], false);
       }
       return;
     }
@@ -425,7 +430,7 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: Rea
     const next = getNext(anchor);
     if (next && next !== anchor) {
       setSelectedElements([next]);
-      onSelectedChange?.([next.getAttribute("data-node-guid") || ""]);
+      onSelectedChange?.([next.getAttribute("data-node-guid") || ""], false);
       next.scrollIntoView({ block: "nearest", inline: "nearest" });
     }
   }, [selectedElements, onSelectedChange]);
@@ -439,7 +444,7 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: Rea
     clearSelection: () => {
       setSelectedElements([]);
       setOverlays([]);
-      onSelectedChange?.([]);
+      onSelectedChange?.([], false);
     }
   }), [navigate, onSelectedChange]);
 

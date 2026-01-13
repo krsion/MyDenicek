@@ -1,5 +1,5 @@
 import { Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, DrawerBody, DrawerHeader, DrawerHeaderTitle, InlineDrawer, Switch, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
-import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CameraRegular, ChatRegular, CodeRegular, EditRegular, PlayRegular, RecordRegular, RenameFilled, RenameRegular, StopRegular } from "@fluentui/react-icons";
+import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CameraRegular, ChatRegular, CodeRegular, EditFilled, EditRegular, PlayRegular, RecordRegular, RenameFilled, RenameRegular, StopRegular } from "@fluentui/react-icons";
 import type { DenicekAction, DenicekActions, JsonDoc } from "@mydenicek/react";
 import {
   useConnectivity,
@@ -40,6 +40,7 @@ export const App = () => {
 
   const [connected, setConnected] = useState(true);
   const [showAiPanel, setShowAiPanel] = useState(false);
+  const [isGeneralizedSelection, setIsGeneralizedSelection] = useState(false);
   const navigatorRef = useRef<DomNavigatorHandle>(null);
 
   const handleStartRecording = () => {
@@ -152,64 +153,86 @@ export const App = () => {
               />
 
               {node?.kind === "value" ? (
-                <ToolbarPopoverButton
-                  text="Edit"
-                  icon={<EditRegular />}
-                  disabled={false}
-                  ariaLabel="Edit"
-                  placeholder="Value content"
-                  initialValue={details?.value || ""}
-                  onSubmit={(value) => {
-                    const originalValue = details?.value || "";
-                    updateValue(selectedNodeIds, value, originalValue);
-                  }}
-                />
+                isGeneralizedSelection ? (
+                  <ToolbarPopoverButton
+                    text="Edit all"
+                    icon={<EditFilled />}
+                    disabled={false}
+                    ariaLabel="Edit all matching"
+                    placeholder="Value content"
+                    initialValue={details?.value || ""}
+                    onSubmit={(value) => {
+                      const originalValue = details?.value || "";
+                      addGeneralizedTransformation(selectedNodeIds, "edit", { originalValue, newValue: value });
+                    }}
+                  />
+                ) : (
+                  <ToolbarPopoverButton
+                    text="Edit"
+                    icon={<EditRegular />}
+                    disabled={false}
+                    ariaLabel="Edit"
+                    placeholder="Value content"
+                    initialValue={details?.value || ""}
+                    onSubmit={(value) => {
+                      const originalValue = details?.value || "";
+                      updateValue(selectedNodeIds, value, originalValue);
+                    }}
+                  />
+                )
               ) : (
+                !isGeneralizedSelection && (
+                  <ToolbarPopoverButton
+                    text="Rename"
+                    icon={<RenameRegular />}
+                    disabled={!selectedNodeId || node?.kind !== "element"}
+                    ariaLabel="Rename"
+                    placeholder="Tag name (e.g. div)"
+                    initialValue={details?.tag || details?.dom?.tagName || ""}
+                    onSubmit={(tag) => {
+                      updateTag(selectedNodeIds, tag);
+                      if (selectedNodeId) clickOnSelectedNode(selectedNodeId);
+                    }}
+                  />
+                )
+              )}
+              {!isGeneralizedSelection && (
                 <ToolbarPopoverButton
-                  text="Rename"
-                  icon={<RenameRegular />}
-                  disabled={!selectedNodeId || node?.kind !== "element"}
-                  ariaLabel="Rename"
-                  placeholder="Tag name (e.g. div)"
-                  initialValue={details?.tag || details?.dom?.tagName || ""}
+                  text="Wrap"
+                  icon={<BackpackRegular />}
+                  disabled={!selectedNodeId}
+                  ariaLabel="Wrap"
                   onSubmit={(tag) => {
-                    updateTag(selectedNodeIds, tag);
+                    wrapNodes(selectedNodeIds, tag);
                     if (selectedNodeId) clickOnSelectedNode(selectedNodeId);
                   }}
                 />
               )}
-              <ToolbarPopoverButton
-                text="Wrap"
-                icon={<BackpackRegular />}
-                disabled={!selectedNodeId}
-                ariaLabel="Wrap"
-                onSubmit={(tag) => {
-                  wrapNodes(selectedNodeIds, tag);
-                  if (selectedNodeId) clickOnSelectedNode(selectedNodeId);
-                }}
-              />
-              <ToolbarDivider />
 
-              <ToolbarPopoverButton
-                text="Rename all"
-                icon={<RenameFilled />}
-                disabled={!selectedNodeId}
-                initialValue={(node?.kind === "element") ? node.tag : ""}
-                ariaLabel="Rename all matching"
-                onSubmit={(tag) => {
-                  addGeneralizedTransformation(selectedNodeIds, "rename", tag);
-                }}
-              />
+              {isGeneralizedSelection && node?.kind === "element" && (
+                <ToolbarPopoverButton
+                  text="Rename all"
+                  icon={<RenameFilled />}
+                  disabled={!selectedNodeId}
+                  initialValue={(node?.kind === "element") ? node.tag : ""}
+                  ariaLabel="Rename all matching"
+                  onSubmit={(tag) => {
+                    addGeneralizedTransformation(selectedNodeIds, "rename", { tag });
+                  }}
+                />
+              )}
 
-              <ToolbarPopoverButton
-                text="Wrap all"
-                icon={<BackpackFilled />}
-                disabled={!selectedNodeId}
-                ariaLabel="Wrap all matching"
-                onSubmit={(tag) => {
-                  addGeneralizedTransformation(selectedNodeIds, "wrap", tag);
-                }}
-              />
+              {isGeneralizedSelection && (
+                <ToolbarPopoverButton
+                  text="Wrap all"
+                  icon={<BackpackFilled />}
+                  disabled={!selectedNodeId}
+                  ariaLabel="Wrap all matching"
+                  onSubmit={(tag) => {
+                    addGeneralizedTransformation(selectedNodeIds, "wrap", { tag });
+                  }}
+                />
+              )}
             </ToolbarGroup>
 
             <ToolbarGroup>
@@ -261,7 +284,7 @@ export const App = () => {
           </TagGroup>}
           />
 
-          <DomNavigator ref={navigatorRef} onSelectedChange={(ids) => { setSelectedNodeIds(ids) }} selectedNodeIds={selectedNodeIds} remoteSelections={remoteSelections} generalizer={(ids) => model.generalizeSelection(ids)}>
+          <DomNavigator ref={navigatorRef} onSelectedChange={(ids, isGeneralized) => { setSelectedNodeIds(ids); setIsGeneralizedSelection(isGeneralized); }} selectedNodeIds={selectedNodeIds} remoteSelections={remoteSelections} generalizer={(ids) => model.generalizeSelection(ids)}>
             <RenderedDocument model={model} />
           </DomNavigator>
 

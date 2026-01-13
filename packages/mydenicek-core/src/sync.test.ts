@@ -187,7 +187,7 @@ describe("Sync and Conflict Resolution", () => {
       // Peer A adds a transformation to rename all li to div
       docA = Automerge.change(docA, (d) => {
         const model = new DenicekModel(d);
-        model.addTransformation("root", "rename", "div");
+        model.addTransformation("root", "rename", { tag: "div" });
       });
 
       // Sync - peer B receives the transformation
@@ -210,7 +210,7 @@ describe("Sync and Conflict Resolution", () => {
       // Peer A adds a transformation
       docA = Automerge.change(docA, (d) => {
         const model = new DenicekModel(d);
-        model.addTransformation("root", "rename", "div");
+        model.addTransformation("root", "rename", { tag: "div" });
       });
 
       // Peer B adds a new child (without knowing about transformation)
@@ -244,7 +244,7 @@ describe("Sync and Conflict Resolution", () => {
       // Apply first transformation
       docA = Automerge.change(docA, (d) => {
         const model = new DenicekModel(d);
-        model.addTransformation("root", "rename", "div");
+        model.addTransformation("root", "rename", { tag: "div" });
       });
 
       // Clone after first transformation
@@ -253,7 +253,7 @@ describe("Sync and Conflict Resolution", () => {
       // Peer A adds second transformation
       docA = Automerge.change(docA, (d) => {
         const model = new DenicekModel(d);
-        model.addTransformation("root", "rename", "span");
+        model.addTransformation("root", "rename", { tag: "span" });
       });
 
       // Peer B manually sets a child's version higher than transformation 1
@@ -282,13 +282,13 @@ describe("Sync and Conflict Resolution", () => {
       // Peer A adds a rename transformation (will be version 1)
       docA = Automerge.change(docA, (d) => {
         const model = new DenicekModel(d);
-        model.addTransformation("root", "rename", "div");
+        model.addTransformation("root", "rename", { tag: "div" });
       });
 
       // Peer B also adds a rename transformation (also version 1)
       docB = Automerge.change(docB, (d) => {
         const model = new DenicekModel(d);
-        model.addTransformation("root", "rename", "span");
+        model.addTransformation("root", "rename", { tag: "span" });
       });
 
       // Verify both have the same key before sync (new format: lca:tag:depth:version)
@@ -333,13 +333,13 @@ describe("Sync and Conflict Resolution", () => {
       // Peer A wraps with "article" (version 1)
       docA = Automerge.change(docA, (d) => {
         const model = new DenicekModel(d);
-        model.addTransformation("root", "wrap", "article");
+        model.addTransformation("root", "wrap", { tag: "article" });
       });
 
       // Peer B wraps with "section" (also version 1)
       docB = Automerge.change(docB, (d) => {
         const model = new DenicekModel(d);
-        model.addTransformation("root", "wrap", "section");
+        model.addTransformation("root", "wrap", { tag: "section" });
       });
 
       // Both have applied their wrap transformations locally
@@ -385,7 +385,7 @@ describe("Sync and Conflict Resolution", () => {
       // Peer A adds wrap transformation
       docA = Automerge.change(docA, (d) => {
         const model = new DenicekModel(d);
-        model.addTransformation("root", "wrap", "article");
+        model.addTransformation("root", "wrap", { tag: "article" });
       });
 
       // Peer B adds a new li child
@@ -427,7 +427,7 @@ describe("Sync and Conflict Resolution", () => {
       });
       docA = Automerge.change(docA, (d) => {
         const model = new DenicekModel(d);
-        model.addTransformation("root", "rename", "p");
+        model.addTransformation("root", "rename", { tag: "p" });
       });
 
       // Peer B: edit text, add child
@@ -470,7 +470,7 @@ describe("Sync and Conflict Resolution", () => {
       // Peer A adds transformation
       docA = Automerge.change(docA, (d) => {
         const model = new DenicekModel(d);
-        model.addTransformation("root", "rename", "div");
+        model.addTransformation("root", "rename", { tag: "div" });
       });
 
       // Sync A -> B
@@ -515,7 +515,7 @@ describe("Sync and Conflict Resolution", () => {
       let doc = createMinimalDoc();
       doc = Automerge.change(doc, (d) => {
         const model = new DenicekModel(d);
-        model.addTransformation("non-existent", "rename", "div");
+        model.addTransformation("non-existent", "rename", { tag: "div" });
       });
       // Should not throw, transformation should be empty or ignored
       expect(Object.keys(doc.transformations).length).toBe(0);
@@ -530,7 +530,7 @@ describe("Sync and Conflict Resolution", () => {
       // Add transformation
       docA = Automerge.change(docA, (d) => {
         const model = new DenicekModel(d);
-        model.addTransformation("root", "rename", "div");
+        model.addTransformation("root", "rename", { tag: "div" });
       });
 
       // Version should now be 1
@@ -544,13 +544,13 @@ describe("Sync and Conflict Resolution", () => {
       // Add first transformation
       doc = Automerge.change(doc, (d) => {
         const model = new DenicekModel(d);
-        model.addTransformation("root", "rename", "div");
+        model.addTransformation("root", "rename", { tag: "div" });
       });
 
       // Add second transformation
       doc = Automerge.change(doc, (d) => {
         const model = new DenicekModel(d);
-        model.addTransformation("root", "rename", "span");
+        model.addTransformation("root", "rename", { tag: "span" });
       });
 
       // Final tag should be span (version 2)
@@ -567,7 +567,7 @@ describe("Sync and Conflict Resolution", () => {
       // Add transformation (version 1)
       doc = Automerge.change(doc, (d) => {
         const model = new DenicekModel(d);
-        model.addTransformation("root", "rename", "div");
+        model.addTransformation("root", "rename", { tag: "div" });
       });
 
       // Existing children should be renamed
@@ -596,7 +596,7 @@ describe("Sync and Conflict Resolution", () => {
       // Add transformation (version 1)
       doc = Automerge.change(doc, (d) => {
         const model = new DenicekModel(d);
-        model.addTransformation("root", "rename", "div");
+        model.addTransformation("root", "rename", { tag: "div" });
       });
 
       // Add sibling AFTER the transformation
@@ -638,7 +638,7 @@ describe("Sync and Conflict Resolution", () => {
       // Add transformation that only targets 'p' elements
       amDoc = Automerge.change(amDoc, (d) => {
         const model = new DenicekModel(d);
-        model.addTransformation("root", "rename", "paragraph", { selectorTag: "p" });
+        model.addTransformation("root", "rename", { tag: "paragraph", selectorTag: "p" });
       });
       
       // Only p elements should be renamed
@@ -665,7 +665,7 @@ describe("Sync and Conflict Resolution", () => {
       // Add transformation that only targets depth 1
       amDoc = Automerge.change(amDoc, (d) => {
         const model = new DenicekModel(d);
-        model.addTransformation("root", "rename", "first-level", { selectorDepth: 1 });
+        model.addTransformation("root", "rename", { tag: "first-level", selectorDepth: 1 });
       });
       
       // Only depth 1 should be renamed
@@ -693,7 +693,7 @@ describe("Sync and Conflict Resolution", () => {
       // Add transformation that targets 'li' at depth 1
       amDoc = Automerge.change(amDoc, (d) => {
         const model = new DenicekModel(d);
-        model.addTransformation("root", "rename", "list-item", { selectorTag: "li", selectorDepth: 1 });
+        model.addTransformation("root", "rename", { tag: "list-item", selectorTag: "li", selectorDepth: 1 });
       });
       
       // Only li at depth 1 should be renamed
