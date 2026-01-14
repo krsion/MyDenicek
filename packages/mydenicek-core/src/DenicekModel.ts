@@ -31,6 +31,11 @@ export interface AddTransformationOptions {
   tag?: string;
   /** Splice info for edit transformations */
   splice?: SpliceInfo;
+  /** 
+   * Optional prefix for generating wrapper IDs (for wrap transformations).
+   * If not provided, a default prefix based on transformation key will be used.
+   */
+  wrapperIdPrefix?: string;
 }
 
 export class DenicekModel {
@@ -140,18 +145,32 @@ export class DenicekModel {
     }
   }
 
-  wrapNode(targetId: string, wrapperTag: string): string {
-    let wrapperId = "w-" + targetId;
-    while (this.doc.nodes[wrapperId]) wrapperId = wrapperId + "_w";
+  wrapNode(targetId: string, wrapperTag: string, wrapperId?: string): string {
+    // If wrapperId is provided (from transformation), use it; otherwise generate one
+    let actualWrapperId = wrapperId ?? ("w-" + targetId);
+    
+    // If no explicit wrapperId was provided, ensure uniqueness
+    if (!wrapperId) {
+      while (this.doc.nodes[actualWrapperId]) actualWrapperId = actualWrapperId + "_w";
+    }
+    
+    // If wrapper already exists with correct structure, this is idempotent
+    const existingWrapper = this.doc.nodes[actualWrapperId];
+    if (existingWrapper?.kind === "element" && 
+        existingWrapper.tag === wrapperTag && 
+        existingWrapper.children.length === 1 && 
+        existingWrapper.children[0] === targetId) {
+      return actualWrapperId; // Already correctly wrapped
+    }
     
     for (const parent of this.getParents(targetId)) {
        const idx = parent.children.indexOf(targetId);
        if (idx !== -1) {
-           parent.children[idx] = wrapperId;
+           parent.children[idx] = actualWrapperId;
        }
     }
-    this.doc.nodes[wrapperId] = { kind: "element", tag: wrapperTag, attrs: {}, children: [targetId] };
-    return wrapperId;
+    this.doc.nodes[actualWrapperId] = { kind: "element", tag: wrapperTag, attrs: {}, children: [targetId] };
+    return actualWrapperId;
   }
 
   /**
@@ -261,7 +280,12 @@ export class DenicekModel {
     };
 
     // Add payload based on type
-    if ((type === "wrap" || type === "rename") && options.tag !== undefined) {
+    if (type === "wrap" && options.tag !== undefined) {
+      t.tag = options.tag;
+      // Generate stable wrapper ID prefix for CRDT-friendly idempotent wrapping
+      // The actual wrapperId per node will be generated during application
+      t.wrapperId = options.wrapperIdPrefix ?? `wrap-${lca}-${version}`;
+    } else if (type === "rename" && options.tag !== undefined) {
       t.tag = options.tag;
     } else if (type === "edit" && options.splice !== undefined) {
       t.splice = options.splice;
@@ -412,7 +436,8 @@ export class DenicekModel {
   }
 
   /**
-   * Applies a transformation to a node, handling undo of conflicting transformations.
+   * Applies a transformation to a node.
+   * For wrap transformations, uses the stable wrapperId from the transformation for idempotency.
    */
   applyTransformationToNode(nodeId: string, t: Transformation, key: string): void {
     const node = this.doc.nodes[nodeId];
@@ -420,30 +445,20 @@ export class DenicekModel {
     
     const specificity = this.getTransformationSpecificity(t);
     
-    // Check if we need to undo a previous transformation at this specificity
+    // Check if already applied this exact transformation
     const applied = node.appliedTransformations?.[specificity];
-    if (applied && applied.key !== key) {
-      // Need to undo the previous transformation first
-      const prevT = this.doc.transformations?.[applied.key];
-      if (prevT) {
-        this.undoTransformationOnNode(nodeId, prevT);
-      }
+    if (applied && applied.key === key) {
+      return; // Already applied, idempotent
     }
     
     // Apply the new transformation
     if (t.type === "rename" && node.kind === "element" && t.tag) {
       node.tag = t.tag;
-    } else if (t.type === "wrap" && t.tag) {
-      // Check if already wrapped with correct tag (idempotent)
-      const parents = this.getParents(nodeId);
-      const alreadyWrapped = parents.some(p => 
-        p.tag === t.tag && 
-        p.children.length === 1 && 
-        p.children[0] === nodeId
-      );
-      if (!alreadyWrapped) {
-        this.wrapNode(nodeId, t.tag);
-      }
+    } else if (t.type === "wrap" && t.tag && t.wrapperId) {
+      // Generate stable per-node wrapper ID from the transformation's wrapper ID prefix
+      // This ensures each target node gets a unique but deterministic wrapper
+      const perNodeWrapperId = `${t.wrapperId}-${nodeId}`;
+      this.wrapNode(nodeId, t.tag, perNodeWrapperId);
     } else if (t.type === "edit" && node.kind === "value" && t.splice) {
       // Apply smart splice to value node
       const { index, deleteCount, insertText } = t.splice;
@@ -458,26 +473,6 @@ export class DenicekModel {
     }
     node.appliedTransformations[specificity] = { version: t.version, key };
     node.version = Math.max(node.version ?? 0, t.version);
-  }
-
-  /**
-   * Undoes a transformation on a node.
-   * Note: This doesn't restore the original state perfectly, but prepares for a new transformation.
-   */
-  private undoTransformationOnNode(nodeId: string, t: Transformation): void {
-    if (t.type === "wrap") {
-      // Find the wrapper and unwrap
-      const parents = this.getParents(nodeId);
-      for (const parent of parents) {
-        if (parent.children.length === 1 && parent.children[0] === nodeId) {
-          const parentId = this.getNodeId(parent);
-          if (parentId) {
-            this.unwrapNode(parentId);
-          }
-        }
-      }
-    }
-    // For rename, we don't need to undo - the new rename will overwrite
   }
 
   /**

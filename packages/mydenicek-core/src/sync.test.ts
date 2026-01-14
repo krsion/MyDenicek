@@ -345,12 +345,13 @@ describe("Sync and Conflict Resolution", () => {
       // Both have applied their wrap transformations locally
       // Peer A has wrappers with tag "article"
       // Peer B has wrappers with tag "section"
+      // The wrapper ID format is now: wrap-${lca}-${version}-${nodeId}
       const rootA_before = docA.nodes["root"] as ElementNode;
       const rootB_before = docB.nodes["root"] as ElementNode;
-      expect(rootA_before.children).toContain("w-li1");
-      expect(rootB_before.children).toContain("w-li1");
-      expect((docA.nodes["w-li1"] as ElementNode).tag).toBe("article");
-      expect((docB.nodes["w-li1"] as ElementNode).tag).toBe("section");
+      expect(rootA_before.children).toContain("wrap-root-1-li1");
+      expect(rootB_before.children).toContain("wrap-root-1-li1");
+      expect((docA.nodes["wrap-root-1-li1"] as ElementNode).tag).toBe("article");
+      expect((docB.nodes["wrap-root-1-li1"] as ElementNode).tag).toBe("section");
 
       // Sync
       [docA, docB] = syncDocuments(docA, docB);
@@ -368,8 +369,8 @@ describe("Sync and Conflict Resolution", () => {
 
       // QUESTION: Does the wrapper tag match the surviving transformation?
       // After LWW merge, both wrapper nodes' tags are subject to LWW too
-      const wrapperTagA = (docA.nodes["w-li1"] as ElementNode).tag;
-      const wrapperTagB = (docB.nodes["w-li1"] as ElementNode).tag;
+      const wrapperTagA = (docA.nodes["wrap-root-1-li1"] as ElementNode).tag;
+      const wrapperTagB = (docB.nodes["wrap-root-1-li1"] as ElementNode).tag;
       
       // Both peers should have consistent wrapper tags (LWW)
       expect(wrapperTagA).toBe(wrapperTagB);
@@ -402,10 +403,10 @@ describe("Sync and Conflict Resolution", () => {
       docA = applyTransformationsAfterSync(docA);
       docB = applyTransformationsAfterSync(docB);
 
-      // li4 should be wrapped
+      // li4 should be wrapped (wrapper ID format: wrap-${lca}-${version}-${nodeId})
       const rootA = docA.nodes["root"] as ElementNode;
-      expect(rootA.children).toContain("w-li4");
-      const wrapperA = docA.nodes["w-li4"] as ElementNode;
+      expect(rootA.children).toContain("wrap-root-1-li4");
+      const wrapperA = docA.nodes["wrap-root-1-li4"] as ElementNode;
       expect(wrapperA.tag).toBe("article");
       expect(wrapperA.children).toContain("li4");
 
@@ -730,6 +731,80 @@ describe("Sync and Conflict Resolution", () => {
       expect(info.matchingNodeIds).toContain("li2");
       expect(info.matchingNodeIds).toContain("li3");
       expect(info.matchingNodeIds.length).toBe(3);
+    });
+  });
+
+  describe("CRDT wrap transformation conflict scenarios", () => {
+    test("concurrent wrap with different tags, LWW winner is outermost", () => {
+      let docA = createDocWithChildren();
+      let docB = Automerge.clone(docA);
+
+      // Peer A wraps li1 with <b> (version 1)
+      docA = Automerge.change(docA, (d) => {
+        const model = new DenicekModel(d);
+        model.addTransformation("root", "wrap", { tag: "b", selectorTag: "li", selectorDepth: 1 });
+      });
+
+      // Peer B wraps li1 with <i> (also version 1)
+      docB = Automerge.change(docB, (d) => {
+        const model = new DenicekModel(d);
+        model.addTransformation("root", "wrap", { tag: "i", selectorTag: "li", selectorDepth: 1 });
+      });
+
+      // Sync
+      [docA, docB] = syncDocuments(docA, docB);
+      docA = applyTransformationsAfterSync(docA);
+      docB = applyTransformationsAfterSync(docB);
+
+      // Only one wrapper per node (LWW winner)
+      const wrapperTag = (docA.nodes["wrap-root-1-li1"] as ElementNode).tag;
+      expect(["b", "i"]).toContain(wrapperTag);
+      expect((docA.nodes["wrap-root-1-li1"] as ElementNode).children).toContain("li1");
+      expect((docB.nodes["wrap-root-1-li1"] as ElementNode).tag).toBe(wrapperTag);
+    });
+
+    test("sequential wrap transformations result in nested wrappers", () => {
+      let doc = createDocWithChildren();
+      // v1: wrap li1 in <b>
+      doc = Automerge.change(doc, (d) => {
+        const model = new DenicekModel(d);
+        model.addTransformation("root", "wrap", { tag: "b", selectorTag: "li", selectorDepth: 1 });
+      });
+      // v2: wrap the new <b> wrapper in <i>
+      doc = Automerge.change(doc, (d) => {
+        const model = new DenicekModel(d);
+        model.addTransformation("root", "wrap", { tag: "i", selectorTag: "b", selectorDepth: 1 });
+      });
+      doc = applyTransformationsAfterSync(doc);
+      // Should be <i><b>li1</b></i>
+      // Note: Each selector combination (lca+tag+depth) has its own version counter,
+      // so the <b> selector gets version 1 (first transform for that selector)
+      const outer = doc.nodes["wrap-root-1-wrap-root-1-li1"] as ElementNode;
+      expect(outer.tag).toBe("i");
+      const innerId = outer.children[0];
+      const inner = doc.nodes[innerId] as ElementNode;
+      expect(inner.tag).toBe("b");
+      expect(inner.children[0]).toBe("li1");
+    });
+
+    test("wrap then rename, both applied", () => {
+      let doc = createDocWithChildren();
+      // wrap li1 in <b>
+      doc = Automerge.change(doc, (d) => {
+        const model = new DenicekModel(d);
+        model.addTransformation("root", "wrap", { tag: "b", selectorTag: "li", selectorDepth: 1 });
+      });
+      // rename li1 to <strong> (now at depth 2 after being wrapped)
+      doc = Automerge.change(doc, (d) => {
+        const model = new DenicekModel(d);
+        model.addTransformation("root", "rename", { tag: "strong", selectorTag: "li", selectorDepth: 2 });
+      });
+      doc = applyTransformationsAfterSync(doc);
+      // The wrapper should be <b>, the node should be <strong>
+      const wrapper = doc.nodes["wrap-root-1-li1"] as ElementNode;
+      expect(wrapper.tag).toBe("b");
+      const renamed = doc.nodes[wrapper.children[0]] as ElementNode;
+      expect(renamed.tag).toBe("strong");
     });
   });
 });

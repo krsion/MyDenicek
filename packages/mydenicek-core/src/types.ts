@@ -69,6 +69,12 @@ export type Transformation = {
   type: "wrap" | "rename" | "edit";
   /** The new tag to apply (for rename) or wrapper tag (for wrap) */
   tag?: string;
+  /** 
+   * For 'wrap' transformations: the predetermined stable ID for the wrapper node.
+   * This makes wrap transformations idempotent and CRDT-friendly.
+   * Format: typically "${targetNodeId}-wrap-${version}" or a UUID.
+   */
+  wrapperId?: string;
   /** Optional: only apply to children matching this tag */
   selectorTag?: string;
   /** Optional: only apply to descendants at this depth from LCA (1 = direct children) */
