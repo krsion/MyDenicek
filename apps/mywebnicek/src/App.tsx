@@ -1,6 +1,6 @@
 import { Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, DrawerBody, DrawerHeader, DrawerHeaderTitle, InlineDrawer, Switch, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
-import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CameraRegular, ChatRegular, ClipboardPasteRegular, CodeRegular, CopyRegular, EditFilled, EditRegular, PlayRegular, RecordRegular, RenameFilled, RenameRegular, StopRegular } from "@fluentui/react-icons";
-import type { DenicekAction, DenicekActions, DocumentSnapshot } from "@mydenicek/react-v2";
+import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CameraRegular, ClipboardPasteRegular, CodeRegular, CopyRegular, EditFilled, EditRegular, PlayRegular, RecordRegular, RenameFilled, RenameRegular, StopRegular } from "@fluentui/react-icons";
+import type { DocumentSnapshot } from "@mydenicek/react-v2";
 import {
   useConnectivity,
   useDocumentActions,
@@ -9,13 +9,13 @@ import {
   useSelectedNode,
   useSelection
 } from "@mydenicek/react-v2";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { AddNodePopoverButton } from "./AddNodePopoverButton";
+import { useClipboard } from "./hooks/useClipboard";
 import { DomNavigator, type DomNavigatorHandle } from "./DomNavigator";
 import { ElementDetails } from "./ElementDetails.tsx";
 import { JsonView } from "./JsonView.tsx";
-import { LlmChat } from "./LlmChat";
 import { RecordedScriptView } from "./RecordedScriptView";
 import { RenderedDocument } from "./RenderedDocument.tsx";
 import { ToolbarPopoverButton } from "./ToolbarPopoverButton";
@@ -36,13 +36,11 @@ export const App = () => {
   const { setSelectedNodeIds, remoteSelections, userId } = useSelection();
   const { selectedNodeId, selectedNodeIds, node, details } = useSelectedNode();
 
-  const [recordedScript, setRecordedScript] = useState<DenicekAction[] | null>(null);
   const [snapshot, setSnapshot] = useState<DocumentSnapshot | null>(null);
   const [filterPatches, setFilterPatches] = useState(false);
   const [patchesViewMode, setPatchesViewMode] = useState<'table' | 'json'>('table');
 
   const [connected, setConnected] = useState(true);
-  const [showAiPanel, setShowAiPanel] = useState(false);
   const [isGeneralizedSelection, setIsGeneralizedSelection] = useState(false);
   const navigatorRef = useRef<DomNavigatorHandle>(null);
 
@@ -79,48 +77,13 @@ export const App = () => {
     updateAttribute(selectedNodeIds, key, value);
   };
 
-  // Clipboard state for copy/paste of input values
-  const [clipboardValue, setClipboardValue] = useState<string | null>(null);
-
-  // Check if selected node is an input element
-  const isInputSelected = node?.kind === "element" && node.tag === "input";
-  // Check if selected node is a value node
-  const isValueSelected = node?.kind === "value";
-
-  const handleCopyFromInput = useCallback(() => {
-    if (!selectedNodeId || !isInputSelected) return;
-    const inputEl = document.querySelector(`[data-node-guid="${selectedNodeId}"]`) as HTMLInputElement | null;
-    if (!inputEl) return;
-    setClipboardValue(inputEl.value);
-  }, [selectedNodeId, isInputSelected]);
-
-  const handlePasteToValue = useCallback(() => {
-    if (!selectedNodeId || !isValueSelected || clipboardValue === null) return;
-    const valueNode = model?.getNode(selectedNodeId);
-    const originalValue = valueNode?.kind === "value" ? valueNode.value : "";
-    updateValue([selectedNodeId], clipboardValue, originalValue);
-  }, [selectedNodeId, isValueSelected, clipboardValue, model, updateValue]);
-
-  // Keyboard shortcuts for Ctrl+C and Ctrl+V
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "c" && isInputSelected) {
-        e.preventDefault();
-        handleCopyFromInput();
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === "v" && isValueSelected && clipboardValue !== null) {
-        e.preventDefault();
-        handlePasteToValue();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isInputSelected, isValueSelected, clipboardValue, handleCopyFromInput, handlePasteToValue]);
-
-  const docActions: DenicekActions = useMemo(() => ({
-    undo, redo, canUndo, canRedo,
-    updateAttribute, updateTag, wrapNodes, updateValue, addChildren, addSiblings, deleteNodes
-  }), [undo, redo, canUndo, canRedo, updateAttribute, updateTag, wrapNodes, updateValue, addChildren, addSiblings, deleteNodes]);
+  // Clipboard operations for copy/paste between input and value nodes
+  const { clipboardValue, isInputSelected, isValueSelected, handleCopyFromInput, handlePasteToValue } = useClipboard({
+    selectedNodeId,
+    node,
+    model,
+    updateValue,
+  });
 
   if (!model) return <div>Loading...</div>;
 
@@ -314,8 +277,6 @@ export const App = () => {
               <ToolbarDivider />
               <ToolbarButton icon={<RecordRegular />} onClick={() => setShowHistory(!showHistory)} appearance={showHistory ? "primary" : undefined}>History</ToolbarButton>
               <ToolbarButton icon={<PlayRegular />} onClick={handleReplay} disabled={!recordingHistory?.length || !selectedNodeId}>Replay</ToolbarButton>
-              <ToolbarDivider />
-              <ToolbarButton icon={<ChatRegular />} onClick={() => setShowAiPanel(!showAiPanel)}>AI Assistant</ToolbarButton>
             </ToolbarGroup>
           </Toolbar>
 
@@ -370,14 +331,6 @@ export const App = () => {
         </DrawerHeader>
         <DrawerBody>
           <RecordedScriptView script={recordingHistory || []} />
-        </DrawerBody>
-      </InlineDrawer>
-      <InlineDrawer open={showAiPanel} separator position="end" style={{ width: '400px' }}>
-        <DrawerHeader>
-          <DrawerHeaderTitle>AI Assistant</DrawerHeaderTitle>
-        </DrawerHeader>
-        <DrawerBody>
-          <LlmChat model={model} actions={docActions} />
         </DrawerBody>
       </InlineDrawer>
     </div>

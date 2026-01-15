@@ -14,6 +14,9 @@ export { DenicekModel } from "./DenicekModel.js";
 export { DenicekStore } from "./DenicekStore.js";
 export type { StoreOptions } from "./DenicekStore.js";
 
+// Error handling
+export { DenicekError, handleModelError } from "./errors.js";
+
 // Types
 export type {
     DenicekAction,

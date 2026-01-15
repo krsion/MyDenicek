@@ -4,11 +4,31 @@
 
 import {
     DenicekModel,
+    DenicekStore,
     type GeneralizedPatch,
     type SpliceInfo
 } from "@mydenicek/core-v2";
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { DenicekContext } from "./DenicekProvider.js";
+
+/**
+ * Creates a bulk action that applies an operation to multiple nodes.
+ * Reduces boilerplate for common store.modify patterns.
+ */
+function useBulkAction<TArgs extends unknown[]>(
+    store: DenicekStore,
+    operation: (model: DenicekModel, id: string, ...args: TArgs) => void,
+    useTransaction = false
+) {
+    return useCallback((nodeIds: string[], ...args: TArgs) => {
+        const method = useTransaction ? store.modifyTransaction : store.modify;
+        method.call(store, (model: DenicekModel) => {
+            for (const id of nodeIds) {
+                operation(model, id, ...args);
+            }
+        });
+    }, [store]);
+}
 
 /**
  * Calculates the minimal splice operation needed to transform oldVal into newVal.
@@ -136,38 +156,16 @@ export function useRecording() {
 export function useDocumentActions() {
     const { store } = useDocumentState();
 
-    const undo = useCallback(() => {
-        store.undo();
-    }, [store]);
+    const undo = useCallback(() => store.undo(), [store]);
+    const redo = useCallback(() => store.redo(), [store]);
 
-    const redo = useCallback(() => {
-        store.redo();
-    }, [store]);
+    // Simple bulk actions using the factory
+    const updateAttribute = useBulkAction(store, (m, id, key: string, value: unknown | undefined) => m.updateAttribute(id, key, value));
+    const updateTag = useBulkAction(store, (m, id, newTag: string) => m.updateTag(id, newTag));
+    const wrapNodes = useBulkAction(store, (m, id, wrapperTag: string) => m.wrapNode(id, wrapperTag), true);
+    const deleteNodes = useBulkAction(store, (m, id) => m.deleteNode(id), true);
 
-    const updateAttribute = useCallback((nodeIds: string[], key: string, value: unknown | undefined) => {
-        store.modify((model: DenicekModel) => {
-            for (const id of nodeIds) {
-                model.updateAttribute(id, key, value);
-            }
-        });
-    }, [store]);
-
-    const updateTag = useCallback((nodeIds: string[], newTag: string) => {
-        store.modify((model: DenicekModel) => {
-            for (const id of nodeIds) {
-                model.updateTag(id, newTag);
-            }
-        });
-    }, [store]);
-
-    const wrapNodes = useCallback((nodeIds: string[], wrapperTag: string) => {
-        store.modifyTransaction((model: DenicekModel) => {
-            for (const id of nodeIds) {
-                model.wrapNode(id, wrapperTag);
-            }
-        });
-    }, [store]);
-
+    // Actions with special logic that don't fit the bulk pattern
     const updateValue = useCallback((nodeIds: string[], newValue: string, originalValue: string) => {
         const splice = calculateSplice(originalValue, newValue);
         store.modify((model: DenicekModel) => {
@@ -180,18 +178,15 @@ export function useDocumentActions() {
     const addChildren = useCallback((parentIds: string[], type: "element" | "value", content: string) => {
         const newIds: string[] = [];
         store.modifyTransaction((model: DenicekModel) => {
-            parentIds.forEach((id) => {
+            for (const id of parentIds) {
                 const node = model.getNode(id);
                 if (node?.kind === "element") {
-                    let newId: string;
-                    if (type === "value") {
-                        newId = model.addValueChildNode(id, content);
-                    } else {
-                        newId = model.addElementChildNode(id, content);
-                    }
+                    const newId = type === "value"
+                        ? model.addValueChildNode(id, content)
+                        : model.addElementChildNode(id, content);
                     newIds.push(newId);
                 }
-            });
+            }
         });
         return newIds;
     }, [store]);
@@ -207,14 +202,6 @@ export function useDocumentActions() {
             }
         });
         return newIds;
-    }, [store]);
-
-    const deleteNodes = useCallback((nodeIds: string[]) => {
-        store.modifyTransaction((model: DenicekModel) => {
-            for (const id of nodeIds) {
-                model.deleteNode(id);
-            }
-        });
     }, [store]);
 
 
