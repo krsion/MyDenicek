@@ -1,5 +1,5 @@
 import { DENICEK_TOOLS, serializeDocument } from '@mydenicek/mcp';
-import { type DenicekActions, type DenicekModel } from '@mydenicek/react';
+import { type DenicekActions, type DenicekModel } from '@mydenicek/react-v2';
 import { useState } from 'react';
 
 export type { DenicekActions };

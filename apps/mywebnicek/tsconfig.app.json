@@ -35,6 +35,12 @@
     "exactOptionalPropertyTypes": true,
     "noPropertyAccessFromIndexSignature": true,
     "paths": {
+      "@mydenicek/core-v2": [
+        "../../packages/mydenicek-core-v2/src/index.ts"
+      ],
+      "@mydenicek/react-v2": [
+        "../../packages/mydenicek-react-v2/src/index.ts"
+      ],
       "@mydenicek/core": [
         "../../packages/mydenicek-core/src/index.ts"
       ],

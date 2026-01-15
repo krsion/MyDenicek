@@ -1,7 +1,7 @@
 import { Card, CardHeader, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Text } from "@fluentui/react-components";
-import { type DenicekAction } from "@mydenicek/react";
+import { type DenicekAction } from "@mydenicek/react-v2";
 
-export const RecordedScriptView = ({ script }: { script: DenicekAction[] }) => {
+export function RecordedScriptView({ script }: { script: DenicekAction[] }) {
     if (!script || script.length === 0) {
         return (
             <Card>

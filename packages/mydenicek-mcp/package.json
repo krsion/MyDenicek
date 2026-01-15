@@ -14,7 +14,7 @@
         "build": "tsc"
     },
     "dependencies": {
-        "@mydenicek/core": "*"
+        "@mydenicek/core-v2": "file:../../packages/mydenicek-core-v2"
     },
     "devDependencies": {
         "typescript": "^5.0.0"

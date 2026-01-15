@@ -6,9 +6,11 @@
         "packages/*"
     ],
     "scripts": {
-        "test": "npm test --workspaces"
+        "test": "npm test --workspaces",
+        "dev": "concurrently -k \"npm run start -w @mydenicek/sync-server\" \"npm run dev -w mywebnicek\""
     },
     "devDependencies": {
+        "concurrently": "^9.2.1",
         "vite-tsconfig-paths": "^6.0.3"
     }
 }

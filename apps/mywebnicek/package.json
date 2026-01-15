@@ -13,9 +13,9 @@
   },
   "dependencies": {
     "@fluentui/react-components": "^9.72.7",
-    "@mydenicek/core": "*",
+    "@mydenicek/core-v2": "file:../../packages/mydenicek-core-v2",
     "@mydenicek/mcp": "*",
-    "@mydenicek/react": "*",
+    "@mydenicek/react-v2": "file:../../packages/mydenicek-react-v2",
     "@uiw/react-json-view": "^2.0.0-alpha.39",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

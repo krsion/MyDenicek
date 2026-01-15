@@ -1,6 +1,6 @@
 import { Button, Card, Input, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Text } from "@fluentui/react-components";
 import { AddRegular, DeleteRegular } from "@fluentui/react-icons";
-import type { SelectedNodeDetails } from "@mydenicek/react";
+import type { SelectedNodeDetails } from "@mydenicek/react-v2";
 import { useEffect, useState } from "react";
 
 function AttributeRow({ attrKey, value, onSave, onDelete }: { attrKey: string, value: unknown, onSave: (key: string, value: unknown) => void, onDelete: (key: string) => void }) {

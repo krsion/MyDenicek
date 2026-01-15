@@ -350,13 +350,16 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, { children: Rea
     if (!(e.target instanceof HTMLElement)) return;
     if (!withinContainer(e.target)) return;
 
-    const target = e.target;
+    const originalTarget = e.target;
 
     // Allow native interaction with form elements unless Ctrl/Meta is held for selection
     const interactiveTags = ["INPUT", "TEXTAREA", "SELECT", "BUTTON"];
-    if (interactiveTags.includes(target.tagName) && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+    if (interactiveTags.includes(originalTarget.tagName) && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
       return; // Let native behavior handle the click
     }
+
+    const target = originalTarget.closest('[data-node-guid]') as HTMLElement | null;
+    if (!target || !withinContainer(target)) return;
 
     const targetId = target.getAttribute("data-node-guid");
     if (!targetId) return;

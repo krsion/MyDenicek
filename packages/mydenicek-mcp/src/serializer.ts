@@ -1,6 +1,6 @@
-import { type JsonDoc } from "@mydenicek/core";
+import { type DocumentSnapshot } from "@mydenicek/core-v2";
 
-export function serializeDocument(doc: JsonDoc): string {
+export function serializeDocument(doc: DocumentSnapshot): string {
   const nodes = doc.nodes;
   const rootId = doc.root;
 

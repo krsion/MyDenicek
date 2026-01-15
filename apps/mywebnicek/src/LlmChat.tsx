@@ -1,6 +1,6 @@
 import { Button, Input, Spinner, Textarea } from "@fluentui/react-components";
 import { SendRegular } from "@fluentui/react-icons";
-import { type DenicekActions, type DenicekModel } from "@mydenicek/react";
+import { type DenicekActions, type DenicekModel } from "@mydenicek/react-v2";
 import { useState } from "react";
 
 // Remove internal hook type import

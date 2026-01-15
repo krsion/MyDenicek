@@ -1,6 +1,6 @@
-import { Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, DrawerBody, DrawerHeader, DrawerHeaderTitle, InlineDrawer, Switch, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
+import { Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, DrawerBody, DrawerHeader, DrawerHeaderTitle, InlineDrawer, Switch, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
 import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CameraRegular, ChatRegular, ClipboardPasteRegular, CodeRegular, CopyRegular, EditFilled, EditRegular, PlayRegular, RecordRegular, RenameFilled, RenameRegular, StopRegular } from "@fluentui/react-icons";
-import type { DenicekAction, DenicekActions, JsonDoc } from "@mydenicek/react";
+import type { DenicekAction, DenicekActions, DocumentSnapshot } from "@mydenicek/react-v2";
 import {
   useConnectivity,
   useDocumentActions,
@@ -8,7 +8,7 @@ import {
   useRecording,
   useSelectedNode,
   useSelection
-} from "@mydenicek/react";
+} from "@mydenicek/react-v2";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AddNodePopoverButton } from "./AddNodePopoverButton";
@@ -21,20 +21,23 @@ import { RenderedDocument } from "./RenderedDocument.tsx";
 import { ToolbarPopoverButton } from "./ToolbarPopoverButton";
 
 export const App = () => {
-  const { model } = useDocumentState();
+  const { store, model, snapshot: liveSnapshot } = useDocumentState();
   const {
     undo, redo, canUndo, canRedo,
     updateAttribute, updateTag, wrapNodes,
     updateValue, addChildren, addSiblings,
-    deleteNodes, addTransformation, addGeneralizedTransformation
+    deleteNodes
   } = useDocumentActions();
-  const { isRecording, startRecording, stopRecording, replay } = useRecording();
+  const recordingObj = useRecording();
+  const { history: recordingHistory, clearHistory, replay } = recordingObj;
+  const [showHistory, setShowHistory] = useState(true);
+
   const { connect, disconnect } = useConnectivity();
   const { setSelectedNodeIds, remoteSelections, userId } = useSelection();
   const { selectedNodeId, selectedNodeIds, node, details } = useSelectedNode();
 
   const [recordedScript, setRecordedScript] = useState<DenicekAction[] | null>(null);
-  const [snapshot, setSnapshot] = useState<JsonDoc | null>(null);
+  const [snapshot, setSnapshot] = useState<DocumentSnapshot | null>(null);
   const [filterPatches, setFilterPatches] = useState(false);
   const [patchesViewMode, setPatchesViewMode] = useState<'table' | 'json'>('table');
 
@@ -43,21 +46,11 @@ export const App = () => {
   const [isGeneralizedSelection, setIsGeneralizedSelection] = useState(false);
   const navigatorRef = useRef<DomNavigatorHandle>(null);
 
-  const handleStartRecording = () => {
-    if (selectedNodeId) {
-      startRecording(selectedNodeId);
-      setRecordedScript(null);
-    }
-  };
 
-  const handleStopRecording = () => {
-    const script = stopRecording();
-    setRecordedScript(script);
-  };
 
   const handleReplay = () => {
-    if (!recordedScript || !selectedNodeId) return;
-    replay(recordedScript, selectedNodeId);
+    if (!recordingHistory || !selectedNodeId) return;
+    replay(recordingHistory, selectedNodeId);
   };
 
   const triggerNavigation = (action: 'parent' | 'child' | 'prev' | 'next' | 'clear') => {
@@ -126,8 +119,8 @@ export const App = () => {
 
   const docActions: DenicekActions = useMemo(() => ({
     undo, redo, canUndo, canRedo,
-    updateAttribute, updateTag, wrapNodes, updateValue, addChildren, addSiblings, deleteNodes, addTransformation, addGeneralizedTransformation
-  }), [undo, redo, canUndo, canRedo, updateAttribute, updateTag, wrapNodes, updateValue, addChildren, addSiblings, deleteNodes, addTransformation, addGeneralizedTransformation]);
+    updateAttribute, updateTag, wrapNodes, updateValue, addChildren, addSiblings, deleteNodes
+  }), [undo, redo, canUndo, canRedo, updateAttribute, updateTag, wrapNodes, updateValue, addChildren, addSiblings, deleteNodes]);
 
   if (!model) return <div>Loading...</div>;
 
@@ -201,7 +194,7 @@ export const App = () => {
                     initialValue={details?.value || ""}
                     onSubmit={(value) => {
                       const originalValue = details?.value || "";
-                      addGeneralizedTransformation(selectedNodeIds, "edit", { originalValue, newValue: value });
+                      updateValue(selectedNodeIds, value, originalValue);
                     }}
                   />
                 ) : (
@@ -272,7 +265,7 @@ export const App = () => {
                   initialValue={(node?.kind === "element") ? node.tag : ""}
                   ariaLabel="Rename all matching"
                   onSubmit={(tag) => {
-                    addGeneralizedTransformation(selectedNodeIds, "rename", { tag });
+                    updateTag(selectedNodeIds, tag);
                   }}
                 />
               )}
@@ -284,7 +277,7 @@ export const App = () => {
                   disabled={!selectedNodeId}
                   ariaLabel="Wrap all matching"
                   onSubmit={(tag) => {
-                    addGeneralizedTransformation(selectedNodeIds, "wrap", { tag });
+                    wrapNodes(selectedNodeIds, tag);
                   }}
                 />
               )}
@@ -300,7 +293,7 @@ export const App = () => {
                     disconnect();
                   } else {
                     setConnected(true);
-                    connect();
+                    connect("ws://localhost:3001");
                   }
                 }}
                 label={connected ? "Sync on" : "Sync off"}
@@ -319,12 +312,8 @@ export const App = () => {
               </Dialog>
               <ToolbarButton icon={<CameraRegular />} onClick={() => setSnapshot(model.getSnapshot())}>Snapshot</ToolbarButton>
               <ToolbarDivider />
-              {!isRecording ? (
-                <ToolbarButton icon={<RecordRegular />} onClick={handleStartRecording} disabled={!selectedNodeId}>Record</ToolbarButton>
-              ) : (
-                <ToolbarButton icon={<StopRegular />} onClick={handleStopRecording}>Stop Recording</ToolbarButton>
-              )}
-              <ToolbarButton icon={<PlayRegular />} onClick={handleReplay} disabled={!recordedScript || !selectedNodeId}>Replay</ToolbarButton>
+              <ToolbarButton icon={<RecordRegular />} onClick={() => setShowHistory(!showHistory)} appearance={showHistory ? "primary" : undefined}>History</ToolbarButton>
+              <ToolbarButton icon={<PlayRegular />} onClick={handleReplay} disabled={!recordingHistory?.length || !selectedNodeId}>Replay</ToolbarButton>
               <ToolbarDivider />
               <ToolbarButton icon={<ChatRegular />} onClick={() => setShowAiPanel(!showAiPanel)}>AI Assistant</ToolbarButton>
             </ToolbarGroup>
@@ -340,7 +329,7 @@ export const App = () => {
           />
 
           <DomNavigator ref={navigatorRef} onSelectedChange={(ids, isGeneralized) => { setSelectedNodeIds(ids); setIsGeneralizedSelection(isGeneralized); }} selectedNodeIds={selectedNodeIds} remoteSelections={remoteSelections} generalizer={(ids) => model.generalizeSelection(ids)}>
-            <RenderedDocument model={model} />
+            <RenderedDocument model={model} version={liveSnapshot} />
           </DomNavigator>
 
           <ElementDetails
@@ -349,33 +338,7 @@ export const App = () => {
             onAttributeChange={handleAttributeChange}
           />
 
-          {model.transformations && model.transformations.length > 0 && (
-            <Card>
-              <CardHeader header={<Text>Transformations</Text>} />
-              <Table size="small">
-                <TableHeader>
-                  <TableRow>
-                    <TableHeaderCell>Type</TableHeaderCell>
-                    <TableHeaderCell>LCA</TableHeaderCell>
-                    <TableHeaderCell>Selector</TableHeaderCell>
-                    <TableHeaderCell>Tag</TableHeaderCell>
-                    <TableHeaderCell>Version</TableHeaderCell>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {model.transformations.map((t, i) => (
-                    <TableRow key={i}>
-                      <TableCell>{t.type}</TableCell>
-                      <TableCell>{t.lca}</TableCell>
-                      <TableCell>{`${t.selectorTag ?? '*'}:${t.selectorDepth ?? '*'}`}</TableCell>
-                      <TableCell>{t.tag}</TableCell>
-                      <TableCell>{t.version}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </Card>
-          )}
+
 
           {snapshot && (
             <Card>
@@ -390,12 +353,23 @@ export const App = () => {
           )}
         </Card>
       </div>
-      <InlineDrawer open={(recordedScript !== null && recordedScript.length > 0) || isRecording} separator position="end">
+      <InlineDrawer open={showHistory} separator position="end">
         <DrawerHeader>
-          <DrawerHeaderTitle>Recording</DrawerHeaderTitle>
+          <DrawerHeaderTitle
+            action={
+              <ToolbarButton
+                appearance="subtle"
+                icon={<StopRegular />}
+                onClick={clearHistory}
+                aria-label="Clear History"
+              />
+            }
+          >
+            History
+          </DrawerHeaderTitle>
         </DrawerHeader>
         <DrawerBody>
-          <RecordedScriptView script={recordedScript || []} />
+          <RecordedScriptView script={recordingHistory || []} />
         </DrawerBody>
       </InlineDrawer>
       <InlineDrawer open={showAiPanel} separator position="end" style={{ width: '400px' }}>
@@ -416,3 +390,5 @@ function clickOnSelectedNode(selectedNodeGuid: string) {
     el?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   }, 0);
 }
+
+

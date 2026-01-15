@@ -1,6 +1,6 @@
 import { makeStyles, mergeClasses } from "@fluentui/react-components";
-import { type DenicekModel } from "@mydenicek/core";
-import { DENICEK_NODE_ID_ATTR } from "@mydenicek/react";
+import { type DenicekModel } from "@mydenicek/core-v2";
+import { DENICEK_NODE_ID_ATTR } from "@mydenicek/react-v2";
 import React from "react";
 
 const useStyles = makeStyles({
@@ -43,7 +43,7 @@ const useStyles = makeStyles({
 });
 
 
-export function RenderedDocument({ model }: { model: DenicekModel; }) {
+export function RenderedDocument({ model }: { model: DenicekModel; version?: unknown }) {
   const styles = useStyles();
 
   function renderById(id: string, path: string): React.ReactNode {
@@ -89,7 +89,7 @@ export function RenderedDocument({ model }: { model: DenicekModel; }) {
       if (React.isValidElement(rendered)) renderedChildren.push(React.cloneElement(rendered as React.ReactElement<unknown>, { key: child }));
       else renderedChildren.push(rendered);
     }
-    
+
     // Guard against empty tag names which cause React errors
     const tagName = node.tag || 'div';
     return React.createElement(tagName, attrs as Record<string, unknown>, ...renderedChildren);
