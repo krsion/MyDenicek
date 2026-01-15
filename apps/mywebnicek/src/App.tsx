@@ -1,4 +1,4 @@
-import { Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, DrawerBody, DrawerHeader, DrawerHeaderTitle, InlineDrawer, Switch, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
+import { Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, Switch, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
 import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CameraRegular, ClipboardPasteRegular, CodeRegular, CopyRegular, EditFilled, EditRegular, PlayRegular, RecordRegular, RenameFilled, RenameRegular, StopRegular } from "@fluentui/react-icons";
 import type { DocumentSnapshot } from "@mydenicek/react-v2";
 import {
@@ -19,6 +19,7 @@ import { JsonView } from "./JsonView.tsx";
 import { RecordedScriptView } from "./RecordedScriptView";
 import { RenderedDocument } from "./RenderedDocument.tsx";
 import { ToolbarPopoverButton } from "./ToolbarPopoverButton";
+import { ResizablePanel } from "./components/ResizablePanel";
 
 export const App = () => {
   const { store, model, snapshot: liveSnapshot } = useDocumentState();
@@ -95,7 +96,7 @@ export const App = () => {
     <div style={{ display: "flex" }}>
       <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column" }}>
         <Card appearance="subtle" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-          <Toolbar style={{ display: "flex", justifyContent: "space-between" }}>
+          <Toolbar style={{ display: "flex", flexWrap: "wrap", gap: "4px", justifyContent: "space-between" }}>
             <ToolbarGroup>
               <Tooltip content="Undo" relationship="label">
                 <ToolbarButton
@@ -297,6 +298,7 @@ export const App = () => {
             details={details}
             attributes={selectedNodeAttributes}
             onAttributeChange={handleAttributeChange}
+            onIdClick={(id) => setSelectedNodeIds([id])}
           />
 
 
@@ -314,25 +316,20 @@ export const App = () => {
           )}
         </Card>
       </div>
-      <InlineDrawer open={showHistory} separator position="end">
-        <DrawerHeader>
-          <DrawerHeaderTitle
-            action={
-              <ToolbarButton
-                appearance="subtle"
-                icon={<StopRegular />}
-                onClick={clearHistory}
-                aria-label="Clear History"
-              />
-            }
-          >
-            History
-          </DrawerHeaderTitle>
-        </DrawerHeader>
-        <DrawerBody>
-          <RecordedScriptView script={recordingHistory || []} />
-        </DrawerBody>
-      </InlineDrawer>
+      <ResizablePanel open={showHistory} defaultWidth={350} minWidth={200} maxWidth={700}>
+        <div style={{ padding: '12px', borderBottom: '1px solid #e0e0e0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text weight="semibold">History</Text>
+          <ToolbarButton
+            appearance="subtle"
+            icon={<StopRegular />}
+            onClick={clearHistory}
+            aria-label="Clear History"
+          />
+        </div>
+        <div style={{ flex: 1, overflow: 'auto', padding: '8px' }}>
+          <RecordedScriptView script={recordingHistory || []} onNodeClick={(id) => setSelectedNodeIds([id])} />
+        </div>
+      </ResizablePanel>
     </div>
   );
 }
