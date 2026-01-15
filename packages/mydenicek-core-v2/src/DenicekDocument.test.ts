@@ -217,7 +217,7 @@ describe("DenicekStore", () => {
         it("should notify on version change", () => {
             let versions: number[] = [];
             const storeWithCallback = new DenicekStore(doc, {
-                onVersionChange: (v) => versions.push(v),
+                onVersionChange: (v: number) => versions.push(v),
             });
 
             storeWithCallback.modify((model) => {

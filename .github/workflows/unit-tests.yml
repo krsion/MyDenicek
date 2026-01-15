@@ -22,5 +22,5 @@ jobs:
         run: npm ci
         
       - name: Run Core Tests
-        working-directory: packages/mydenicek-core
+        working-directory: packages/mydenicek-core-v2
         run: npm test

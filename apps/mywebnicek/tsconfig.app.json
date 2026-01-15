@@ -41,12 +41,6 @@
       "@mydenicek/react-v2": [
         "../../packages/mydenicek-react-v2/src/index.ts"
       ],
-      "@mydenicek/core": [
-        "../../packages/mydenicek-core/src/index.ts"
-      ],
-      "@mydenicek/react": [
-        "../../packages/mydenicek-react/src/index.ts"
-      ],
       "@mydenicek/mcp": [
         "../../packages/mydenicek-mcp/src/index.ts"
       ]

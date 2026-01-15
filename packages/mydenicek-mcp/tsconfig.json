@@ -13,8 +13,8 @@
         "esModuleInterop": true,
         "skipLibCheck": true,
         "paths": {
-            "@mydenicek/core": [
-                "../mydenicek-core/src/index.ts"
+            "@mydenicek/core-v2": [
+                "../mydenicek-core-v2/src/index.ts"
             ]
         }
     },

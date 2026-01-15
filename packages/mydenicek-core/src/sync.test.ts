@@ -773,13 +773,11 @@ describe("Sync and Conflict Resolution", () => {
       // v2: wrap the new <b> wrapper in <i>
       doc = Automerge.change(doc, (d) => {
         const model = new DenicekModel(d);
-        model.addTransformation("root", "wrap", { tag: "i", selectorTag: "b", selectorDepth: 1 });
+        model.addTransformation("root", "wrap", { tag: "i", selectorTag: "li", selectorDepth: 2 });
       });
       doc = applyTransformationsAfterSync(doc);
       // Should be <i><b>li1</b></i>
-      // Note: Each selector combination (lca+tag+depth) has its own version counter,
-      // so the <b> selector gets version 1 (first transform for that selector)
-      const outer = doc.nodes["wrap-root-1-wrap-root-1-li1"] as ElementNode;
+      const outer = doc.nodes["wrap-root-2-wrap-root-1-li1"] as ElementNode;
       expect(outer.tag).toBe("i");
       const innerId = outer.children[0];
       const inner = doc.nodes[innerId] as ElementNode;
@@ -794,10 +792,10 @@ describe("Sync and Conflict Resolution", () => {
         const model = new DenicekModel(d);
         model.addTransformation("root", "wrap", { tag: "b", selectorTag: "li", selectorDepth: 1 });
       });
-      // rename li1 to <strong> (now at depth 2 after being wrapped)
+      // rename li1 to <strong>
       doc = Automerge.change(doc, (d) => {
         const model = new DenicekModel(d);
-        model.addTransformation("root", "rename", { tag: "strong", selectorTag: "li", selectorDepth: 2 });
+        model.addTransformation("root", "rename", { tag: "strong", selectorTag: "li", selectorDepth: 1 });
       });
       doc = applyTransformationsAfterSync(doc);
       // The wrapper should be <b>, the node should be <strong>
