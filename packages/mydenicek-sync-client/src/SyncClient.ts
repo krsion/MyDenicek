@@ -1,19 +1,30 @@
 /**
  * Loro Sync Client for MyDenicek
- * 
+ *
  * Re-exports loro-websocket client and loro-adaptors for use with DenicekDocuments.
  * The loro-websocket library handles WebSocket sync with automatic reconnection.
  */
 
-// Re-export the main client and adaptor types from loro-websocket
-export {
-    ClientStatus, LoroWebsocketClient, type ClientStatusValue, type LoroWebsocketClientOptions,
+import {
+    ClientStatus,
+    LoroWebsocketClient,
+    type ClientStatusValue,
+    type LoroWebsocketClientOptions,
     type LoroWebsocketClientRoom
 } from "loro-websocket/client";
 
+// Re-export the main client and adaptor types from loro-websocket
+export {
+    ClientStatus,
+    LoroWebsocketClient,
+    type ClientStatusValue,
+    type LoroWebsocketClientOptions,
+    type LoroWebsocketClientRoom
+};
+
 // Re-export adaptors
 // @ts-ignore - TS fails to resolve named export despite it existing in d.ts
-export { LoroAdaptor } from "loro-adaptors";
+    export { LoroAdaptor } from "loro-adaptors";
 
 /**
  * Helper to create a properly configured sync client for DenicekDocument
@@ -41,6 +52,5 @@ export function createDenicekSyncClient(options: {
     url: string;
     pingIntervalMs?: number;
 }) {
-    const { LoroWebsocketClient } = require("loro-websocket/client");
-    return new LoroWebsocketClient(options) as import("loro-websocket/client").LoroWebsocketClient;
+    return new LoroWebsocketClient(options);
 }

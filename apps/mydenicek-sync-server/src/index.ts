@@ -17,7 +17,7 @@ if (isMainModule) {
     const PORT = parseInt(process.env.PORT || "3001", 10);
     const PERSISTENCE_PATH = process.env.PERSISTENCE_PATH || "./data";
 
-    createSyncServer({
+    await createSyncServer({
         port: PORT,
         persistencePath: PERSISTENCE_PATH,
         saveInterval: 5000,

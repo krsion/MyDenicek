@@ -7,7 +7,7 @@
     ],
     "scripts": {
         "test": "npm test --workspaces",
-        "dev": "concurrently -k \"npm run start -w @mydenicek/sync-server\" \"npm run dev -w mywebnicek\""
+        "dev": "concurrently -k -n server,web -c blue,green \"npm run dev -w @mydenicek/sync-server\" \"npm run dev -w mywebnicek\""
     },
     "devDependencies": {
         "concurrently": "^9.2.1",

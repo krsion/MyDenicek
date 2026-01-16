@@ -1,6 +1,6 @@
 /**
  * Loro Sync Server for MyDenicek
- * 
+ *
  * This server uses loro-websocket's SimpleServer to handle
  * real-time synchronization of documents.
  */
@@ -8,6 +8,16 @@
 import type { CrdtType, Permission } from "loro-protocol";
 import { SimpleServer } from "loro-websocket/server";
 import { initPersistence, loadDocument, saveDocument } from "./persistence.js";
+
+function timestamp(): string {
+    return new Date().toISOString();
+}
+
+function formatBytes(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
 
 export interface SyncServerOptions {
     /** Port to listen on */
@@ -25,8 +35,10 @@ export interface SyncServerOptions {
 /**
  * Create and start the sync server
  */
-export function createSyncServer(options: SyncServerOptions): SimpleServer {
-    const { port, host, persistencePath, saveInterval = 5000, onAuth } = options;
+export async function createSyncServer(
+    options: SyncServerOptions
+): Promise<SimpleServer> {
+    const { port, host, persistencePath, saveInterval = 5000 } = options;
 
     if (persistencePath) {
         initPersistence(persistencePath);
@@ -37,19 +49,33 @@ export function createSyncServer(options: SyncServerOptions): SimpleServer {
         host,
         saveInterval,
         onLoadDocument: async (roomId: string, crdtType: CrdtType) => {
+            console.log(`[${timestamp()}] LOAD room="${roomId}" type=${crdtType}`);
             if (persistencePath) {
-                return loadDocument(roomId);
+                const data = loadDocument(roomId);
+                if (data) {
+                    console.log(
+                        `[${timestamp()}] LOADED room="${roomId}" size=${formatBytes(data.length)}`
+                    );
+                } else {
+                    console.log(`[${timestamp()}] NEW room="${roomId}" (no existing data)`);
+                }
+                return data;
             }
             return null;
         },
         onSaveDocument: async (roomId: string, crdtType: CrdtType, data: Uint8Array) => {
+            console.log(
+                `[${timestamp()}] SYNC room="${roomId}" size=${formatBytes(data.length)}`
+            );
             if (persistencePath) {
                 await saveDocument(roomId, data);
+                console.log(`[${timestamp()}] SAVED room="${roomId}"`);
             }
         },
     });
 
-    console.log(`Loro sync server listening on ${host || "0.0.0.0"}:${port}`);
+    await server.start();
+    console.log(`[${timestamp()}] Loro sync server listening on ${host || "0.0.0.0"}:${port}`);
 
     return server;
 }
