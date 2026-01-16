@@ -10,7 +10,7 @@
     },
     "dependencies": {
         "loro-crdt": "^1.0.0",
-        "loro-websocket": "^0.6.0",
+        "loro-websocket": "^0.1.0",
         "loro-adaptors": "^0.1.0"
     },
     "devDependencies": {
