@@ -152,3 +152,84 @@ export function buildDocumentIndex(doc: LoroDoc): DocumentIndex {
 
     return { nodes, parents, childIds, rootId };
 }
+
+// ==================== CONCURRENCY DETECTION ====================
+
+/**
+ * Check if an OpId causally precedes another by checking if it's in the deps chain.
+ * This checks if opId1's change is in the causal history of opId2.
+ */
+function opIdCausallyPrecedes(
+    doc: LoroDoc,
+    opId1: { peer: bigint | `${number}`; counter: number },
+    opId2: { peer: bigint | `${number}`; counter: number }
+): boolean {
+    // If same peer, just compare counters
+    const peer1 = opId1.peer.toString();
+    const peer2 = opId2.peer.toString();
+
+    if (peer1 === peer2) {
+        return opId1.counter < opId2.counter;
+    }
+
+    // Check if opId2's change has opId1 (or something after it from peer1) in its causal history
+    // We do this by checking the lamport timestamps - if lamport1 < lamport2, check deps
+    const change1 = doc.getChangeAt({ peer: peer1 as `${number}`, counter: opId1.counter });
+    const change2 = doc.getChangeAt({ peer: peer2 as `${number}`, counter: opId2.counter });
+
+    // If change2's deps include something from peer1 with counter >= opId1.counter,
+    // then change2 "knew about" change1 (or something after it)
+    for (const dep of change2.deps) {
+        if (dep.peer.toString() === peer1 && dep.counter >= opId1.counter) {
+            return true;
+        }
+    }
+
+    // Also check recursively through the deps chain by comparing lamport
+    // If lamport2 > lamport1 and they share any common history, check more deeply
+    // For simplicity, we use a heuristic: if change2 has higher lamport and has any deps
+    // that have lamport >= lamport1, there's likely a causal relationship
+    if (change2.lamport > change1.lamport && change2.deps.length > 0) {
+        // Check each dep to see if it could have seen change1
+        for (const dep of change2.deps) {
+            const depChange = doc.getChangeAt(dep);
+            if (depChange.lamport >= change1.lamport) {
+                // This dep was created at or after change1, so change2 "knows about" change1
+                // through this dep (indirectly)
+                if (dep.peer.toString() === peer1 && dep.counter >= opId1.counter) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Check if two tree nodes were created concurrently (neither knew about the other).
+ * Returns true if the nodes are concurrent (should be flattened in wrap cleanup).
+ * Returns false if one causally precedes the other (intentional nesting, keep).
+ *
+ * Two operations are concurrent if neither causally precedes the other.
+ */
+export function areNodesConcurrent(
+    doc: LoroDoc,
+    node1: LoroTreeNode,
+    node2: LoroTreeNode
+): boolean {
+    const id1 = node1.creationId();
+    const id2 = node2.creationId();
+
+    // Same peer - definitely not concurrent (one was created after the other)
+    if (id1.peer.toString() === id2.peer.toString()) {
+        return false;
+    }
+
+    // Check if either causally precedes the other
+    const oneBeforeTwo = opIdCausallyPrecedes(doc, id1, id2);
+    const twoBeforeOne = opIdCausallyPrecedes(doc, id2, id1);
+
+    // Concurrent if neither precedes the other
+    return !oneBeforeTwo && !twoBeforeOne;
+}

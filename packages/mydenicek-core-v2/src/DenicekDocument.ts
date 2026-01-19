@@ -7,7 +7,13 @@
 import { Frontiers, LoroDoc, UndoManager } from "loro-crdt";
 import type { LoroWebsocketClient, LoroWebsocketClientRoom } from "loro-websocket/client";
 import { DenicekModel } from "./DenicekModel.js";
-import { buildDocumentIndex, type DocumentIndex } from "./loroHelpers.js";
+import {
+    areNodesConcurrent,
+    buildDocumentIndex,
+    type DocumentIndex,
+    stringToTreeId,
+    TREE_CONTAINER
+} from "./loroHelpers.js";
 import type { GeneralizedPatch, NodeData, Snapshot, Version } from "./types.js";
 
 /**
@@ -136,6 +142,10 @@ export class DenicekDocument {
         });
 
         await room.waitForReachingServerVersion();
+
+        // Cleanup any redundant wrappers from concurrent operations
+        this.cleanupRedundantWrappers();
+
         this.commit("sync-connect");
 
         this.syncClient = client;
@@ -499,6 +509,75 @@ export class DenicekDocument {
         const doc = new DenicekDocument(options);
         doc.import(bytes);
         return doc;
+    }
+
+    // === Concurrent Wrap Cleanup ===
+
+    /**
+     * Cleanup redundant wrappers created by concurrent wrap operations.
+     * When two clients wrap the same node concurrently, both create wrappers.
+     * This method flattens nested wrappers using LWW based on Loro's lamport timestamps.
+     *
+     * IMPORTANT: Only flattens CONCURRENT wrappers (neither knew about the other).
+     * Intentional sequential nesting (outer was created after inner) is preserved.
+     */
+    cleanupRedundantWrappers(): void {
+        const tree = this._doc.getTree(TREE_CONTAINER);
+
+        this.change((model) => {
+            const allNodes = this.getAllNodes();
+            const nodesToDelete: string[] = [];
+
+            // Find orphaned empty wrappers created concurrently with a sibling.
+            // After Loro merges concurrent wraps of the same node, one wrapper "wins"
+            // the move conflict (gets the target), and the other becomes empty.
+            // These empty wrappers are siblings, not nested.
+            for (const [nodeId, node] of Object.entries(allNodes)) {
+                if (node.kind !== "element") continue;
+
+                const childIds = this.getChildIds(nodeId);
+                // Only check empty elements (potential orphaned wrappers)
+                if (childIds.length !== 0) continue;
+
+                const parentId = this.getParentId(nodeId);
+                if (!parentId) continue;
+
+                // Get siblings
+                const siblingIds = this.getChildIds(parentId);
+                if (siblingIds.length < 2) continue;
+
+                // Check if any sibling is a non-empty element created concurrently
+                const currentTreeNode = tree.getNodeByID(stringToTreeId(nodeId));
+                if (!currentTreeNode) continue;
+
+                for (const siblingId of siblingIds) {
+                    if (siblingId === nodeId) continue;
+
+                    const siblingNode = allNodes[siblingId];
+                    if (siblingNode?.kind !== "element") continue;
+
+                    const siblingChildIds = this.getChildIds(siblingId);
+                    if (siblingChildIds.length === 0) continue; // Both empty, skip
+
+                    const siblingTreeNode = tree.getNodeByID(stringToTreeId(siblingId));
+                    if (!siblingTreeNode) continue;
+
+                    // Check if they were created concurrently
+                    const concurrent = areNodesConcurrent(this._doc, currentTreeNode, siblingTreeNode);
+
+                    if (concurrent) {
+                        // This empty node is an orphaned wrapper from concurrent wrap
+                        nodesToDelete.push(nodeId);
+                        break;
+                    }
+                }
+            }
+
+            // Delete all orphaned wrappers
+            for (const id of nodesToDelete) {
+                model.deleteNode(id);
+            }
+        });
     }
 
     // === Cleanup ===

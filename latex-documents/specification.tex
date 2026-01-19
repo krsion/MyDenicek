@@ -1,0 +1,581 @@
+\documentclass{article}
+
+\usepackage[a-2u]{pdfx}
+\usepackage[utf8]{inputenc}
+\usepackage{array}
+\usepackage[ddmmyyyy]{datetime}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{enumitem}
+
+\renewcommand{\dateseparator}{.}
+\renewcommand{\baselinestretch}{1.5}
+\geometry{margin=2cm}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  backgroundcolor=\color{gray!10}
+}
+
+% METADATA SECTION START
+\def\StudentsFullName{Bc. Ondrej Krsicka}
+\def\Obor{Computer Science - Software and Data Engineering}
+\def\ProjectTitle{Using CRDTs to enable collaborative editing in Denicek}
+\def\ProjectType{Research project}
+\def\SupervisorFullName{Mgr. Tomas Petricek, Ph.D.}
+\def\ExpectedStart{1.11.2025}
+\def\ExpectedEnd{1.7.2026}
+% METADATA SECTION END
+
+\title{\ProjectTitle}
+\author{\StudentsFullName}
+
+\begin{document}
+
+\centerline{\Large \textbf{Specification of team software project}}
+\centerline{\textbf{Department of Software Engineering}}
+\centerline{\textbf{Faculty of Mathematics and Physics, Charles University}}
+\bigskip
+{\noindent\begin{tabular*}{\textwidth}{ >{\raggedleft}m{4cm} l}
+ {\bf Solvers:} & \StudentsFullName \\
+ {\bf Study program:} & \Obor \\
+ & \\
+ {\bf Project title:} & \ProjectTitle \\
+ {\bf Project type:} & \ProjectType \\
+ & \\
+ {\bf Supervisor:} & \SupervisorFullName \\
+\end{tabular*}}
+
+\section{Introduction}
+
+\emph{Denicek}~\cite{denicek2024} is a document-based end-user programming substrate that serves as the foundation for various programming systems. One such system is the web-based \emph{Webnicek}, which enables users to create interactive HTML documents through end-user programming experiences including collaborative editing, programming by demonstration, and incremental recomputation.
+
+The current Denicek synchronization layer relies on Operational Transformation (OT), which presents several challenges: it is complex, error-prone, and requires a central server for coordination. These limitations conflict with the principles of local-first software~\cite{klep2019}, which emphasize user data ownership and offline-first operation.
+
+This project creates \emph{MyDenicek}, a CRDT-based backend that replaces OT with Conflict-free Replicated Data Types using the Loro library~\cite{loro2024}. The key innovation is adopting an \textbf{ID-based approach} instead of path-based addressing, which solves the ``Shifting Index'' problem that plagued OT-based systems during concurrent structural edits. \emph{MyWebnicek} is a web-based programming system built on top of MyDenicek, providing functionality similar to Webnicek while demonstrating the capabilities of the new substrate.
+
+\subsection{Relation to other projects}
+
+This project directly builds upon the original Denicek system~\cite{denicek2024} and is inspired by \emph{MyWebstrates}~\cite{klokmose2024}: a local-first, CRDT-based alternative to Webstrates~\cite{klokmose2015}. The naming convention follows this inspiration.
+
+The project extends research on Conflict-free Replicated Data Types as summarized in Preguica's overview~\cite{crdtoverview}, and specifically leverages the Loro CRDT library~\cite{loro2024} for its native tree support and efficient synchronization capabilities. The design was informed by Grove~\cite{grove2024}, a bidirectionally typed collaborative structure editor calculus, though the final implementation uses Loro's \texttt{LoroTree} for practical reasons including better move operation support and active maintenance.
+
+Collaboration with the supervisor ensures alignment with the original Denicek design philosophy while exploring novel CRDT-based approaches to collaborative document editing.
+
+\section{Project description}
+
+The project delivers two main components: \emph{MyDenicek}, a reusable TypeScript library providing CRDT-based document operations, and \emph{MyWebnicek}, a React-based web application demonstrating the library's capabilities.
+
+The key architectural decision is the adoption of \textbf{ID-based node identification} instead of path-based addressing. In path-based systems, concurrent structural edits cause paths to shift unpredictably. For example, if User A deletes the second child of a node while User B modifies the third child, path-based systems struggle to correctly identify the target of User B's operation. ID-based systems assign stable unique identifiers to each node, ensuring operations target the correct elements regardless of concurrent structural changes.
+
+\subsection{Functional requirements}
+
+The following functional requirements specify the capabilities of the MyDenicek core library and MyWebnicek application.
+
+\subsubsection{MyDenicek Core Library Requirements}
+
+\textbf{FR-01: Document Representation} The library shall represent HTML-like structured documents as trees where each node has a stable unique identifier, a kind (element or value), and associated data (tag and attributes for elements, text content for values).
+
+\textbf{FR-02: Node Operations} The library shall expose an API for modifying documents through the following primitive operations:
+\begin{itemize}[noitemsep]
+    \item Add child node (element or value) to a parent at a specified index
+    \item Add sibling node before or after a reference node
+    \item Delete node and its subtree
+    \item Update element tag name
+    \item Update element attributes
+    \item Edit value content with character-level text editing (splice operation)
+    \item Move node to a new parent or position
+    \item Wrap node in a new parent element
+\end{itemize}
+
+\textbf{FR-03: CRDT-Based Merging} The library shall provide CRDT-based operations for merging divergent document versions without requiring a central coordination server. Concurrent operations shall converge to identical states across all replicas.
+
+\textbf{FR-04: Conflict Resolution} The library shall implement deterministic conflict resolution:
+\begin{itemize}[noitemsep]
+    \item Concurrent wrap operations on the same node shall produce a single wrapper using deterministic ID generation (\texttt{w-\$\{nodeId\}})
+    \item Concurrent tag or value edits shall use Last-Writer-Wins (LWW) semantics based on Lamport timestamps
+    \item Concurrent child additions shall preserve all children with ordering determined by fractional indexing
+\end{itemize}
+
+\textbf{FR-05: Export and Import} The library shall support exporting document state as binary snapshots or incremental updates, and importing these to reconstruct or synchronize documents.
+
+\textbf{FR-06: Undo and Redo} The library shall provide undo and redo functionality with configurable maximum steps and merge intervals for grouping related operations.
+
+\textbf{FR-07: History Recording} The library shall record document changes as generalized patches that can be replayed on different document contexts, enabling programming by demonstration workflows.
+
+\textbf{FR-08: Version Tracking} The library shall track document versions using vector clocks (frontiers) and support temporal checkout to previous versions.
+
+\textbf{FR-09: Event Subscriptions} The library shall provide subscription mechanisms for:
+\begin{itemize}[noitemsep]
+    \item Document state changes (for UI updates)
+    \item Local updates (for synchronization)
+    \item Patch recording (for history capture)
+\end{itemize}
+
+\textbf{FR-10: WebSocket Synchronization} The library shall support real-time synchronization via WebSocket connections to a sync server, with room-based document isolation.
+
+\subsubsection{MyWebnicek Application Requirements}
+
+\textbf{FR-11: Document Rendering} The application shall render the document tree as interactive HTML elements, dynamically creating React components based on node tags and attributes.
+
+\textbf{FR-12: Node Navigation} The application shall provide keyboard and mouse-based navigation through the document tree, including:
+\begin{itemize}[noitemsep]
+    \item Click to select nodes
+    \item Ctrl/Cmd+click for multi-select
+    \item Shift+click for range selection
+    \item Keyboard navigation (parent, first child, previous/next sibling)
+\end{itemize}
+
+\textbf{FR-13: Document Actions Toolbar} The application shall provide a toolbar for common operations:
+\begin{itemize}[noitemsep]
+    \item Undo/Redo with visual state indicators
+    \item Add child nodes (element or value)
+    \item Edit text content of value nodes
+    \item Rename element tags
+    \item Wrap elements in containers
+    \item Delete selected nodes
+\end{itemize}
+
+\textbf{FR-14: Element Details Panel} The application shall display and allow editing of the selected node's attributes.
+
+\textbf{FR-15: Recorded Script View} The application shall display recorded actions as a table showing:
+\begin{itemize}[noitemsep]
+    \item Action type and parameters
+    \item Target node identifiers
+    \item Creation badges for actions that create new nodes
+    \item Dependency information between actions
+\end{itemize}
+
+\textbf{FR-16: Script Replay} The application shall support replaying recorded scripts on different target nodes, enabling programming by demonstration.
+
+\textbf{FR-17: Collaboration Features} The application shall provide:
+\begin{itemize}[noitemsep]
+    \item Sync toggle to connect/disconnect from the sync server
+    \item Share button to copy shareable links (room ID in URL hash)
+    \item Visual indication of connection status and room ID
+\end{itemize}
+
+\textbf{FR-18: JSON View} The application shall provide a raw JSON inspector for debugging document state.
+
+\textbf{FR-19: Snapshot View} The application shall support capturing document snapshots for temporal comparison.
+
+\subsection{Non-functional requirements}
+
+\textbf{NFR-01: Type Safety} All components shall be implemented in TypeScript with strict type checking. The core library shall not expose Loro-specific types in its public API.
+
+\textbf{NFR-02: Abstraction Layer} The \texttt{DenicekDocument} class shall serve as the sole public interface to document operations, hiding CRDT implementation details. Applications shall interact only through this abstraction.
+
+\textbf{NFR-03: Performance} Node lookup, parent lookup, and children retrieval shall operate in O(1) time complexity through internal indexing.
+
+\textbf{NFR-04: Sync Latency} Real-time synchronization shall propagate changes between connected clients within 500ms under normal network conditions.
+
+\textbf{NFR-05: Offline Support} The library architecture shall support offline editing with automatic reconciliation when connectivity is restored.
+
+\textbf{NFR-06: Browser Compatibility} MyWebnicek shall function correctly on current versions of Chrome, Firefox, Safari, and Edge.
+
+\textbf{NFR-07: Modularity} The system shall maintain clear separation between:
+\begin{itemize}[noitemsep]
+    \item Core library (\texttt{@mydenicek/core-v2}) - CRDT operations
+    \item React bindings (\texttt{@mydenicek/react-v2}) - hooks and context
+    \item Web application (\texttt{mywebnicek}) - UI components
+    \item Sync server (\texttt{mydenicek-sync-server}) - WebSocket coordination
+\end{itemize}
+
+\textbf{NFR-08: Testability} The core library shall have comprehensive unit tests. Integration tests shall verify multi-client synchronization scenarios.
+
+\textbf{NFR-09: Documentation} All public APIs shall be documented with TypeScript JSDoc comments.
+
+\subsection{Architecture}
+
+The system follows a layered architecture with clear separation of concerns.
+
+\subsubsection{Package Structure}
+
+The project is organized as a monorepo with the following packages:
+
+\begin{itemize}[noitemsep]
+    \item \textbf{@mydenicek/core-v2} - Core CRDT library wrapping Loro
+    \item \textbf{@mydenicek/react-v2} - React hooks and context providers
+    \item \textbf{@mydenicek/mcp} - Model Context Protocol tool definitions
+    \item \textbf{mywebnicek} - React 19 web application with Fluent UI
+    \item \textbf{mydenicek-sync-server} - Node.js WebSocket sync server
+    \item \textbf{mydenicek-integration-tests} - End-to-end synchronization tests
+\end{itemize}
+
+\subsubsection{Core Library Architecture}
+
+The core library centers on two main classes:
+
+\textbf{DenicekDocument} - The primary public API providing:
+\begin{lstlisting}
+class DenicekDocument {
+  // State access
+  getRootId(): string | null;
+  getNode(id: string): NodeData | null;
+  getChildIds(parentId: string): string[];
+  getParentId(nodeId: string): string | null;
+
+  // Mutations (via callback)
+  change(callback: (model: DenicekModel) => void): void;
+
+  // Undo/Redo
+  undo(): void;
+  redo(): void;
+
+  // Sync
+  export(mode: "snapshot" | "update"): Uint8Array;
+  import(bytes: Uint8Array): void;
+  connectToSync(url: string, roomId: string): void;
+
+  // Subscriptions
+  subscribe(callback: () => void): () => void;
+  subscribePatches(callback: (patches) => void): () => void;
+}
+\end{lstlisting}
+
+\textbf{DenicekModel} - Write operations available inside \texttt{change()} callbacks:
+\begin{lstlisting}
+interface DenicekModel {
+  // Read
+  rootId: string | null;
+  getNode(id: string): NodeData | null;
+
+  // Write
+  createRootNode(tag: string): string;
+  addChildNode(parentId, kind, data, index?): string;
+  deleteNode(id: string): void;
+  updateTag(id: string, newTag: string): void;
+  updateAttribute(id, key, value): void;
+  spliceValue(id, index, deleteCount, insert): void;
+  moveNode(nodeId, newParentId, index?): void;
+  wrapNode(targetId, wrapperTag, wrapperId?): void;
+}
+\end{lstlisting}
+
+\subsubsection{Data Types}
+
+\begin{lstlisting}
+interface ElementNodeData {
+  id: string;
+  kind: "element";
+  tag: string;
+  attrs: Record<string, unknown>;
+}
+
+interface ValueNodeData {
+  id: string;
+  kind: "value";
+  value: string;
+}
+
+type NodeData = ElementNodeData | ValueNodeData;
+\end{lstlisting}
+
+\subsubsection{React Integration}
+
+The React library provides:
+
+\textbf{DenicekProvider} - Context provider wrapping the application:
+\begin{lstlisting}
+<DenicekProvider
+  initializer={(model) => model.createRootNode("div")}
+  onChange={() => console.log("Document changed")}
+>
+  <App />
+</DenicekProvider>
+\end{lstlisting}
+
+\textbf{Hooks}:
+\begin{itemize}[noitemsep]
+    \item \texttt{useDocumentState()} - Access document and version counter
+    \item \texttt{useConnectivity()} - Sync connection management
+    \item \texttt{useRecording()} - History recording and replay
+    \item \texttt{useDocumentActions()} - Mutation helpers with undo/redo
+    \item \texttt{useSelection()} - Node selection state management
+\end{itemize}
+
+\subsubsection{Synchronization Architecture}
+
+The sync system uses a WebSocket-based architecture:
+
+\begin{enumerate}[noitemsep]
+    \item \textbf{Client-side}: \texttt{LoroWebsocketClient} manages connections and rooms
+    \item \textbf{Server-side}: \texttt{SimpleServer} from \texttt{loro-websocket/server} handles room management
+    \item \textbf{Protocol}: Loro's native sync protocol with incremental updates
+    \item \textbf{Persistence}: File-based storage with configurable save intervals
+\end{enumerate}
+
+Room-based isolation ensures documents are synchronized only among clients connected to the same room. The URL hash contains the room ID for easy sharing.
+
+\subsubsection{Conflict Resolution Strategy}
+
+The system handles concurrent operations as follows:
+
+\begin{center}
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Scenario} & \textbf{Resolution} \\
+\hline
+Concurrent wrap operations & Single wrapper with ID \texttt{w-\$\{nodeId\}}, LWW for tag \\
+Concurrent child additions & Both preserved with fractional index ordering \\
+Concurrent tag renames & Last-Writer-Wins based on timestamp \\
+Concurrent value edits & Last-Writer-Wins based on timestamp \\
+Concurrent wrap + add child & Both succeed independently \\
+Concurrent wrap + rename & Both succeed (correct node targeted) \\
+\hline
+\end{tabular}
+\end{center}
+
+\section{Platform and technologies}
+
+The project uses the following technologies:
+
+\begin{itemize}
+    \item \textbf{Programming Languages:}
+    \begin{itemize}[noitemsep]
+        \item TypeScript - all components for type safety
+    \end{itemize}
+
+    \item \textbf{Core Libraries:}
+    \begin{itemize}[noitemsep]
+        \item Loro (v1.5+) - CRDT data structures with native tree support
+        \item loro-websocket (v0.1+) - WebSocket sync protocol
+        \item loro-adaptors (v0.1+) - Integration utilities
+    \end{itemize}
+
+    \item \textbf{Frontend:}
+    \begin{itemize}[noitemsep]
+        \item React 19 - UI framework
+        \item Fluent UI (v9.72+) - Component library
+        \item Vite - Build tool
+    \end{itemize}
+
+    \item \textbf{Backend:}
+    \begin{itemize}[noitemsep]
+        \item Node.js - Sync server runtime
+        \item WebSocket - Real-time communication
+    \end{itemize}
+
+    \item \textbf{Testing:}
+    \begin{itemize}[noitemsep]
+        \item Vitest - Unit testing
+        \item Playwright - End-to-end testing
+    \end{itemize}
+
+    \item \textbf{Build and Development:}
+    \begin{itemize}[noitemsep]
+        \item pnpm - Package management (monorepo workspaces)
+        \item TypeScript 5.0+ - Compilation and type checking
+    \end{itemize}
+\end{itemize}
+
+\section{Evaluation}
+
+The evaluation demonstrates that the CRDT-based approach correctly implements the required end-user programming experiences from Denicek.
+
+\subsection{Correctness Testing}
+
+\textbf{Unit Tests} verify individual operations:
+\begin{itemize}[noitemsep]
+    \item Basic operations (create, add, delete, update)
+    \item Export/import round-trips
+    \item Subscription notifications
+    \item Undo/redo behavior
+    \item Version tracking accuracy
+\end{itemize}
+
+\textbf{Integration Tests} verify multi-client scenarios:
+\begin{itemize}[noitemsep]
+    \item Real sync server startup and shutdown
+    \item Two-client change propagation
+    \item Concurrent edit convergence
+    \item Offline edit reconciliation
+\end{itemize}
+
+\subsection{Formative Examples}
+
+The system is evaluated against the formative examples from the original Denicek paper:
+
+\textbf{Counter App}: User creates a document with value 1, wraps it in a formula (1+1), records the process, and replays it on button click to produce a counter.
+
+\textbf{Todo App}: Similar to counter, but recorded actions add text from an input field as a new list item.
+
+\textbf{Conference List}: Alice refactors a list of speakers from comma-separated items into a table. Meanwhile, Bob adds a new list item. The merged result contains all speakers including Bob's addition.
+
+\textbf{Conference Budget}: Building on the conference list, formulas depending on values are tracked during refactoring.
+
+\textbf{Hello World}: User makes the first line of a list lowercase, then capitalizes the first letter, copies the formula, and applies it to the whole list.
+
+\subsection{Comparison with OT}
+
+The ID-based CRDT approach is compared against the original OT implementation:
+
+\begin{center}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Aspect} & \textbf{OT (Original)} & \textbf{CRDT (MyDenicek)} \\
+\hline
+Central server & Required & Optional (peer-to-peer capable) \\
+Complexity & High (transform functions) & Lower (merge semantics) \\
+Offline support & Limited & Native \\
+Structural edits & Error-prone & Stable (ID-based) \\
+Implementation & Custom & Loro library \\
+\hline
+\end{tabular}
+\end{center}
+
+\section{Risks}
+
+\textbf{Loro API Stability} The Loro library is actively developed and APIs may change. Mitigation: The abstraction layer isolates application code from Loro internals, limiting the impact of API changes to the core library.
+
+\textbf{Performance at Scale} Large documents with many concurrent editors may experience performance degradation. Mitigation: Loro is designed for efficiency, and the architecture supports future optimization through lazy loading and partial replication.
+
+\textbf{Feature Parity} Some Denicek features may be difficult to map to CRDT semantics. Mitigation: Regular consultation with the supervisor and Denicek co-author ensures alignment on acceptable tradeoffs.
+
+\textbf{WebSocket Reliability} Network instability may cause synchronization issues. Mitigation: The system supports offline editing with automatic reconciliation, and the sync server implements graceful reconnection handling.
+
+\textbf{Browser Compatibility} Different browsers may handle WebSocket connections differently. Mitigation: Testing across major browsers and fallback mechanisms for connection issues.
+
+\section{Milestones / Deliverables}
+
+\textbf{MyDenicek Core Library} A fully functional TypeScript library (\texttt{@mydenicek/core-v2}) providing:
+\begin{itemize}[noitemsep]
+    \item CRDT-based document representation using Loro
+    \item Complete set of document operations
+    \item Undo/redo functionality
+    \item History recording and replay
+    \item WebSocket synchronization support
+    \item Comprehensive unit tests
+\end{itemize}
+
+\textbf{MyDenicek React Library} React bindings (\texttt{@mydenicek/react-v2}) providing:
+\begin{itemize}[noitemsep]
+    \item Context provider for document state
+    \item Hooks for document access and mutation
+    \item Selection state management
+    \item Connectivity management for sync
+\end{itemize}
+
+\textbf{MyWebnicek Application} A React web application demonstrating:
+\begin{itemize}[noitemsep]
+    \item Interactive document rendering
+    \item Node navigation and selection
+    \item Document editing toolbar
+    \item Script recording and replay
+    \item Real-time collaboration via sharing
+\end{itemize}
+
+\textbf{Sync Server} A Node.js WebSocket server providing:
+\begin{itemize}[noitemsep]
+    \item Room-based document synchronization
+    \item Persistent storage of document state
+    \item Logging for debugging and monitoring
+\end{itemize}
+
+\textbf{Technical Documentation} Comprehensive documentation including:
+\begin{itemize}[noitemsep]
+    \item API reference for all public interfaces
+    \item Architecture documentation
+    \item Setup and deployment instructions
+    \item Evaluation results and comparison with OT
+\end{itemize}
+
+\textbf{Demo} A live demonstration showcasing:
+\begin{itemize}[noitemsep]
+    \item Document creation and editing
+    \item Real-time collaboration between multiple clients
+    \item Script recording and replay
+    \item Conflict resolution in action
+\end{itemize}
+
+\section{Time Schedule}
+
+The project spans November 2025 to July 2026 (8 months).
+
+\begin{center}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Phase} & \textbf{Activity} & \textbf{Timeline} \\
+\hline
+Task 1 & Study materials, analysis, prototyping & Month 1-3 \\
+ & - Literature review (CRDTs, Loro, Grove) & \\
+ & - Prototype document representation & \\
+ & - Evaluate CRDT approaches & \\
+\hline
+Task 2 & Production implementation & Month 4-7 \\
+ & - MyDenicek core library & \\
+ & - React bindings & \\
+ & - MyWebnicek application & \\
+ & - Sync server & \\
+\hline
+Task 3 & Documentation & Month 8 \\
+ & - Technical report & \\
+ & - Video demonstration & \\
+ & - API documentation & \\
+\hline
+Task 4 & Testing and evaluation & Month 8 \\
+ & - Integration tests & \\
+ & - Formative example validation & \\
+ & - Performance evaluation & \\
+\hline
+\end{tabular}
+\end{center}
+
+\section{Form of collaboration}
+
+\subsection{Consulting plan}
+
+\textbf{Regular Meetings} Bi-weekly meetings with the supervisor to discuss progress, technical challenges, and alignment with research objectives. Each meeting reviews completed work, addresses blockers, and plans next steps.
+
+\textbf{Design Collaboration} The system design is developed in collaboration between the supervisor, the student, and Jonathan Edwards (Denicek co-author). This ensures the CRDT-based approach maintains compatibility with Denicek's design philosophy while exploring novel approaches.
+
+\textbf{Ad-hoc Communication} Email and messaging for quick questions, code reviews, and urgent technical issues.
+
+\subsection{Repository Management}
+
+The project is maintained in a Git repository with:
+\begin{itemize}[noitemsep]
+    \item Main branch for stable releases
+    \item Feature branches for development
+    \item Regular commits with descriptive messages
+    \item Code review before merging significant changes
+\end{itemize}
+
+\bibliographystyle{plain}
+\begin{thebibliography}{9}
+
+\bibitem{denicek2024}
+T. Petricek, et al. \textit{Denicek: Computational Substrate for Document-Oriented End-User Programming.} In Proceedings of the 38th Annual ACM Symposium on User Interface Software and Technology (UIST '25). no. 32, pp. 1--19.
+
+\bibitem{crdtoverview}
+N. Preguica. \textit{Conflict-free Replicated Data Types: An Overview.} 2018. \url{https://arxiv.org/abs/1806.10254}.
+
+\bibitem{grove2024}
+M. D. Adams, et al. \textit{Grove: A Bidirectionally Typed Collaborative Structure Editor Calculus.} ACM, 2024. DOI: \url{https://doi.org/10.1145/3704909}.
+
+\bibitem{klep2019}
+M. Kleppmann, et al. \textit{Local-first software: you own your data, in spite of the cloud.} Proceedings of the 2019 ACM SIGPLAN International Symposium on New Ideas, New Paradigms, and Reflections on Programming and Software. 2019.
+
+\bibitem{klokmose2024}
+C. N. Klokmose, J. R. Eagan, and P. van Hardenberg. \textit{MyWebstrates: Webstrates as Local-first Software.} In Proceedings of the 37th Annual ACM Symposium on User Interface Software and Technology (UIST '24). Association for Computing Machinery, 2024.
+
+\bibitem{klokmose2015}
+C. N. Klokmose, J. R. Eagan, S. Baader, W. Mackay, and M. Beaudouin-Lafon. \textit{Webstrates: Shareable Dynamic Media.} In Proceedings of the 28th Annual ACM Symposium on User Interface Software \& Technology (UIST '15). Association for Computing Machinery, 2015.
+
+\bibitem{loro2024}
+Loro. \textit{Loro CRDT Library.} \url{https://loro.dev/}
+
+\bibitem{cypher1993}
+A. Cypher, et al. (eds.) \textit{Watch what I do: programming by demonstration.} MIT Press, 1993.
+
+\bibitem{edwards2024}
+J. Edwards, et al. \textit{Schema Evolution in Interactive Programming Systems.} The Art, Science, and Engineering of Programming, 9(1), 2-1. 2024.
+
+\end{thebibliography}
+
+\end{document}

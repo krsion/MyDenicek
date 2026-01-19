@@ -101,10 +101,28 @@ Consider a scenario where Alice wraps a list item `<li>` in a `<ul>` (unordered 
 2. **Double Wrapping:** `<ul><ol><li>...</li></ol></ul>`. This creates a nested list that neither user intended.
 3. **Duplication:** `<ul><li>...</li></ul>` AND `<ol><li>...</li></ol>` (Two separate lists). This requires manual conflict resolution to delete the duplicate.
 
-**Our Solution:**
-To achieve outcome #1, we generate a deterministic ID for the wrapper node, such as `w-${wrapped-element-id}`.
-* Because both clients generate the *same ID* for the new parent, Loro treats this as a concurrent edit to the *same object*.
-* Loro's built-in **Last-Writer-Wins (LWW)** logic resolves the conflict on the `tag` property (choosing either `ul` or `ol`), preventing the creation of two separate wrapper nodes.
+**Current Behavior (Implemented):**
+We achieve **outcome #1 (Winner-Takes-All)** through post-merge cleanup:
+1. After sync completes, we detect orphaned empty wrappers created concurrently with a sibling wrapper
+2. Using Loro's lamport timestamps, we apply LWW to determine the winning tag
+3. The orphaned wrapper is deleted, leaving a single wrapper with the winning tag
+
+**Implementation Details:**
+Since Loro's tree API (`LoroTree.createNode()`) doesn't support custom IDs, we can't prevent double-wrapping at creation time. Instead, the `cleanupRedundantWrappers()` method runs after sync to:
+* Detect orphaned empty wrappers (one wrapper "won" the move conflict, leaving the other empty)
+* Use `areNodesConcurrent()` to verify they were created concurrently (not intentional sequential nesting)
+* Delete the orphaned wrapper while preserving intentional nested structures
+
+See `packages/mydenicek-integration-tests/src/concurrent-wrap.test.ts` for tests verifying the behavior.
+
+**Why not "Mass Actions"?**
+An earlier approach considered propagating structural operations (like wrap) to causally concurrent additions—e.g., if user A wraps all list items while user B adds a new item, A's wrap would automatically apply to B's new item after sync. This "mass actions" approach was abandoned because:
+* It required fragile synchronization between action metadata and document state
+* LWW conflicts between concurrent transformations could desync replicas
+* Undo-redo operations would themselves need syncing, compounding fragility
+* Building this on top of Loro's existing CRDT semantics was fundamentally hacky
+
+The current approach adopts **traditional CRDT semantics**: operations only affect causally preceding state (per [Shapiro et al.](https://hal.inria.fr/inria-00555588)). This is more predictable—concurrent operations don't unexpectedly affect each other. Users can explicitly replay actions on new nodes via the Recording/Replay feature if needed. See [Issue #6](https://github.com/krsion/MyDenicek/issues/6) for the full rationale.
 
 ### 3. Why are nodes stored in a Dictionary (Map) and not a List?
 
@@ -143,7 +161,7 @@ The following table outlines how the system resolves specific concurrent operati
 
 | Concurrent Operations | Resolution Behavior | Logic |
 | :--- | :--- | :--- |
-| **Wrap (A) vs Wrap (B)** | **Single Wrapper** | Uses deterministic ID generation for the wrapper (`w-${nodeId}`). The tag (A or B) is decided by LWW. |
+| **Wrap (A) vs Wrap (B)** | **One Wrapper Wins** | Post-merge cleanup detects concurrent wrappers and deletes the orphaned one. LWW determines the winning tag. See Design Decisions #2. |
 | **Add Child vs Add Child** | **Both Added** | `addChild` generates a random unique ID. Both nodes appear in the parent's children list. |
 | **Rename Tag vs Rename Tag** | **One Tag Wins** | Last-Writer-Wins (LWW) on the `tag` property. |
 | **Edit Value vs Edit Value** | **One Value Wins** | LWW on the `value` property. |
@@ -172,4 +190,41 @@ npm run build -w mywebnicek            # Build web app
 npm run test --workspaces              # All tests (unit + E2E)
 npm test -w @mydenicek/core-v2         # Core unit tests (Vitest)
 npm run test -w mywebnicek             # E2E tests (Playwright)
+```
+
+## TODO
+
+### High Priority
+
+| Task | Details |
+|------|---------|
+| Add sync reconnection logic | Exponential backoff retry when server unavailable (`App.tsx:76`) |
+| Complete E2E test coverage | Missing: keyboard navigation, attribute editing, wrap operations |
+
+### Medium Priority
+
+| Task | Details |
+|------|---------|
+| Implement remote selection visualization | `useSelection.ts:36` has stubs for `remoteSelections`/`userId` |
+| Add Snapshot View UI | `document.getSnapshot()` exists but not exposed in UI (FR-19) |
+| Make JSON View interactive | Currently read-only; implement JSON patch on edit (FR-18) |
+| Generate API documentation | No generated docs for public APIs (NFR-09) |
+
+### Low Priority
+
+| Task | Details |
+|------|---------|
+| Add stress tests for large documents | Performance under load untested |
+| Consolidate generalization logic | Duplicated in `scriptAnalysis.ts` and `App.tsx` |
+| Add deployment guide for sync server | Missing from docs |
+| Measure and document sync latency | Configurable but not measured (NFR-04) |
+
+### Implementation Status
+
+```
+Core Library (FR-01 to FR-10):     10/10 fully implemented
+MyWebnicek UI (FR-11 to FR-19):     7/9 full, 2 partial
+Non-functional (NFR-01 to NFR-09):  5/9 full, 4 partial
+
+Overall: ~92% feature-complete
 ```
