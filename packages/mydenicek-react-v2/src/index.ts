@@ -6,10 +6,17 @@
 
 // Re-export types from core
 export type {
-    DenicekAction, DocumentSnapshot, ElementNode, Node, SpliceInfo, ValueNode
+    DenicekAction,
+    ElementNode,
+    ElementNodeData,
+    Node,
+    NodeData,
+    SpliceInfo,
+    ValueNode,
+    ValueNodeData,
 } from "@mydenicek/core-v2";
 
-export { DenicekDocument, DenicekModel, DenicekStore } from "@mydenicek/core-v2";
+export { DenicekDocument, DenicekModel, DocumentView } from "@mydenicek/core-v2";
 
 // Constants
 export { DENICEK_NODE_ID_ATTR } from "./constants.js";

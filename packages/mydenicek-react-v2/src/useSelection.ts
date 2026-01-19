@@ -2,14 +2,14 @@
  * Hook for managing selection state
  */
 
-import type { Node } from "@mydenicek/core-v2";
+import type { NodeData } from "@mydenicek/core-v2";
 import { useContext, useMemo } from "react";
 import { DenicekContext, DenicekSelectionContext } from "./DenicekProvider.js";
 import { DENICEK_NODE_ID_ATTR } from "./constants.js";
 
 export interface SelectedNodeDetails {
     id: string;
-    node: Node | undefined;
+    node: NodeData | undefined;
     tag: string | undefined;
     value: string | undefined;
     attrs: Record<string, unknown> | undefined;
@@ -69,7 +69,7 @@ export function useSelectedNode() {
 
     const node = useMemo(() => {
         if (!selectedNodeId) return undefined;
-        return snapshot.nodes[selectedNodeId];
+        return snapshot.getNode(selectedNodeId) ?? undefined;
     }, [snapshot, selectedNodeId]);
 
     const details = useMemo<SelectedNodeDetails | undefined>(() => {

@@ -5,6 +5,7 @@
 \usepackage{array}
 \usepackage[ddmmyyyy]{datetime}
 \usepackage{geometry}
+\usepackage{hyperref}
 
 \renewcommand{\dateseparator}{.}
 \renewcommand{\baselinestretch}{1.5}
@@ -198,41 +199,63 @@ M. Kleppmann, et al. Local-first software: you own your data, in spite of the cl
 Clemens Nylandsted Klokmose, James R. Eagan, and Peter van Hardenberg. 2024. MyWebstrates: Webstrates as Local-first Software. In Proceedings of the 37th Annual ACM Symposium on User Interface Software and Technology (UIST '24). Association for Computing Machinery, New York, NY, USA, Article 42, 1–12. https://doi.org/10.1145/3654777.3676445
 \bibitem{klokmose2015}
 Clemens N. Klokmose, James R. Eagan, Siemen Baader, Wendy Mackay, and Michel Beaudouin-Lafon. 2015. Webstrates: Shareable Dynamic Media. In Proceedings of the 28th Annual ACM Symposium on User Interface Software \& Technology (UIST '15). Association for Computing Machinery, New York, NY, USA, 280–290. https://doi.org/10.1145/2807442.2807446
+\bibitem{loro2024}
+Loro. \textit{Loro CRDT Library.} \url{https://loro.dev/}
 
 \end{thebibliography}
-\appendix   
-\section{Denicek document structure}
-A \emph{Denicek document} is a tree composed of named nodes of the following kinds:
+\appendix
+\section{MyDenicek document structure}
+A \emph{MyDenicek document} is represented via a \texttt{DocumentView} class that encapsulates the tree structure, using \textbf{Loro CRDTs}~\cite{loro2024} for synchronization:
+
+\begin{verbatim}
+class DocumentView {
+  getRootId(): string | null;
+  getNode(id: string): NodeData | null;
+  getChildIds(parentId: string): string[];
+  getParentId(nodeId: string): string | null;
+  getAllNodeIds(): string[];
+  *walkDepthFirst(): Generator<{ node: NodeData; depth; parentId }>;
+}
+
+// Node data types (no children array - use getChildIds instead)
+interface ElementNodeData {
+  id: string;
+  kind: "element";
+  tag: string;
+  attrs: Record<string, unknown>;
+}
+
+interface ValueNodeData {
+  id: string;
+  kind: "value";
+  value: string;
+}
+
+type NodeData = ElementNodeData | ValueNodeData;
+\end{verbatim}
+
+Internally, the document is stored as a \texttt{LoroTree}---Loro's native movable tree CRDT that handles concurrent structural edits, move operations, and conflict resolution. The \texttt{DocumentView} class is the \emph{public API} that:
 \begin{itemize}
 \setlength{\itemsep}{-5pt}
-\item Ordered lists of nodes: all items are of the same type and addressable by index
-\item Records: children can be of different types and are addressable by their name
-\item References to other locations in the document
-\item Primitives: numeric or textual values
+\item \textbf{Hides CRDT internals}: No Loro types are exposed; applications work with plain TypeScript objects
+\item \textbf{Enables O(1) lookup}: Internal index maps allow efficient node, parent, and children lookups
+\item \textbf{Prevents direct mutation}: Users access data through methods instead of property access
+\item \textbf{Simplifies rendering}: React components receive a stable view for efficient diffing
 \end{itemize}
 
-\section{Denicek programs}
-A \emph{Denicek program} is represented as a history of primitive actions. Histories can be replayed, merged, and compared, with conflict detection between them.
-
-Primitive actions that do not affect references include:
+\section{MyDenicek operations}
+Primitive operations supported by the CRDT-based system:
 \begin{itemize}
 \setlength{\itemsep}{-5pt}
-\item Add to record
-\item Append to list
-\item Reorder list
-\item Delete item from list
-\item Update tag of list or record
-\item Edit a primitive value (text or number)
+\item Add child node (element or value) to a parent
+\item Add sibling node (before or after reference node)
+\item Delete node
+\item Update node tag
+\item Update node attribute
+\item Edit value content (character-level text editing)
+\item Wrap node in new parent element
 \end{itemize}
 
-Primitive actions that \emph{do} affect references include:
-\begin{itemize}
-\setlength{\itemsep}{-5pt}
-\item Rename a record
-\item Delete a record
-\item Wrap a node in a record
-\item Wrap a node in a list
-\item Copy node(s) from given selectors to specified target(s)
-\end{itemize}
+Conflict resolution uses deterministic wrapper IDs (\texttt{w-\$\{nodeId\}}) for wrap operations and Last-Writer-Wins (LWW) semantics for concurrent tag/value edits.
 
 \end{document}

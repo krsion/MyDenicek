@@ -11,8 +11,9 @@ export type { DenicekDocumentOptions } from "./DenicekDocument.js";
 
 export { DenicekModel } from "./DenicekModel.js";
 
-export { DenicekStore } from "./DenicekStore.js";
-export type { StoreOptions } from "./DenicekStore.js";
+
+// DocumentView - encapsulated read-only view of the document
+export { DocumentView } from "./DocumentView.js";
 
 // Error handling
 export { DenicekError, handleModelError } from "./errors.js";
@@ -20,15 +21,19 @@ export { DenicekError, handleModelError } from "./errors.js";
 // Types
 export type {
     DenicekAction,
-    // Document types
-    DocumentSnapshot, ElementNode, GeneralizedPatch, HistoryEntry,
-    // Node types
+    // Public node data types (used with DocumentView)
+    ElementNodeData,
+    NodeData,
+    ValueNodeData,
+    // Internal node types (for model operations)
+    ElementNode,
     Node,
-    // Recording/replay
+    ValueNode,
+    // Other types
+    GeneralizedPatch,
+    HistoryEntry,
     PatchAction,
-    // Text operations
     SpliceInfo,
-    // Cursor and history
-    TextCursor, ValueNode
+    TextCursor,
 } from "./types.js";
 

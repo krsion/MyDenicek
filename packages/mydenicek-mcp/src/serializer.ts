@@ -1,11 +1,11 @@
-import { type DocumentSnapshot } from "@mydenicek/core-v2";
+import { type DocumentView } from "@mydenicek/core-v2";
 
-export function serializeDocument(doc: DocumentSnapshot): string {
-  const nodes = doc.nodes;
-  const rootId = doc.root;
+export function serializeDocument(view: DocumentView): string {
+  const rootId = view.getRootId();
+  if (!rootId) return "<!-- Empty document -->";
 
   function serializeNode(id: string, depth: number): string {
-    const node = nodes[id];
+    const node = view.getNode(id);
     if (!node) return `<!-- Missing node ${id} -->`;
 
     const indent = "  ".repeat(depth);
@@ -16,14 +16,15 @@ export function serializeDocument(doc: DocumentSnapshot): string {
       const attrs = Object.entries(node.attrs)
         .map(([k, v]) => `${k}="${v}"`)
         .join(" ");
-      
+
       const openTag = attrs ? `<${node.tag} id="${id}" ${attrs}>` : `<${node.tag} id="${id}">`;
-      
-      if (node.children.length === 0) {
+
+      const childIds = view.getChildIds(id);
+      if (childIds.length === 0) {
         return `${indent}${openTag}</${node.tag}>`;
       }
 
-      const children = node.children
+      const children = childIds
         .map(childId => serializeNode(childId, depth + 1))
         .join("\n");
 

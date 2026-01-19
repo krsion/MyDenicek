@@ -4,8 +4,43 @@
  */
 
 
+// ============================================================================
+// Public Node Data Types (returned by DocumentView)
+// ============================================================================
+
 /**
- * Element node - represents a structural element in the document tree
+ * Element node data - public read-only view of an element node
+ * Children are accessed via DocumentView.getChildIds(), not stored here
+ */
+export interface ElementNodeData {
+    id: string;
+    kind: "element";
+    tag: string;
+    attrs: Record<string, unknown>;
+}
+
+/**
+ * Value node data - public read-only view of a text content node
+ */
+export interface ValueNodeData {
+    id: string;
+    kind: "value";
+    value: string;
+}
+
+/**
+ * Union type for public node data
+ */
+export type NodeData = ElementNodeData | ValueNodeData;
+
+
+// ============================================================================
+// Internal Node Types (used by LoroDocWrapper and model operations)
+// ============================================================================
+
+/**
+ * Internal element node - includes children IDs for tree operations
+ * @internal
  */
 export interface ElementNode {
     kind: "element";
@@ -15,7 +50,8 @@ export interface ElementNode {
 }
 
 /**
- * Value node - represents a text content node
+ * Internal value node
+ * @internal
  */
 export interface ValueNode {
     kind: "value";
@@ -23,17 +59,10 @@ export interface ValueNode {
 }
 
 /**
- * Union type for all node types
+ * Internal union type for all node types
+ * @internal
  */
 export type Node = ElementNode | ValueNode;
-
-/**
- * Document snapshot - plain JSON representation of the document
- */
-export interface DocumentSnapshot {
-    root: string;
-    nodes: Record<string, Node>;
-}
 
 /**
  * Splice info for text operations

@@ -1,6 +1,6 @@
-import { Button, Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, Switch, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
-import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackRegular, CameraRegular, ClipboardPasteRegular, CodeRegular, CopyRegular, EditRegular, PlayRegular, RecordRegular, RenameRegular, StopRegular } from "@fluentui/react-icons";
-import type { DocumentSnapshot } from "@mydenicek/react-v2";
+import { Button, Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, Switch, Tag, TagGroup, Text, Toast, Toaster, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip, useId, useToastController } from "@fluentui/react-components";
+import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackRegular, CameraRegular, ClipboardPasteRegular, CodeRegular, CopyRegular, EditRegular, LinkRegular, PlayRegular, RecordRegular, RenameRegular, StopRegular } from "@fluentui/react-icons";
+import type { DocumentView } from "@mydenicek/react-v2";
 import {
   useConnectivity,
   useDocumentActions,
@@ -9,7 +9,7 @@ import {
   useSelectedNode,
   useSelection
 } from "@mydenicek/react-v2";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AddNodePopoverButton } from "./AddNodePopoverButton";
 import { ResizablePanel } from "./components/ResizablePanel";
@@ -23,6 +23,17 @@ import { ToolbarPopoverButton } from "./ToolbarPopoverButton";
 import { analyzeScript, generalizeScript, type ScriptAnalysis } from "./utils/scriptAnalysis";
 import { generalizeSelection } from "./utils/selectionUtils";
 
+// Generate a random room ID
+function generateRoomId(): string {
+  return Math.random().toString(36).substring(2, 10);
+}
+
+// Get room ID from URL hash or generate a new one
+function getRoomIdFromHash(): string {
+  const hash = window.location.hash.slice(1); // Remove the # prefix
+  return hash || generateRoomId();
+}
+
 export const App = () => {
   const { store: _store, model, snapshot: liveSnapshot } = useDocumentState();
   const {
@@ -35,18 +46,63 @@ export const App = () => {
   const { history: recordingHistory, clearHistory, replay } = recordingObj;
   const [showHistory, setShowHistory] = useState(true);
 
-  const { connect, disconnect } = useConnectivity();
+  const { connect, disconnect, roomId: _connectedRoomId } = useConnectivity();
   const { setSelectedNodeIds, remoteSelections, userId } = useSelection();
   const { selectedNodeId, selectedNodeIds, node, details } = useSelectedNode();
 
-  const [snapshot, setSnapshot] = useState<DocumentSnapshot | null>(null);
+  const [snapshot, setSnapshot] = useState<DocumentView | null>(null);
   const [filterPatches, setFilterPatches] = useState(false);
   const [patchesViewMode, setPatchesViewMode] = useState<'table' | 'json'>('table');
 
   const [connected, setConnected] = useState(true);
+  const [roomId] = useState<string>(() => getRoomIdFromHash());
   const navigatorRef = useRef<DomNavigatorHandle>(null);
   const [selectedActionIndices, setSelectedActionIndices] = useState<Set<number>>(new Set());
   const [targetOverrides, setTargetOverrides] = useState<Map<number, string>>(new Map());
+
+  // Toast for share notification
+  const toasterId = useId("share-toaster");
+  const { dispatchToast } = useToastController(toasterId);
+
+  // Update URL hash when room ID changes
+  useEffect(() => {
+    if (roomId && window.location.hash.slice(1) !== roomId) {
+      window.history.replaceState(null, "", `#${roomId}`);
+    }
+  }, [roomId]);
+
+  // Auto-connect on mount
+  useEffect(() => {
+    connect("ws://localhost:3001", roomId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Handle share button click
+  const handleShare = useCallback(() => {
+    const shareUrl = `${window.location.origin}${window.location.pathname}#${roomId}`;
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      dispatchToast(
+        <Toast>Link copied to clipboard!</Toast>,
+        { intent: "success" }
+      );
+    }).catch(() => {
+      dispatchToast(
+        <Toast>Failed to copy link</Toast>,
+        { intent: "error" }
+      );
+    });
+  }, [roomId, dispatchToast]);
+
+  // Handle sync toggle
+  const handleSyncToggle = useCallback(() => {
+    if (connected) {
+      setConnected(false);
+      disconnect();
+    } else {
+      setConnected(true);
+      connect("ws://localhost:3001", roomId);
+    }
+  }, [connected, connect, disconnect, roomId]);
 
   // Frontend-only generalization for Shift+click multi-select
   const handleGeneralize = useCallback((ids: string[]) => {
@@ -158,12 +214,13 @@ export const App = () => {
 
   if (!model) return <div>Loading...</div>;
 
-  const selectedNodeFirstChildTag = (node && node.kind === "element") ? model.getFirstChildTag(node) : undefined;
+  const selectedNodeFirstChildTag = (node && node.kind === "element" && selectedNodeId) ? model.getFirstChildTag(selectedNodeId) : undefined;
   const selectedNodeAttributes = (node && node.kind === "element") ? node.attrs : undefined;
 
 
   return (
     <div style={{ display: "flex" }}>
+      <Toaster toasterId={toasterId} position="bottom-end" />
       <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column" }}>
         <Card appearance="subtle" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
           <Toolbar style={{ display: "flex", flexWrap: "wrap", gap: "4px", justifyContent: "space-between" }}>
@@ -277,17 +334,17 @@ export const App = () => {
               <Text>{userId}</Text>
               <Switch
                 checked={connected}
-                onChange={() => {
-                  if (connected) {
-                    setConnected(false);
-                    disconnect();
-                  } else {
-                    setConnected(true);
-                    connect("ws://localhost:3001");
-                  }
-                }}
+                onChange={handleSyncToggle}
                 label={connected ? "Sync on" : "Sync off"}
               />
+              <Tooltip content="Copy shareable link" relationship="label">
+                <ToolbarButton
+                  icon={<LinkRegular />}
+                  onClick={handleShare}
+                >
+                  Share
+                </ToolbarButton>
+              </Tooltip>
               <Dialog>
                 <DialogTrigger>
                   <ToolbarButton icon={<CodeRegular />}>Raw</ToolbarButton>
@@ -320,7 +377,7 @@ export const App = () => {
           />
 
           <DomNavigator ref={navigatorRef} onSelectedChange={(ids) => { setSelectedNodeIds(ids); }} selectedNodeIds={selectedNodeIds} remoteSelections={remoteSelections} generalizer={handleGeneralize}>
-            <RenderedDocument model={model} version={liveSnapshot} />
+            <RenderedDocument view={liveSnapshot} />
           </DomNavigator>
 
           <ElementDetails

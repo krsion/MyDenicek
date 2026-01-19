@@ -6,6 +6,9 @@
         "packages/*"
     ],
     "scripts": {
+        "build": "tsc -b",
+        "build:watch": "tsc -b --watch",
+        "clean": "tsc -b --clean",
         "test": "npm test --workspaces",
         "dev": "concurrently -k -n server,web -c blue,green \"npm run dev -w @mydenicek/sync-server\" \"npm run dev -w mywebnicek\""
     },

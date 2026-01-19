@@ -8,11 +8,14 @@
         "module": "esnext",
         "moduleResolution": "bundler",
         "declaration": true,
+        "declarationMap": true,
         "outDir": "./dist",
+        "rootDir": "./src",
         "strict": true,
         "esModuleInterop": true,
         "skipLibCheck": true,
-        "jsx": "react-jsx"
+        "jsx": "react-jsx",
+        "composite": true
     },
     "include": [
         "src"
@@ -20,5 +23,9 @@
     "exclude": [
         "node_modules",
         "dist"
+    ],
+    "references": [
+        { "path": "../mydenicek-core-v2" },
+        { "path": "../mydenicek-sync-client" }
     ]
 }

@@ -2,12 +2,12 @@
  * Hook for clipboard operations between input elements and value nodes
  */
 
-import type { DenicekModel, Node } from "@mydenicek/react-v2";
+import type { DenicekModel, NodeData } from "@mydenicek/react-v2";
 import { useCallback, useEffect, useState } from "react";
 
 interface UseClipboardProps {
     selectedNodeId: string | null;
-    node: Node | null | undefined;
+    node: NodeData | null | undefined;
     model: DenicekModel | null;
     updateValue: (nodeIds: string[], newValue: string, originalValue: string) => void;
 }

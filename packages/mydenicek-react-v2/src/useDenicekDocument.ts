@@ -3,8 +3,8 @@
  */
 
 import {
+    DenicekDocument,
     DenicekModel,
-    DenicekStore,
     type GeneralizedPatch,
     type SpliceInfo
 } from "@mydenicek/core-v2";
@@ -13,21 +13,19 @@ import { DenicekContext } from "./DenicekProvider.js";
 
 /**
  * Creates a bulk action that applies an operation to multiple nodes.
- * Reduces boilerplate for common store.modify patterns.
+ * Reduces boilerplate for common document.change patterns.
  */
 function useBulkAction<TArgs extends unknown[]>(
-    store: DenicekStore,
+    document: DenicekDocument,
     operation: (model: DenicekModel, id: string, ...args: TArgs) => void,
-    useTransaction = false
 ) {
     return useCallback((nodeIds: string[], ...args: TArgs) => {
-        const method = useTransaction ? store.modifyTransaction : store.modify;
-        method.call(store, (model: DenicekModel) => {
+        document.change((model: DenicekModel) => {
             for (const id of nodeIds) {
                 operation(model, id, ...args);
             }
         });
-    }, [store]);
+    }, [document]);
 }
 
 /**
@@ -61,15 +59,14 @@ export function useDocumentState() {
     if (!context) {
         throw new Error("useDocumentState must be used within a DenicekProvider");
     }
-    
+
     // Create a model wrapper for backwards compatibility
     const model = useMemo(() => {
         return new DenicekModel(context.document);
     }, [context.document]);
-    
+
     return {
         document: context.document,
-        store: context.store,
         snapshot: context.snapshot,
         model, // Backwards compatibility
     };
@@ -95,17 +92,18 @@ export function useConnectivity() {
     if (!context) {
         throw new Error("useConnectivity must be used within a DenicekProvider");
     }
-    
+
     return {
-        connect: (url: string) => {
+        connect: (url: string, roomId: string) => {
             if (context.syncManager) {
-                context.syncManager.connect(url).catch(console.error);
+                context.syncManager.connect(url, roomId).catch(console.error);
             }
         },
         disconnect: () => {
             context.syncManager?.disconnect();
         },
         isConnected: context.syncManager?.isConnected ?? false,
+        roomId: context.syncManager?.roomId ?? null,
     };
 }
 
@@ -118,33 +116,33 @@ export function useRecording() {
     if (!context) {
         throw new Error("useRecording must be used within a DenicekProvider");
     }
-    const { store, document } = context;
+    const { document } = context;
 
     // Use state to store history data and trigger re-renders when it changes
-    const [historyData, setHistoryData] = useState<GeneralizedPatch[]>(() => store.getHistory());
+    const [historyData, setHistoryData] = useState<GeneralizedPatch[]>(() => document.getHistory());
 
     // Subscribe to document patches to update history state
     useEffect(() => {
         // Subscribe to patches from the document
         const unsubscribe = document.subscribePatches(() => {
-            // When a patch is received, get fresh history from store
-            setHistoryData(store.getHistory());
+            // When a patch is received, get fresh history from document
+            setHistoryData(document.getHistory());
         });
 
         // Also get initial history
-        setHistoryData(store.getHistory());
+        setHistoryData(document.getHistory());
 
         return unsubscribe;
-    }, [store, document]);
+    }, [document]);
 
     return {
         isRecording: true, // History is always active
         startRecording: (_startNodeId: string) => { /* no-op */ },
-        stopRecording: () => store.getHistory(),
-        replay: (script: GeneralizedPatch[], startNodeId: string) => store.replay(script, startNodeId),
+        stopRecording: () => document.getHistory(),
+        replay: (script: GeneralizedPatch[], startNodeId: string) => document.replay(script, startNodeId),
         history: historyData,
         clearHistory: () => {
-            store.clearHistory();
+            document.clearHistory();
             setHistoryData([]);
         },
     };
@@ -154,30 +152,30 @@ export function useRecording() {
  * Hook for document actions (mutations)
  */
 export function useDocumentActions() {
-    const { store } = useDocumentState();
+    const { document } = useDocumentState();
 
-    const undo = useCallback(() => store.undo(), [store]);
-    const redo = useCallback(() => store.redo(), [store]);
+    const undo = useCallback(() => document.undo(), [document]);
+    const redo = useCallback(() => document.redo(), [document]);
 
     // Simple bulk actions using the factory
-    const updateAttribute = useBulkAction(store, (m, id, key: string, value: unknown | undefined) => m.updateAttribute(id, key, value));
-    const updateTag = useBulkAction(store, (m, id, newTag: string) => m.updateTag(id, newTag));
-    const wrapNodes = useBulkAction(store, (m, id, wrapperTag: string) => m.wrapNode(id, wrapperTag), true);
-    const deleteNodes = useBulkAction(store, (m, id) => m.deleteNode(id), true);
+    const updateAttribute = useBulkAction(document, (m, id, key: string, value: unknown | undefined) => m.updateAttribute(id, key, value));
+    const updateTag = useBulkAction(document, (m, id, newTag: string) => m.updateTag(id, newTag));
+    const wrapNodes = useBulkAction(document, (m, id, wrapperTag: string) => m.wrapNode(id, wrapperTag));
+    const deleteNodes = useBulkAction(document, (m, id) => m.deleteNode(id));
 
     // Actions with special logic that don't fit the bulk pattern
     const updateValue = useCallback((nodeIds: string[], newValue: string, originalValue: string) => {
         const splice = calculateSplice(originalValue, newValue);
-        store.modify((model: DenicekModel) => {
+        document.change((model: DenicekModel) => {
             for (const id of nodeIds) {
                 model.spliceValue(id, splice.index, splice.deleteCount, splice.insertText);
             }
         });
-    }, [store]);
+    }, [document]);
 
     const addChildren = useCallback((parentIds: string[], type: "element" | "value", content: string) => {
         const newIds: string[] = [];
-        store.modifyTransaction((model: DenicekModel) => {
+        document.change((model: DenicekModel) => {
             for (const id of parentIds) {
                 const node = model.getNode(id);
                 if (node?.kind === "element") {
@@ -189,11 +187,11 @@ export function useDocumentActions() {
             }
         });
         return newIds;
-    }, [store]);
+    }, [document]);
 
     const addSiblings = useCallback((referenceIds: string[], position: "before" | "after") => {
         const newIds: string[] = [];
-        store.modifyTransaction((model: DenicekModel) => {
+        document.change((model: DenicekModel) => {
             for (const id of referenceIds) {
                 const newId = position === "before"
                     ? model.addSiblingNodeBefore(id)
@@ -202,15 +200,15 @@ export function useDocumentActions() {
             }
         });
         return newIds;
-    }, [store]);
+    }, [document]);
 
 
 
     return {
         undo,
         redo,
-        canUndo: store.canUndo,
-        canRedo: store.canRedo,
+        canUndo: document.canUndo,
+        canRedo: document.canRedo,
         updateAttribute,
         updateTag,
         wrapNodes,

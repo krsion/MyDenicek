@@ -55,11 +55,11 @@ describe("Sync Integration", () => {
     });
 
     it("should connect two clients and sync changes", async () => {
-        // Create documents with initialized structure
-        doc1 = DenicekDocument.create({ peerId: 1n });
-        doc2 = DenicekDocument.create({ peerId: 2n });
+        // Create DenicekDocuments (empty, no initial content)
+        doc1 = new DenicekDocument({ peerId: 1n });
+        doc2 = new DenicekDocument({ peerId: 2n });
 
-        // Connect client 1
+        // Connect client 1 with adaptor wrapping doc1's internal LoroDoc
         client1 = new LoroWebsocketClient({
             url: server.url,
             pingIntervalMs: 1000,
@@ -68,7 +68,7 @@ describe("Sync Integration", () => {
         const adaptor1 = new LoroAdaptor(doc1._internal.doc);
         room1 = await client1.join({ roomId: ROOM_ID, crdtAdaptor: adaptor1 });
 
-        // Connect client 2
+        // Connect client 2 with adaptor wrapping doc2's internal LoroDoc
         client2 = new LoroWebsocketClient({
             url: server.url,
             pingIntervalMs: 1000,
@@ -77,11 +77,13 @@ describe("Sync Integration", () => {
         const adaptor2 = new LoroAdaptor(doc2._internal.doc);
         room2 = await client2.join({ roomId: ROOM_ID, crdtAdaptor: adaptor2 });
 
-        // Wait for initial connection
-        await new Promise((resolve) => setTimeout(resolve, 300));
+        // Wait for rooms to be ready
+        await room1.waitForReachingServerVersion();
+        await room2.waitForReachingServerVersion();
 
-        // Client 1 makes a simple change - just add one node
+        // Initialize and make changes
         doc1.change((model) => {
+            model.initializeDocument();
             const rootId = model.rootId;
             const nodeId = model.addElementChildNode(rootId, "test-element");
             model.updateAttribute(nodeId, "testAttr", "fromClient1");
@@ -91,11 +93,14 @@ describe("Sync Integration", () => {
         await waitForSync(doc1, doc2, 5000);
 
         // Verify client 2 sees the changes from client 1
-        const snapshot2 = doc2.getSnapshot();
-        const nodes2 = Object.values(snapshot2.nodes);
-        const testNode = nodes2.find(
-            (n) => n.kind === "element" && n.tag === "test-element"
-        );
+        const view2 = doc2.getSnapshot();
+        let testNode;
+        for (const { node } of view2.walkDepthFirst()) {
+            if (node.kind === "element" && node.tag === "test-element") {
+                testNode = node;
+                break;
+            }
+        }
         expect(testNode).toBeDefined();
         if (testNode?.kind === "element") {
             expect(testNode.attrs.testAttr).toBe("fromClient1");
@@ -112,11 +117,14 @@ describe("Sync Integration", () => {
         await waitForSync(doc1, doc2, 5000);
 
         // Verify client 1 sees the changes from client 2
-        const snapshot1 = doc1.getSnapshot();
-        const nodes1 = Object.values(snapshot1.nodes);
-        const testNode2 = nodes1.find(
-            (n) => n.kind === "element" && n.tag === "test-element-2"
-        );
+        const view1 = doc1.getSnapshot();
+        let testNode2;
+        for (const { node } of view1.walkDepthFirst()) {
+            if (node.kind === "element" && node.tag === "test-element-2") {
+                testNode2 = node;
+                break;
+            }
+        }
         expect(testNode2).toBeDefined();
         if (testNode2?.kind === "element") {
             expect(testNode2.attrs.testAttr).toBe("fromClient2");
@@ -168,7 +176,9 @@ describe("Sync Integration", () => {
 });
 
 /**
- * Wait for two documents to sync by comparing snapshots
+ * Wait for two documents to sync by comparing node counts and IDs
+ * Note: We don't compare root IDs because when two independently created documents
+ * sync, they can have multiple roots with different ordering.
  */
 async function waitForSync(
     doc1: DenicekDocument,
@@ -178,10 +188,18 @@ async function waitForSync(
     const startTime = Date.now();
 
     while (Date.now() - startTime < timeoutMs) {
-        const snapshot1 = doc1.getSnapshot();
-        const snapshot2 = doc2.getSnapshot();
+        const view1 = doc1.getSnapshot();
+        const view2 = doc2.getSnapshot();
 
-        if (JSON.stringify(snapshot1) === JSON.stringify(snapshot2)) {
+        // Compare all node IDs (sorted) - this is the definitive sync check
+        const ids1 = view1.getAllNodeIds().sort();
+        const ids2 = view2.getAllNodeIds().sort();
+        const sameIds = JSON.stringify(ids1) === JSON.stringify(ids2);
+
+        // Also check node count as a sanity check
+        const sameCount = view1.getNodeCount() === view2.getNodeCount();
+
+        if (sameCount && sameIds && ids1.length > 0) {
             return;
         }
 

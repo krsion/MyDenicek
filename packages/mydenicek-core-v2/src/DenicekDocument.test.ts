@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { DenicekDocument } from "./DenicekDocument.js";
-import { DenicekStore } from "./DenicekStore.js";
 
 describe("DenicekDocument", () => {
     let doc: DenicekDocument;
@@ -11,16 +10,16 @@ describe("DenicekDocument", () => {
 
     describe("basic operations", () => {
         it("should create an empty document", () => {
-            const snapshot = doc.getSnapshot();
-            expect(snapshot.root).toBe("");
-            expect(Object.keys(snapshot.nodes)).toHaveLength(0);
+            const view = doc.getSnapshot();
+            expect(view.getRootId()).toBeNull();
+            expect(view.getNodeCount()).toBe(0);
         });
 
         it("should create a document with initial structure", () => {
             doc = DenicekDocument.create();
-            const snapshot = doc.getSnapshot();
-            expect(snapshot.root).toBeTruthy();
-            expect(Object.keys(snapshot.nodes).length).toBeGreaterThan(0);
+            const view = doc.getSnapshot();
+            expect(view.getRootId()).toBeTruthy();
+            expect(view.getNodeCount()).toBeGreaterThan(0);
         });
 
         it("should add nodes via change()", () => {
@@ -28,8 +27,8 @@ describe("DenicekDocument", () => {
                 model.initializeDocument();
             });
 
-            const snapshot = doc.getSnapshot();
-            expect(snapshot.root).toBeTruthy();
+            const view = doc.getSnapshot();
+            expect(view.getRootId()).toBeTruthy();
         });
     });
 
@@ -39,11 +38,11 @@ describe("DenicekDocument", () => {
             const bytes = doc.export("snapshot");
 
             const doc2 = DenicekDocument.fromBytes(bytes);
-            const snapshot1 = doc.getSnapshot();
-            const snapshot2 = doc2.getSnapshot();
+            const view1 = doc.getSnapshot();
+            const view2 = doc2.getSnapshot();
 
-            expect(snapshot2.root).toBe(snapshot1.root);
-            expect(Object.keys(snapshot2.nodes)).toHaveLength(Object.keys(snapshot1.nodes).length);
+            expect(view2.getRootId()).toBe(view1.getRootId());
+            expect(view2.getNodeCount()).toBe(view1.getNodeCount());
         });
     });
 
@@ -59,6 +58,60 @@ describe("DenicekDocument", () => {
             });
 
             expect(notified).toBe(true);
+        });
+    });
+
+    describe("undo/redo", () => {
+        beforeEach(() => {
+            doc = DenicekDocument.create();
+        });
+
+        it("should track canUndo/canRedo state on fresh document", () => {
+            // Use a fresh document (not create() which adds initial content)
+            const freshDoc = new DenicekDocument();
+            expect(freshDoc.canUndo).toBe(false);
+            expect(freshDoc.canRedo).toBe(false);
+        });
+
+        it("should undo changes", () => {
+            let nodeId: string;
+            doc.change((model) => {
+                const rootId = model.rootId;
+                nodeId = model.addElementChildNode(rootId, "test");
+            });
+
+            // Verify node was added
+            const viewBefore = doc.getSnapshot();
+            expect(viewBefore.getNode(nodeId!)).toBeTruthy();
+
+            // Undo should be available now
+            expect(doc.canUndo).toBe(true);
+
+            // Undo the change
+            doc.undo();
+
+            // Verify node was removed
+            const viewAfter = doc.getSnapshot();
+            expect(viewAfter.getNode(nodeId!)).toBeNull();
+
+            // Redo should be available
+            expect(doc.canRedo).toBe(true);
+        });
+    });
+
+    describe("version change notification", () => {
+        it("should notify on version change", () => {
+            let versions: number[] = [];
+            const docWithCallback = DenicekDocument.create({
+                onVersionChange: (v: number) => versions.push(v),
+            });
+
+            docWithCallback.change((model) => {
+                const rootId = model.rootId;
+                model.addElementChildNode(rootId, "test");
+            });
+
+            expect(versions.length).toBeGreaterThan(0);
         });
     });
 });
@@ -168,64 +221,6 @@ describe("DenicekModel", () => {
                 const node = model.getNode(nodeId!);
                 expect(node).toBeUndefined();
             });
-        });
-    });
-});
-
-describe("DenicekStore", () => {
-    let doc: DenicekDocument;
-    let store: DenicekStore;
-
-    beforeEach(() => {
-        doc = DenicekDocument.create();
-        store = new DenicekStore(doc);
-    });
-
-    describe("undo/redo", () => {
-        it("should track canUndo/canRedo state", () => {
-            expect(store.canUndo).toBe(false);
-            expect(store.canRedo).toBe(false);
-        });
-
-        it("should undo changes", () => {
-            let nodeId: string;
-            store.modify((model) => {
-                const rootId = model.rootId;
-                nodeId = model.addElementChildNode(rootId, "test");
-            });
-
-            // Verify node was added
-            const snapshotBefore = doc.getSnapshot();
-            expect(snapshotBefore.nodes[nodeId!]).toBeTruthy();
-
-            // Undo should be available now
-            expect(store.canUndo).toBe(true);
-
-            // Undo the change
-            store.undo();
-
-            // Verify node was removed
-            const snapshotAfter = doc.getSnapshot();
-            expect(snapshotAfter.nodes[nodeId!]).toBeUndefined();
-
-            // Redo should be available
-            expect(store.canRedo).toBe(true);
-        });
-    });
-
-    describe("version change notification", () => {
-        it("should notify on version change", () => {
-            let versions: number[] = [];
-            const storeWithCallback = new DenicekStore(doc, {
-                onVersionChange: (v: number) => versions.push(v),
-            });
-
-            storeWithCallback.modify((model) => {
-                const rootId = model.rootId;
-                model.addElementChildNode(rootId, "test");
-            });
-
-            expect(versions.length).toBeGreaterThan(0);
         });
     });
 });

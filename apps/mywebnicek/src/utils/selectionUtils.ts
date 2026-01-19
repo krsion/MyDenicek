@@ -2,28 +2,22 @@
  * Selection utilities for the frontend
  *
  * This is a frontend-only implementation of selection generalization.
- * It works with DocumentSnapshot data rather than Loro internals.
+ * It works with DocumentView for encapsulated tree access.
  */
 
-import type { DocumentSnapshot } from "@mydenicek/core-v2";
+import type { DocumentView } from "@mydenicek/core-v2";
 
 /**
  * Find the lowest common ancestor of a set of nodes
  */
 function findLowestCommonAncestor(
-    snapshot: DocumentSnapshot,
+    view: DocumentView,
     nodeIds: string[]
 ): string | null {
     if (nodeIds.length === 0) return null;
 
-    const getParentId = (nodeId: string): string | null => {
-        for (const [id, node] of Object.entries(snapshot.nodes)) {
-            if (node.kind === "element" && node.children.includes(nodeId)) {
-                return id;
-            }
-        }
-        return null;
-    };
+    // O(1) parent lookup via DocumentView
+    const getParentId = (nodeId: string) => view.getParentId(nodeId);
 
     let currentLca: string | null = nodeIds[0] ?? null;
 
@@ -51,7 +45,7 @@ function findLowestCommonAncestor(
             runner = getParentId(runner);
         }
         if (!found) {
-            currentLca = snapshot.root;
+            currentLca = view.getRootId();
         }
     }
 
@@ -65,21 +59,15 @@ function findLowestCommonAncestor(
  * (same tag, same depth from LCA, same kind).
  */
 export function generalizeSelection(
-    snapshot: DocumentSnapshot,
+    view: DocumentView,
     nodeIds: string[]
 ): string[] {
     if (nodeIds.length === 0) return [];
 
-    const getParentId = (nodeId: string): string | null => {
-        for (const [id, node] of Object.entries(snapshot.nodes)) {
-            if (node.kind === "element" && node.children.includes(nodeId)) {
-                return id;
-            }
-        }
-        return null;
-    };
+    // O(1) parent lookup via DocumentView
+    const getParentId = (nodeId: string) => view.getParentId(nodeId);
 
-    let lcaId = findLowestCommonAncestor(snapshot, nodeIds);
+    let lcaId = findLowestCommonAncestor(view, nodeIds);
     if (!lcaId) return [];
 
     // When a single node is selected, use its parent as LCA
@@ -105,7 +93,7 @@ export function generalizeSelection(
     let hasElements = false;
 
     for (const id of nodeIds) {
-        const node = snapshot.nodes[id];
+        const node = view.getNode(id);
         if (!node) continue;
 
         const depth = getDepthFromLca(id);
@@ -139,7 +127,7 @@ export function generalizeSelection(
     const results: string[] = [];
 
     const traverse = (currentId: string, currentDepth: number) => {
-        const node = snapshot.nodes[currentId];
+        const node = view.getNode(currentId);
         if (!node) return;
 
         if (node.kind === "element") {
@@ -151,7 +139,8 @@ export function generalizeSelection(
                 results.push(currentId);
             }
 
-            for (const childId of node.children) {
+            // Use getChildIds instead of node.children
+            for (const childId of view.getChildIds(currentId)) {
                 traverse(childId, currentDepth + 1);
             }
         } else if (node.kind === "value") {

@@ -1,30 +1,28 @@
 /**
  * DenicekProvider - React context provider for Loro-based documents
- * 
- * This provider creates and manages a DenicekDocument and DenicekStore,
- * making them available to child components via React context.
+ *
+ * This provider creates and manages a DenicekDocument,
+ * making it available to child components via React context.
  */
 
 import {
     DenicekDocument,
-    DenicekStore,
-    type DocumentSnapshot
+    DocumentView,
 } from "@mydenicek/core-v2";
 import { createContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
 // Context types
 export interface DenicekContextValue {
-    /** The document instance */
+    /** The document instance (includes undo/redo, history, replay) */
     document: DenicekDocument;
-    /** The store for mutations and undo/redo */
-    store: DenicekStore;
-    /** Current document snapshot (read-only view) */
-    snapshot: DocumentSnapshot;
+    /** Current document view (read-only, encapsulated tree access) */
+    snapshot: DocumentView;
     /** Sync manager */
     syncManager?: {
-        connect: (url: string) => Promise<void>;
+        connect: (url: string, roomId: string) => Promise<void>;
         disconnect: () => void;
         isConnected: boolean;
+        roomId: string | null;
     };
 }
 
@@ -44,7 +42,7 @@ export interface DenicekProviderProps {
     /** Optional initial document (for importing existing data) */
     initialDocument?: DenicekDocument;
     /** Callback when document changes */
-    onChange?: (snapshot: DocumentSnapshot) => void;
+    onChange?: (view: DocumentView) => void;
 }
 
 /**
@@ -55,20 +53,24 @@ export function DenicekProvider({
     initialDocument,
     onChange,
 }: DenicekProviderProps) {
-    // Create or use provided document
-    const document = useMemo(() => {
-        return initialDocument ?? DenicekDocument.create();
-    }, [initialDocument]);
-
     // Version counter for triggering re-renders
     const [version, setVersion] = useState(0);
 
-    // Create store with version change callback
-    const store = useMemo(() => {
-        return new DenicekStore(document, {
+    // Create or use provided document
+    const document = useMemo(() => {
+        return initialDocument ?? DenicekDocument.create({
             onVersionChange: () => setVersion(v => v + 1),
         });
-    }, [document]);
+    }, [initialDocument]);
+
+    // If using an external document, subscribe to its changes
+    useEffect(() => {
+        if (initialDocument) {
+            return initialDocument.subscribe(() => {
+                setVersion(v => v + 1);
+            });
+        }
+    }, [initialDocument]);
 
     // Get current snapshot - updates when version changes
     const snapshot = useMemo(() => {
@@ -84,8 +86,9 @@ export function DenicekProvider({
     // Sync state
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [syncClient, setSyncClient] = useState<any>(null);
+    const [currentRoomId, setCurrentRoomId] = useState<string | null>(null);
 
-    const connect = async (url: string) => {
+    const connect = async (url: string, roomId: string) => {
         if (syncClient) {
             syncClient.close();
         }
@@ -95,19 +98,24 @@ export function DenicekProvider({
 
         await client.connect();
 
-        // Use a fixed room name for simplicity in this migration
-        await client.join({
-            roomId: "denicek-room",
+        const room = await client.join({
+            roomId,
             crdtAdaptor: new LoroAdaptor(document._internal.doc)
         });
 
+        // Wait for initial sync with server, then commit to push any local changes
+        await room.waitForReachingServerVersion();
+        document.commit("sync-connect");
+
         setSyncClient(client);
+        setCurrentRoomId(roomId);
     };
 
     const disconnect = () => {
         if (syncClient) {
             syncClient.close();
             setSyncClient(null);
+            setCurrentRoomId(null);
         }
     };
 
@@ -116,12 +124,12 @@ export function DenicekProvider({
 
     const contextValue: DenicekContextValue = {
         document,
-        store,
         snapshot,
         syncManager: {
             connect,
             disconnect,
             isConnected: !!syncClient,
+            roomId: currentRoomId,
         }
     };
 
