@@ -17,18 +17,18 @@ describe("DenicekDocument", () => {
 
     describe("basic operations", () => {
         it("should create an empty document", () => {
-            const view = doc.getSnapshot();
-            expect(view.getRootId()).toBeNull();
-            expect(view.getNodeCount()).toBe(0);
+            expect(doc.getRootId()).toBeNull();
+            const snapshot = doc.getSnapshot();
+            expect(snapshot.nodes.size).toBe(0);
         });
 
         it("should create a document with initial structure via initializer", () => {
             doc = DenicekDocument.create({}, (model) => {
                 model.createRootNode("section");
             });
-            const view = doc.getSnapshot();
-            expect(view.getRootId()).toBeTruthy();
-            expect(view.getNodeCount()).toBe(1);
+            expect(doc.getRootId()).toBeTruthy();
+            const snapshot = doc.getSnapshot();
+            expect(snapshot.nodes.size).toBe(1);
         });
 
         it("should add nodes via change()", () => {
@@ -36,8 +36,7 @@ describe("DenicekDocument", () => {
                 model.createRootNode("root");
             });
 
-            const view = doc.getSnapshot();
-            expect(view.getRootId()).toBeTruthy();
+            expect(doc.getRootId()).toBeTruthy();
         });
     });
 
@@ -47,11 +46,9 @@ describe("DenicekDocument", () => {
             const bytes = doc.export("snapshot");
 
             const doc2 = DenicekDocument.fromBytes(bytes);
-            const view1 = doc.getSnapshot();
-            const view2 = doc2.getSnapshot();
 
-            expect(view2.getRootId()).toBe(view1.getRootId());
-            expect(view2.getNodeCount()).toBe(view1.getNodeCount());
+            expect(doc2.getRootId()).toBe(doc.getRootId());
+            expect(doc2.getSnapshot().nodes.size).toBe(doc.getSnapshot().nodes.size);
         });
     });
 
@@ -90,8 +87,7 @@ describe("DenicekDocument", () => {
             });
 
             // Verify node was added
-            const viewBefore = doc.getSnapshot();
-            expect(viewBefore.getNode(nodeId!)).toBeTruthy();
+            expect(doc.getNode(nodeId!)).toBeTruthy();
 
             // Undo should be available now
             expect(doc.canUndo).toBe(true);
@@ -100,8 +96,7 @@ describe("DenicekDocument", () => {
             doc.undo();
 
             // Verify node was removed
-            const viewAfter = doc.getSnapshot();
-            expect(viewAfter.getNode(nodeId!)).toBeNull();
+            expect(doc.getNode(nodeId!)).toBeNull();
 
             // Redo should be available
             expect(doc.canRedo).toBe(true);

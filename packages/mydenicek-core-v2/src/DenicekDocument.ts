@@ -7,9 +7,8 @@
 import { Frontiers, LoroDoc, UndoManager } from "loro-crdt";
 import type { LoroWebsocketClient, LoroWebsocketClientRoom } from "loro-websocket/client";
 import { DenicekModel } from "./DenicekModel.js";
-import { DocumentView } from "./DocumentView.js";
-import { createDocumentView } from "./loroHelpers.js";
-import type { GeneralizedPatch, HistoryEntry, NodeData, Version } from "./types.js";
+import { buildDocumentIndex, type DocumentIndex } from "./loroHelpers.js";
+import type { GeneralizedPatch, HistoryEntry, NodeData, Snapshot, Version } from "./types.js";
 
 /**
  * Options for connecting to a sync server
@@ -70,6 +69,9 @@ export class DenicekDocument {
     private syncRoom: LoroWebsocketClientRoom | null = null;
     private _syncRoomId: string | null = null;
 
+    // Cached index for O(1) lookups
+    private _cachedIndex: DocumentIndex | null = null;
+
     constructor(options?: DenicekDocumentOptions) {
         this._doc = new LoroDoc();
         if (options?.peerId !== undefined) {
@@ -88,11 +90,22 @@ export class DenicekDocument {
             mergeInterval: options?.mergeInterval ?? 1000,
         });
 
-        // Subscribe to document changes to track version
+        // Subscribe to document changes to track version and invalidate cache
         this._doc.subscribe(() => {
+            this._cachedIndex = null;
             this._version++;
             this.onVersionChange?.(this._version);
         });
+    }
+
+    /**
+     * Get the cached index, building it if necessary
+     */
+    private getIndex(): DocumentIndex {
+        if (!this._cachedIndex) {
+            this._cachedIndex = buildDocumentIndex(this._doc);
+        }
+        return this._cachedIndex;
     }
 
     // === Sync ===
@@ -168,47 +181,77 @@ export class DenicekDocument {
         return this._version;
     }
 
-    // === Snapshot ===
-
-    /**
-     * Get a DocumentView of the current document state
-     * The view provides read-only access to the document tree
-     */
-    getSnapshot(): DocumentView {
-        return createDocumentView(this._doc);
-    }
-
-    /**
-     * Convert the document to a JSON representation
-     */
-    toJSON(): object {
-        const view = this.getSnapshot();
-        const result: Record<string, unknown> = {};
-        for (const { node } of view.walkDepthFirst()) {
-            result[node.id] = node;
-        }
-        return { root: view.getRootId(), nodes: result };
-    }
-
     // === Node Access ===
+
+    /**
+     * Get node data by ID. Returns null if node doesn't exist.
+     */
+    getNode(id: string): NodeData | null {
+        return this.getIndex().nodes.get(id) ?? null;
+    }
+
+    /**
+     * Get the IDs of all children of a node.
+     * Returns empty array if node doesn't exist or is a value node.
+     */
+    getChildIds(parentId: string): string[] {
+        return this.getIndex().childIds.get(parentId) ?? [];
+    }
+
+    /**
+     * Get the parent ID of a node.
+     * Returns null if node is root or doesn't exist.
+     */
+    getParentId(nodeId: string): string | null {
+        return this.getIndex().parents.get(nodeId) ?? null;
+    }
 
     /**
      * Get the root node ID
      */
-    getRootId(): string | undefined {
-        return this.getSnapshot().getRootId() ?? undefined;
+    getRootId(): string | null {
+        return this.getIndex().rootId;
     }
 
     /**
      * Get all nodes as a record
      */
     getAllNodes(): Record<string, NodeData> {
-        const view = this.getSnapshot();
+        const index = this.getIndex();
         const result: Record<string, NodeData> = {};
-        for (const { node } of view.walkDepthFirst()) {
-            result[node.id] = node;
+        for (const [id, node] of index.nodes) {
+            result[id] = node;
         }
         return result;
+    }
+
+    // === Snapshot ===
+
+    /**
+     * Get an immutable snapshot of the current document state.
+     * Use for temporal comparisons (e.g., diff views).
+     * For live access, use getNode/getChildIds/getParentId directly.
+     */
+    getSnapshot(): Snapshot {
+        const index = this.getIndex();
+        return {
+            nodes: new Map(index.nodes),
+            parents: new Map(index.parents),
+            childIds: new Map(index.childIds.entries()),
+            rootId: index.rootId,
+        };
+    }
+
+    /**
+     * Convert the document to a JSON representation
+     */
+    toJSON(): object {
+        const index = this.getIndex();
+        const result: Record<string, unknown> = {};
+        for (const [id, node] of index.nodes) {
+            result[id] = node;
+        }
+        return { root: index.rootId, nodes: result };
     }
 
     // === Modifications ===
@@ -221,10 +264,7 @@ export class DenicekDocument {
     change(fn: (model: DenicekModel) => void): void {
         const model = new DenicekModel(
             this._doc,
-            {
-                getSnapshot: () => this.getSnapshot(),
-                getAllNodes: () => this.getAllNodes(),
-            },
+            { getAllNodes: () => this.getAllNodes() },
             (p) => this._recordPatch(p)
         );
         fn(model);
@@ -313,11 +353,8 @@ export class DenicekDocument {
      * The listener is called whenever the document changes (local or remote)
      * @returns Unsubscribe function
      */
-    subscribe(listener: (view: DocumentView) => void): () => void {
-        const subscription = this._doc.subscribe(() => {
-            listener(this.getSnapshot());
-        });
-        return subscription;
+    subscribe(listener: () => void): () => void {
+        return this._doc.subscribe(listener);
     }
 
     /**

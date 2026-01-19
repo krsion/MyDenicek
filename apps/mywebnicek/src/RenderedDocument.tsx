@@ -1,5 +1,5 @@
 import { makeStyles, mergeClasses } from "@fluentui/react-components";
-import { type DocumentView } from "@mydenicek/core-v2";
+import { type DenicekDocument } from "@mydenicek/core-v2";
 import { DENICEK_NODE_ID_ATTR } from "@mydenicek/react-v2";
 import React from "react";
 
@@ -43,11 +43,11 @@ const useStyles = makeStyles({
 });
 
 
-export function RenderedDocument({ view }: { view: DocumentView; version?: unknown }) {
+export function RenderedDocument({ document }: { document: DenicekDocument; version?: unknown }) {
   const styles = useStyles();
 
   function renderById(id: string): React.ReactNode {
-    const node = view.getNode(id);
+    const node = document.getNode(id);
     if (!node) return undefined;
 
     if (node.kind === "value") {
@@ -81,7 +81,7 @@ export function RenderedDocument({ view }: { view: DocumentView; version?: unkno
       }
     }
 
-    const childIds = view.getChildIds(id);
+    const childIds = document.getChildIds(id);
     const renderedChildren: React.ReactNode[] = [];
     for (const childId of childIds) {
       const rendered = renderById(childId);
@@ -97,8 +97,8 @@ export function RenderedDocument({ view }: { view: DocumentView; version?: unkno
     return React.createElement(tagName, attrs as Record<string, unknown>, ...renderedChildren);
   }
 
-  // View might not be ready initially if doc is loading
-  const rootId = view?.getRootId();
+  // Document might not be ready initially if doc is loading
+  const rootId = document?.getRootId();
   if (!rootId) return null;
 
   return <>{renderById(rootId)}</>;

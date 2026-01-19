@@ -1,6 +1,6 @@
 import { Button, Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, Switch, Tag, TagGroup, Text, Toast, Toaster, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip, useId, useToastController } from "@fluentui/react-components";
 import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackRegular, CameraRegular, ClipboardPasteRegular, CodeRegular, CopyRegular, EditRegular, LinkRegular, PlayRegular, RecordRegular, RenameRegular, StopRegular } from "@fluentui/react-icons";
-import type { DocumentView } from "@mydenicek/react-v2";
+import type { Snapshot } from "@mydenicek/react-v2";
 import {
   useConnectivity,
   useDocumentActions,
@@ -35,7 +35,7 @@ function getRoomIdFromHash(): string {
 }
 
 export const App = () => {
-  const { snapshot: liveSnapshot } = useDocumentState();
+  const { document } = useDocumentState();
   const {
     undo, redo, canUndo, canRedo,
     updateAttribute, updateTag, wrapNodes,
@@ -50,7 +50,7 @@ export const App = () => {
   const { setSelectedNodeIds, remoteSelections, userId } = useSelection();
   const { selectedNodeId, selectedNodeIds, node, details } = useSelectedNode();
 
-  const [snapshot, setSnapshot] = useState<DocumentView | null>(null);
+  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [filterPatches, setFilterPatches] = useState(false);
   const [patchesViewMode, setPatchesViewMode] = useState<'table' | 'json'>('table');
 
@@ -106,9 +106,8 @@ export const App = () => {
 
   // Frontend-only generalization for Shift+click multi-select
   const handleGeneralize = useCallback((ids: string[]) => {
-    if (!liveSnapshot) return ids;
-    return generalizeSelection(liveSnapshot, ids);
-  }, [liveSnapshot]);
+    return generalizeSelection(document, ids);
+  }, [document]);
 
   // Analyze recording history for created node dependencies
   const scriptAnalysis: ScriptAnalysis | null = useMemo(() => {
@@ -208,18 +207,16 @@ export const App = () => {
   const { clipboardValue, isInputSelected, isValueSelected, handleCopyFromInput, handlePasteToValue } = useClipboard({
     selectedNodeId: selectedNodeId ?? null,
     node,
-    snapshot: liveSnapshot,
+    document,
     updateValue,
   });
-
-  if (!liveSnapshot) return <div>Loading...</div>;
 
   // Get first child's tag for the selected element node
   const selectedNodeFirstChildTag = (() => {
     if (!node || node.kind !== "element" || !selectedNodeId) return undefined;
-    const childIds = liveSnapshot.getChildIds(selectedNodeId);
+    const childIds = document.getChildIds(selectedNodeId);
     if (childIds.length === 0) return undefined;
-    const firstChild = liveSnapshot.getNode(childIds[0]!);
+    const firstChild = document.getNode(childIds[0]!);
     return firstChild?.kind === "element" ? firstChild.tag : undefined;
   })();
   const selectedNodeAttributes = (node && node.kind === "element") ? node.attrs : undefined;
@@ -359,12 +356,12 @@ export const App = () => {
                 <DialogSurface style={{ width: 1000 }}>
                   <DialogBody>
                     <DialogContent>
-                      <JsonView data={liveSnapshot} />
+                      <JsonView data={document} />
                     </DialogContent>
                   </DialogBody>
                 </DialogSurface>
               </Dialog>
-              <ToolbarButton icon={<CameraRegular />} onClick={() => setSnapshot(liveSnapshot)}>Snapshot</ToolbarButton>
+              <ToolbarButton icon={<CameraRegular />} onClick={() => setSnapshot(document.getSnapshot())}>Snapshot</ToolbarButton>
               <ToolbarDivider />
               {showHistory ? (
                 <ToolbarButton icon={<RecordRegular />} onClick={() => setShowHistory(!showHistory)} appearance="primary">Actions</ToolbarButton>
@@ -384,7 +381,7 @@ export const App = () => {
           />
 
           <DomNavigator ref={navigatorRef} onSelectedChange={(ids) => { setSelectedNodeIds(ids); }} selectedNodeIds={selectedNodeIds} remoteSelections={remoteSelections} generalizer={handleGeneralize}>
-            <RenderedDocument view={liveSnapshot} />
+            <RenderedDocument document={document} />
           </DomNavigator>
 
           <ElementDetails

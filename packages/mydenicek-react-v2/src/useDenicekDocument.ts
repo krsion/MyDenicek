@@ -52,7 +52,9 @@ export function calculateSplice(oldVal: string, newVal: string): SpliceInfo {
 }
 
 /**
- * Hook to access document state
+ * Hook to access document state.
+ * Returns the document instance which provides direct access to nodes via
+ * getNode(), getChildIds(), getParentId(), getRootId().
  */
 export function useDocumentState() {
     const context = useContext(DenicekContext);
@@ -62,19 +64,21 @@ export function useDocumentState() {
 
     return {
         document: context.document,
-        snapshot: context.snapshot,
+        version: context.version,
     };
 }
 
 /**
- * Hook to access just the snapshot (for read-only operations)
+ * Hook to access just the document (for read operations).
+ * Use document.getNode(), document.getChildIds(), etc. for lookups.
+ * @deprecated Use useDocumentState().document instead
  */
 export function useSnapshot() {
     const context = useContext(DenicekContext);
     if (!context) {
         throw new Error("useSnapshot must be used within a DenicekProvider");
     }
-    return context.snapshot;
+    return context.document;
 }
 
 /**

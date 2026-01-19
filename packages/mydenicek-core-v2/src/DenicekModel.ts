@@ -16,7 +16,6 @@ import {
     TREE_CONTAINER,
     treeIdToString,
 } from "./loroHelpers.js";
-import { DocumentView } from "./DocumentView.js";
 import type {
     ElementNode,
     GeneralizedPatch,
@@ -30,7 +29,6 @@ import { handleModelError } from "./errors.js";
  * Document reference interface for read operations
  */
 interface DocumentRef {
-    getSnapshot: () => DocumentView;
     getAllNodes: () => Record<string, NodeData>;
 }
 
@@ -87,10 +85,6 @@ export class DenicekModel {
 
     getAllNodes(): Record<string, NodeData> {
         return this.docRef.getAllNodes();
-    }
-
-    getSnapshot(): DocumentView {
-        return this.docRef.getSnapshot();
     }
 
     getParents(childId: string): ElementNode[] {

@@ -11,12 +11,13 @@ export type {
     ElementNodeData,
     Node,
     NodeData,
+    Snapshot,
     SpliceInfo,
     ValueNode,
     ValueNodeData,
 } from "@mydenicek/core-v2";
 
-export { DenicekDocument, DenicekModel, DocumentView } from "@mydenicek/core-v2";
+export { DenicekDocument, DenicekModel } from "@mydenicek/core-v2";
 
 // Constants
 export { DENICEK_NODE_ID_ATTR } from "./constants.js";

@@ -1,12 +1,13 @@
 # LaTeX auxiliary files produced in proposal/
-proposal/*.aux
-proposal/*.log
-proposal/*.out
-proposal/*.fls
-proposal/*.fdb_latexmk
-proposal/*.synctex.gz
-proposal/*.xmpi
+*.aux
+*.log
+*.out
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.xmpi
 node_modules/
 dist/
 packages/mydenicek-core/dist/index.d.ts
 packages/mydenicek-core/dist/index.js
+apps/mydenicek-sync-server/data/*

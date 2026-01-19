@@ -2,22 +2,22 @@
  * Selection utilities for the frontend
  *
  * This is a frontend-only implementation of selection generalization.
- * It works with DocumentView for encapsulated tree access.
+ * It works with DenicekDocument for encapsulated tree access.
  */
 
-import type { DocumentView } from "@mydenicek/core-v2";
+import type { DenicekDocument } from "@mydenicek/core-v2";
 
 /**
  * Find the lowest common ancestor of a set of nodes
  */
 function findLowestCommonAncestor(
-    view: DocumentView,
+    doc: DenicekDocument,
     nodeIds: string[]
 ): string | null {
     if (nodeIds.length === 0) return null;
 
-    // O(1) parent lookup via DocumentView
-    const getParentId = (nodeId: string) => view.getParentId(nodeId);
+    // O(1) parent lookup via DenicekDocument
+    const getParentId = (nodeId: string) => doc.getParentId(nodeId);
 
     let currentLca: string | null = nodeIds[0] ?? null;
 
@@ -45,7 +45,7 @@ function findLowestCommonAncestor(
             runner = getParentId(runner);
         }
         if (!found) {
-            currentLca = view.getRootId();
+            currentLca = doc.getRootId();
         }
     }
 
@@ -59,15 +59,15 @@ function findLowestCommonAncestor(
  * (same tag, same depth from LCA, same kind).
  */
 export function generalizeSelection(
-    view: DocumentView,
+    doc: DenicekDocument,
     nodeIds: string[]
 ): string[] {
     if (nodeIds.length === 0) return [];
 
-    // O(1) parent lookup via DocumentView
-    const getParentId = (nodeId: string) => view.getParentId(nodeId);
+    // O(1) parent lookup via DenicekDocument
+    const getParentId = (nodeId: string) => doc.getParentId(nodeId);
 
-    let lcaId = findLowestCommonAncestor(view, nodeIds);
+    let lcaId = findLowestCommonAncestor(doc, nodeIds);
     if (!lcaId) return [];
 
     // When a single node is selected, use its parent as LCA
@@ -93,7 +93,7 @@ export function generalizeSelection(
     let hasElements = false;
 
     for (const id of nodeIds) {
-        const node = view.getNode(id);
+        const node = doc.getNode(id);
         if (!node) continue;
 
         const depth = getDepthFromLca(id);
@@ -127,7 +127,7 @@ export function generalizeSelection(
     const results: string[] = [];
 
     const traverse = (currentId: string, currentDepth: number) => {
-        const node = view.getNode(currentId);
+        const node = doc.getNode(currentId);
         if (!node) return;
 
         if (node.kind === "element") {
@@ -140,7 +140,7 @@ export function generalizeSelection(
             }
 
             // Use getChildIds instead of node.children
-            for (const childId of view.getChildIds(currentId)) {
+            for (const childId of doc.getChildIds(currentId)) {
                 traverse(childId, currentDepth + 1);
             }
         } else if (node.kind === "value") {

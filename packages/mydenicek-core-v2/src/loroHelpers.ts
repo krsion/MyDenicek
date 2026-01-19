@@ -4,8 +4,7 @@
  */
 
 import { LoroDoc, LoroMap, LoroText, LoroTree, LoroTreeNode, TreeID } from "loro-crdt";
-import type { ElementNode, Node, ValueNode } from "./types.js";
-import { DocumentView, type InternalNode, type InternalElementNode, type InternalValueNode } from "./DocumentView.js";
+import type { ElementNode, Node, NodeData, ValueNode } from "./types.js";
 
 /**
  * Internal constants for Loro container names
@@ -85,65 +84,72 @@ export function loroNodeToNode(treeNode: LoroTreeNode, tree: LoroTree): Node {
 }
 
 /**
- * Convert a LoroTreeNode to internal nested node structure for DocumentView
+ * Result of building document index
  */
-function loroNodeToInternalNode(treeNode: LoroTreeNode, tree: LoroTree): InternalNode {
-    const id = treeIdToString(treeNode.id);
-    const data = treeNode.data;
-    const kind = data.get(NODE_KIND) as "element" | "value" | undefined;
-
-    if (kind === "value") {
-        const textContainer = data.get(NODE_TEXT) as LoroText | undefined;
-        const value = textContainer ? textContainer.toString() : "";
-        const node: InternalValueNode = {
-            id,
-            kind: "value",
-            value,
-        };
-        return node;
-    } else {
-        const tag = (data.get(NODE_TAG) as string) || "div";
-        const attrsData = data.get(NODE_ATTRS);
-        let attrs: Record<string, unknown> = {};
-        if (attrsData && typeof attrsData === "object") {
-            if (attrsData instanceof LoroMap) {
-                attrs = attrsData.toJSON() as Record<string, unknown>;
-            } else {
-                attrs = { ...(attrsData as object) };
-            }
-        }
-
-        // Recursively convert children
-        const children: InternalNode[] = [];
-        const childNodes = treeNode.children();
-        if (childNodes) {
-            for (const child of childNodes) {
-                children.push(loroNodeToInternalNode(child, tree));
-            }
-        }
-
-        const node: InternalElementNode = {
-            id,
-            kind: "element",
-            tag,
-            attrs,
-            children,
-        };
-        return node;
-    }
+export interface DocumentIndex {
+    nodes: Map<string, NodeData>;
+    parents: Map<string, string | null>;
+    childIds: Map<string, string[]>;
+    rootId: string | null;
 }
 
 /**
- * Create a DocumentView from a LoroDoc
+ * Build document index from a LoroDoc.
+ * Returns flat maps for O(1) lookups.
  */
-export function createDocumentView(doc: LoroDoc): DocumentView {
+export function buildDocumentIndex(doc: LoroDoc): DocumentIndex {
     const tree = doc.getTree(TREE_CONTAINER);
     const roots = tree.roots();
 
+    const nodes = new Map<string, NodeData>();
+    const parents = new Map<string, string | null>();
+    const childIds = new Map<string, string[]>();
+
     if (roots.length === 0) {
-        return new DocumentView(null);
+        return { nodes, parents, childIds, rootId: null };
     }
 
-    const root = loroNodeToInternalNode(roots[0], tree);
-    return new DocumentView(root);
+    const rootId = treeIdToString(roots[0].id);
+
+    function walkNode(treeNode: LoroTreeNode, parentId: string | null): void {
+        const id = treeIdToString(treeNode.id);
+        const data = treeNode.data;
+        const kind = data.get(NODE_KIND) as "element" | "value" | undefined;
+
+        parents.set(id, parentId);
+
+        if (kind === "value") {
+            const textContainer = data.get(NODE_TEXT) as LoroText | undefined;
+            const value = textContainer ? textContainer.toString() : "";
+            nodes.set(id, { id, kind: "value", value });
+            childIds.set(id, []);
+        } else {
+            const tag = (data.get(NODE_TAG) as string) || "div";
+            const attrsData = data.get(NODE_ATTRS);
+            let attrs: Record<string, unknown> = {};
+            if (attrsData && typeof attrsData === "object") {
+                if (attrsData instanceof LoroMap) {
+                    attrs = attrsData.toJSON() as Record<string, unknown>;
+                } else {
+                    attrs = { ...(attrsData as object) };
+                }
+            }
+
+            nodes.set(id, { id, kind: "element", tag, attrs });
+
+            const children: string[] = [];
+            const childNodes = treeNode.children();
+            if (childNodes) {
+                for (const child of childNodes) {
+                    children.push(treeIdToString(child.id));
+                    walkNode(child, id);
+                }
+            }
+            childIds.set(id, children);
+        }
+    }
+
+    walkNode(roots[0], null);
+
+    return { nodes, parents, childIds, rootId };
 }

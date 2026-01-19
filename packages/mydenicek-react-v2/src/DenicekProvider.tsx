@@ -8,16 +8,15 @@
 import {
     DenicekDocument,
     DenicekModel,
-    DocumentView,
 } from "@mydenicek/core-v2";
 import { createContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
 // Context types
 export interface DenicekContextValue {
-    /** The document instance (includes undo/redo, history, replay) */
+    /** The document instance (includes undo/redo, history, replay, and node access) */
     document: DenicekDocument;
-    /** Current document view (read-only, encapsulated tree access) */
-    snapshot: DocumentView;
+    /** Version counter - changes on each document update, use for reactive dependencies */
+    version: number;
     /** Sync manager */
     syncManager?: {
         connect: (url: string, roomId: string) => Promise<void>;
@@ -45,7 +44,7 @@ export interface DenicekProviderProps {
     /** Optional initializer to set up document structure when creating a new document */
     initializer?: (model: DenicekModel) => void;
     /** Callback when document changes */
-    onChange?: (view: DocumentView) => void;
+    onChange?: () => void;
 }
 
 /**
@@ -78,16 +77,10 @@ export function DenicekProvider({
         }
     }, [initialDocument]);
 
-    // Get current snapshot - updates when version changes
-    const snapshot = useMemo(() => {
-        return document.getSnapshot();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [document, version]);
-
     // Notify parent of changes
     useEffect(() => {
-        onChange?.(snapshot);
-    }, [snapshot, onChange]);
+        onChange?.();
+    }, [version, onChange]);
 
     // Sync handlers - use document's built-in sync methods
     const connect = async (url: string, roomId: string) => {
@@ -105,7 +98,7 @@ export function DenicekProvider({
 
     const contextValue: DenicekContextValue = {
         document,
-        snapshot,
+        version,
         syncManager: {
             connect,
             disconnect,

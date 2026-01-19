@@ -5,12 +5,12 @@
 
 
 // ============================================================================
-// Public Node Data Types (returned by DocumentView)
+// Public Node Data Types
 // ============================================================================
 
 /**
  * Element node data - public read-only view of an element node
- * Children are accessed via DocumentView.getChildIds(), not stored here
+ * Children are accessed via DenicekDocument.getChildIds(), not stored here
  */
 export interface ElementNodeData {
     id: string;
@@ -33,9 +33,20 @@ export interface ValueNodeData {
  */
 export type NodeData = ElementNodeData | ValueNodeData;
 
+/**
+ * Immutable snapshot of document state for temporal comparisons.
+ * Use DenicekDocument methods for live document access.
+ */
+export interface Snapshot {
+    readonly nodes: ReadonlyMap<string, NodeData>;
+    readonly parents: ReadonlyMap<string, string | null>;
+    readonly childIds: ReadonlyMap<string, readonly string[]>;
+    readonly rootId: string | null;
+}
+
 
 // ============================================================================
-// Internal Node Types (used by LoroDocWrapper and model operations)
+// Internal Node Types
 // ============================================================================
 
 /**

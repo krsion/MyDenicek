@@ -60,7 +60,7 @@ export function useSelectedNode() {
         throw new Error("useSelectedNode must be used within a DenicekProvider");
     }
 
-    const { snapshot } = context;
+    const { document: denicekDoc, version } = context;
     const { selectedNodeIds } = selectionContext;
 
     const selectedNodeId = selectedNodeIds.length > 0
@@ -69,8 +69,9 @@ export function useSelectedNode() {
 
     const node = useMemo(() => {
         if (!selectedNodeId) return undefined;
-        return snapshot.getNode(selectedNodeId) ?? undefined;
-    }, [snapshot, selectedNodeId]);
+        return denicekDoc.getNode(selectedNodeId) ?? undefined;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [denicekDoc, version, selectedNodeId]);
 
     const details = useMemo<SelectedNodeDetails | undefined>(() => {
         if (!selectedNodeId) return undefined;
