@@ -1,4 +1,4 @@
-import { Button, Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, Switch, Tag, TagGroup, Text, Toast, Toaster, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip, useId, useToastController } from "@fluentui/react-components";
+import { Badge, Button, Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, Spinner, Switch, Tag, TagGroup, Text, Toast, Toaster, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip, useId, useToastController } from "@fluentui/react-components";
 import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackRegular, CameraRegular, ClipboardPasteRegular, CodeRegular, CopyRegular, EditRegular, LinkRegular, PlayRegular, RecordRegular, RenameRegular, StopRegular } from "@fluentui/react-icons";
 import type { Snapshot } from "@mydenicek/react-v2";
 import {
@@ -46,7 +46,7 @@ export const App = () => {
   const { history: recordingHistory, clearHistory, replay } = recordingObj;
   const [showHistory, setShowHistory] = useState(true);
 
-  const { connect, disconnect, roomId: _connectedRoomId } = useConnectivity();
+  const { connect, disconnect, status, latency, error } = useConnectivity();
   const { setSelectedNodeIds, remoteSelections, userId } = useSelection();
   const { selectedNodeId, selectedNodeIds, node, details } = useSelectedNode();
 
@@ -54,8 +54,10 @@ export const App = () => {
   const [filterPatches, setFilterPatches] = useState(false);
   const [patchesViewMode, setPatchesViewMode] = useState<'table' | 'json'>('table');
 
-  const [connected, setConnected] = useState(true);
   const [roomId] = useState<string>(() => getRoomIdFromHash());
+
+  // Derive connected from status
+  const connected = status === "connected";
   const navigatorRef = useRef<DomNavigatorHandle>(null);
   const [selectedActionIndices, setSelectedActionIndices] = useState<Set<number>>(new Set());
   const [targetOverrides, setTargetOverrides] = useState<Map<number, string>>(new Map());
@@ -95,14 +97,12 @@ export const App = () => {
 
   // Handle sync toggle
   const handleSyncToggle = useCallback(() => {
-    if (connected) {
-      setConnected(false);
+    if (status === "connected" || status === "connecting") {
       disconnect();
     } else {
-      setConnected(true);
       connect("ws://localhost:3001", roomId);
     }
-  }, [connected, connect, disconnect, roomId]);
+  }, [status, connect, disconnect, roomId]);
 
   // Frontend-only generalization for Shift+click multi-select
   const handleGeneralize = useCallback((ids: string[]) => {
@@ -336,10 +336,12 @@ export const App = () => {
 
             <ToolbarGroup>
               <Text>{userId}</Text>
+              <SyncStatusIndicator status={status} latency={latency} error={error} />
               <Switch
-                checked={connected}
+                checked={status === "connected" || status === "connecting"}
                 onChange={handleSyncToggle}
                 label={connected ? "Sync on" : "Sync off"}
+                disabled={status === "connecting"}
               />
               <Tooltip content="Copy shareable link" relationship="label">
                 <ToolbarButton
@@ -445,6 +447,58 @@ export const App = () => {
         </div>
       </ResizablePanel>
     </div>
+  );
+}
+
+/** Sync status indicator component */
+function SyncStatusIndicator({
+  status,
+  latency,
+  error,
+}: {
+  status: "connecting" | "connected" | "disconnected" | "idle";
+  latency?: number;
+  error?: string | null;
+}) {
+  if (status === "connecting") {
+    return (
+      <Tooltip content="Attempting to connect..." relationship="label">
+        <Badge appearance="outline" color="warning" size="medium" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <Spinner size="extra-tiny" />
+          Connecting
+        </Badge>
+      </Tooltip>
+    );
+  }
+
+  if (status === "connected") {
+    return (
+      <Tooltip
+        content={latency ? `Round-trip latency: ${latency}ms` : "Connected to sync server"}
+        relationship="label"
+      >
+        <Badge appearance="filled" color="success" size="medium">
+          {latency ? `Synced (${latency}ms)` : "Synced"}
+        </Badge>
+      </Tooltip>
+    );
+  }
+
+  if (status === "disconnected") {
+    return (
+      <Tooltip content={error || "Connection lost, will auto-retry"} relationship="label">
+        <Badge appearance="filled" color="danger" size="medium">
+          Disconnected
+        </Badge>
+      </Tooltip>
+    );
+  }
+
+  // idle
+  return (
+    <Badge appearance="outline" color="informative" size="medium">
+      Offline
+    </Badge>
   );
 }
 

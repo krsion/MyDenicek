@@ -29,6 +29,9 @@ export type {
     ElementNode,
     Node,
     ValueNode,
+    // Sync types
+    SyncState,
+    SyncStatus,
     // Other types
     GeneralizedPatch,
     OpId,

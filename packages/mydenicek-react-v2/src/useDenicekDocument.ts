@@ -6,7 +6,8 @@ import {
     DenicekDocument,
     DenicekModel,
     type GeneralizedPatch,
-    type SpliceInfo
+    type SpliceInfo,
+    type SyncStatus,
 } from "@mydenicek/core-v2";
 import { useCallback, useContext, useEffect, useState } from "react";
 import { DenicekContext } from "./DenicekProvider.js";
@@ -68,15 +69,24 @@ export function useDocumentState() {
     };
 }
 
+const defaultSyncState = {
+    status: "idle" as SyncStatus,
+    latency: undefined as number | undefined,
+    roomId: null as string | null,
+    error: null as string | null,
+};
+
 /**
- * Hook for connectivity state (stub for backwards compatibility)
- * In v2, use sync-client directly for real sync
+ * Hook for sync connectivity state
+ * Provides reactive access to sync status, latency, and error information
  */
 export function useConnectivity() {
     const context = useContext(DenicekContext);
     if (!context) {
         throw new Error("useConnectivity must be used within a DenicekProvider");
     }
+
+    const syncState = context.syncManager?.syncState ?? defaultSyncState;
 
     return {
         connect: (url: string, roomId: string) => {
@@ -87,8 +97,13 @@ export function useConnectivity() {
         disconnect: () => {
             context.syncManager?.disconnect();
         },
-        isConnected: context.syncManager?.isConnected ?? false,
-        roomId: context.syncManager?.roomId ?? null,
+        // New reactive state
+        status: syncState.status,
+        latency: syncState.latency,
+        error: syncState.error,
+        roomId: syncState.roomId,
+        // Backwards compatible
+        isConnected: syncState.status === "connected",
     };
 }
 

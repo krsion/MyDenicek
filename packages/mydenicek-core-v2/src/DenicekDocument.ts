@@ -14,7 +14,7 @@ import {
     stringToTreeId,
     TREE_CONTAINER
 } from "./loroHelpers.js";
-import type { GeneralizedPatch, NodeData, Snapshot, Version } from "./types.js";
+import type { GeneralizedPatch, NodeData, Snapshot, SyncState, SyncStatus, Version } from "./types.js";
 
 /**
  * Options for connecting to a sync server
@@ -75,6 +75,14 @@ export class DenicekDocument {
     private syncRoom: LoroWebsocketClientRoom | null = null;
     private _syncRoomId: string | null = null;
 
+    // Sync status tracking
+    private syncStatusListeners: Set<(state: SyncState) => void> = new Set();
+    private _syncStatus: SyncStatus = "idle";
+    private _syncLatency: number | undefined = undefined;
+    private _syncError: string | null = null;
+    private statusUnsubscribe?: () => void;
+    private latencyUnsubscribe?: () => void;
+
     // Cached index for O(1) lookups
     private _cachedIndex: DocumentIndex | null = null;
 
@@ -125,38 +133,63 @@ export class DenicekDocument {
         // Disconnect existing connection if any
         await this.disconnectSync();
 
-        // Dynamic import to keep sync dependencies optional
-        const { LoroWebsocketClient } = await import("loro-websocket/client");
-        const { LoroAdaptor } = await import("loro-adaptors");
+        this.setSyncStatus("connecting");
 
-        const client = new LoroWebsocketClient({
-            url: options.url,
-            pingIntervalMs: options.pingIntervalMs,
-        });
+        try {
+            // Dynamic import to keep sync dependencies optional
+            const { LoroWebsocketClient } = await import("loro-websocket/client");
+            const { LoroAdaptor } = await import("loro-adaptors");
 
-        await client.connect();
+            const client = new LoroWebsocketClient({
+                url: options.url,
+                pingIntervalMs: options.pingIntervalMs,
+            });
 
-        const room = await client.join({
-            roomId: options.roomId,
-            crdtAdaptor: new LoroAdaptor(this._doc),
-        });
+            // Subscribe to status changes BEFORE connecting
+            this.statusUnsubscribe = client.onStatusChange((status) => {
+                this.setSyncStatus(status);
+            });
 
-        await room.waitForReachingServerVersion();
+            this.latencyUnsubscribe = client.onLatency((ms) => {
+                this._syncLatency = ms;
+                this.notifySyncStateChange();
+            });
 
-        // Cleanup any redundant wrappers from concurrent operations
-        this.cleanupRedundantWrappers();
+            await client.connect();
 
-        this.commit("sync-connect");
+            const room = await client.join({
+                roomId: options.roomId,
+                crdtAdaptor: new LoroAdaptor(this._doc),
+            });
 
-        this.syncClient = client;
-        this.syncRoom = room;
-        this._syncRoomId = options.roomId;
+            await room.waitForReachingServerVersion();
+
+            // Cleanup any redundant wrappers from concurrent operations
+            this.cleanupRedundantWrappers();
+
+            this.commit("sync-connect");
+
+            this.syncClient = client;
+            this.syncRoom = room;
+            this._syncRoomId = options.roomId;
+            // Status is already "connected" via onStatusChange callback
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "Connection failed";
+            this.setSyncStatus("disconnected", errorMessage);
+            throw error;
+        }
     }
 
     /**
      * Disconnect from the sync server
      */
     async disconnectSync(): Promise<void> {
+        // Cleanup status subscriptions
+        this.statusUnsubscribe?.();
+        this.latencyUnsubscribe?.();
+        this.statusUnsubscribe = undefined;
+        this.latencyUnsubscribe = undefined;
+
         if (this.syncRoom) {
             await this.syncRoom.leave().catch(() => {});
             this.syncRoom = null;
@@ -166,6 +199,8 @@ export class DenicekDocument {
             this.syncClient = null;
         }
         this._syncRoomId = null;
+        this._syncLatency = undefined;
+        this.setSyncStatus("idle");
     }
 
     /**
@@ -180,6 +215,44 @@ export class DenicekDocument {
      */
     get syncRoomId(): string | null {
         return this._syncRoomId;
+    }
+
+    /**
+     * Get the current sync state
+     */
+    getSyncState(): SyncState {
+        return {
+            status: this._syncStatus,
+            latency: this._syncLatency,
+            roomId: this._syncRoomId,
+            error: this._syncError,
+        };
+    }
+
+    /**
+     * Subscribe to sync state changes
+     * @returns Unsubscribe function
+     */
+    onSyncStateChange(listener: (state: SyncState) => void): () => void {
+        this.syncStatusListeners.add(listener);
+        // Immediately notify with current state
+        listener(this.getSyncState());
+        return () => {
+            this.syncStatusListeners.delete(listener);
+        };
+    }
+
+    private notifySyncStateChange(): void {
+        const state = this.getSyncState();
+        for (const listener of this.syncStatusListeners) {
+            listener(state);
+        }
+    }
+
+    private setSyncStatus(status: SyncStatus, error?: string): void {
+        this._syncStatus = status;
+        this._syncError = error ?? null;
+        this.notifySyncStateChange();
     }
 
     // === Version ===
@@ -586,10 +659,14 @@ export class DenicekDocument {
      * Dispose of the document and clean up subscriptions
      */
     dispose(): void {
+        // Cleanup status subscriptions
+        this.statusUnsubscribe?.();
+        this.latencyUnsubscribe?.();
         // Fire-and-forget sync disconnect to keep dispose() synchronous
         this.disconnectSync().catch(() => {});
         if (this.localUpdateUnsubscribe) {
             this.localUpdateUnsubscribe();
         }
+        this.syncStatusListeners.clear();
     }
 }

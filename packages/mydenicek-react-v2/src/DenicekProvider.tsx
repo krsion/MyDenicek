@@ -8,6 +8,7 @@
 import {
     DenicekDocument,
     DenicekModel,
+    type SyncState,
 } from "@mydenicek/core-v2";
 import { createContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
@@ -21,8 +22,12 @@ export interface DenicekContextValue {
     syncManager?: {
         connect: (url: string, roomId: string) => Promise<void>;
         disconnect: () => Promise<void>;
+        /** @deprecated Use syncState.status === "connected" instead */
         isConnected: boolean;
+        /** @deprecated Use syncState.roomId instead */
         roomId: string | null;
+        /** Current sync state with status, latency, error */
+        syncState: SyncState;
     };
 }
 
@@ -77,6 +82,14 @@ export function DenicekProvider({
         }
     }, [initialDocument]);
 
+    // Sync state tracking
+    const [syncState, setSyncState] = useState<SyncState>(() => document.getSyncState());
+
+    // Subscribe to sync state changes
+    useEffect(() => {
+        return document.onSyncStateChange(setSyncState);
+    }, [document]);
+
     // Notify parent of changes
     useEffect(() => {
         onChange?.();
@@ -84,13 +97,16 @@ export function DenicekProvider({
 
     // Sync handlers - use document's built-in sync methods
     const connect = async (url: string, roomId: string) => {
-        await document.connectToSync({ url, roomId });
-        setVersion(v => v + 1); // Trigger re-render to update sync state
+        try {
+            await document.connectToSync({ url, roomId });
+        } catch (error) {
+            // Error is already captured in syncState via onSyncStateChange
+            console.error("Sync connection failed:", error);
+        }
     };
 
     const disconnect = async () => {
         await document.disconnectSync();
-        setVersion(v => v + 1); // Trigger re-render to update sync state
     };
 
     // Selection state
@@ -102,8 +118,9 @@ export function DenicekProvider({
         syncManager: {
             connect,
             disconnect,
-            isConnected: document.isSyncConnected,
-            roomId: document.syncRoomId,
+            isConnected: syncState.status === "connected",
+            roomId: syncState.roomId,
+            syncState,
         }
     };
 

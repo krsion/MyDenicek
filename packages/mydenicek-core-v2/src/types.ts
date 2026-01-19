@@ -114,3 +114,27 @@ export interface GeneralizedPatch {
  */
 export type DenicekAction = GeneralizedPatch;
 
+
+// ============================================================================
+// Sync Types
+// ============================================================================
+
+/**
+ * Connection status values matching loro-websocket
+ * - "idle": Never connected (initial state)
+ * - "connecting": Connection attempt in progress
+ * - "connected": WebSocket open and syncing
+ * - "disconnected": Connection lost, will auto-retry
+ */
+export type SyncStatus = "connecting" | "connected" | "disconnected" | "idle";
+
+/**
+ * Extended sync state for UI consumption
+ */
+export interface SyncState {
+    status: SyncStatus;
+    latency: number | undefined;
+    roomId: string | null;
+    error: string | null;
+}
+

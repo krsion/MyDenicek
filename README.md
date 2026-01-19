@@ -198,7 +198,6 @@ npm run test -w mywebnicek             # E2E tests (Playwright)
 
 | Task | Details |
 |------|---------|
-| Add sync reconnection logic | Exponential backoff retry when server unavailable (`App.tsx:76`) |
 | Complete E2E test coverage | Missing: keyboard navigation, attribute editing, wrap operations |
 
 ### Medium Priority
