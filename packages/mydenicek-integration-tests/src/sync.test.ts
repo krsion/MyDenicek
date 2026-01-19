@@ -3,14 +3,12 @@
  *
  * These tests:
  * 1. Spawn the actual sync server as a subprocess
- * 2. Connect two clients
+ * 2. Connect two clients using document.connectToSync()
  * 3. Verify changes sync between clients
  * 4. Verify server logs show expected activity
  */
 
 import { DenicekDocument } from "@mydenicek/core-v2";
-import { LoroAdaptor } from "loro-adaptors";
-import { LoroWebsocketClient, type LoroWebsocketClientRoom } from "loro-websocket/client";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
     startServerProcess,
@@ -22,12 +20,8 @@ const ROOM_ID = "test-room";
 
 describe("Sync Integration", () => {
     let server: ServerProcessContext;
-    let client1: LoroWebsocketClient;
-    let client2: LoroWebsocketClient;
     let doc1: DenicekDocument;
     let doc2: DenicekDocument;
-    let room1: LoroWebsocketClientRoom;
-    let room2: LoroWebsocketClientRoom;
 
     beforeAll(async () => {
         // Start the server process
@@ -35,11 +29,7 @@ describe("Sync Integration", () => {
     }, 15000);
 
     afterAll(async () => {
-        // Clean up clients
-        if (room1) await room1.leave().catch(() => {});
-        if (room2) await room2.leave().catch(() => {});
-        if (client1) client1.close();
-        if (client2) client2.close();
+        // Clean up - dispose handles sync disconnection
         if (doc1) doc1.dispose();
         if (doc2) doc2.dispose();
 
@@ -59,27 +49,9 @@ describe("Sync Integration", () => {
         doc1 = new DenicekDocument({ peerId: 1n });
         doc2 = new DenicekDocument({ peerId: 2n });
 
-        // Connect client 1 with adaptor wrapping doc1's internal LoroDoc
-        client1 = new LoroWebsocketClient({
-            url: server.url,
-            pingIntervalMs: 1000,
-        });
-        await client1.waitConnected();
-        const adaptor1 = new LoroAdaptor(doc1._internal.doc);
-        room1 = await client1.join({ roomId: ROOM_ID, crdtAdaptor: adaptor1 });
-
-        // Connect client 2 with adaptor wrapping doc2's internal LoroDoc
-        client2 = new LoroWebsocketClient({
-            url: server.url,
-            pingIntervalMs: 1000,
-        });
-        await client2.waitConnected();
-        const adaptor2 = new LoroAdaptor(doc2._internal.doc);
-        room2 = await client2.join({ roomId: ROOM_ID, crdtAdaptor: adaptor2 });
-
-        // Wait for rooms to be ready
-        await room1.waitForReachingServerVersion();
-        await room2.waitForReachingServerVersion();
+        // Connect both documents to the same room using built-in sync
+        await doc1.connectToSync({ url: server.url, roomId: ROOM_ID, pingIntervalMs: 1000 });
+        await doc2.connectToSync({ url: server.url, roomId: ROOM_ID, pingIntervalMs: 1000 });
 
         // Initialize and make changes
         doc1.change((model) => {

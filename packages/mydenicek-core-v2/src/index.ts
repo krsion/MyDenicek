@@ -7,7 +7,7 @@
 
 // Main classes
 export { DenicekDocument } from "./DenicekDocument.js";
-export type { DenicekDocumentOptions } from "./DenicekDocument.js";
+export type { DenicekDocumentOptions, SyncOptions } from "./DenicekDocument.js";
 
 export { DenicekModel } from "./DenicekModel.js";
 

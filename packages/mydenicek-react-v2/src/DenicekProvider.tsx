@@ -21,7 +21,7 @@ export interface DenicekContextValue {
     /** Sync manager */
     syncManager?: {
         connect: (url: string, roomId: string) => Promise<void>;
-        disconnect: () => void;
+        disconnect: () => Promise<void>;
         isConnected: boolean;
         roomId: string | null;
     };
@@ -89,40 +89,15 @@ export function DenicekProvider({
         onChange?.(snapshot);
     }, [snapshot, onChange]);
 
-    // Sync state
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const [syncClient, setSyncClient] = useState<any>(null);
-    const [currentRoomId, setCurrentRoomId] = useState<string | null>(null);
-
+    // Sync handlers - use document's built-in sync methods
     const connect = async (url: string, roomId: string) => {
-        if (syncClient) {
-            syncClient.close();
-        }
-
-        const { createDenicekSyncClient, LoroAdaptor } = await import("@mydenicek/sync-client");
-        const client = createDenicekSyncClient({ url });
-
-        await client.connect();
-
-        const room = await client.join({
-            roomId,
-            crdtAdaptor: new LoroAdaptor(document._internal.doc)
-        });
-
-        // Wait for initial sync with server, then commit to push any local changes
-        await room.waitForReachingServerVersion();
-        document.commit("sync-connect");
-
-        setSyncClient(client);
-        setCurrentRoomId(roomId);
+        await document.connectToSync({ url, roomId });
+        setVersion(v => v + 1); // Trigger re-render to update sync state
     };
 
-    const disconnect = () => {
-        if (syncClient) {
-            syncClient.close();
-            setSyncClient(null);
-            setCurrentRoomId(null);
-        }
+    const disconnect = async () => {
+        await document.disconnectSync();
+        setVersion(v => v + 1); // Trigger re-render to update sync state
     };
 
     // Selection state
@@ -134,8 +109,8 @@ export function DenicekProvider({
         syncManager: {
             connect,
             disconnect,
-            isConnected: !!syncClient,
-            roomId: currentRoomId,
+            isConnected: document.isSyncConnected,
+            roomId: document.syncRoomId,
         }
     };
 

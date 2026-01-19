@@ -5,8 +5,7 @@
  * It is created inside a change() callback and provides methods to read and modify the document.
  */
 
-import { LoroMap, LoroText, LoroTree } from "loro-crdt";
-import type { DenicekDocument } from "./DenicekDocument.js";
+import { LoroDoc, LoroMap, LoroText, LoroTree } from "loro-crdt";
 import {
     loroNodeToNode,
     NODE_ATTRS,
@@ -28,17 +27,31 @@ import type {
 import { handleModelError } from "./errors.js";
 
 /**
+ * Document reference interface for read operations
+ */
+interface DocumentRef {
+    getSnapshot: () => DocumentView;
+    getAllNodes: () => Record<string, NodeData>;
+}
+
+/**
  * DenicekModel - Operations on the document
  *
  * This class is created inside a change() callback and provides
  * methods to read and modify the document.
  */
 export class DenicekModel {
-    private doc: DenicekDocument;
+    private _loroDoc: LoroDoc;
+    private docRef: DocumentRef;
     private onPatch?: (patch: GeneralizedPatch) => void;
 
-    constructor(doc: DenicekDocument, onPatch?: (patch: GeneralizedPatch) => void) {
-        this.doc = doc;
+    constructor(
+        loroDoc: LoroDoc,
+        docRef: DocumentRef,
+        onPatch?: (patch: GeneralizedPatch) => void
+    ) {
+        this._loroDoc = loroDoc;
+        this.docRef = docRef;
         this.onPatch = onPatch;
     }
 
@@ -48,12 +61,8 @@ export class DenicekModel {
         }
     }
 
-    private get loroDoc() {
-        return this.doc._internal.doc;
-    }
-
     private get tree(): LoroTree {
-        return this.loroDoc.getTree(TREE_CONTAINER);
+        return this._loroDoc.getTree(TREE_CONTAINER);
     }
 
     // ==================== READ ====================
@@ -76,16 +85,12 @@ export class DenicekModel {
         }
     }
 
-    getRootNode(): Node | undefined {
-        return this.getNode(this.rootId);
-    }
-
     getAllNodes(): Record<string, NodeData> {
-        return this.doc.getAllNodes();
+        return this.docRef.getAllNodes();
     }
 
     getSnapshot(): DocumentView {
-        return this.doc.getSnapshot();
+        return this.docRef.getSnapshot();
     }
 
     getParents(childId: string): ElementNode[] {
@@ -139,14 +144,6 @@ export class DenicekModel {
     }
 
     // ==================== WRITE ====================
-
-    insertText(id: string, index: number, text: string): void {
-        this.spliceValue(id, index, 0, text);
-    }
-
-    deleteText(id: string, index: number, length: number): void {
-        this.spliceValue(id, index, length, "");
-    }
 
     updateAttribute(id: string, key: string, value: unknown | undefined): void {
         try {
@@ -409,7 +406,7 @@ export class DenicekModel {
         }
     }
 
-    addChildNode(parentId: string, child: Node, _id?: string, index?: number): string {
+    addChildNode(parentId: string, child: Node, index?: number): string {
         try {
             const parentTreeId = stringToTreeId(parentId);
             const parentNode = this.tree.getNodeByID(parentTreeId);
@@ -448,12 +445,12 @@ export class DenicekModel {
         }
     }
 
-    addElementChildNode(parentId: string, tag: string, _id?: string): string {
+    addElementChildNode(parentId: string, tag: string): string {
         const node: ElementNode = { kind: "element", tag, attrs: {}, children: [] };
         return this.addChildNode(parentId, node);
     }
 
-    addValueChildNode(parentId: string, value: string, _id?: string): string {
+    addValueChildNode(parentId: string, value: string): string {
         const node: ValueNode = { kind: "value", value };
         return this.addChildNode(parentId, node);
     }
@@ -557,7 +554,7 @@ export class DenicekModel {
                 const parentId = id;
                 const index = path[3] as number;
                 const nodeDef = value as Node;
-                return this.addChildNode(parentId, nodeDef, undefined, index);
+                return this.addChildNode(parentId, nodeDef, index);
             }
 
             if (path.length === 2 && action === "del") {

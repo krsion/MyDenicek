@@ -12,7 +12,6 @@ export default defineConfig({
     alias: {
       '@mydenicek/core-v2': path.resolve(__dirname, '../../packages/mydenicek-core-v2/src/index.ts'),
       '@mydenicek/react-v2': path.resolve(__dirname, '../../packages/mydenicek-react-v2/src/index.ts'),
-      '@mydenicek/sync-client': path.resolve(__dirname, '../../packages/mydenicek-sync-client/src/index.ts'),
     },
   },
   optimizeDeps: {

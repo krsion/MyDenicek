@@ -139,7 +139,7 @@ describe("DenicekModel", () => {
                 const rootId = model.rootId;
                 expect(rootId).toBeTruthy();
 
-                const rootNode = model.getRootNode();
+                const rootNode = model.getNode(rootId);
                 expect(rootNode).toBeTruthy();
                 expect(rootNode?.kind).toBe("element");
             });

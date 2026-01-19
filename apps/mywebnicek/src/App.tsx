@@ -35,7 +35,7 @@ function getRoomIdFromHash(): string {
 }
 
 export const App = () => {
-  const { store: _store, model, snapshot: liveSnapshot } = useDocumentState();
+  const { snapshot: liveSnapshot } = useDocumentState();
   const {
     undo, redo, canUndo, canRedo,
     updateAttribute, updateTag, wrapNodes,
@@ -208,13 +208,20 @@ export const App = () => {
   const { clipboardValue, isInputSelected, isValueSelected, handleCopyFromInput, handlePasteToValue } = useClipboard({
     selectedNodeId: selectedNodeId ?? null,
     node,
-    model,
+    snapshot: liveSnapshot,
     updateValue,
   });
 
-  if (!model) return <div>Loading...</div>;
+  if (!liveSnapshot) return <div>Loading...</div>;
 
-  const selectedNodeFirstChildTag = (node && node.kind === "element" && selectedNodeId) ? model.getFirstChildTag(selectedNodeId) : undefined;
+  // Get first child's tag for the selected element node
+  const selectedNodeFirstChildTag = (() => {
+    if (!node || node.kind !== "element" || !selectedNodeId) return undefined;
+    const childIds = liveSnapshot.getChildIds(selectedNodeId);
+    if (childIds.length === 0) return undefined;
+    const firstChild = liveSnapshot.getNode(childIds[0]!);
+    return firstChild?.kind === "element" ? firstChild.tag : undefined;
+  })();
   const selectedNodeAttributes = (node && node.kind === "element") ? node.attrs : undefined;
 
 
@@ -352,12 +359,12 @@ export const App = () => {
                 <DialogSurface style={{ width: 1000 }}>
                   <DialogBody>
                     <DialogContent>
-                      <JsonView data={model.getSnapshot()} />
+                      <JsonView data={liveSnapshot} />
                     </DialogContent>
                   </DialogBody>
                 </DialogSurface>
               </Dialog>
-              <ToolbarButton icon={<CameraRegular />} onClick={() => setSnapshot(model.getSnapshot())}>Snapshot</ToolbarButton>
+              <ToolbarButton icon={<CameraRegular />} onClick={() => setSnapshot(liveSnapshot)}>Snapshot</ToolbarButton>
               <ToolbarDivider />
               {showHistory ? (
                 <ToolbarButton icon={<RecordRegular />} onClick={() => setShowHistory(!showHistory)} appearance="primary">Actions</ToolbarButton>

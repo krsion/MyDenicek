@@ -25,7 +25,6 @@
         "dist"
     ],
     "references": [
-        { "path": "../mydenicek-core-v2" },
-        { "path": "../mydenicek-sync-client" }
+        { "path": "../mydenicek-core-v2" }
     ]
 }

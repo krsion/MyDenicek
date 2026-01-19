@@ -1,14 +1,27 @@
 /**
  * DenicekDocument - Main document abstraction for mydenicek-core-v2
  * This class wraps the Loro document and provides a public API
- * Includes undo/redo, history tracking, and replay functionality
+ * Includes undo/redo, history tracking, sync, and replay functionality
  */
 
 import { Frontiers, LoroDoc, UndoManager } from "loro-crdt";
+import type { LoroWebsocketClient, LoroWebsocketClientRoom } from "loro-websocket/client";
 import { DenicekModel } from "./DenicekModel.js";
 import { DocumentView } from "./DocumentView.js";
 import { createDocumentView } from "./loroHelpers.js";
 import type { GeneralizedPatch, HistoryEntry, NodeData, Version } from "./types.js";
+
+/**
+ * Options for connecting to a sync server
+ */
+export interface SyncOptions {
+    /** WebSocket server URL */
+    url: string;
+    /** Room ID to join */
+    roomId: string;
+    /** Ping interval in ms (optional) */
+    pingIntervalMs?: number;
+}
 
 /**
  * Options for creating a DenicekDocument
@@ -52,6 +65,11 @@ export class DenicekDocument {
     // History log
     private history: GeneralizedPatch[] = [];
 
+    // Sync state
+    private syncClient: LoroWebsocketClient | null = null;
+    private syncRoom: LoroWebsocketClientRoom | null = null;
+    private _syncRoomId: string | null = null;
+
     constructor(options?: DenicekDocumentOptions) {
         this._doc = new LoroDoc();
         if (options?.peerId !== undefined) {
@@ -77,12 +95,68 @@ export class DenicekDocument {
         });
     }
 
+    // === Sync ===
+
     /**
-     * Get access to the underlying LoroDoc (for internal use)
-     * @internal
+     * Connect to a sync server and join a room
+     * @param options Sync connection options
+     * @returns Promise that resolves when connected and initial sync is complete
      */
-    get _internal(): { doc: LoroDoc } {
-        return { doc: this._doc };
+    async connectToSync(options: SyncOptions): Promise<void> {
+        // Disconnect existing connection if any
+        await this.disconnectSync();
+
+        // Dynamic import to keep sync dependencies optional
+        const { LoroWebsocketClient } = await import("loro-websocket/client");
+        const { LoroAdaptor } = await import("loro-adaptors");
+
+        const client = new LoroWebsocketClient({
+            url: options.url,
+            pingIntervalMs: options.pingIntervalMs,
+        });
+
+        await client.connect();
+
+        const room = await client.join({
+            roomId: options.roomId,
+            crdtAdaptor: new LoroAdaptor(this._doc),
+        });
+
+        await room.waitForReachingServerVersion();
+        this.commit("sync-connect");
+
+        this.syncClient = client;
+        this.syncRoom = room;
+        this._syncRoomId = options.roomId;
+    }
+
+    /**
+     * Disconnect from the sync server
+     */
+    async disconnectSync(): Promise<void> {
+        if (this.syncRoom) {
+            await this.syncRoom.leave().catch(() => {});
+            this.syncRoom = null;
+        }
+        if (this.syncClient) {
+            this.syncClient.close();
+            this.syncClient = null;
+        }
+        this._syncRoomId = null;
+    }
+
+    /**
+     * Check if connected to a sync server
+     */
+    get isSyncConnected(): boolean {
+        return this.syncClient !== null && this.syncRoom !== null;
+    }
+
+    /**
+     * Get the current room ID if connected
+     */
+    get syncRoomId(): string | null {
+        return this._syncRoomId;
     }
 
     // === Version ===
@@ -145,7 +219,14 @@ export class DenicekDocument {
      * Changes are automatically committed after the callback
      */
     change(fn: (model: DenicekModel) => void): void {
-        const model = new DenicekModel(this, (p) => this._recordPatch(p));
+        const model = new DenicekModel(
+            this._doc,
+            {
+                getSnapshot: () => this.getSnapshot(),
+                getAllNodes: () => this.getAllNodes(),
+            },
+            (p) => this._recordPatch(p)
+        );
         fn(model);
         this._doc.commit();
     }
@@ -400,6 +481,8 @@ export class DenicekDocument {
      * Dispose of the document and clean up subscriptions
      */
     dispose(): void {
+        // Fire-and-forget sync disconnect to keep dispose() synchronous
+        this.disconnectSync().catch(() => {});
         if (this.localUpdateUnsubscribe) {
             this.localUpdateUnsubscribe();
         }

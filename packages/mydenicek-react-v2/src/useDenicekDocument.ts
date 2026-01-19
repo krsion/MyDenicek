@@ -8,7 +8,7 @@ import {
     type GeneralizedPatch,
     type SpliceInfo
 } from "@mydenicek/core-v2";
-import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useCallback, useContext, useEffect, useState } from "react";
 import { DenicekContext } from "./DenicekProvider.js";
 
 /**
@@ -60,15 +60,9 @@ export function useDocumentState() {
         throw new Error("useDocumentState must be used within a DenicekProvider");
     }
 
-    // Create a model wrapper for backwards compatibility
-    const model = useMemo(() => {
-        return new DenicekModel(context.document);
-    }, [context.document]);
-
     return {
         document: context.document,
         snapshot: context.snapshot,
-        model, // Backwards compatibility
     };
 }
 

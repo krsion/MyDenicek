@@ -9,9 +9,6 @@
     "devDependencies": {
         "@mydenicek/core-v2": "*",
         "@mydenicek/sync-server": "*",
-        "loro-adaptors": "^0.1.0",
-        "loro-crdt": "^1.0.0",
-        "loro-websocket": "^0.1.0",
         "vitest": "^4.0.16"
     }
 }

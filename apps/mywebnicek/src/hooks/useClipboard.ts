@@ -2,17 +2,17 @@
  * Hook for clipboard operations between input elements and value nodes
  */
 
-import type { DenicekModel, NodeData } from "@mydenicek/react-v2";
+import type { DocumentView, NodeData } from "@mydenicek/react-v2";
 import { useCallback, useEffect, useState } from "react";
 
 interface UseClipboardProps {
     selectedNodeId: string | null;
     node: NodeData | null | undefined;
-    model: DenicekModel | null;
+    snapshot: DocumentView | null;
     updateValue: (nodeIds: string[], newValue: string, originalValue: string) => void;
 }
 
-export function useClipboard({ selectedNodeId, node, model, updateValue }: UseClipboardProps) {
+export function useClipboard({ selectedNodeId, node, snapshot, updateValue }: UseClipboardProps) {
     const [clipboardValue, setClipboardValue] = useState<string | null>(null);
 
     const isInputSelected = node?.kind === "element" && node.tag === "input";
@@ -27,10 +27,10 @@ export function useClipboard({ selectedNodeId, node, model, updateValue }: UseCl
 
     const handlePasteToValue = useCallback(() => {
         if (!selectedNodeId || !isValueSelected || clipboardValue === null) return;
-        const valueNode = model?.getNode(selectedNodeId);
+        const valueNode = snapshot?.getNode(selectedNodeId);
         const originalValue = valueNode?.kind === "value" ? valueNode.value : "";
         updateValue([selectedNodeId], clipboardValue, originalValue);
-    }, [selectedNodeId, isValueSelected, clipboardValue, model, updateValue]);
+    }, [selectedNodeId, isValueSelected, clipboardValue, snapshot, updateValue]);
 
     // Keyboard shortcuts for Ctrl+C and Ctrl+V
     useEffect(() => {

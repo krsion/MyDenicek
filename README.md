@@ -64,7 +64,6 @@ apps/
 packages/
   mydenicek-core-v2/          # Core CRDT logic (Loro wrapper)
   mydenicek-react-v2/         # React hooks/context
-  mydenicek-sync-client/      # WebSocket sync client (loro-websocket)
   mydenicek-mcp/              # MCP integration
   mydenicek-integration-tests/ # Cross-package integration tests
 ```
