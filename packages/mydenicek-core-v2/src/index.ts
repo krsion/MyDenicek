@@ -26,9 +26,8 @@ export type {
     Node,
     // Recording/replay
     PatchAction,
-    // Selection
-    SelectionInfo, SpliceInfo,
-
+    // Text operations
+    SpliceInfo,
     // Cursor and history
     TextCursor, ValueNode
 } from "./types.js";

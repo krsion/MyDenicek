@@ -10,14 +10,15 @@
 
 import { makeStyles } from "@fluentui/react-components";
 import React, { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+
+import { colorFromString } from "./DomNavigator/colorUtils";
 import {
-    withinContainer as checkWithinContainer,
     firstElementChildOf,
-    prevSibling,
     nextSibling,
     parentOf,
+    prevSibling,
+    withinContainer as checkWithinContainer,
 } from "./DomNavigator/domHelpers";
-import { colorFromString } from "./DomNavigator/colorUtils";
 import { useOverlayPosition, usePeerOverlays } from "./DomNavigator/useOverlayPosition";
 
 export interface DomNavigatorHandle {
@@ -53,7 +54,7 @@ const useStyles = makeStyles({
 
 interface DomNavigatorProps {
     children: React.ReactNode;
-    onSelectedChange?: (nodeIds: string[], isGeneralized: boolean) => void;
+    onSelectedChange?: (nodeIds: string[]) => void;
     selectedNodeIds?: string[];
     remoteSelections?: { [userId: string]: string[] | null };
     generalizer?: (nodeIds: string[]) => string[];
@@ -134,7 +135,7 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, DomNavigatorPro
             if (e.key === "Escape") {
                 setSelectedElements([]);
                 setOverlays([]);
-                onSelectedChange?.([], false);
+                onSelectedChange?.([]);
                 return;
             }
 
@@ -142,7 +143,7 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, DomNavigatorPro
                 const start = firstElementChildOf(containerRef.current);
                 if (start) {
                     setSelectedElements([start]);
-                    onSelectedChange?.([start.getAttribute("data-node-guid") || ""], false);
+                    onSelectedChange?.([start.getAttribute("data-node-guid") || ""]);
                 }
                 return;
             }
@@ -160,7 +161,7 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, DomNavigatorPro
 
             if (next && next !== anchor) {
                 setSelectedElements([next]);
-                onSelectedChange?.([next.getAttribute("data-node-guid") || ""], false);
+                onSelectedChange?.([next.getAttribute("data-node-guid") || ""]);
                 next.scrollIntoView({ block: "nearest", inline: "nearest" });
             }
         }
@@ -207,7 +208,7 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, DomNavigatorPro
                                 .filter((el): el is HTMLElement => !!el && withinContainer(el));
                             setSelectedElements(newSelection);
                             const ids = newSelection.map(el => el.getAttribute("data-node-guid")).filter((id): id is string => !!id);
-                            onSelectedChange?.(ids, true);
+                            onSelectedChange?.(ids);
                             return;
                         } else {
                             newSelection = [target];
@@ -231,7 +232,7 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, DomNavigatorPro
             }
 
             setSelectedElements(newSelection);
-            onSelectedChange?.(newSelection.map(el => el.getAttribute("data-node-guid") || "").filter(Boolean), false);
+            onSelectedChange?.(newSelection.map(el => el.getAttribute("data-node-guid") || "").filter(Boolean));
         }
 
         // Programmatic navigation helper
@@ -240,7 +241,7 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, DomNavigatorPro
                 const start = firstElementChildOf(containerRef.current);
                 if (start) {
                     setSelectedElements([start]);
-                    onSelectedChange?.([start.getAttribute("data-node-guid") || ""], false);
+                    onSelectedChange?.([start.getAttribute("data-node-guid") || ""]);
                 }
                 return;
             }
@@ -250,7 +251,7 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, DomNavigatorPro
             const next = getNext(anchor);
             if (next && next !== anchor) {
                 setSelectedElements([next]);
-                onSelectedChange?.([next.getAttribute("data-node-guid") || ""], false);
+                onSelectedChange?.([next.getAttribute("data-node-guid") || ""]);
                 next.scrollIntoView({ block: "nearest", inline: "nearest" });
             }
         }, [selectedElements, onSelectedChange]);
@@ -264,7 +265,7 @@ export const DomNavigator = React.forwardRef<DomNavigatorHandle, DomNavigatorPro
             clearSelection: () => {
                 setSelectedElements([]);
                 setOverlays([]);
-                onSelectedChange?.([], false);
+                onSelectedChange?.([]);
             }
         }), [navigate, onSelectedChange, setOverlays]);
 

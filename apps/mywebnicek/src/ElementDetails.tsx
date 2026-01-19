@@ -2,6 +2,7 @@ import { Button, Card, Input, Table, TableBody, TableCell, TableHeader, TableHea
 import { AddRegular, DeleteRegular } from "@fluentui/react-icons";
 import type { SelectedNodeDetails } from "@mydenicek/react-v2";
 import { useEffect, useState } from "react";
+
 import { ShortenedId } from "./components/ShortenedId";
 
 function AttributeRow({ attrKey, value, onSave, onDelete }: { attrKey: string, value: unknown, onSave: (key: string, value: unknown) => void, onDelete: (key: string) => void }) {

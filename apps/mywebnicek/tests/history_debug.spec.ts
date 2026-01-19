@@ -12,11 +12,11 @@ test('history sidebar shows actions', async ({ page }) => {
   await rootNode.click();
 
   // Check if Sidebar is visible via content
-  const sidebarHeader = page.getByText("Recorded Script");
-  
+  const sidebarHeader = page.getByText("Recorded Actions");
+
   if (!await sidebarHeader.isVisible()) {
       // Toggle it
-       await page.getByRole('button', { name: "History", exact: true }).click();
+       await page.getByRole('button', { name: "Actions", exact: true }).click();
   }
   await expect(sidebarHeader).toBeVisible();
 

@@ -1,5 +1,5 @@
-import { Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, Switch, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
-import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CameraRegular, ClipboardPasteRegular, CodeRegular, CopyRegular, EditFilled, EditRegular, PlayRegular, RecordRegular, RenameFilled, RenameRegular, StopRegular } from "@fluentui/react-icons";
+import { Button, Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, Switch, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
+import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackRegular, CameraRegular, ClipboardPasteRegular, CodeRegular, CopyRegular, EditRegular, PlayRegular, RecordRegular, RenameRegular, StopRegular } from "@fluentui/react-icons";
 import type { DocumentSnapshot } from "@mydenicek/react-v2";
 import {
   useConnectivity,
@@ -9,25 +9,27 @@ import {
   useSelectedNode,
   useSelection
 } from "@mydenicek/react-v2";
-import { useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { AddNodePopoverButton } from "./AddNodePopoverButton";
-import { useClipboard } from "./hooks/useClipboard";
+import { ResizablePanel } from "./components/ResizablePanel";
 import { DomNavigator, type DomNavigatorHandle } from "./DomNavigator";
 import { ElementDetails } from "./ElementDetails.tsx";
+import { useClipboard } from "./hooks/useClipboard";
 import { JsonView } from "./JsonView.tsx";
 import { RecordedScriptView } from "./RecordedScriptView";
 import { RenderedDocument } from "./RenderedDocument.tsx";
 import { ToolbarPopoverButton } from "./ToolbarPopoverButton";
-import { ResizablePanel } from "./components/ResizablePanel";
+import { analyzeScript, generalizeScript, type ScriptAnalysis } from "./utils/scriptAnalysis";
+import { generalizeSelection } from "./utils/selectionUtils";
 
 export const App = () => {
-  const { store, model, snapshot: liveSnapshot } = useDocumentState();
+  const { store: _store, model, snapshot: liveSnapshot } = useDocumentState();
   const {
     undo, redo, canUndo, canRedo,
     updateAttribute, updateTag, wrapNodes,
     updateValue, addChildren, addSiblings,
-    deleteNodes
+    deleteNodes: _deleteNodes
   } = useDocumentActions();
   const recordingObj = useRecording();
   const { history: recordingHistory, clearHistory, replay } = recordingObj;
@@ -42,15 +44,83 @@ export const App = () => {
   const [patchesViewMode, setPatchesViewMode] = useState<'table' | 'json'>('table');
 
   const [connected, setConnected] = useState(true);
-  const [isGeneralizedSelection, setIsGeneralizedSelection] = useState(false);
   const navigatorRef = useRef<DomNavigatorHandle>(null);
+  const [selectedActionIndices, setSelectedActionIndices] = useState<Set<number>>(new Set());
+  const [targetOverrides, setTargetOverrides] = useState<Map<number, string>>(new Map());
 
+  // Frontend-only generalization for Shift+click multi-select
+  const handleGeneralize = useCallback((ids: string[]) => {
+    if (!liveSnapshot) return ids;
+    return generalizeSelection(liveSnapshot, ids);
+  }, [liveSnapshot]);
 
+  // Analyze recording history for created node dependencies
+  const scriptAnalysis: ScriptAnalysis | null = useMemo(() => {
+    if (!recordingHistory || recordingHistory.length === 0) return null;
+    return analyzeScript(recordingHistory);
+  }, [recordingHistory]);
 
   const handleReplay = () => {
     if (!recordingHistory || !selectedNodeId) return;
-    replay(recordingHistory, selectedNodeId);
+
+    // Get indices to replay (all or selected)
+    const indicesToReplay = selectedActionIndices.size > 0
+      ? Array.from(selectedActionIndices).sort((a, b) => a - b)
+      : recordingHistory.map((_, i) => i);
+
+    if (indicesToReplay.length === 0) return;
+
+    // Get the actions to replay
+    const actionsToReplay = indicesToReplay
+      .map(i => recordingHistory[i])
+      .filter((action): action is NonNullable<typeof action> => action !== null);
+
+    if (actionsToReplay.length === 0) return;
+
+    // Analyze and generalize the script (replace created node IDs with variables)
+    // This allows replay() to map $1, $2, etc. to newly created nodes
+    const analysis = analyzeScript(actionsToReplay);
+    const generalizedActions = generalizeScript(actionsToReplay, analysis);
+
+    // Apply target overrides (manual retargeting by user)
+    const finalActions = generalizedActions.map((action, newIdx) => {
+      const origIdx = indicesToReplay[newIdx]!;
+      const override = targetOverrides.get(origIdx);
+      if (!override) return action;
+
+      // Clone and modify the path to use the overridden node ID
+      const newPath = action.path.map(segment => {
+        const str = String(segment);
+        // Replace node ID (peer@counter format) - but not variables
+        if (/^\d+@\d+$/.test(str)) {
+          return override;
+        }
+        return segment;
+      });
+
+      return { ...action, path: newPath };
+    });
+
+    replay(finalActions, selectedNodeId);
   };
+
+  const handleActionSelectionChange = useCallback((indices: Set<number>) => {
+    setSelectedActionIndices(indices);
+  }, []);
+
+  const handleClearHistory = useCallback(() => {
+    clearHistory();
+    setSelectedActionIndices(new Set());
+    setTargetOverrides(new Map());
+  }, [clearHistory]);
+
+  const handleRetarget = useCallback((index: number, newNodeId: string) => {
+    setTargetOverrides(prev => {
+      const newMap = new Map(prev);
+      newMap.set(index, newNodeId);
+      return newMap;
+    });
+  }, []);
 
   const triggerNavigation = (action: 'parent' | 'child' | 'prev' | 'next' | 'clear') => {
     if (!navigatorRef.current) return;
@@ -80,7 +150,7 @@ export const App = () => {
 
   // Clipboard operations for copy/paste between input and value nodes
   const { clipboardValue, isInputSelected, isValueSelected, handleCopyFromInput, handlePasteToValue } = useClipboard({
-    selectedNodeId,
+    selectedNodeId: selectedNodeId ?? null,
     node,
     model,
     updateValue,
@@ -148,61 +218,42 @@ export const App = () => {
               />
 
               {node?.kind === "value" ? (
-                isGeneralizedSelection ? (
-                  <ToolbarPopoverButton
-                    text="Edit all"
-                    icon={<EditFilled />}
-                    disabled={false}
-                    ariaLabel="Edit all matching"
-                    placeholder="Value content"
-                    initialValue={details?.value || ""}
-                    onSubmit={(value) => {
-                      const originalValue = details?.value || "";
-                      updateValue(selectedNodeIds, value, originalValue);
-                    }}
-                  />
-                ) : (
-                  <ToolbarPopoverButton
-                    text="Edit"
-                    icon={<EditRegular />}
-                    disabled={false}
-                    ariaLabel="Edit"
-                    placeholder="Value content"
-                    initialValue={details?.value || ""}
-                    onSubmit={(value) => {
-                      const originalValue = details?.value || "";
-                      updateValue(selectedNodeIds, value, originalValue);
-                    }}
-                  />
-                )
-              ) : (
-                !isGeneralizedSelection && (
-                  <ToolbarPopoverButton
-                    text="Rename"
-                    icon={<RenameRegular />}
-                    disabled={!selectedNodeId || node?.kind !== "element"}
-                    ariaLabel="Rename"
-                    placeholder="Tag name (e.g. div)"
-                    initialValue={details?.tag || details?.dom?.tagName || ""}
-                    onSubmit={(tag) => {
-                      updateTag(selectedNodeIds, tag);
-                      if (selectedNodeId) clickOnSelectedNode(selectedNodeId);
-                    }}
-                  />
-                )
-              )}
-              {!isGeneralizedSelection && (
                 <ToolbarPopoverButton
-                  text="Wrap"
-                  icon={<BackpackRegular />}
-                  disabled={!selectedNodeId}
-                  ariaLabel="Wrap"
+                  text="Edit"
+                  icon={<EditRegular />}
+                  disabled={false}
+                  ariaLabel="Edit"
+                  placeholder="Value content"
+                  initialValue={details?.value || ""}
+                  onSubmit={(value) => {
+                    const originalValue = details?.value || "";
+                    updateValue(selectedNodeIds, value, originalValue);
+                  }}
+                />
+              ) : (
+                <ToolbarPopoverButton
+                  text="Rename"
+                  icon={<RenameRegular />}
+                  disabled={!selectedNodeId || node?.kind !== "element"}
+                  ariaLabel="Rename"
+                  placeholder="Tag name (e.g. div)"
+                  initialValue={details?.tag || details?.dom?.tagName || ""}
                   onSubmit={(tag) => {
-                    wrapNodes(selectedNodeIds, tag);
+                    updateTag(selectedNodeIds, tag);
                     if (selectedNodeId) clickOnSelectedNode(selectedNodeId);
                   }}
                 />
               )}
+              <ToolbarPopoverButton
+                text="Wrap"
+                icon={<BackpackRegular />}
+                disabled={!selectedNodeId}
+                ariaLabel="Wrap"
+                onSubmit={(tag) => {
+                  wrapNodes(selectedNodeIds, tag);
+                  if (selectedNodeId) clickOnSelectedNode(selectedNodeId);
+                }}
+              />
 
               <Tooltip content="Copy input value (Ctrl+C)" relationship="label">
                 <ToolbarButton
@@ -220,31 +271,6 @@ export const App = () => {
                   disabled={!isValueSelected || clipboardValue === null}
                 />
               </Tooltip>
-
-              {isGeneralizedSelection && node?.kind === "element" && (
-                <ToolbarPopoverButton
-                  text="Rename all"
-                  icon={<RenameFilled />}
-                  disabled={!selectedNodeId}
-                  initialValue={(node?.kind === "element") ? node.tag : ""}
-                  ariaLabel="Rename all matching"
-                  onSubmit={(tag) => {
-                    updateTag(selectedNodeIds, tag);
-                  }}
-                />
-              )}
-
-              {isGeneralizedSelection && (
-                <ToolbarPopoverButton
-                  text="Wrap all"
-                  icon={<BackpackFilled />}
-                  disabled={!selectedNodeId}
-                  ariaLabel="Wrap all matching"
-                  onSubmit={(tag) => {
-                    wrapNodes(selectedNodeIds, tag);
-                  }}
-                />
-              )}
             </ToolbarGroup>
 
             <ToolbarGroup>
@@ -276,8 +302,11 @@ export const App = () => {
               </Dialog>
               <ToolbarButton icon={<CameraRegular />} onClick={() => setSnapshot(model.getSnapshot())}>Snapshot</ToolbarButton>
               <ToolbarDivider />
-              <ToolbarButton icon={<RecordRegular />} onClick={() => setShowHistory(!showHistory)} appearance={showHistory ? "primary" : undefined}>History</ToolbarButton>
-              <ToolbarButton icon={<PlayRegular />} onClick={handleReplay} disabled={!recordingHistory?.length || !selectedNodeId}>Replay</ToolbarButton>
+              {showHistory ? (
+                <ToolbarButton icon={<RecordRegular />} onClick={() => setShowHistory(!showHistory)} appearance="primary">Actions</ToolbarButton>
+              ) : (
+                <ToolbarButton icon={<RecordRegular />} onClick={() => setShowHistory(!showHistory)}>Actions</ToolbarButton>
+              )}
             </ToolbarGroup>
           </Toolbar>
 
@@ -290,7 +319,7 @@ export const App = () => {
           </TagGroup>}
           />
 
-          <DomNavigator ref={navigatorRef} onSelectedChange={(ids, isGeneralized) => { setSelectedNodeIds(ids); setIsGeneralizedSelection(isGeneralized); }} selectedNodeIds={selectedNodeIds} remoteSelections={remoteSelections} generalizer={(ids) => model.generalizeSelection(ids)}>
+          <DomNavigator ref={navigatorRef} onSelectedChange={(ids) => { setSelectedNodeIds(ids); }} selectedNodeIds={selectedNodeIds} remoteSelections={remoteSelections} generalizer={handleGeneralize}>
             <RenderedDocument model={model} version={liveSnapshot} />
           </DomNavigator>
 
@@ -317,17 +346,41 @@ export const App = () => {
         </Card>
       </div>
       <ResizablePanel open={showHistory} defaultWidth={350} minWidth={200} maxWidth={700}>
-        <div style={{ padding: '12px', borderBottom: '1px solid #e0e0e0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text weight="semibold">History</Text>
-          <ToolbarButton
-            appearance="subtle"
-            icon={<StopRegular />}
-            onClick={clearHistory}
-            aria-label="Clear History"
-          />
-        </div>
-        <div style={{ flex: 1, overflow: 'auto', padding: '8px' }}>
-          <RecordedScriptView script={recordingHistory || []} onNodeClick={(id) => setSelectedNodeIds([id])} />
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <div style={{ padding: '12px', borderBottom: '1px solid #e0e0e0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text weight="semibold">Actions</Text>
+            <ToolbarButton
+              appearance="subtle"
+              icon={<StopRegular />}
+              onClick={handleClearHistory}
+              aria-label="Clear Actions"
+            />
+          </div>
+          <div style={{ flex: 1, overflow: 'auto', padding: '8px' }}>
+            <RecordedScriptView
+              script={recordingHistory || []}
+              onNodeClick={(id) => setSelectedNodeIds([id])}
+              selectedIndices={selectedActionIndices}
+              onSelectionChange={handleActionSelectionChange}
+              targetOverrides={targetOverrides}
+              onRetarget={handleRetarget}
+              currentNodeId={selectedNodeId ?? null}
+              analysis={scriptAnalysis}
+            />
+          </div>
+          <div style={{ padding: '12px', borderTop: '1px solid #e0e0e0' }}>
+            <Tooltip content="Apply selected actions to the currently selected node" relationship="label">
+              <Button
+                icon={<PlayRegular />}
+                onClick={handleReplay}
+                disabled={!recordingHistory?.length || !selectedNodeId}
+                appearance="primary"
+                style={{ width: '100%' }}
+              >
+                {selectedActionIndices.size > 0 ? `Apply (${selectedActionIndices.size})` : "Apply all"}
+              </Button>
+            </Tooltip>
+          </div>
         </div>
       </ResizablePanel>
     </div>

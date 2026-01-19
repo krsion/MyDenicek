@@ -13,13 +13,14 @@ test.describe('Recording and Replay', () => {
 
     // Navigate to parent (ul)
     await page.locator('text=Parent').click();
-    
+
     // Verify we selected the ul
     await expect(page.getByRole('cell', { name: 'ul', exact: true })).toBeVisible();
 
-    // Start recording
-    await page.getByRole('button', { name: 'Record' }).click();
-    await expect(page.getByRole('button', { name: 'Stop Recording' })).toBeVisible();
+    // Clear any existing history first
+    await page.getByLabel('Clear Actions').click();
+
+    // Recording is always on - just perform actions
 
     // Add a new li child
     await page.getByRole('button', { name: 'Add element' }).click();
@@ -35,21 +36,19 @@ test.describe('Recording and Replay', () => {
     // Verify the new item exists
     await expect(page.locator('x-value', { hasText: 'Item A xx' })).toBeVisible();
 
-    // Stop recording
-    await page.getByRole('button', { name: 'Stop Recording' }).click();
-
     // Check what was recorded - should have the script in the drawer
-    await expect(page.locator('text=Recorded Script')).toBeVisible();
-    
+    await expect(page.locator('text=Recorded Actions')).toBeVisible();
+
     // Log the recorded actions for debugging
     const actionCells = page.locator('table').filter({ hasText: 'Action' }).locator('tbody tr');
     const count = await actionCells.count();
     console.log(`Recorded ${count} actions:`);
     for (let i = 0; i < count; i++) {
       const row = actionCells.nth(i);
-      const action = await row.locator('td').nth(0).textContent();
-      const path = await row.locator('td').nth(1).textContent();
-      const value = await row.locator('td').nth(2).textContent();
+      // With checkboxes, the column indices shift by 1
+      const action = await row.locator('td').nth(1).textContent();
+      const path = await row.locator('td').nth(2).textContent();
+      const value = await row.locator('td').nth(3).textContent();
       console.log(`  ${action} | ${path} | ${value}`);
     }
 
@@ -57,20 +56,20 @@ test.describe('Recording and Replay', () => {
     await page.locator('text=Parent').click();
     await page.locator('text=Parent').click();
     await expect(page.getByRole('cell', { name: 'ul', exact: true })).toBeVisible();
-    
-    // The replay button should be enabled
-    await expect(page.getByRole('button', { name: 'Replay' })).toBeEnabled();
-    
-    // Click Replay
-    await page.getByRole('button', { name: 'Replay' }).click();
+
+    // The Apply button should be enabled (shows "Apply all" or "Apply (N)" based on selection)
+    const applyButton = page.getByRole('button', { name: /Apply/ });
+    await expect(applyButton).toBeEnabled();
+
+    // Click Apply
+    await applyButton.click();
 
     // After replay, we should have TWO "Item A xx" values (original + replayed)
-    // But this will likely fail due to the $1 mapping issue
     const itemCount = await page.locator('x-value', { hasText: 'Item A xx' }).count();
     console.log(`Found ${itemCount} "Item A xx" items after replay`);
-    
+
     expect(itemCount).toBe(2);
-    
+
     // Also verify both items are inside <li> elements, not <div>
     const liWithItemAxx = page.locator('li x-value', { hasText: 'Item A xx' });
     const liCount = await liWithItemAxx.count();

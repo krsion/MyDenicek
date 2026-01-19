@@ -217,14 +217,6 @@ export class DenicekModel {
         return SelectionLogic.findLowestCommonAncestor(this.tree, this.rootId, nodeIds);
     }
 
-    generalizeSelectionWithInfo(nodeIds: string[]): SelectionLogic.SelectionInfo {
-        return SelectionLogic.generalizeSelectionWithInfo(this.tree, this.rootId, nodeIds);
-    }
-
-    generalizeSelection(nodeIds: string[]): string[] {
-        return SelectionLogic.generalizeSelection(this.tree, this.rootId, nodeIds);
-    }
-
     // ==================== INITIALIZATION ====================
 
     initializeDocument(): void {

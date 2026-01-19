@@ -97,13 +97,3 @@ export interface GeneralizedPatch {
  */
 export type DenicekAction = GeneralizedPatch;
 
-/**
- * Selection generalization result
- */
-export interface SelectionInfo {
-    nodeIds: string[];
-    lca: string;
-    selectorTag?: string;
-    selectorDepth?: number;
-    selectorKind?: "element" | "value";
-}
