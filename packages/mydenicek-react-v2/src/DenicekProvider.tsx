@@ -7,6 +7,7 @@
 
 import {
     DenicekDocument,
+    DenicekModel,
     DocumentView,
 } from "@mydenicek/core-v2";
 import { createContext, useEffect, useMemo, useState, type ReactNode } from "react";
@@ -41,6 +42,8 @@ export interface DenicekProviderProps {
     children: ReactNode;
     /** Optional initial document (for importing existing data) */
     initialDocument?: DenicekDocument;
+    /** Optional initializer to set up document structure when creating a new document */
+    initializer?: (model: DenicekModel) => void;
     /** Callback when document changes */
     onChange?: (view: DocumentView) => void;
 }
@@ -51,6 +54,7 @@ export interface DenicekProviderProps {
 export function DenicekProvider({
     children,
     initialDocument,
+    initializer,
     onChange,
 }: DenicekProviderProps) {
     // Version counter for triggering re-renders
@@ -58,9 +62,11 @@ export function DenicekProvider({
 
     // Create or use provided document
     const document = useMemo(() => {
-        return initialDocument ?? DenicekDocument.create({
-            onVersionChange: () => setVersion(v => v + 1),
-        });
+        return initialDocument ?? DenicekDocument.create(
+            { onVersionChange: () => setVersion(v => v + 1) },
+            initializer
+        );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [initialDocument]);
 
     // If using an external document, subscribe to its changes

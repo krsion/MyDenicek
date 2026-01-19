@@ -370,13 +370,18 @@ export class DenicekDocument {
     // === Static Factory Methods ===
 
     /**
-     * Create a new document with an initial structure
+     * Create a new document, optionally with an initial structure
+     * @param options Document options
+     * @param initializer Optional callback to set up initial document structure
      */
-    static create(options?: DenicekDocumentOptions): DenicekDocument {
+    static create(
+        options?: DenicekDocumentOptions,
+        initializer?: (model: DenicekModel) => void
+    ): DenicekDocument {
         const doc = new DenicekDocument(options);
-        doc.change((model) => {
-            model.initializeDocument();
-        });
+        if (initializer) {
+            doc.change(initializer);
+        }
         return doc;
     }
 

@@ -391,6 +391,24 @@ export class DenicekModel {
 
     // ==================== NODE CREATION ====================
 
+    /**
+     * Create a root element node (no parent)
+     * Returns the ID of the created root node
+     */
+    createRootNode(tag: string): string {
+        try {
+            const rootNode = this.tree.createNode();
+            const data = rootNode.data;
+            data.set(NODE_KIND, "element");
+            data.set(NODE_TAG, tag);
+            data.setContainer(NODE_ATTRS, new LoroMap());
+            return treeIdToString(rootNode.id);
+        } catch (e) {
+            handleModelError("createRootNode", e);
+            return "";
+        }
+    }
+
     addChildNode(parentId: string, child: Node, _id?: string, index?: number): string {
         try {
             const parentTreeId = stringToTreeId(parentId);
@@ -578,105 +596,4 @@ export class DenicekModel {
         }
     }
 
-    // ==================== INITIALIZATION ====================
-
-    initializeDocument(): void {
-        const rootNode = this.tree.createNode();
-        const rootData = rootNode.data;
-        rootData.set(NODE_KIND, "element");
-        rootData.set(NODE_TAG, "section");
-        rootData.setContainer(NODE_ATTRS, new LoroMap());
-
-        const rootId = treeIdToString(rootNode.id);
-
-        const addElement = (parentId: string, tag: string): string => {
-            return this.addElementChildNode(parentId, tag);
-        };
-
-        const addValue = (parentId: string, value: string): string => {
-            return this.addValueChildNode(parentId, value);
-        };
-
-        // Create initial document structure
-        const sectionId = addElement(rootId, "section");
-        this.updateAttribute(sectionId, "style", { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 });
-        this.updateAttribute(sectionId, "data-testid", "section");
-
-        // Article A
-        const articleAId = addElement(sectionId, "article");
-        const h2AId = addElement(articleAId, "h2");
-        addValue(h2AId, "Article A");
-        const pAId = addElement(articleAId, "p");
-        addValue(pAId, "Lorem ipsum dolor sit amet, consectetur adipiscing elit.");
-        const ulAId = addElement(articleAId, "ul");
-        const li1Id = addElement(ulAId, "li");
-        addValue(li1Id, "Item A1");
-        const li2Id = addElement(ulAId, "li");
-        addValue(li2Id, "Item A2");
-        const li3Id = addElement(ulAId, "li");
-        addValue(li3Id, "Item A3");
-
-        // Article B
-        const articleBId = addElement(sectionId, "article");
-        const h2BId = addElement(articleBId, "h2");
-        addValue(h2BId, "Article B");
-        const pBId = addElement(articleBId, "p");
-        addValue(pBId, "Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.");
-        const divBId = addElement(articleBId, "div");
-        this.updateAttribute(divBId, "style", { display: 'flex', gap: 8 });
-        const btn1Id = addElement(divBId, "button");
-        addValue(btn1Id, "Button 1");
-        const btn2Id = addElement(divBId, "button");
-        addValue(btn2Id, "Button 2");
-        const btn3Id = addElement(divBId, "button");
-        addValue(btn3Id, "Button 3");
-
-        // Article C
-        const articleCId = addElement(sectionId, "article");
-        this.updateAttribute(articleCId, "style", { gridColumn: 'span 2' });
-        const h2CId = addElement(articleCId, "h2");
-        addValue(h2CId, "Article C");
-        const gridCId = addElement(articleCId, "div");
-        this.updateAttribute(gridCId, "style", { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 });
-        for (let i = 0; i < 9; i++) {
-            const boxId = addElement(gridCId, "div");
-            this.updateAttribute(boxId, "style", { padding: 12, background: '#f7f7f7', border: '1px dashed #ccc', borderRadius: 6 });
-            addValue(boxId, `Box ${i + 1}`);
-        }
-
-        // Article D (Table)
-        const articleDId = addElement(sectionId, "article");
-        this.updateAttribute(articleDId, "style", { gridColumn: 'span 2' });
-        const h2DId = addElement(articleDId, "h2");
-        addValue(h2DId, "Table Data");
-        const tableId = addElement(articleDId, "table");
-        this.updateAttribute(tableId, "border", "1");
-        this.updateAttribute(tableId, "style", { width: '100%', borderCollapse: 'collapse' });
-
-        const theadId = addElement(tableId, "thead");
-        const theadTrId = addElement(theadId, "tr");
-        const th1Id = addElement(theadTrId, "th");
-        addValue(th1Id, "Name");
-        const th2Id = addElement(theadTrId, "th");
-        addValue(th2Id, "Role");
-        const th3Id = addElement(theadTrId, "th");
-        addValue(th3Id, "Status");
-
-        const tbodyId = addElement(tableId, "tbody");
-        const tr1Id = addElement(tbodyId, "tr");
-        const td1aId = addElement(tr1Id, "td");
-        addValue(td1aId, "Alice");
-        const td1bId = addElement(tr1Id, "td");
-        addValue(td1bId, "Developer");
-        const td1cId = addElement(tr1Id, "td");
-        addValue(td1cId, "Active");
-
-        const tr2Id = addElement(tbodyId, "tr");
-        const td2aId = addElement(tr2Id, "td");
-        addValue(td2aId, "Bob");
-        const td2bId = addElement(tr2Id, "td");
-        addValue(td2bId, "Designer");
-        const td2cId = addElement(tr2Id, "td");
-        addValue(td2cId, "Inactive");
-    }
 }

@@ -83,8 +83,7 @@ describe("Sync Integration", () => {
 
         // Initialize and make changes
         doc1.change((model) => {
-            model.initializeDocument();
-            const rootId = model.rootId;
+            const rootId = model.createRootNode("section");
             const nodeId = model.addElementChildNode(rootId, "test-element");
             model.updateAttribute(nodeId, "testAttr", "fromClient1");
         });

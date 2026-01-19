@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { DenicekDocument } from "./DenicekDocument.js";
+import type { DenicekModel } from "./DenicekModel.js";
+
+/** Simple test initializer - creates a minimal document structure */
+function testInitializer(model: DenicekModel): void {
+    const rootId = model.createRootNode("section");
+    model.addElementChildNode(rootId, "p");
+}
 
 describe("DenicekDocument", () => {
     let doc: DenicekDocument;
@@ -15,16 +22,18 @@ describe("DenicekDocument", () => {
             expect(view.getNodeCount()).toBe(0);
         });
 
-        it("should create a document with initial structure", () => {
-            doc = DenicekDocument.create();
+        it("should create a document with initial structure via initializer", () => {
+            doc = DenicekDocument.create({}, (model) => {
+                model.createRootNode("section");
+            });
             const view = doc.getSnapshot();
             expect(view.getRootId()).toBeTruthy();
-            expect(view.getNodeCount()).toBeGreaterThan(0);
+            expect(view.getNodeCount()).toBe(1);
         });
 
         it("should add nodes via change()", () => {
             doc.change((model) => {
-                model.initializeDocument();
+                model.createRootNode("root");
             });
 
             const view = doc.getSnapshot();
@@ -34,7 +43,7 @@ describe("DenicekDocument", () => {
 
     describe("export/import", () => {
         it("should export and import document", () => {
-            doc = DenicekDocument.create();
+            doc = DenicekDocument.create({}, testInitializer);
             const bytes = doc.export("snapshot");
 
             const doc2 = DenicekDocument.fromBytes(bytes);
@@ -54,7 +63,7 @@ describe("DenicekDocument", () => {
             });
 
             doc.change((model) => {
-                model.initializeDocument();
+                model.createRootNode("root");
             });
 
             expect(notified).toBe(true);
@@ -63,7 +72,7 @@ describe("DenicekDocument", () => {
 
     describe("undo/redo", () => {
         beforeEach(() => {
-            doc = DenicekDocument.create();
+            doc = DenicekDocument.create({}, testInitializer);
         });
 
         it("should track canUndo/canRedo state on fresh document", () => {
@@ -102,9 +111,10 @@ describe("DenicekDocument", () => {
     describe("version change notification", () => {
         it("should notify on version change", () => {
             let versions: number[] = [];
-            const docWithCallback = DenicekDocument.create({
-                onVersionChange: (v: number) => versions.push(v),
-            });
+            const docWithCallback = DenicekDocument.create(
+                { onVersionChange: (v: number) => versions.push(v) },
+                testInitializer
+            );
 
             docWithCallback.change((model) => {
                 const rootId = model.rootId;
@@ -120,7 +130,7 @@ describe("DenicekModel", () => {
     let doc: DenicekDocument;
 
     beforeEach(() => {
-        doc = DenicekDocument.create();
+        doc = DenicekDocument.create({}, testInitializer);
     });
 
     describe("node operations", () => {
