@@ -98,18 +98,6 @@ export interface OpId {
 export type Version = OpId[];
 
 /**
- * History entry for time travel
- */
-export interface HistoryEntry {
-    /** Version identifier (frontiers) */
-    version: Version;
-    /** Timestamp when this version was created */
-    timestamp?: number;
-    /** Origin identifier for this change */
-    origin?: string;
-}
-
-/**
  * Generalized patch for recording/replay
  */
 export type PatchAction = "put" | "del" | "insert" | "splice" | "inc" | "move";
@@ -118,9 +106,7 @@ export interface GeneralizedPatch {
     action: PatchAction;
     path: (string | number)[];
     value?: unknown;
-    values?: unknown[];
     length?: number;
-    _deleteLength?: number;
 }
 
 /**

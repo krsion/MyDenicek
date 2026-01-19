@@ -121,9 +121,6 @@ export function useRecording() {
     }, [document]);
 
     return {
-        isRecording: true, // History is always active
-        startRecording: (_startNodeId: string) => { /* no-op */ },
-        stopRecording: () => document.getHistory(),
         replay: (script: GeneralizedPatch[], startNodeId: string) => document.replay(script, startNodeId),
         history: historyData,
         clearHistory: () => {

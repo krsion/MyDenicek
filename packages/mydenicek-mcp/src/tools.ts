@@ -100,6 +100,5 @@ export interface DenicekActions {
   wrapNodes: (nodeIds: string[], wrapperTag: string) => void;
   updateValue: (nodeIds: string[], newValue: string, originalValue: string) => void;
   addChildren: (parentIds: string[], type: "element" | "value", content: string) => string[];
-  addSiblings: (referenceIds: string[], position: "before" | "after") => string[];
   deleteNodes: (nodeIds: string[]) => void;
 }

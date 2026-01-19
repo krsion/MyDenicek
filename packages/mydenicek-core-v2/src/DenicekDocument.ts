@@ -8,7 +8,7 @@ import { Frontiers, LoroDoc, UndoManager } from "loro-crdt";
 import type { LoroWebsocketClient, LoroWebsocketClientRoom } from "loro-websocket/client";
 import { DenicekModel } from "./DenicekModel.js";
 import { buildDocumentIndex, type DocumentIndex } from "./loroHelpers.js";
-import type { GeneralizedPatch, HistoryEntry, NodeData, Snapshot, Version } from "./types.js";
+import type { GeneralizedPatch, NodeData, Snapshot, Version } from "./types.js";
 
 /**
  * Options for connecting to a sync server
@@ -366,17 +366,6 @@ export class DenicekDocument {
     }
 
     // === History ===
-
-    /**
-     * Get the document history
-     * Each entry contains a version (frontiers) that can be used for checkout
-     */
-    getHistoryVersions(): HistoryEntry[] {
-        return [{
-            version: this.getVersion(),
-            timestamp: Date.now(),
-        }];
-    }
 
     /**
      * Checkout to a specific version

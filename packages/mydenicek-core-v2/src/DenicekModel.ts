@@ -304,47 +304,6 @@ export class DenicekModel {
         }
     }
 
-    unwrapNode(wrapperId: string): boolean {
-        try {
-            const wrapperTreeId = stringToTreeId(wrapperId);
-            const wrapperNode = this.tree.getNodeByID(wrapperTreeId);
-            if (!wrapperNode) return false;
-
-            const data = wrapperNode.data;
-            const kind = data.get(NODE_KIND);
-            if (kind !== "element") return false;
-
-            const children = wrapperNode.children();
-            if (!children || children.length !== 1) return false;
-
-            const wrappedNode = children[0];
-            const parent = wrapperNode.parent();
-            if (!parent) return false;
-
-            const siblings = parent.children();
-            if (!siblings) return false;
-
-            let wrapperIndex = 0;
-            for (let i = 0; i < siblings.length; i++) {
-                if (treeIdToString(siblings[i].id) === wrapperId) {
-                    wrapperIndex = i;
-                    break;
-                }
-            }
-
-            // Move wrapped node to wrapper's parent at wrapper's position
-            wrappedNode.move(parent, wrapperIndex);
-
-            // Delete wrapper
-            this.tree.delete(wrapperTreeId);
-
-            return true;
-        } catch (e) {
-            handleModelError("unwrapNode", e);
-            return false;
-        }
-    }
-
     // ==================== NODE CREATION ====================
 
     /**
@@ -461,42 +420,6 @@ export class DenicekModel {
             handleModelError("addSiblingNode", e);
             return undefined;
         }
-    }
-
-    // ==================== SELECTION ====================
-
-    findLowestCommonAncestor(nodeIds: string[]): string | null {
-        if (nodeIds.length === 0) return null;
-
-        let currentLca: string | null = nodeIds[0] ?? null;
-
-        for (let i = 1; i < nodeIds.length; i++) {
-            if (!currentLca) break;
-            const nextNode = nodeIds[i];
-
-            const ancestors = new Set<string>();
-            let curr: string | null = currentLca;
-            while (curr) {
-                ancestors.add(curr);
-                curr = this.getParentId(curr);
-            }
-
-            let runner: string | null = nextNode ?? null;
-            let found = false;
-            while (runner) {
-                if (ancestors.has(runner)) {
-                    currentLca = runner;
-                    found = true;
-                    break;
-                }
-                runner = this.getParentId(runner);
-            }
-            if (!found) {
-                currentLca = this.rootId;
-            }
-        }
-
-        return currentLca;
     }
 
     // ==================== REPLAY ====================

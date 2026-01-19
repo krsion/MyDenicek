@@ -31,9 +31,7 @@ export type {
     ValueNode,
     // Other types
     GeneralizedPatch,
-    HistoryEntry,
     OpId,
-    PatchAction,
     SpliceInfo,
     Version,
 } from "./types.js";
