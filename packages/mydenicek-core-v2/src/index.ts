@@ -35,7 +35,6 @@ export type {
     OpId,
     PatchAction,
     SpliceInfo,
-    TextCursor,
     Version,
 } from "./types.js";
 

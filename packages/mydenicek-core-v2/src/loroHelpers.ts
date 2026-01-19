@@ -10,7 +10,6 @@ import type { ElementNode, Node, NodeData, ValueNode } from "./types.js";
  * Internal constants for Loro container names
  */
 export const TREE_CONTAINER = "tree";
-export const CONFIG_CONTAINER = "config";
 
 /**
  * Node data keys

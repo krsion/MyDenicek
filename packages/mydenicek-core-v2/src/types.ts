@@ -84,15 +84,6 @@ export interface SpliceInfo {
     insertText: string;
 }
 
-
-/**
- * Cursor position in a text node
- */
-export interface TextCursor {
-    nodeId: string;
-    position: number;
-}
-
 /**
  * OpId represents a single operation ID (peer + counter)
  */

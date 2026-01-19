@@ -30,7 +30,7 @@ export {
 
 // Hooks
 export {
-    calculateSplice, useConnectivity, useDenicekDocument, useDocumentActions, useDocumentState, useRecording, useSnapshot, type DenicekActions
+    calculateSplice, useConnectivity, useDenicekDocument, useDocumentActions, useDocumentState, useRecording, type DenicekActions
 } from "./useDenicekDocument.js";
 
 export { useSelectedNode, useSelection, type SelectedNodeDetails } from "./useSelection.js";

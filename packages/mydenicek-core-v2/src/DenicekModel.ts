@@ -87,25 +87,6 @@ export class DenicekModel {
         return this.docRef.getAllNodes();
     }
 
-    getParents(childId: string): ElementNode[] {
-        try {
-            const treeId = stringToTreeId(childId);
-            const treeNode = this.tree.getNodeByID(treeId);
-            if (!treeNode) return [];
-
-            const parent = treeNode.parent();
-            if (!parent) return [];
-
-            const parentNode = loroNodeToNode(parent, this.tree);
-            if (parentNode.kind === "element") {
-                return [parentNode];
-            }
-            return [];
-        } catch {
-            return [];
-        }
-    }
-
     getParentId(childId: string): string | null {
         try {
             const treeId = stringToTreeId(childId);
@@ -119,22 +100,6 @@ export class DenicekModel {
         } catch {
             return null;
         }
-    }
-
-    getFirstChildTag(parentId: string): string | undefined {
-        const parentNode = this.getNode(parentId);
-        if (!parentNode || parentNode.kind !== "element") return undefined;
-        if (!parentNode.children[0]) return undefined;
-        const childNode = this.getNode(parentNode.children[0]);
-        if (childNode?.kind === "element") {
-            return childNode.tag;
-        }
-        return undefined;
-    }
-
-    getChildrenIds(parentId: string): string[] {
-        const node = this.getNode(parentId);
-        return (node?.kind === "element") ? node.children : [];
     }
 
     // ==================== WRITE ====================

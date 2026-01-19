@@ -8,7 +8,7 @@
  * 4. Verify server logs show expected activity
  */
 
-import { DenicekDocument } from "@mydenicek/core-v2";
+import { DenicekDocument, type NodeData } from "@mydenicek/core-v2";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
     startServerProcess,
@@ -64,14 +64,8 @@ describe("Sync Integration", () => {
         await waitForSync(doc1, doc2, 5000);
 
         // Verify client 2 sees the changes from client 1
-        const view2 = doc2.getSnapshot();
-        let testNode;
-        for (const { node } of view2.walkDepthFirst()) {
-            if (node.kind === "element" && node.tag === "test-element") {
-                testNode = node;
-                break;
-            }
-        }
+        const nodes2 = doc2.getAllNodes();
+        const testNode = findNodeByTag(nodes2, "test-element");
         expect(testNode).toBeDefined();
         if (testNode?.kind === "element") {
             expect(testNode.attrs.testAttr).toBe("fromClient1");
@@ -88,14 +82,8 @@ describe("Sync Integration", () => {
         await waitForSync(doc1, doc2, 5000);
 
         // Verify client 1 sees the changes from client 2
-        const view1 = doc1.getSnapshot();
-        let testNode2;
-        for (const { node } of view1.walkDepthFirst()) {
-            if (node.kind === "element" && node.tag === "test-element-2") {
-                testNode2 = node;
-                break;
-            }
-        }
+        const nodes1 = doc1.getAllNodes();
+        const testNode2 = findNodeByTag(nodes1, "test-element-2");
         expect(testNode2).toBeDefined();
         if (testNode2?.kind === "element") {
             expect(testNode2.attrs.testAttr).toBe("fromClient2");
@@ -147,6 +135,32 @@ describe("Sync Integration", () => {
 });
 
 /**
+ * Find a node by its tag name
+ */
+function findNodeByTag(nodes: Record<string, NodeData>, tag: string): NodeData | undefined {
+    for (const node of Object.values(nodes)) {
+        if (node.kind === "element" && node.tag === tag) {
+            return node;
+        }
+    }
+    return undefined;
+}
+
+/**
+ * Get all node IDs from a document
+ */
+function getAllNodeIds(doc: DenicekDocument): string[] {
+    return Object.keys(doc.getAllNodes());
+}
+
+/**
+ * Get node count from a document
+ */
+function getNodeCount(doc: DenicekDocument): number {
+    return Object.keys(doc.getAllNodes()).length;
+}
+
+/**
  * Wait for two documents to sync by comparing node counts and IDs
  * Note: We don't compare root IDs because when two independently created documents
  * sync, they can have multiple roots with different ordering.
@@ -159,16 +173,13 @@ async function waitForSync(
     const startTime = Date.now();
 
     while (Date.now() - startTime < timeoutMs) {
-        const view1 = doc1.getSnapshot();
-        const view2 = doc2.getSnapshot();
-
         // Compare all node IDs (sorted) - this is the definitive sync check
-        const ids1 = view1.getAllNodeIds().sort();
-        const ids2 = view2.getAllNodeIds().sort();
+        const ids1 = getAllNodeIds(doc1).sort();
+        const ids2 = getAllNodeIds(doc2).sort();
         const sameIds = JSON.stringify(ids1) === JSON.stringify(ids2);
 
         // Also check node count as a sanity check
-        const sameCount = view1.getNodeCount() === view2.getNodeCount();
+        const sameCount = getNodeCount(doc1) === getNodeCount(doc2);
 
         if (sameCount && sameIds && ids1.length > 0) {
             return;

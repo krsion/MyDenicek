@@ -5,7 +5,7 @@
 import { spawn, type ChildProcess } from "child_process";
 import { existsSync, mkdtempSync, rmSync } from "fs";
 import { tmpdir } from "os";
-import { dirname, join, resolve } from "path";
+import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
 export interface ServerProcessContext {

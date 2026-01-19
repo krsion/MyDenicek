@@ -69,19 +69,6 @@ export function useDocumentState() {
 }
 
 /**
- * Hook to access just the document (for read operations).
- * Use document.getNode(), document.getChildIds(), etc. for lookups.
- * @deprecated Use useDocumentState().document instead
- */
-export function useSnapshot() {
-    const context = useContext(DenicekContext);
-    if (!context) {
-        throw new Error("useSnapshot must be used within a DenicekProvider");
-    }
-    return context.document;
-}
-
-/**
  * Hook for connectivity state (stub for backwards compatibility)
  * In v2, use sync-client directly for real sync
  */
