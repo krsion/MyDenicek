@@ -14,17 +14,16 @@ export type {
     Snapshot,
     SpliceInfo,
     ValueNode,
-    ValueNodeData,
-} from "@mydenicek/core-v2";
-export { DenicekDocument, DenicekModel } from "@mydenicek/core-v2";
+    ValueNodeData
+} from "@mydenicek/core";
+export { DenicekDocument, DenicekModel } from "@mydenicek/core";
 
 // Constants
 export { DENICEK_NODE_ID_ATTR } from "./constants.js";
 
 // Provider
 export {
-    DenicekContext,     type DenicekContextValue, DenicekProvider, type DenicekProviderProps, DenicekSelectionContext,
-type DenicekSelectionContextValue
+    DenicekContext, type DenicekContextValue, DenicekProvider, type DenicekProviderProps, DenicekSelectionContext, type DenicekSelectionContextValue
 } from "./DenicekProvider.js";
 
 // Hooks

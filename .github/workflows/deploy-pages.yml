@@ -24,7 +24,7 @@ jobs:
 
       - name: Build Core
         run: |
-          npm run build -w packages/mydenicek-core-v2
+          npm run build -w packages/mydenicek-core
 
       - name: Build
         working-directory: ./apps/mywebnicek
@@ -33,7 +33,7 @@ jobs:
 
       - name: Run Unit Tests
         run: |
-          npm run test -w packages/mydenicek-core-v2
+          npm run test -w packages/mydenicek-core
 
       - name: Install Playwright Browsers
         working-directory: ./apps/mywebnicek

@@ -1,6 +1,6 @@
 import { makeStyles, mergeClasses } from "@fluentui/react-components";
-import { type DenicekDocument } from "@mydenicek/core-v2";
-import { DENICEK_NODE_ID_ATTR } from "@mydenicek/react-v2";
+import { type DenicekDocument } from "@mydenicek/core";
+import { DENICEK_NODE_ID_ATTR } from "@mydenicek/react";
 import React from "react";
 
 const useStyles = makeStyles({

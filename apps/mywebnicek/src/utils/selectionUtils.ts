@@ -5,7 +5,7 @@
  * It works with DenicekDocument for encapsulated tree access.
  */
 
-import type { DenicekDocument } from "@mydenicek/core-v2";
+import type { DenicekDocument } from "@mydenicek/core";
 
 /**
  * Find the lowest common ancestor of a set of nodes

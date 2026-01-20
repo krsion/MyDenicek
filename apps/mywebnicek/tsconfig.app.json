@@ -3,17 +3,27 @@
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
     "useDefineForClassFields": true,
-    "types": ["vite/client"],
+    "types": [
+      "vite/client"
+    ],
     "allowImportingTsExtensions": true,
     "moduleDetection": "force",
     "noEmit": true,
     "jsx": "react-jsx",
     "noUncheckedSideEffectImports": true,
     "paths": {
-      "@mydenicek/core-v2": ["../../packages/mydenicek-core-v2/src/index.ts"],
-      "@mydenicek/react-v2": ["../../packages/mydenicek-react-v2/src/index.ts"],
-      "@mydenicek/mcp": ["../../packages/mydenicek-mcp/src/index.ts"]
+      "@mydenicek/core": [
+        "../../packages/mydenicek-core/src/index.ts"
+      ],
+      "@mydenicek/react": [
+        "../../packages/mydenicek-react/src/index.ts"
+      ],
+      "@mydenicek/mcp": [
+        "../../packages/mydenicek-mcp/src/index.ts"
+      ]
     }
   },
-  "include": ["src"]
+  "include": [
+    "src"
+  ]
 }

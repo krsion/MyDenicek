@@ -3,8 +3,12 @@
     "compilerOptions": {
         "noEmit": true
     },
-    "include": ["src"],
+    "include": [
+        "src"
+    ],
     "references": [
-        { "path": "../mydenicek-core-v2" }
+        {
+            "path": "../mydenicek-core"
+        }
     ]
 }

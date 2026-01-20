@@ -1,4 +1,4 @@
-import type { GeneralizedPatch } from "@mydenicek/core-v2";
+import type { GeneralizedPatch } from "@mydenicek/core";
 
 /**
  * Information about a node created by an insert action

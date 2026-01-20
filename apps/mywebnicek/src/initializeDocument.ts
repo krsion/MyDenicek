@@ -5,7 +5,7 @@
  * Extracted from core library to keep initialization logic application-specific.
  */
 
-import type { DenicekModel } from "@mydenicek/core-v2";
+import type { DenicekModel } from "@mydenicek/core";
 
 /**
  * Initialize a document with a sample structure

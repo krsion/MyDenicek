@@ -2,10 +2,10 @@
     "files": [],
     "references": [
         {
-            "path": "./packages/mydenicek-core-v2"
+            "path": "./packages/mydenicek-core"
         },
         {
-            "path": "./packages/mydenicek-react-v2"
+            "path": "./packages/mydenicek-react"
         },
         {
             "path": "./packages/mydenicek-mcp"

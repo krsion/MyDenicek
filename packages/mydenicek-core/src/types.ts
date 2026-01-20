@@ -1,5 +1,5 @@
 /**
- * Public types for mydenicek-core-v2
+ * Public types for mydenicek-core
  * No Loro types are exposed - all internal CRDT details are hidden
  */
 

@@ -13,4 +13,4 @@ packages/mydenicek-core/dist/index.js
 apps/mydenicek-sync-server/data/*
 *.tsbuildinfo
 packages/mydenicek-mcp/tsconfig.tsbuildinfo
-packages/mydenicek-react-v2/tsconfig.tsbuildinfo
+packages/mydenicek-react/tsconfig.tsbuildinfo

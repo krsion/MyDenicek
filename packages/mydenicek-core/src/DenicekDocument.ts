@@ -1,5 +1,5 @@
 /**
- * DenicekDocument - Main document abstraction for mydenicek-core-v2
+ * DenicekDocument - Main document abstraction for mydenicek-core
  * This class wraps the Loro document and provides a public API
  * Includes undo/redo, history tracking, sync, and replay functionality
  */

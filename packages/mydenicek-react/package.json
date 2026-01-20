@@ -1,5 +1,5 @@
 {
-    "name": "@mydenicek/core-v2",
+    "name": "@mydenicek/react",
     "version": "0.0.1",
     "type": "module",
     "main": "dist/index.js",
@@ -9,12 +9,15 @@
         "test": "vitest run"
     },
     "dependencies": {
-        "loro-crdt": "^1.5.0",
-        "loro-websocket": "^0.1.0",
-        "loro-adaptors": "^0.1.0"
+        "@mydenicek/core": "file:../mydenicek-core"
+    },
+    "peerDependencies": {
+        "react": ">=18.0.0"
     },
     "devDependencies": {
         "typescript": "^5.0.0",
-        "vitest": "^4.0.16"
+        "vitest": "^4.0.0",
+        "@types/react": "^19.0.0",
+        "react": "^19.0.0"
     }
 }

@@ -180,8 +180,8 @@ The following functional requirements specify the capabilities of the MyDenicek 
 
 \textbf{NFR-07: Modularity} The system shall maintain clear separation between:
 \begin{itemize}[noitemsep]
-    \item Core library (\texttt{@mydenicek/core-v2}) - CRDT operations
-    \item React bindings (\texttt{@mydenicek/react-v2}) - hooks and context
+    \item Core library (\texttt{@mydenicek/core}) - CRDT operations
+    \item React bindings (\texttt{@mydenicek/react}) - hooks and context
     \item Web application (\texttt{mywebnicek}) - UI components
     \item Sync server (\texttt{mydenicek-sync-server}) - WebSocket coordination
 \end{itemize}
@@ -199,8 +199,8 @@ The system follows a layered architecture with clear separation of concerns.
 The project is organized as a monorepo with the following packages:
 
 \begin{itemize}[noitemsep]
-    \item \textbf{@mydenicek/core-v2} - Core CRDT library wrapping Loro
-    \item \textbf{@mydenicek/react-v2} - React hooks and context providers
+    \item \textbf{@mydenicek/core} - Core CRDT library wrapping Loro
+    \item \textbf{@mydenicek/react} - React hooks and context providers
     \item \textbf{@mydenicek/mcp} - Model Context Protocol tool definitions
     \item \textbf{mywebnicek} - React 19 web application with Fluent UI
     \item \textbf{mydenicek-sync-server} - Node.js WebSocket sync server
@@ -443,7 +443,7 @@ Implementation & Custom & Loro library \\
 
 \section{Milestones / Deliverables}
 
-\textbf{MyDenicek Core Library} A fully functional TypeScript library (\texttt{@mydenicek/core-v2}) providing:
+\textbf{MyDenicek Core Library} A fully functional TypeScript library (\texttt{@mydenicek/core}) providing:
 \begin{itemize}[noitemsep]
     \item CRDT-based document representation using Loro
     \item Complete set of document operations
@@ -453,7 +453,7 @@ Implementation & Custom & Loro library \\
     \item Comprehensive unit tests
 \end{itemize}
 
-\textbf{MyDenicek React Library} React bindings (\texttt{@mydenicek/react-v2}) providing:
+\textbf{MyDenicek React Library} React bindings (\texttt{@mydenicek/react}) providing:
 \begin{itemize}[noitemsep]
     \item Context provider for document state
     \item Hooks for document access and mutation

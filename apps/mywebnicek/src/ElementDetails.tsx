@@ -1,6 +1,6 @@
 import { Button, Card, Input, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Text } from "@fluentui/react-components";
 import { AddRegular, DeleteRegular } from "@fluentui/react-icons";
-import type { SelectedNodeDetails } from "@mydenicek/react-v2";
+import type { SelectedNodeDetails } from "@mydenicek/react";
 import { useEffect, useState } from "react";
 
 import { NodeId } from "./components/NodeId";

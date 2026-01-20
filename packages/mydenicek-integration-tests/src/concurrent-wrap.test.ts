@@ -8,7 +8,7 @@
  * - Each document converges to the same state
  */
 
-import { DenicekDocument } from "@mydenicek/core-v2";
+import { DenicekDocument } from "@mydenicek/core";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import {

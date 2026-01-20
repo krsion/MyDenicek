@@ -8,7 +8,7 @@ import {
     type GeneralizedPatch,
     type SpliceInfo,
     type SyncStatus,
-} from "@mydenicek/core-v2";
+} from "@mydenicek/core";
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 
 import { DenicekContext } from "./DenicekProvider.js";

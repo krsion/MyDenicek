@@ -62,25 +62,25 @@ apps/
   mywebnicek/                 # React 19 + Fluent UI web app
   mydenicek-sync-server/      # WebSocket sync server (Loro)
 packages/
-  mydenicek-core-v2/          # Core CRDT logic (Loro wrapper)
-  mydenicek-react-v2/         # React hooks/context
+  mydenicek-core/          # Core CRDT logic (Loro wrapper)
+  mydenicek-react/         # React hooks/context
   mydenicek-mcp/              # MCP integration
   mydenicek-integration-tests/ # Cross-package integration tests
 ```
 
 ### Core Architecture Layers
 
-**DenicekDocument** (`packages/mydenicek-core-v2/src/DenicekDocument.ts`)
+**DenicekDocument** (`packages/mydenicek-core/src/DenicekDocument.ts`)
 - Entry point for all document operations
 - Wraps Loro internals via LoroDocWrapper (no Loro types exposed publicly)
 - Provides: snapshots, mutations via `change()`, export/import, subscriptions, history/checkout
 
-**DenicekStore** (`packages/mydenicek-core-v2/src/DenicekStore.ts`)
+**DenicekStore** (`packages/mydenicek-core/src/DenicekStore.ts`)
 - Transaction management with `modify()` and `modifyTransaction()`
 - Undo/Redo via Loro's UndoManager
 - Patch history recording for replay functionality
 
-**DenicekModel** (`packages/mydenicek-core-v2/src/DenicekModel.ts`)
+**DenicekModel** (`packages/mydenicek-core/src/DenicekModel.ts`)
 - Facade for read/write operations, created inside `change()` callbacks
 - Delegates to: NodeReader, NodeWriter, NodeCreator, NodeWrapper, SelectionLogic
 
@@ -184,11 +184,11 @@ npm run dev                            # Start sync server + web app concurrentl
 npm run dev -w mywebnicek              # Web app only (Vite dev server at localhost:5174)
 npm run dev -w @mydenicek/sync-server  # Sync server only (port 3001)
 
-npm run build -w @mydenicek/core-v2    # Build core library (must build before web app)
+npm run build -w @mydenicek/core    # Build core library (must build before web app)
 npm run build -w mywebnicek            # Build web app
 
 npm run test --workspaces              # All tests (unit + E2E)
-npm test -w @mydenicek/core-v2         # Core unit tests (Vitest)
+npm test -w @mydenicek/core         # Core unit tests (Vitest)
 npm run test -w mywebnicek             # E2E tests (Playwright)
 ```
 

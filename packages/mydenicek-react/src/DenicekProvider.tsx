@@ -9,8 +9,8 @@ import {
     DenicekDocument,
     DenicekModel,
     type SyncState,
-} from "@mydenicek/core-v2";
-import { createContext, type ReactNode,useEffect, useMemo, useState } from "react";
+} from "@mydenicek/core";
+import { createContext, type ReactNode, useEffect, useMemo, useState } from "react";
 
 // Context types
 export interface DenicekContextValue {
@@ -70,7 +70,7 @@ export function DenicekProvider({
             { onVersionChange: () => setVersion(v => v + 1) },
             initializer
         );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [initialDocument]);
 
     // If using an external document, subscribe to its changes

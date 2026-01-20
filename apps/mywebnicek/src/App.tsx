@@ -1,6 +1,6 @@
 import { Badge, Button, Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, Spinner, Switch, Tag, TagGroup, Text, Toast, Toaster, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip, useId, useToastController } from "@fluentui/react-components";
 import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackRegular, CameraRegular, ClipboardPasteRegular, CodeRegular, CopyRegular, EditRegular, LinkRegular, PlayRegular, RecordRegular, RenameRegular, StopRegular } from "@fluentui/react-icons";
-import type { Snapshot } from "@mydenicek/react-v2";
+import type { Snapshot } from "@mydenicek/react";
 import {
   useConnectivity,
   useDocumentActions,
@@ -8,7 +8,7 @@ import {
   useRecording,
   useSelectedNode,
   useSelection
-} from "@mydenicek/react-v2";
+} from "@mydenicek/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AddNodePopoverButton } from "./AddNodePopoverButton";

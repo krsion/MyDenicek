@@ -1,6 +1,6 @@
 import { Badge, Button, Card, CardHeader, Checkbox, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Text, Tooltip } from "@fluentui/react-components";
 import { TargetRegular } from "@fluentui/react-icons";
-import { type DenicekAction } from "@mydenicek/react-v2";
+import { type DenicekAction } from "@mydenicek/react";
 
 import { NodeId } from "./components/NodeId";
 import { usePeerAlias } from "./context/PeerAliasContext";

@@ -1,5 +1,5 @@
 /**
- * mydenicek-core-v2
+ * mydenicek-core
  *
  * Core document operations using Loro CRDT
  * No Loro types are exposed - all CRDT details are hidden
@@ -35,6 +35,6 @@ export type {
     SyncStatus,
     ValueNode,
     ValueNodeData,
-    Version,
+    Version
 } from "./types.js";
 

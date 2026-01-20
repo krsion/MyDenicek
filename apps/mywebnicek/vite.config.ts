@@ -10,8 +10,8 @@ export default defineConfig({
   base: '/MyDenicek/',
   resolve: {
     alias: {
-      '@mydenicek/core-v2': path.resolve(__dirname, '../../packages/mydenicek-core-v2/src/index.ts'),
-      '@mydenicek/react-v2': path.resolve(__dirname, '../../packages/mydenicek-react-v2/src/index.ts'),
+      '@mydenicek/core': path.resolve(__dirname, '../../packages/mydenicek-core/src/index.ts'),
+      '@mydenicek/react': path.resolve(__dirname, '../../packages/mydenicek-react/src/index.ts'),
     },
   },
   optimizeDeps: {
