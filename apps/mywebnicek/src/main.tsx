@@ -1,14 +1,15 @@
 import { FluentProvider, webLightTheme } from '@fluentui/react-components';
-import { DenicekProvider } from '@mydenicek/react';
+import { DenicekProvider } from '@mydenicek/react-v2';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { App } from './App.tsx';
+import { initializeDocument } from './initializeDocument.ts';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <FluentProvider theme={webLightTheme}>
-      <DenicekProvider>
+      <DenicekProvider initializer={initializeDocument}>
         <App />
       </DenicekProvider>
     </FluentProvider>

@@ -1,6 +1,6 @@
-import { Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, DrawerBody, DrawerHeader, DrawerHeaderTitle, InlineDrawer, Switch, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Tag, TagGroup, Text, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip } from "@fluentui/react-components";
-import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackFilled, BackpackRegular, CameraRegular, ChatRegular, ClipboardPasteRegular, CodeRegular, CopyRegular, EditFilled, EditRegular, PlayRegular, RecordRegular, RenameFilled, RenameRegular, StopRegular } from "@fluentui/react-icons";
-import type { DenicekAction, DenicekActions, JsonDoc } from "@mydenicek/react";
+import { Badge, Button, Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, Spinner, Switch, Tag, TagGroup, Text, Toast, Toaster, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip, useId, useToastController } from "@fluentui/react-components";
+import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackRegular, CameraRegular, ClipboardPasteRegular, CodeRegular, CopyRegular, EditRegular, LinkRegular, PlayRegular, RecordRegular, RenameRegular, StopRegular } from "@fluentui/react-icons";
+import type { Snapshot } from "@mydenicek/react-v2";
 import {
   useConnectivity,
   useDocumentActions,
@@ -8,57 +8,199 @@ import {
   useRecording,
   useSelectedNode,
   useSelection
-} from "@mydenicek/react";
+} from "@mydenicek/react-v2";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AddNodePopoverButton } from "./AddNodePopoverButton";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import { ResizablePanel } from "./components/ResizablePanel";
+import { PeerAliasProvider } from "./context/PeerAliasContext";
 import { DomNavigator, type DomNavigatorHandle } from "./DomNavigator";
 import { ElementDetails } from "./ElementDetails.tsx";
+import { useClipboard } from "./hooks/useClipboard";
 import { JsonView } from "./JsonView.tsx";
-import { LlmChat } from "./LlmChat";
 import { RecordedScriptView } from "./RecordedScriptView";
 import { RenderedDocument } from "./RenderedDocument.tsx";
-import { ToolbarPopoverButton } from "./ToolbarPopoverButton";
+import { ToolbarPopoverButton, validateTagName } from "./ToolbarPopoverButton";
+import { analyzeScript, generalizeScript, type ScriptAnalysis } from "./utils/scriptAnalysis";
+import { generalizeSelection } from "./utils/selectionUtils";
+
+// Generate a random room ID
+function generateRoomId(): string {
+  return Math.random().toString(36).substring(2, 10);
+}
+
+// Get room ID from URL hash or generate a new one
+function getRoomIdFromHash(): string {
+  const hash = window.location.hash.slice(1); // Remove the # prefix
+  return hash || generateRoomId();
+}
 
 export const App = () => {
-  const { model } = useDocumentState();
+  const { document } = useDocumentState();
   const {
     undo, redo, canUndo, canRedo,
     updateAttribute, updateTag, wrapNodes,
     updateValue, addChildren, addSiblings,
-    deleteNodes, addTransformation, addGeneralizedTransformation
+    deleteNodes: _deleteNodes
   } = useDocumentActions();
-  const { isRecording, startRecording, stopRecording, replay } = useRecording();
-  const { connect, disconnect } = useConnectivity();
+  const recordingObj = useRecording();
+  const { history: recordingHistory, clearHistory, replay } = recordingObj;
+  const [showHistory, setShowHistory] = useState(true);
+
+  const { connect, disconnect, status, latency, error } = useConnectivity();
   const { setSelectedNodeIds, remoteSelections, userId } = useSelection();
   const { selectedNodeId, selectedNodeIds, node, details } = useSelectedNode();
 
-  const [recordedScript, setRecordedScript] = useState<DenicekAction[] | null>(null);
-  const [snapshot, setSnapshot] = useState<JsonDoc | null>(null);
+  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [filterPatches, setFilterPatches] = useState(false);
   const [patchesViewMode, setPatchesViewMode] = useState<'table' | 'json'>('table');
 
-  const [connected, setConnected] = useState(true);
-  const [showAiPanel, setShowAiPanel] = useState(false);
-  const [isGeneralizedSelection, setIsGeneralizedSelection] = useState(false);
+  const [roomId] = useState<string>(() => getRoomIdFromHash());
+
+  // Derive connected from status
+  const connected = status === "connected";
   const navigatorRef = useRef<DomNavigatorHandle>(null);
+  const [selectedActionIndices, setSelectedActionIndices] = useState<Set<number>>(new Set());
+  const [targetOverrides, setTargetOverrides] = useState<Map<number, string>>(new Map());
+  const [sourceOverrides, setSourceOverrides] = useState<Map<number, string>>(new Map());
 
-  const handleStartRecording = () => {
-    if (selectedNodeId) {
-      startRecording(selectedNodeId);
-      setRecordedScript(null);
+  // Toast for share notification
+  const toasterId = useId("share-toaster");
+  const { dispatchToast } = useToastController(toasterId);
+
+  // Update URL hash when room ID changes
+  useEffect(() => {
+    if (roomId && window.location.hash.slice(1) !== roomId) {
+      window.history.replaceState(null, "", `#${roomId}`);
     }
-  };
+  }, [roomId]);
 
-  const handleStopRecording = () => {
-    const script = stopRecording();
-    setRecordedScript(script);
-  };
+  // Auto-connect on mount
+  useEffect(() => {
+    connect("ws://localhost:3001", roomId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Handle share button click
+  const handleShare = useCallback(() => {
+    const shareUrl = `${window.location.origin}${window.location.pathname}#${roomId}`;
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      dispatchToast(
+        <Toast>Link copied to clipboard!</Toast>,
+        { intent: "success" }
+      );
+    }).catch(() => {
+      dispatchToast(
+        <Toast>Failed to copy link</Toast>,
+        { intent: "error" }
+      );
+    });
+  }, [roomId, dispatchToast]);
+
+  // Handle sync toggle
+  const handleSyncToggle = useCallback(() => {
+    if (status === "connected" || status === "connecting") {
+      disconnect();
+    } else {
+      connect("ws://localhost:3001", roomId);
+    }
+  }, [status, connect, disconnect, roomId]);
+
+  // Frontend-only generalization for Shift+click multi-select
+  const handleGeneralize = useCallback((ids: string[]) => {
+    return generalizeSelection(document, ids);
+  }, [document]);
+
+  // Analyze recording history for created node dependencies
+  const scriptAnalysis: ScriptAnalysis | null = useMemo(() => {
+    if (!recordingHistory || recordingHistory.length === 0) return null;
+    return analyzeScript(recordingHistory);
+  }, [recordingHistory]);
 
   const handleReplay = () => {
-    if (!recordedScript || !selectedNodeId) return;
-    replay(recordedScript, selectedNodeId);
+    if (!recordingHistory || !selectedNodeId) return;
+
+    // Get indices to replay (all or selected)
+    const indicesToReplay = selectedActionIndices.size > 0
+      ? Array.from(selectedActionIndices).sort((a, b) => a - b)
+      : recordingHistory.map((_, i) => i);
+
+    if (indicesToReplay.length === 0) return;
+
+    // Get the actions to replay
+    const actionsToReplay = indicesToReplay
+      .map(i => recordingHistory[i])
+      .filter((action): action is NonNullable<typeof action> => action !== null);
+
+    if (actionsToReplay.length === 0) return;
+
+    // Analyze and generalize the script (replace created node IDs with variables)
+    // This allows replay() to map $1, $2, etc. to newly created nodes
+    const analysis = analyzeScript(actionsToReplay);
+    const generalizedActions = generalizeScript(actionsToReplay, analysis);
+
+    // Apply target overrides (manual retargeting by user)
+    const finalActions = generalizedActions.map((action, newIdx) => {
+      const origIdx = indicesToReplay[newIdx]!;
+      const targetOverride = targetOverrides.get(origIdx);
+      const sourceOverride = sourceOverrides.get(origIdx);
+
+      let result = action;
+
+      // Apply target override to path
+      if (targetOverride) {
+        const newPath = action.path.map(segment => {
+          const str = String(segment);
+          // Replace node ID (peer@counter format) - but not variables
+          if (/^\d+@\d+$/.test(str)) {
+            return targetOverride;
+          }
+          return segment;
+        });
+        result = { ...result, path: newPath };
+      }
+
+      // Apply source override for copy actions
+      if (sourceOverride && action.action === "copy" && action.value && typeof action.value === 'object' && 'sourceId' in action.value) {
+        result = {
+          ...result,
+          value: { ...action.value, sourceId: sourceOverride }
+        };
+      }
+
+      return result;
+    });
+
+    replay(finalActions, selectedNodeId);
   };
+
+  const handleActionSelectionChange = useCallback((indices: Set<number>) => {
+    setSelectedActionIndices(indices);
+  }, []);
+
+  const handleClearHistory = useCallback(() => {
+    clearHistory();
+    setSelectedActionIndices(new Set());
+    setTargetOverrides(new Map());
+    setSourceOverrides(new Map());
+  }, [clearHistory]);
+
+  const handleRetarget = useCallback((index: number, newNodeId: string) => {
+    setTargetOverrides(prev => {
+      const newMap = new Map(prev);
+      newMap.set(index, newNodeId);
+      return newMap;
+    });
+  }, []);
+
+  const handleRetargetSource = useCallback((index: number, newSourceId: string) => {
+    setSourceOverrides(prev => {
+      const newMap = new Map(prev);
+      newMap.set(index, newSourceId);
+      return newMap;
+    });
+  }, []);
 
   const triggerNavigation = (action: 'parent' | 'child' | 'prev' | 'next' | 'clear') => {
     if (!navigatorRef.current) return;
@@ -86,125 +228,123 @@ export const App = () => {
     updateAttribute(selectedNodeIds, key, value);
   };
 
-  // Clipboard state for copy/paste of input values
-  const [clipboardValue, setClipboardValue] = useState<string | null>(null);
+  // Clipboard: copy creates a "copy" action referencing the source node
+  const { hasClipboardData, isInputSelected, isValueSelected, handleCopy, handlePaste } = useClipboard({
+    selectedNodeId: selectedNodeId ?? null,
+    node,
+    document,
+  });
 
-  // Check if selected node is an input element
-  const isInputSelected = node?.kind === "element" && node.tag === "input";
-  // Check if selected node is a value node
-  const isValueSelected = node?.kind === "value";
-
-  const handleCopyFromInput = useCallback(() => {
-    if (!selectedNodeId || !isInputSelected) return;
-    const inputEl = document.querySelector(`[data-node-guid="${selectedNodeId}"]`) as HTMLInputElement | null;
-    if (!inputEl) return;
-    setClipboardValue(inputEl.value);
-  }, [selectedNodeId, isInputSelected]);
-
-  const handlePasteToValue = useCallback(() => {
-    if (!selectedNodeId || !isValueSelected || clipboardValue === null) return;
-    const valueNode = model?.getNode(selectedNodeId);
-    const originalValue = valueNode?.kind === "value" ? valueNode.value : "";
-    updateValue([selectedNodeId], clipboardValue, originalValue);
-  }, [selectedNodeId, isValueSelected, clipboardValue, model, updateValue]);
-
-  // Keyboard shortcuts for Ctrl+C and Ctrl+V
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "c" && isInputSelected) {
-        e.preventDefault();
-        handleCopyFromInput();
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === "v" && isValueSelected && clipboardValue !== null) {
-        e.preventDefault();
-        handlePasteToValue();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isInputSelected, isValueSelected, clipboardValue, handleCopyFromInput, handlePasteToValue]);
-
-  const docActions: DenicekActions = useMemo(() => ({
-    undo, redo, canUndo, canRedo,
-    updateAttribute, updateTag, wrapNodes, updateValue, addChildren, addSiblings, deleteNodes, addTransformation, addGeneralizedTransformation
-  }), [undo, redo, canUndo, canRedo, updateAttribute, updateTag, wrapNodes, updateValue, addChildren, addSiblings, deleteNodes, addTransformation, addGeneralizedTransformation]);
-
-  if (!model) return <div>Loading...</div>;
-
-  const selectedNodeFirstChildTag = (node && node.kind === "element") ? model.getFirstChildTag(node) : undefined;
+  // Get first child's tag for the selected element node
+  const selectedNodeFirstChildTag = (() => {
+    if (!node || node.kind !== "element" || !selectedNodeId) return undefined;
+    const childIds = document.getChildIds(selectedNodeId);
+    if (childIds.length === 0) return undefined;
+    const firstChild = document.getNode(childIds[0]!);
+    return firstChild?.kind === "element" ? firstChild.tag : undefined;
+  })();
   const selectedNodeAttributes = (node && node.kind === "element") ? node.attrs : undefined;
 
+  // Collect known peer IDs from recording history and remote selections
+  const knownPeerIds = useMemo(() => {
+    const peerIds = new Set<string>();
+
+    // Extract peer IDs from recording history
+    if (recordingHistory) {
+      for (const action of recordingHistory) {
+        for (const segment of action.path) {
+          const str = String(segment);
+          const match = str.match(/^\d+@(\d+)$/);
+          if (match?.[1]) {
+            peerIds.add(match[1]);
+          }
+        }
+        // Also check values for node IDs
+        const value = (action as { value?: unknown }).value;
+        if (typeof value === 'object' && value !== null) {
+          const checkValue = (v: unknown): void => {
+            if (typeof v === 'string') {
+              const match = v.match(/^\d+@(\d+)$/);
+              if (match?.[1]) peerIds.add(match[1]);
+            } else if (Array.isArray(v)) {
+              v.forEach(checkValue);
+            } else if (typeof v === 'object' && v !== null) {
+              Object.values(v).forEach(checkValue);
+            }
+          };
+          checkValue(value);
+        }
+      }
+    }
+
+    // Add remote selection peer IDs
+    if (remoteSelections) {
+      for (const peerId of Object.keys(remoteSelections)) {
+        peerIds.add(peerId);
+      }
+    }
+
+    return Array.from(peerIds);
+  }, [recordingHistory, remoteSelections]);
 
   return (
-    <div style={{ display: "flex" }}>
-      <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column" }}>
-        <Card appearance="subtle" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-          <Toolbar style={{ display: "flex", justifyContent: "space-between" }}>
-            <ToolbarGroup>
-              <Tooltip content="Undo" relationship="label">
-                <ToolbarButton
-                  icon={<ArrowUndoRegular />}
-                  onClick={() => {
-                    undo();
-                    if (selectedNodeId) clickOnSelectedNode(selectedNodeId);
-                  }}
-                  disabled={!canUndo}
-                />
-              </Tooltip>
-              <Tooltip content="Redo" relationship="label">
-                <ToolbarButton
-                  icon={<ArrowRedoRegular />}
-                  onClick={() => {
-                    redo();
-                    if (selectedNodeId) clickOnSelectedNode(selectedNodeId);
-                  }}
-                  disabled={!canRedo}
-                />
-              </Tooltip>
-              <ToolbarDivider />
-              <AddNodePopoverButton
-                disabled={node?.kind !== "element"}
-                initialValue={selectedNodeFirstChildTag || ""}
-                onAddChild={(content, isValue) => {
-                  if (selectedNodeIds.length === 0) return;
-                  const newIds = addChildren(selectedNodeIds, isValue ? "value" : "element", content);
-                  if (newIds.length > 0) setSelectedNodeIds(newIds);
-                }}
-                onAddBefore={(content, _isValue) => {
-                  if (selectedNodeIds.length === 0) return;
-                  const newIds = addSiblings(selectedNodeIds, "before");
-                  // If content was provided, update it immediately
-                  if (newIds.length > 0) {
-                    updateValue(newIds, content, "");
-                    setSelectedNodeIds(newIds);
-                  }
-                }}
-                onAddAfter={(content, _isValue) => {
-                  if (selectedNodeIds.length === 0) return;
-                  const newIds = addSiblings(selectedNodeIds, "after");
-                  // If content was provided, update it immediately
-                  if (newIds.length > 0) {
-                    updateValue(newIds, content, "");
-                    setSelectedNodeIds(newIds);
-                  }
-                }}
-              />
-
-              {node?.kind === "value" ? (
-                isGeneralizedSelection ? (
-                  <ToolbarPopoverButton
-                    text="Edit all"
-                    icon={<EditFilled />}
-                    disabled={false}
-                    ariaLabel="Edit all matching"
-                    placeholder="Value content"
-                    initialValue={details?.value || ""}
-                    onSubmit={(value) => {
-                      const originalValue = details?.value || "";
-                      addGeneralizedTransformation(selectedNodeIds, "edit", { originalValue, newValue: value });
+    <PeerAliasProvider selfPeerId={userId ?? null} knownPeerIds={knownPeerIds}>
+      <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
+        <Toaster toasterId={toasterId} position="bottom-end" />
+        <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column" }}>
+          <Card appearance="subtle" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+            <Toolbar style={{ display: "flex", flexWrap: "wrap", gap: "4px", justifyContent: "space-between" }}>
+              <ToolbarGroup>
+                <Tooltip content="Undo" relationship="label">
+                  <ToolbarButton
+                    icon={<ArrowUndoRegular />}
+                    onClick={() => {
+                      undo();
+                      if (selectedNodeId) clickOnSelectedNode(selectedNodeId);
                     }}
+                    disabled={!canUndo}
                   />
-                ) : (
+                </Tooltip>
+                <Tooltip content="Redo" relationship="label">
+                  <ToolbarButton
+                    icon={<ArrowRedoRegular />}
+                    onClick={() => {
+                      redo();
+                      if (selectedNodeId) clickOnSelectedNode(selectedNodeId);
+                    }}
+                    disabled={!canRedo}
+                  />
+                </Tooltip>
+                <ToolbarDivider />
+                <AddNodePopoverButton
+                  disabled={node?.kind !== "element"}
+                  initialValue={selectedNodeFirstChildTag || ""}
+                  onAddChild={(content, isValue) => {
+                    if (selectedNodeIds.length === 0) return;
+                    const newIds = addChildren(selectedNodeIds, isValue ? "value" : "element", content);
+                    if (newIds.length > 0) setSelectedNodeIds(newIds);
+                  }}
+                  onAddBefore={(content, _isValue) => {
+                    if (selectedNodeIds.length === 0) return;
+                    const newIds = addSiblings(selectedNodeIds, "before");
+                    // If content was provided, update it immediately
+                    if (newIds.length > 0) {
+                      updateValue(newIds, content, "");
+                      setSelectedNodeIds(newIds);
+                    }
+                  }}
+                  onAddAfter={(content, _isValue) => {
+                    if (selectedNodeIds.length === 0) return;
+                    const newIds = addSiblings(selectedNodeIds, "after");
+                    // If content was provided, update it immediately
+                    if (newIds.length > 0) {
+                      updateValue(newIds, content, "");
+                      setSelectedNodeIds(newIds);
+                    }
+                  }}
+                />
+
+                {node?.kind === "value" ? (
                   <ToolbarPopoverButton
                     text="Edit"
                     icon={<EditRegular />}
@@ -217,9 +357,7 @@ export const App = () => {
                       updateValue(selectedNodeIds, value, originalValue);
                     }}
                   />
-                )
-              ) : (
-                !isGeneralizedSelection && (
+                ) : (
                   <ToolbarPopoverButton
                     text="Rename"
                     icon={<RenameRegular />}
@@ -227,186 +365,213 @@ export const App = () => {
                     ariaLabel="Rename"
                     placeholder="Tag name (e.g. div)"
                     initialValue={details?.tag || details?.dom?.tagName || ""}
+                    validate={validateTagName}
                     onSubmit={(tag) => {
                       updateTag(selectedNodeIds, tag);
                       if (selectedNodeId) clickOnSelectedNode(selectedNodeId);
                     }}
                   />
-                )
-              )}
-              {!isGeneralizedSelection && (
+                )}
                 <ToolbarPopoverButton
                   text="Wrap"
                   icon={<BackpackRegular />}
                   disabled={!selectedNodeId}
                   ariaLabel="Wrap"
+                  placeholder="Tag name (e.g. div)"
+                  validate={validateTagName}
                   onSubmit={(tag) => {
                     wrapNodes(selectedNodeIds, tag);
                     if (selectedNodeId) clickOnSelectedNode(selectedNodeId);
                   }}
                 />
-              )}
 
-              <Tooltip content="Copy input value (Ctrl+C)" relationship="label">
-                <ToolbarButton
-                  icon={<CopyRegular />}
-                  disabled={!isInputSelected}
-                  onClick={handleCopyFromInput}
+                <Tooltip content="Copy (Ctrl+C)" relationship="label">
+                  <ToolbarButton
+                    icon={<CopyRegular />}
+                    disabled={!isInputSelected && !isValueSelected}
+                    onClick={handleCopy}
+                  />
+                </Tooltip>
+
+                <Tooltip content="Paste (Ctrl+V)" relationship="label">
+                  <ToolbarButton
+                    icon={<ClipboardPasteRegular />}
+                    onClick={handlePaste}
+                    disabled={!isValueSelected || !hasClipboardData}
+                  />
+                </Tooltip>
+              </ToolbarGroup>
+
+              <ToolbarGroup>
+                <Text>{userId}</Text>
+                <SyncStatusIndicator status={status} latency={latency} error={error} />
+                <Switch
+                  checked={status === "connected" || status === "connecting"}
+                  onChange={handleSyncToggle}
+                  label={connected ? "Sync on" : "Sync off"}
+                  disabled={status === "connecting"}
                 />
-              </Tooltip>
+                <Tooltip content="Copy shareable link" relationship="label">
+                  <ToolbarButton
+                    icon={<LinkRegular />}
+                    onClick={handleShare}
+                  >
+                    Share
+                  </ToolbarButton>
+                </Tooltip>
+                <Dialog>
+                  <DialogTrigger>
+                    <ToolbarButton icon={<CodeRegular />}>Raw</ToolbarButton>
+                  </DialogTrigger>
+                  <DialogSurface style={{ width: 1000 }}>
+                    <DialogBody>
+                      <DialogContent>
+                        <JsonView data={document} />
+                      </DialogContent>
+                    </DialogBody>
+                  </DialogSurface>
+                </Dialog>
+                <ToolbarButton icon={<CameraRegular />} onClick={() => setSnapshot(document.getSnapshot())}>Snapshot</ToolbarButton>
+                <ToolbarDivider />
+                {showHistory ? (
+                  <ToolbarButton icon={<RecordRegular />} onClick={() => setShowHistory(!showHistory)} appearance="primary">Actions</ToolbarButton>
+                ) : (
+                  <ToolbarButton icon={<RecordRegular />} onClick={() => setShowHistory(!showHistory)}>Actions</ToolbarButton>
+                )}
+              </ToolbarGroup>
+            </Toolbar>
+
+            <CardHeader header={<TagGroup>
+              <Tag icon={<ArrowUpRegular />} onClick={() => triggerNavigation('parent')} style={{ cursor: 'pointer' }}> Parent</Tag>
+              <Tag icon={<ArrowDownRegular />} onClick={() => triggerNavigation('child')} style={{ cursor: 'pointer' }}> First child</Tag>
+              <Tag icon={<ArrowLeftRegular />} onClick={() => triggerNavigation('prev')} style={{ cursor: 'pointer' }}> Prev sibling</Tag>
+              <Tag icon={<ArrowRightRegular />} onClick={() => triggerNavigation('next')} style={{ cursor: 'pointer' }}> Next sibling</Tag>
+              <Tag icon={<Text>Esc</Text>} onClick={() => triggerNavigation('clear')} style={{ cursor: 'pointer' }}>Clear</Tag>
+            </TagGroup>}
+            />
+
+            <DomNavigator ref={navigatorRef} onSelectedChange={(ids) => { setSelectedNodeIds(ids); }} selectedNodeIds={selectedNodeIds} remoteSelections={remoteSelections} generalizer={handleGeneralize}>
+              <ErrorBoundary>
+                <RenderedDocument document={document} />
+              </ErrorBoundary>
+            </DomNavigator>
+
+            <ElementDetails
+              details={details}
+              attributes={selectedNodeAttributes}
+              onAttributeChange={handleAttributeChange}
+              onIdClick={(id) => setSelectedNodeIds([id])}
+            />
 
 
-              <Tooltip content={`Paste value (Ctrl+V)`} relationship="label">
-                <ToolbarButton
-                  icon={<ClipboardPasteRegular />}
-                  onClick={handlePasteToValue}
-                  disabled={!isValueSelected || clipboardValue === null}
-                />
-              </Tooltip>
 
-              {isGeneralizedSelection && node?.kind === "element" && (
-                <ToolbarPopoverButton
-                  text="Rename all"
-                  icon={<RenameFilled />}
-                  disabled={!selectedNodeId}
-                  initialValue={(node?.kind === "element") ? node.tag : ""}
-                  ariaLabel="Rename all matching"
-                  onSubmit={(tag) => {
-                    addGeneralizedTransformation(selectedNodeIds, "rename", { tag });
-                  }}
-                />
-              )}
-
-              {isGeneralizedSelection && (
-                <ToolbarPopoverButton
-                  text="Wrap all"
-                  icon={<BackpackFilled />}
-                  disabled={!selectedNodeId}
-                  ariaLabel="Wrap all matching"
-                  onSubmit={(tag) => {
-                    addGeneralizedTransformation(selectedNodeIds, "wrap", { tag });
-                  }}
-                />
-              )}
-            </ToolbarGroup>
-
-            <ToolbarGroup>
-              <Text>{userId}</Text>
-              <Switch
-                checked={connected}
-                onChange={() => {
-                  if (connected) {
-                    setConnected(false);
-                    disconnect();
-                  } else {
-                    setConnected(true);
-                    connect();
-                  }
-                }}
-                label={connected ? "Sync on" : "Sync off"}
+            {snapshot && (
+              <Card>
+                <CardHeader header={<Text>Patches from Snapshot</Text>} action={<div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Switch label="Filter by selection" checked={filterPatches} onChange={(_, data) => setFilterPatches(data.checked)} />
+                  <ToolbarButton icon={<CodeRegular />} onClick={() => setPatchesViewMode(patchesViewMode === 'table' ? 'json' : 'table')}>
+                    {patchesViewMode === 'table' ? 'JSON' : 'Table'}
+                  </ToolbarButton>
+                  <ToolbarButton icon={<CameraRegular />} onClick={() => setSnapshot(null)}>Clear</ToolbarButton>
+                </div>} />
+              </Card>
+            )}
+          </Card>
+        </div>
+        <ResizablePanel open={showHistory} defaultWidth={700} minWidth={200} maxWidth={1200}>
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+            <div style={{ padding: '12px', borderBottom: '1px solid #e0e0e0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+              <Text weight="semibold">Actions</Text>
+              <ToolbarButton
+                appearance="subtle"
+                icon={<StopRegular />}
+                onClick={handleClearHistory}
+                aria-label="Clear Actions"
               />
-              <Dialog>
-                <DialogTrigger>
-                  <ToolbarButton icon={<CodeRegular />}>Raw</ToolbarButton>
-                </DialogTrigger>
-                <DialogSurface style={{ width: 1000 }}>
-                  <DialogBody>
-                    <DialogContent>
-                      <JsonView data={model.getSnapshot()} />
-                    </DialogContent>
-                  </DialogBody>
-                </DialogSurface>
-              </Dialog>
-              <ToolbarButton icon={<CameraRegular />} onClick={() => setSnapshot(model.getSnapshot())}>Snapshot</ToolbarButton>
-              <ToolbarDivider />
-              {!isRecording ? (
-                <ToolbarButton icon={<RecordRegular />} onClick={handleStartRecording} disabled={!selectedNodeId}>Record</ToolbarButton>
-              ) : (
-                <ToolbarButton icon={<StopRegular />} onClick={handleStopRecording}>Stop Recording</ToolbarButton>
-              )}
-              <ToolbarButton icon={<PlayRegular />} onClick={handleReplay} disabled={!recordedScript || !selectedNodeId}>Replay</ToolbarButton>
-              <ToolbarDivider />
-              <ToolbarButton icon={<ChatRegular />} onClick={() => setShowAiPanel(!showAiPanel)}>AI Assistant</ToolbarButton>
-            </ToolbarGroup>
-          </Toolbar>
-
-          <CardHeader header={<TagGroup>
-            <Tag icon={<ArrowUpRegular />} onClick={() => triggerNavigation('parent')} style={{ cursor: 'pointer' }}> Parent</Tag>
-            <Tag icon={<ArrowDownRegular />} onClick={() => triggerNavigation('child')} style={{ cursor: 'pointer' }}> First child</Tag>
-            <Tag icon={<ArrowLeftRegular />} onClick={() => triggerNavigation('prev')} style={{ cursor: 'pointer' }}> Prev sibling</Tag>
-            <Tag icon={<ArrowRightRegular />} onClick={() => triggerNavigation('next')} style={{ cursor: 'pointer' }}> Next sibling</Tag>
-            <Tag icon={<Text>Esc</Text>} onClick={() => triggerNavigation('clear')} style={{ cursor: 'pointer' }}>Clear</Tag>
-          </TagGroup>}
-          />
-
-          <DomNavigator ref={navigatorRef} onSelectedChange={(ids, isGeneralized) => { setSelectedNodeIds(ids); setIsGeneralizedSelection(isGeneralized); }} selectedNodeIds={selectedNodeIds} remoteSelections={remoteSelections} generalizer={(ids) => model.generalizeSelection(ids)}>
-            <RenderedDocument model={model} />
-          </DomNavigator>
-
-          <ElementDetails
-            details={details}
-            attributes={selectedNodeAttributes}
-            onAttributeChange={handleAttributeChange}
-          />
-
-          {model.transformations && model.transformations.length > 0 && (
-            <Card>
-              <CardHeader header={<Text>Transformations</Text>} />
-              <Table size="small">
-                <TableHeader>
-                  <TableRow>
-                    <TableHeaderCell>Type</TableHeaderCell>
-                    <TableHeaderCell>LCA</TableHeaderCell>
-                    <TableHeaderCell>Selector</TableHeaderCell>
-                    <TableHeaderCell>Tag</TableHeaderCell>
-                    <TableHeaderCell>Version</TableHeaderCell>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {model.transformations.map((t, i) => (
-                    <TableRow key={i}>
-                      <TableCell>{t.type}</TableCell>
-                      <TableCell>{t.lca}</TableCell>
-                      <TableCell>{`${t.selectorTag ?? '*'}:${t.selectorDepth ?? '*'}`}</TableCell>
-                      <TableCell>{t.tag}</TableCell>
-                      <TableCell>{t.version}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </Card>
-          )}
-
-          {snapshot && (
-            <Card>
-              <CardHeader header={<Text>Patches from Snapshot</Text>} action={<div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Switch label="Filter by selection" checked={filterPatches} onChange={(_, data) => setFilterPatches(data.checked)} />
-                <ToolbarButton icon={<CodeRegular />} onClick={() => setPatchesViewMode(patchesViewMode === 'table' ? 'json' : 'table')}>
-                  {patchesViewMode === 'table' ? 'JSON' : 'Table'}
-                </ToolbarButton>
-                <ToolbarButton icon={<CameraRegular />} onClick={() => setSnapshot(null)}>Clear</ToolbarButton>
-              </div>} />
-            </Card>
-          )}
-        </Card>
+            </div>
+            <div style={{ flex: 1, overflow: 'auto', padding: '8px', minHeight: 0 }}>
+              <RecordedScriptView
+                script={recordingHistory || []}
+                onNodeClick={(id) => setSelectedNodeIds([id])}
+                selectedIndices={selectedActionIndices}
+                onSelectionChange={handleActionSelectionChange}
+                targetOverrides={targetOverrides}
+                sourceOverrides={sourceOverrides}
+                onRetarget={handleRetarget}
+                onRetargetSource={handleRetargetSource}
+                currentNodeId={selectedNodeId ?? null}
+                analysis={scriptAnalysis}
+              />
+            </div>
+            <div style={{ padding: '12px', borderTop: '1px solid #e0e0e0' }}>
+              <Tooltip content="Apply selected actions to the currently selected node" relationship="label">
+                <Button
+                  icon={<PlayRegular />}
+                  onClick={handleReplay}
+                  disabled={!recordingHistory?.length || !selectedNodeId}
+                  appearance="primary"
+                  style={{ width: '100%' }}
+                >
+                  {selectedActionIndices.size > 0 ? `Apply (${selectedActionIndices.size})` : "Apply all"}
+                </Button>
+              </Tooltip>
+            </div>
+          </div>
+        </ResizablePanel>
       </div>
-      <InlineDrawer open={(recordedScript !== null && recordedScript.length > 0) || isRecording} separator position="end">
-        <DrawerHeader>
-          <DrawerHeaderTitle>Recording</DrawerHeaderTitle>
-        </DrawerHeader>
-        <DrawerBody>
-          <RecordedScriptView script={recordedScript || []} />
-        </DrawerBody>
-      </InlineDrawer>
-      <InlineDrawer open={showAiPanel} separator position="end" style={{ width: '400px' }}>
-        <DrawerHeader>
-          <DrawerHeaderTitle>AI Assistant</DrawerHeaderTitle>
-        </DrawerHeader>
-        <DrawerBody>
-          <LlmChat model={model} actions={docActions} />
-        </DrawerBody>
-      </InlineDrawer>
-    </div>
+    </PeerAliasProvider>
+  );
+}
+
+/** Sync status indicator component */
+function SyncStatusIndicator({
+  status,
+  latency,
+  error,
+}: {
+  status: "connecting" | "connected" | "disconnected" | "idle";
+  latency?: number;
+  error?: string | null;
+}) {
+  if (status === "connecting") {
+    return (
+      <Tooltip content="Attempting to connect..." relationship="label">
+        <Badge appearance="outline" color="warning" size="medium" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <Spinner size="extra-tiny" />
+          Connecting
+        </Badge>
+      </Tooltip>
+    );
+  }
+
+  if (status === "connected") {
+    return (
+      <Tooltip
+        content={latency ? `Round-trip latency: ${latency}ms` : "Connected to sync server"}
+        relationship="label"
+      >
+        <Badge appearance="filled" color="success" size="medium">
+          {latency ? `Synced (${latency}ms)` : "Synced"}
+        </Badge>
+      </Tooltip>
+    );
+  }
+
+  if (status === "disconnected") {
+    return (
+      <Tooltip content={error || "Connection lost, will auto-retry"} relationship="label">
+        <Badge appearance="filled" color="danger" size="medium">
+          Disconnected
+        </Badge>
+      </Tooltip>
+    );
+  }
+
+  // idle
+  return (
+    <Badge appearance="outline" color="informative" size="medium">
+      Offline
+    </Badge>
   );
 }
 
@@ -416,3 +581,5 @@ function clickOnSelectedNode(selectedNodeGuid: string) {
     el?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   }, 0);
 }
+
+

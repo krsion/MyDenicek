@@ -1,11 +1,75 @@
-import { Card, CardHeader, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Text } from "@fluentui/react-components";
-import { type DenicekAction } from "@mydenicek/react";
+import { Badge, Button, Card, CardHeader, Checkbox, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Text, Tooltip } from "@fluentui/react-components";
+import { TargetRegular } from "@fluentui/react-icons";
+import { type DenicekAction } from "@mydenicek/react-v2";
 
-export const RecordedScriptView = ({ script }: { script: DenicekAction[] }) => {
+import { NodeId } from "./components/NodeId";
+import { usePeerAlias } from "./context/PeerAliasContext";
+import { getCreationInfo, getDependencyInfo, type ScriptAnalysis } from "./utils/scriptAnalysis";
+
+// Check if a path segment looks like a Loro OpId (peer@counter format)
+function isNodeId(segment: string): boolean {
+    return /^\d+@\d+$/.test(segment);
+}
+
+// Extract the node ID from a path (e.g., ["nodes", "321@18100", "tag"] -> "321@18100")
+function extractNodeId(path: (string | number)[]): string | null {
+    for (const segment of path) {
+        const str = String(segment);
+        if (isNodeId(str)) {
+            return str;
+        }
+    }
+    return null;
+}
+
+interface RecordedScriptViewProps {
+    script: DenicekAction[];
+    onNodeClick?: (id: string) => void;
+    selectedIndices?: Set<number>;
+    onSelectionChange?: (indices: Set<number>) => void;
+    targetOverrides?: Map<number, string>;
+    sourceOverrides?: Map<number, string>;
+    onRetarget?: (index: number, newNodeId: string) => void;
+    onRetargetSource?: (index: number, newSourceId: string) => void;
+    currentNodeId?: string | null;
+    analysis?: ScriptAnalysis | null;
+}
+
+export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSelectionChange, targetOverrides, sourceOverrides, onRetarget, onRetargetSource, currentNodeId, analysis }: RecordedScriptViewProps) {
+    const { formatValue } = usePeerAlias();
+    const hasSelection = selectedIndices !== undefined && onSelectionChange !== undefined;
+    const allSelected = hasSelection && script.length > 0 && selectedIndices.size === script.length;
+    const someSelected = hasSelection && selectedIndices.size > 0 && selectedIndices.size < script.length;
+
+    const handleToggle = (index: number) => {
+        if (!onSelectionChange || !selectedIndices) return;
+        const newSet = new Set(selectedIndices);
+        if (newSet.has(index)) {
+            newSet.delete(index);
+        } else {
+            newSet.add(index);
+        }
+        onSelectionChange(newSet);
+    };
+
+    const handleSelectAll = () => {
+        if (!onSelectionChange) return;
+        if (allSelected) {
+            onSelectionChange(new Set());
+        } else {
+            onSelectionChange(new Set(script.map((_, i) => i)));
+        }
+    };
+
+    const handleClearSelection = () => {
+        if (!onSelectionChange) return;
+        onSelectionChange(new Set());
+    };
+
     if (!script || script.length === 0) {
         return (
             <Card>
-                <CardHeader header={<Text>Recorded Script</Text>} />
+                <CardHeader header={<Text>Recorded Actions</Text>} />
                 <Text style={{ padding: 12, fontStyle: 'italic', color: '#666' }}>
                     No actions recorded yet. Perform actions on the document to record them.
                 </Text>
@@ -14,30 +78,169 @@ export const RecordedScriptView = ({ script }: { script: DenicekAction[] }) => {
     }
 
     return (
-        <Card>
-            <CardHeader header={<Text>Recorded Script</Text>} />
-            <Table size="small">
-                <TableHeader>
-                    <TableRow>
-                        <TableHeaderCell>Action</TableHeaderCell>
-                        <TableHeaderCell>Path</TableHeaderCell>
-                        <TableHeaderCell>Value</TableHeaderCell>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {script.map((patch, i) => (
-                        <TableRow key={i}>
-                            <TableCell>{patch.action}</TableCell>
-                            <TableCell>{patch.path.join('/')}</TableCell>
-                            <TableCell>
-                                <span style={{ fontFamily: 'monospace', fontSize: '10px' }}>
-                                    {JSON.stringify((patch as any).value || (patch as any).values)}
-                                </span>
-                            </TableCell>
+        <Card style={{ overflow: 'hidden' }}>
+            <CardHeader
+                header={<Text>Recorded Actions</Text>}
+                action={hasSelection ? (
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                        <Button size="small" appearance="subtle" onClick={handleSelectAll}>
+                            {allSelected ? 'Deselect all' : 'Select all'}
+                        </Button>
+                        {someSelected && (
+                            <Button size="small" appearance="subtle" onClick={handleClearSelection}>
+                                Clear
+                            </Button>
+                        )}
+                    </div>
+                ) : null}
+            />
+            <div style={{ overflowX: 'auto' }}>
+                <Table size="small">
+                    <TableHeader>
+                        <TableRow>
+                            {hasSelection && (
+                                <TableHeaderCell style={{ width: '32px' }}>
+                                    <Checkbox
+                                        checked={allSelected ? true : someSelected ? 'mixed' : false}
+                                        onChange={handleSelectAll}
+                                    />
+                                </TableHeaderCell>
+                            )}
+                            <TableHeaderCell style={{ width: '60px' }}>Action</TableHeaderCell>
+                            <TableHeaderCell style={{ width: '130px' }}>Node</TableHeaderCell>
+                            <TableHeaderCell>Value</TableHeaderCell>
                         </TableRow>
-                    ))}
-                </TableBody>
-            </Table>
+                    </TableHeader>
+                    <TableBody>
+                        {[...script].reverse().map((patch, reversedIndex) => {
+                            // Calculate original index (newest first, so reverse the index)
+                            const i = script.length - 1 - reversedIndex;
+                            const originalNodeId = extractNodeId(patch.path);
+                            const overriddenNodeId = targetOverrides?.get(i);
+                            const displayNodeId = overriddenNodeId ?? originalNodeId;
+                            const isOverridden = overriddenNodeId !== undefined;
+                            const value = (patch as unknown as { value?: unknown; values?: unknown }).value ??
+                                (patch as unknown as { value?: unknown; values?: unknown }).values;
+                            const isSelected = hasSelection && selectedIndices.has(i);
+
+                            // Get creation/dependency info from analysis
+                            const creationInfo = analysis ? getCreationInfo(i, analysis) : null;
+                            const dependencyInfo = analysis ? getDependencyInfo(i, analysis) : null;
+
+                            return (
+                                <TableRow
+                                    key={i}
+                                    style={isSelected ? { background: 'rgba(59, 130, 246, 0.1)' } : undefined}
+                                >
+                                    {hasSelection && (
+                                        <TableCell>
+                                            <Checkbox
+                                                checked={isSelected}
+                                                onChange={() => handleToggle(i)}
+                                            />
+                                        </TableCell>
+                                    )}
+                                    <TableCell style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                            {patch.action}
+                                            {creationInfo && (
+                                                <Tooltip content={`This action creates a new node (referenced as #${creationInfo.number})`} relationship="description">
+                                                    <Badge appearance="filled" color="success" size="small">
+                                                        #{creationInfo.number}
+                                                    </Badge>
+                                                </Tooltip>
+                                            )}
+                                        </div>
+                                    </TableCell>
+                                    <TableCell style={{ padding: '4px 8px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', width: '100%' }}>
+
+                                            {/* Node ID with overflow hidden */}
+                                            <span style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                                                {displayNodeId ? (
+                                                    <span style={isOverridden ? { backgroundColor: 'rgba(34, 197, 94, 0.2)', borderRadius: '3px' } : undefined}>
+                                                        <NodeId id={displayNodeId} onClick={onNodeClick} />
+                                                    </span>
+                                                ) : (
+                                                    <span style={{ color: '#999' }}>-</span>
+                                                )}
+                                            </span>
+                                            {/* Fixed-width slot for dependency badge */}
+                                            <span style={{ width: '28px', flexShrink: 0, display: 'flex', justifyContent: 'center' }}>
+                                                {dependencyInfo ? (
+                                                    <Tooltip content={`Uses node created by action #${dependencyInfo.creatorIndex + 1}`} relationship="description">
+                                                        <Badge appearance="outline" color="informative" size="small">
+                                                            #{dependencyInfo.number}
+                                                        </Badge>
+                                                    </Tooltip>
+                                                ) : null}
+                                            </span>
+
+                                            {/* Target button - fixed width slot */}
+                                            <span style={{ width: '24px', flexShrink: 0, display: 'flex', justifyContent: 'center' }}>
+                                                {onRetarget && currentNodeId && originalNodeId ? (
+                                                    <Tooltip content="Use currently selected node as target" relationship="label">
+                                                        <Button
+                                                            size="small"
+                                                            appearance="subtle"
+                                                            icon={<TargetRegular />}
+                                                            onClick={() => onRetarget(i, currentNodeId)}
+                                                            disabled={displayNodeId === currentNodeId}
+                                                            style={{ minWidth: 'auto', padding: '2px' }}
+                                                        />
+                                                    </Tooltip>
+                                                ) : null}
+                                            </span>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell style={{ wordBreak: 'break-word' }}>
+                                        {patch.action === "copy" && value && typeof value === 'object' && 'sourceId' in value ? (() => {
+                                            const copyValue = value as { sourceId: string; id?: string; sourceAttr?: string };
+                                            const originalSourceId = copyValue.sourceId;
+                                            const overriddenSourceId = sourceOverrides?.get(i);
+                                            const displaySourceId = overriddenSourceId ?? originalSourceId;
+                                            const isSourceOverridden = overriddenSourceId !== undefined;
+                                            const sourceAttr = copyValue.sourceAttr;
+                                            return (
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                    <span style={{ fontFamily: 'monospace', fontSize: '11px' }}>
+                                                        copy from{sourceAttr ? ` .${sourceAttr}` : ''}
+                                                    </span>
+                                                    <span style={isSourceOverridden ? { backgroundColor: 'rgba(34, 197, 94, 0.2)', borderRadius: '3px' } : undefined}>
+                                                        <NodeId id={displaySourceId} onClick={onNodeClick} />
+                                                    </span>
+                                                    {onRetargetSource && currentNodeId && (
+                                                        <Tooltip content="Use currently selected node as copy source" relationship="label">
+                                                            <Button
+                                                                size="small"
+                                                                appearance="subtle"
+                                                                icon={<TargetRegular />}
+                                                                onClick={() => onRetargetSource(i, currentNodeId)}
+                                                                disabled={displaySourceId === currentNodeId}
+                                                                style={{ minWidth: 'auto', padding: '2px' }}
+                                                            />
+                                                        </Tooltip>
+                                                    )}
+                                                </div>
+                                            );
+                                        })() : patch.action === "splice" ? (
+                                            <span style={{ fontFamily: 'monospace', fontSize: '11px' }}>
+                                                pos={patch.path[3]} del={patch.length ?? 0} ins={JSON.stringify(formatValue(patch.value ?? ""))}
+                                            </span>
+                                        ) : value !== undefined ? (
+                                            <span style={{ fontFamily: 'monospace', fontSize: '11px' }}>
+                                                {JSON.stringify(formatValue(value))}
+                                            </span>
+                                        ) : (
+                                            <span style={{ color: '#999' }}>-</span>
+                                        )}
+                                    </TableCell>
+                                </TableRow>
+                            );
+                        })}
+                    </TableBody>
+                </Table>
+            </div>
         </Card>
     );
-};
+}

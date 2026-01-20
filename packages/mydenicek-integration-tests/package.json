@@ -1,0 +1,14 @@
+{
+    "name": "@mydenicek/integration-tests",
+    "version": "0.0.1",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "test": "vitest run"
+    },
+    "devDependencies": {
+        "@mydenicek/core-v2": "*",
+        "@mydenicek/sync-server": "*",
+        "vitest": "^4.0.16"
+    }
+}

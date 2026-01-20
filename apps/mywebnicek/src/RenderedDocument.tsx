@@ -1,6 +1,6 @@
 import { makeStyles, mergeClasses } from "@fluentui/react-components";
-import { type DenicekModel } from "@mydenicek/core";
-import { DENICEK_NODE_ID_ATTR } from "@mydenicek/react";
+import { type DenicekDocument } from "@mydenicek/core-v2";
+import { DENICEK_NODE_ID_ATTR } from "@mydenicek/react-v2";
 import React from "react";
 
 const useStyles = makeStyles({
@@ -43,11 +43,19 @@ const useStyles = makeStyles({
 });
 
 
-export function RenderedDocument({ model }: { model: DenicekModel; }) {
+export function RenderedDocument({ document }: { document: DenicekDocument; version?: unknown }) {
   const styles = useStyles();
 
-  function renderById(id: string, path: string): React.ReactNode {
-    const node = model.getNode(id);
+  // Sync input value to CRDT on blur (so copy can read the current value)
+  const handleInputBlur = React.useCallback((e: React.FocusEvent<HTMLInputElement>, nodeId: string) => {
+    const value = e.target.value;
+    document.change((model) => {
+      model.updateAttribute(nodeId, "data-copy-value", value);
+    });
+  }, [document]);
+
+  function renderById(id: string): React.ReactNode {
+    const node = document.getNode(id);
     if (!node) return undefined;
 
     if (node.kind === "value") {
@@ -81,22 +89,30 @@ export function RenderedDocument({ model }: { model: DenicekModel; }) {
       }
     }
 
-    const renderedChildren: React.ReactNode[] = [];
-    for (let i = 0; i < node.children.length; i++) {
-      const child = node.children[i];
-      if (!child) continue;
-      const rendered = renderById(child, `${path}.${i}`);
-      if (React.isValidElement(rendered)) renderedChildren.push(React.cloneElement(rendered as React.ReactElement<unknown>, { key: child }));
-      else renderedChildren.push(rendered);
+    // Add blur handler for input elements to sync value to CRDT
+    if (node.tag === "input") {
+      attrs["onBlur"] = (e: React.FocusEvent<HTMLInputElement>) => handleInputBlur(e, id);
     }
-    
+
+    const childIds = document.getChildIds(id);
+    const renderedChildren: React.ReactNode[] = [];
+    for (const childId of childIds) {
+      const rendered = renderById(childId);
+      if (React.isValidElement(rendered)) {
+        renderedChildren.push(React.cloneElement(rendered as React.ReactElement<unknown>, { key: childId }));
+      } else {
+        renderedChildren.push(rendered);
+      }
+    }
+
     // Guard against empty tag names which cause React errors
     const tagName = node.tag || 'div';
     return React.createElement(tagName, attrs as Record<string, unknown>, ...renderedChildren);
   }
 
-  // Model might not be ready initially if doc is loading
-  if (!model) return null;
+  // Document might not be ready initially if doc is loading
+  const rootId = document?.getRootId();
+  if (!rootId) return null;
 
-  return <>{renderById(model.rootId, "")}</>;
+  return <>{renderById(rootId)}</>;
 }

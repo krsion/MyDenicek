@@ -1,5 +1,5 @@
 import react from '@vitejs/plugin-react'
-import path from "path"
+import path from 'path'
 import { defineConfig } from 'vite'
 import topLevelAwait from 'vite-plugin-top-level-await'
 import wasm from 'vite-plugin-wasm'
@@ -10,10 +10,12 @@ export default defineConfig({
   base: '/MyDenicek/',
   resolve: {
     alias: {
-      "@mydenicek/core": path.resolve(__dirname, "../../packages/mydenicek-core/src/index.ts"),
-      "@mydenicek/react": path.resolve(__dirname, "../../packages/mydenicek-react/src/index.ts"),
-      "@mydenicek/mcp": path.resolve(__dirname, "../../packages/mydenicek-mcp/src/index.ts"),
+      '@mydenicek/core-v2': path.resolve(__dirname, '../../packages/mydenicek-core-v2/src/index.ts'),
+      '@mydenicek/react-v2': path.resolve(__dirname, '../../packages/mydenicek-react-v2/src/index.ts'),
     },
+  },
+  optimizeDeps: {
+    include: ['loro-adaptors', 'loro-websocket/client'],
   },
   plugins: [
     react({
@@ -26,17 +28,5 @@ export default defineConfig({
     topLevelAwait(),
   ],
   server: {
-    proxy: {
-      '/api/anthropic': {
-        target: 'https://api.anthropic.com',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/anthropic/, ''),
-      },
-      '/api/openai': {
-        target: 'https://api.openai.com',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/openai/, ''),
-      },
-    },
   },
 })

@@ -1,7 +1,9 @@
 import { Button, Card, Input, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Text } from "@fluentui/react-components";
 import { AddRegular, DeleteRegular } from "@fluentui/react-icons";
-import type { SelectedNodeDetails } from "@mydenicek/react";
+import type { SelectedNodeDetails } from "@mydenicek/react-v2";
 import { useEffect, useState } from "react";
+
+import { NodeId } from "./components/NodeId";
 
 function AttributeRow({ attrKey, value, onSave, onDelete }: { attrKey: string, value: unknown, onSave: (key: string, value: unknown) => void, onDelete: (key: string) => void }) {
   const [localValue, setLocalValue] = useState(typeof value === 'object' ? JSON.stringify(value) : String(value));
@@ -47,10 +49,11 @@ function AttributeRow({ attrKey, value, onSave, onDelete }: { attrKey: string, v
   );
 }
 
-export function ElementDetails({ details, attributes, onAttributeChange }: {
+export function ElementDetails({ details, attributes, onAttributeChange, onIdClick }: {
   details: SelectedNodeDetails | null | undefined,
   attributes?: Record<string, unknown> | undefined,
-  onAttributeChange?: ((key: string, value: unknown | undefined) => void) | undefined
+  onAttributeChange?: ((key: string, value: unknown | undefined) => void) | undefined,
+  onIdClick?: (id: string) => void
 }) {
   const [newAttrKey, setNewAttrKey] = useState("");
   const [newAttrValue, setNewAttrValue] = useState("");
@@ -73,7 +76,13 @@ export function ElementDetails({ details, attributes, onAttributeChange }: {
         </TableRow>
         <TableRow>
           <TableCell>GUID</TableCell>
-          <TableCell>{details.id ?? <span style={{ color: "#999" }}>(none)</span>}</TableCell>
+          <TableCell>
+            {details.id ? (
+              <NodeId id={details.id} onClick={onIdClick} />
+            ) : (
+              <span style={{ color: "#999" }}>(none)</span>
+            )}
+          </TableCell>
         </TableRow>
         <TableRow>
           <TableCell>Classes</TableCell>

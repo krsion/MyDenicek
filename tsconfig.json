@@ -1,0 +1,20 @@
+{
+    "files": [],
+    "references": [
+        {
+            "path": "./packages/mydenicek-core-v2"
+        },
+        {
+            "path": "./packages/mydenicek-react-v2"
+        },
+        {
+            "path": "./packages/mydenicek-mcp"
+        },
+        {
+            "path": "./packages/mydenicek-integration-tests"
+        },
+        {
+            "path": "./apps/mywebnicek"
+        }
+    ]
+}

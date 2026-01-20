@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:loro.dev)",
+      "WebFetch(domain:github.com)",
+      "WebSearch",
+      "WebFetch(domain:www.npmjs.com)",
+      "WebFetch(domain:docs.rs)",
+      "Bash(dir:*)",
+      "WebFetch(domain:www.loro.dev)",
+      "Bash(npm install)",
+      "Bash(npx tsc:*)"
+    ]
+  }
+}

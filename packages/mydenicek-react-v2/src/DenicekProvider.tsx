@@ -1,0 +1,140 @@
+/**
+ * DenicekProvider - React context provider for Loro-based documents
+ *
+ * This provider creates and manages a DenicekDocument,
+ * making it available to child components via React context.
+ */
+
+import {
+    DenicekDocument,
+    DenicekModel,
+    type SyncState,
+} from "@mydenicek/core-v2";
+import { createContext, type ReactNode,useEffect, useMemo, useState } from "react";
+
+// Context types
+export interface DenicekContextValue {
+    /** The document instance (includes undo/redo, history, replay, and node access) */
+    document: DenicekDocument;
+    /** Version counter - changes on each document update, use for reactive dependencies */
+    version: number;
+    /** Sync manager */
+    syncManager?: {
+        connect: (url: string, roomId: string) => Promise<void>;
+        disconnect: () => Promise<void>;
+        /** @deprecated Use syncState.status === "connected" instead */
+        isConnected: boolean;
+        /** @deprecated Use syncState.roomId instead */
+        roomId: string | null;
+        /** Current sync state with status, latency, error */
+        syncState: SyncState;
+    };
+}
+
+export interface DenicekSelectionContextValue {
+    /** Currently selected node IDs */
+    selectedNodeIds: string[];
+    /** Update selection */
+    setSelectedNodeIds: (ids: string[]) => void;
+}
+
+// Contexts
+export const DenicekContext = createContext<DenicekContextValue | null>(null);
+export const DenicekSelectionContext = createContext<DenicekSelectionContextValue | null>(null);
+
+export interface DenicekProviderProps {
+    children: ReactNode;
+    /** Optional initial document (for importing existing data) */
+    initialDocument?: DenicekDocument;
+    /** Optional initializer to set up document structure when creating a new document */
+    initializer?: (model: DenicekModel) => void;
+    /** Callback when document changes */
+    onChange?: () => void;
+}
+
+/**
+ * Provider component for Denicek documents
+ */
+export function DenicekProvider({
+    children,
+    initialDocument,
+    initializer,
+    onChange,
+}: DenicekProviderProps) {
+    // Version counter for triggering re-renders
+    const [version, setVersion] = useState(0);
+
+    // Create or use provided document
+    const document = useMemo(() => {
+        return initialDocument ?? DenicekDocument.create(
+            { onVersionChange: () => setVersion(v => v + 1) },
+            initializer
+        );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [initialDocument]);
+
+    // If using an external document, subscribe to its changes
+    useEffect(() => {
+        if (initialDocument) {
+            return initialDocument.subscribe(() => {
+                setVersion(v => v + 1);
+            });
+        }
+        return undefined;
+    }, [initialDocument]);
+
+    // Sync state tracking
+    const [syncState, setSyncState] = useState<SyncState>(() => document.getSyncState());
+
+    // Subscribe to sync state changes
+    useEffect(() => {
+        return document.onSyncStateChange(setSyncState);
+    }, [document]);
+
+    // Notify parent of changes
+    useEffect(() => {
+        onChange?.();
+    }, [version, onChange]);
+
+    // Sync handlers - use document's built-in sync methods
+    const connect = async (url: string, roomId: string) => {
+        try {
+            await document.connectToSync({ url, roomId });
+        } catch (error) {
+            // Error is already captured in syncState via onSyncStateChange
+            console.error("Sync connection failed:", error);
+        }
+    };
+
+    const disconnect = async () => {
+        await document.disconnectSync();
+    };
+
+    // Selection state
+    const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
+
+    const contextValue: DenicekContextValue = {
+        document,
+        version,
+        syncManager: {
+            connect,
+            disconnect,
+            isConnected: syncState.status === "connected",
+            roomId: syncState.roomId,
+            syncState,
+        }
+    };
+
+    const selectionContextValue: DenicekSelectionContextValue = {
+        selectedNodeIds,
+        setSelectedNodeIds,
+    };
+
+    return (
+        <DenicekSelectionContext.Provider value={selectionContextValue}>
+            <DenicekContext.Provider value={contextValue}>
+                {children}
+            </DenicekContext.Provider>
+        </DenicekSelectionContext.Provider>
+    );
+}
