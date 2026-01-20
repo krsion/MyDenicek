@@ -1,0 +1,485 @@
+\documentclass{article}
+
+\usepackage[a-2u]{pdfx}
+\usepackage[utf8]{inputenc}
+\usepackage{array}
+\usepackage[ddmmyyyy]{datetime}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows, positioning, fit, backgrounds}
+
+\renewcommand{\dateseparator}{.}
+\renewcommand{\baselinestretch}{1.5}
+\geometry{margin=2cm}
+
+\def\ResearchProject{Research project}
+\def\CompanyProject{Company project}
+\def\SoftwareProject{Software project}
+
+% METADATA SECTION START
+\def\StudentsFullName{Bc. Ondřej Krsička}
+\def\Obor{Computer Science - Software and Data Engineering}
+\def\ProjetTitle{Using CRDTs to enable collaborative editing in Denicek}
+\def\ProjectType{\ResearchProject}
+\def\SupervisorFullName{Mgr. Tomáš Petříček, Ph.D.}
+\def\ExpectedStart{1.9.2025}
+\def\ExpectedEnd{31.3.2026}
+% METADATA SECTION END
+
+\title{\ProjetTitle}
+\author{\StudentsFullName}
+
+\begin{document}
+
+\centerline{\Large \textbf{Specification of team software project}}
+\centerline{ \textbf{Department of Software Engineering}}
+\centerline{ \textbf{Faculty of Mathematics and Physics, Charles University}}
+\bigskip
+{\noindent\begin{tabular*}{\textwidth}{ >{\raggedleft}m{4cm} l}
+ {\bf Solvers:} & \StudentsFullName \\
+ {\bf Study program:} & \Obor \\
+ & \\
+ {\bf Project title:} & \ProjetTitle \\
+ {\bf Project type:} & \ProjectType \\
+ & \\
+ {\bf Supervisor:} & \SupervisorFullName \\
+ & \\
+ {\bf Expected start:} & \ExpectedStart \\
+ {\bf Expected end:} & \ExpectedEnd \\
+\end{tabular*}}
+
+
+\section{Introduction}
+
+\emph{MyDenicek} is a CRDT-based local-first document editing substrate that enables collaborative editing of tree-structured documents with automatic conflict resolution. The project reimplements the synchronization layer of the original \emph{Denicek} system~\cite{denicek2024}, replacing Operational Transformation (OT) with Conflict-free Replicated Data Types (CRDTs) to satisfy the requirements of local-first software~\cite{klep2019}.
+
+The original \emph{Denicek} system provides end-user programming experiences including collaborative editing, programming by demonstration (recording and replaying user actions), incremental recomputation, and schema change control. However, its OT-based synchronization is complex, error-prone, and requires a central server. This project creates an alternative built on CRDTs that enables true peer-to-peer collaboration without a central authority.
+
+\emph{MyWebnicek} is a web-based programming system built on top of \emph{MyDenicek}, providing a user interface for document navigation, editing, and collaborative features. It demonstrates the end-user programming capabilities through formative examples such as counter apps, todo lists, and document refactoring scenarios.
+
+The project is inspired by \emph{MyWebstrates}~\cite{klokmose2024}, a local-first CRDT-based alternative to Webstrates. Both \emph{MyDenicek} (the core library) and \emph{MyWebnicek} (the web application) are implemented in TypeScript.
+
+\subsection{Relation to Denicek}
+
+This project directly extends the research presented at \emph{ACM UIST 2025}~\cite{denicek2024}. While the original Denicek uses Operational Transformation for synchronization, MyDenicek replaces this with a CRDT-based approach using Loro~\cite{loro}. Loro provides a native movable tree CRDT (LoroTree) that handles concurrent structural edits, node moves, and reparenting automatically. The key architectural difference is that nodes are indexed by unique IDs rather than paths, avoiding the ``shifting index'' problem that occurs during concurrent structural edits.
+
+The project maintains a clear separation between the CRDT substrate (\texttt{@mydenicek/core}) and the user interface (\texttt{mywebnicek}), enabling future development of alternative front-ends similar to how the original Denicek supports both Webnicek and Datnicek.
+
+
+\section{Project description}
+
+The project consists of two main components: the core CRDT library (\emph{MyDenicek}) and the web application (\emph{MyWebnicek}). The core library provides a TypeScript API for document manipulation with automatic conflict resolution, while the web application provides a user interface for end-user programming experiences.
+
+\subsection{User journey}
+
+The user journey through MyWebnicek consists of the following phases:
+
+\begin{enumerate}
+\item \textbf{Document Creation/Loading:} Users can create a new document or load an existing one. Documents can be shared via URL for collaborative editing.
+
+\item \textbf{Document Navigation:} Users navigate the document tree using keyboard shortcuts or mouse clicks. The selected node is highlighted in both the rendered view and the JSON inspector.
+
+\item \textbf{Document Editing:} Users perform edit operations through direct manipulation and toolbar controls. Operations include adding nodes, editing values, wrapping nodes, and deleting nodes.
+
+\item \textbf{Recording/Replay:} Users can record a sequence of edit operations and replay them on different parts of the document, enabling programming by demonstration.
+
+\item \textbf{Collaboration:} Multiple users can edit the same document simultaneously. Changes are synchronized via WebSocket and merged automatically using CRDTs.
+
+\item \textbf{Undo/Redo:} Users can undo and redo operations. The undo history is local to each user.
+\end{enumerate}
+
+
+\subsection{Functional requirements}
+
+The following functional requirements specify the capabilities of the system. Requirements labeled [Core] relate to the \texttt{@mydenicek/core} library, while [Web] requirements relate to the \texttt{mywebnicek} application.
+
+\subsubsection{Core Library Requirements}
+
+\textbf{FR-01: Document Representation} [Core] The system shall represent documents as trees of nodes, where each node has a unique ID, a kind (element or value), and additional properties based on its kind.
+
+\textbf{FR-02: Element Nodes} [Core] Element nodes shall have a tag name, a dictionary of attributes, and an ordered list of child node IDs.
+
+\textbf{FR-03: Value Nodes} [Core] Value nodes shall contain a text string that can be modified through splice operations.
+
+\textbf{FR-04: Node Operations} [Core] The system shall support the following operations on nodes:
+\begin{itemize}
+\setlength{\itemsep}{-5pt}
+\item \texttt{addElementChildNode}: Add a new element child to a parent node
+\item \texttt{addValueChildNode}: Add a new value child to a parent node
+\item \texttt{deleteNode}: Remove a node and its descendants from the document
+\item \texttt{moveNode}: Move a node to a different parent or position
+\item \texttt{copyNode}: Create a copy of a node under a target parent
+\item \texttt{updateTag}: Change the tag name of an element node
+\item \texttt{updateAttribute}: Set or modify an attribute on an element node
+\item \texttt{spliceValue}: Insert, delete, or replace text within a value node
+\item \texttt{wrapNode}: Wrap a node in a new parent element
+\end{itemize}
+
+\textbf{FR-05: Conflict Resolution} [Core] The system shall automatically resolve conflicts when concurrent operations are applied:
+\begin{itemize}
+\setlength{\itemsep}{-5pt}
+\item Concurrent wrap operations on the same node shall result in a single wrapper (using deterministic wrapper IDs)
+\item Concurrent attribute updates shall use Last-Writer-Wins (LWW) semantics
+\item Concurrent child additions shall preserve both children
+\item Concurrent tag updates shall use LWW semantics
+\end{itemize}
+
+\textbf{FR-06: Undo/Redo} [Core] The system shall maintain an undo stack and redo stack for each local session. Undo shall reverse the most recent local operation, and redo shall reapply the most recently undone operation.
+
+\textbf{FR-07: Recording} [Core] The system shall support recording a sequence of operations starting from a specified node. Recorded operations shall use generalized node IDs (\texttt{\$0}, \texttt{\$1}, etc.) that can be bound to different nodes during replay.
+
+\textbf{FR-08: Replay} [Core] The system shall support replaying a recorded script starting from a specified node. The generalized node IDs in the script shall be bound to actual node IDs based on the starting node.
+
+\textbf{FR-09: Transformations} [Core] The system shall support defining transformations on element nodes that are automatically applied to new children. This enables pattern-based document manipulation.
+
+\subsubsection{Web Application Requirements}
+
+\textbf{FR-10: Document Rendering} [Web] The application shall render the document tree as HTML, allowing users to see the final document appearance.
+
+\textbf{FR-11: Node Selection} [Web] Users shall be able to select nodes by clicking on them in the rendered view or navigating with keyboard shortcuts (arrow keys, Tab).
+
+\textbf{FR-12: JSON Inspector} [Web] The application shall display a JSON view of the document structure, highlighting the currently selected node.
+
+\textbf{FR-13: Element Details Panel} [Web] When an element node is selected, the application shall display its tag, attributes, and available operations.
+
+\textbf{FR-14: Add Node Interface} [Web] Users shall be able to add child nodes through a popover interface that allows specifying the tag name or text content.
+
+\textbf{FR-15: Recording Controls} [Web] The application shall provide controls to start and stop recording, and display the recorded script.
+
+\textbf{FR-16: Replay Controls} [Web] The application shall provide controls to replay a recorded script on the currently selected node.
+
+\textbf{FR-17: Keyboard Shortcuts} [Web] The application shall support keyboard shortcuts for common operations:
+\begin{itemize}
+\setlength{\itemsep}{-5pt}
+\item Arrow keys: Navigate between nodes
+\item Delete/Backspace: Delete selected node
+\item Ctrl+Z: Undo
+\item Ctrl+Y / Ctrl+Shift+Z: Redo
+\end{itemize}
+
+\textbf{FR-18: WebSocket Synchronization} [Web] The application shall synchronize document changes with other clients via WebSocket connection to a sync server.
+
+
+\subsection{Non-functional requirements}
+
+The following non-functional requirements specify quality attributes and system constraints.
+
+\textbf{NFR-01: Convergence} All replicas of a document shall eventually converge to the same state after receiving all operations, regardless of the order in which operations are received.
+
+\textbf{NFR-02: Offline Support} The system shall support offline editing. Local changes shall be preserved and synchronized when connectivity is restored.
+
+\textbf{NFR-03: Response Time} User interface operations (node selection, editing) shall complete within 100ms to provide responsive feedback.
+
+\textbf{NFR-04: Synchronization Latency} Document changes shall be propagated to connected clients within 500ms under normal network conditions.
+
+\textbf{NFR-05: Browser Compatibility} The web application shall function correctly on current versions of Chrome, Firefox, Safari, and Edge.
+
+\textbf{NFR-06: Type Safety} The codebase shall use TypeScript with strict type checking. The use of \texttt{any} type is prohibited; \texttt{unknown} or specific types shall be used instead.
+
+\textbf{NFR-07: Code Quality} The codebase shall pass ESLint checks with no errors. Unused imports shall be removed automatically, and imports shall be sorted consistently.
+
+\textbf{NFR-08: Test Coverage} Core library functionality shall be covered by unit tests (Vitest). User interface functionality shall be covered by end-to-end tests (Playwright).
+
+\textbf{NFR-09: Documentation} Public APIs shall be documented with JSDoc comments. The README shall contain setup instructions and usage examples.
+
+\textbf{NFR-10: Reproducibility} The development environment shall be reproducible using npm. All dependencies shall be specified in package.json with locked versions.
+
+
+\subsection{Architecture}
+
+The system follows a monorepo structure with clear separation between packages:
+
+\begin{verbatim}
+apps/
+  mywebnicek/               # React 19 + Fluent UI web application
+  mydenicek-sync-server/    # WebSocket sync server
+packages/
+  mydenicek-core/           # Core CRDT logic (Loro wrapper)
+  mydenicek-react/          # React hooks and context
+\end{verbatim}
+
+\subsubsection{Core Library Architecture}
+
+The core library (\texttt{@mydenicek/core}) provides three main classes:
+
+\textbf{DenicekStore} is the entry point for document operations. It wraps a Loro document and provides:
+\begin{itemize}
+\setlength{\itemsep}{-5pt}
+\item \texttt{modify(doc, updater)}: Execute a single change on the document
+\item \texttt{modifyTransaction(doc, updater)}: Execute multiple changes as a single undo step
+\item \texttt{undo(doc)} / \texttt{redo(doc)}: Undo/redo operations
+\item \texttt{startRecording(nodeId)} / \texttt{stopRecording()}: Recording controls
+\item \texttt{replay(doc, script, startNodeId)}: Replay a recorded script
+\end{itemize}
+
+\textbf{DenicekModel} provides read/write operations within \texttt{modify()} callbacks:
+\begin{itemize}
+\setlength{\itemsep}{-5pt}
+\item Read: \texttt{getNode()}, \texttt{getAllNodes()}, \texttt{getParentId()}, \texttt{getChildren()}
+\item Write: \texttt{updateAttribute()}, \texttt{updateTag()}, \texttt{wrapNode()}, \texttt{deleteNode()}, \texttt{moveNode()}, \texttt{spliceValue()}, \texttt{addElementChildNode()}, \texttt{addValueChildNode()}, \texttt{copyNode()}
+\end{itemize}
+
+\textbf{UndoManager} maintains undo/redo stacks by capturing inverse patches for each operation.
+
+\subsubsection{Data Flow}
+
+\begin{enumerate}
+\item User performs an action in the UI (e.g., clicks ``Add Child'')
+\item React component calls \texttt{store.modify(doc, model => \{ ... \})}
+\item DenicekModel applies the change to the Loro document
+\item Loro generates patches and notifies the UndoManager
+\item If recording is active, patches are captured by the Recorder
+\item Loro synchronizes changes to connected peers via WebSocket
+\item Remote peers receive patches and update their local document
+\item React re-renders based on the updated document state
+\end{enumerate}
+
+
+\section{Platform and technologies}
+
+The project uses the following technologies:
+
+\begin{itemize}
+\item \textbf{Programming Languages:}
+\begin{itemize}
+\setlength{\itemsep}{-5pt}
+\item TypeScript -- all packages and applications
+\end{itemize}
+
+\item \textbf{Frameworks and Libraries:}
+\begin{itemize}
+\setlength{\itemsep}{-5pt}
+\item React 19 -- user interface framework
+\item Fluent UI (\texttt{@fluentui/react-components}) -- UI component library
+\item Loro -- CRDT library with native movable tree support
+\item Vite -- build tool and development server
+\end{itemize}
+
+\item \textbf{Testing:}
+\begin{itemize}
+\setlength{\itemsep}{-5pt}
+\item Vitest -- unit testing for core library
+\item Playwright -- end-to-end testing for web application
+\end{itemize}
+
+\item \textbf{Code Quality:}
+\begin{itemize}
+\setlength{\itemsep}{-5pt}
+\item ESLint -- linting with typescript-eslint
+\item eslint-plugin-simple-import-sort -- import sorting
+\item eslint-plugin-unused-imports -- unused import removal
+\end{itemize}
+
+\item \textbf{Infrastructure:}
+\begin{itemize}
+\setlength{\itemsep}{-5pt}
+\item npm workspaces -- monorepo management
+\item GitHub Pages -- deployment of web application
+\item WebSocket -- real-time synchronization
+\end{itemize}
+\end{itemize}
+
+
+\section{Evaluation}
+
+The evaluation approach focuses on demonstrating that the CRDT-based synchronization correctly implements the Denicek editing model and supports the formative examples from the original paper.
+
+\textbf{Unit Tests} The core library includes unit tests (Vitest) that verify:
+\begin{itemize}
+\setlength{\itemsep}{-5pt}
+\item Correctness of node operations (add, delete, move, copy, wrap)
+\item Conflict resolution behavior for concurrent operations
+\item Undo/redo functionality
+\item Recording and replay of operation sequences
+\item Synchronization between multiple documents
+\end{itemize}
+
+\textbf{End-to-End Tests} The web application includes Playwright tests that verify:
+\begin{itemize}
+\setlength{\itemsep}{-5pt}
+\item User interface interactions (selection, navigation, editing)
+\item Recording and replay workflows
+\item Undo/redo through the UI
+\item Bulk operations on multiple nodes
+\end{itemize}
+
+\textbf{Formative Examples} The system will be evaluated against the formative examples from the Denicek paper:
+\begin{itemize}
+\setlength{\itemsep}{-5pt}
+\item Counter app: Record incrementing a value and replay on button click
+\item Todo app: Record adding a list item and replay to add new todos
+\item Conference list: Concurrent editing with schema refactoring
+\item Hello world: Apply transformations across multiple items
+\end{itemize}
+
+\textbf{Comparison with Original Denicek} A qualitative comparison will assess:
+\begin{itemize}
+\setlength{\itemsep}{-5pt}
+\item Feature parity with the original system
+\item Differences in conflict resolution behavior
+\item Developer ergonomics of the API
+\end{itemize}
+
+
+\section{Risks}
+
+\textbf{CRDT Limitations} Some Denicek operations may not map cleanly to CRDT semantics. Mitigation: Identify problematic operations early and design workarounds or document limitations.
+
+\textbf{Loro Performance} Large documents may cause performance issues. Mitigation: Implement lazy loading and pagination if needed; profile performance with realistic document sizes.
+
+\textbf{Conflict Resolution Semantics} Users may expect different conflict resolution behavior than what CRDTs provide. Mitigation: Document the conflict resolution rules clearly; provide UI feedback when conflicts are resolved.
+
+\textbf{Browser Compatibility} WebAssembly (used by Loro) may have compatibility issues in some browsers. Mitigation: Test on all target browsers; provide fallback or polyfills if needed.
+
+\textbf{Scope Creep} The desire to implement all Denicek features may exceed available time. Mitigation: Prioritize core functionality (editing, sync, undo/redo) over advanced features (formula evaluation, debugging).
+
+
+\section{Milestones / Deliverables}
+
+By the project's conclusion, the following deliverables will be provided:
+
+\textbf{Functional MyDenicek Library} A TypeScript library providing:
+\begin{itemize}
+\setlength{\itemsep}{-5pt}
+\item CRDT-based document representation
+\item Complete set of edit operations
+\item Automatic conflict resolution
+\item Undo/redo support
+\item Recording and replay functionality
+\end{itemize}
+
+\textbf{Functional MyWebnicek Application} A React web application providing:
+\begin{itemize}
+\setlength{\itemsep}{-5pt}
+\item Document rendering and navigation
+\item Visual editing interface
+\item Recording/replay UI
+\item Real-time collaboration via WebSocket
+\end{itemize}
+
+\textbf{Technical Documentation} Comprehensive documentation including:
+\begin{itemize}
+\setlength{\itemsep}{-5pt}
+\item README with setup and usage instructions
+\item API documentation for the core library
+\item Architecture overview
+\item Conflict resolution rules
+\end{itemize}
+
+\textbf{Test Suite} Automated tests including:
+\begin{itemize}
+\setlength{\itemsep}{-5pt}
+\item Unit tests for core library (Vitest)
+\item End-to-end tests for web application (Playwright)
+\end{itemize}
+
+\textbf{Demo} A live demonstration showing:
+\begin{itemize}
+\setlength{\itemsep}{-5pt}
+\item Document editing and navigation
+\item Recording and replaying operations
+\item Real-time collaboration between multiple users
+\item Conflict resolution in action
+\end{itemize}
+
+\textbf{Source Code} The project will be available as an open-source repository on GitHub, with clear commit history and documentation.
+
+
+\section{Time Schedule}
+
+The project spans September 2025 to March 2026. The proposal was submitted on 16.10.2025 and approved on 11.11.2025. Work began with attendance at the DARE2025 summer school on CRDTs and local-first software, followed by analysis of the original Denicek system and prototyping. The following table shows completed work (DARE2025 + git history, counting each day with commits as 1 full working day) and estimated remaining effort.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|l|l|r|l|}
+\hline
+\textbf{Milestone} & \textbf{Activity} & \textbf{Time} & \textbf{MD} & \textbf{Status} \\
+\hline
+DARE2025 & Summer school on CRDTs and local-first & Sep 2025 & 5 & Done \\
+\hline
+Analysis & Study Denicek, CRDTs, prototype & Oct--Nov 2025 & 4 & Done \\
+\hline
+Core + Undo & DenicekModel, UndoManager, basic UI & Nov--Dec 2025 & 14 & Done \\
+\hline
+Recording/Replay & Recorder, generalized patches & Dec 2025 & 1 & Done \\
+\hline
+Monorepo + Tests & Package structure, unit/E2E tests & Jan 2026 & 6 & Done \\
+\hline
+Loro Migration & Replace Automerge with Loro CRDT & Jan 2026 & 4 & Done \\
+\hline
+\hline
+\multicolumn{3}{|l|}{\textbf{Completed}} & \textbf{34} & \\
+\hline
+\hline
+Sync \& Collaboration & WebSocket sync, multi-user testing & Jan--Feb 2026 & 8 & Planned \\
+\hline
+Web Application Polish & UI improvements, conflict feedback & Feb 2026 & 6 & Planned \\
+\hline
+Formative Examples & Counter, todo, conference list demos & Feb--Mar 2026 & 5 & Planned \\
+\hline
+Testing \& Bug Fixes & E2E tests, edge cases, bug fixes & Mar 2026 & 5 & Planned \\
+\hline
+Documentation & README, API docs, video demo & Mar 2026 & 4 & Planned \\
+\hline
+Finalization & Polish, presentation preparation & Mar 2026 & 3 & Planned \\
+\hline
+\hline
+\multicolumn{3}{|l|}{\textbf{Remaining (estimated)}} & \textbf{31} & \\
+\hline
+\hline
+\multicolumn{3}{|l|}{\textbf{Total}} & \textbf{65} & \\
+\hline
+\end{tabular}
+\caption{Project timeline: completed work (DARE2025 summer school + git history) and estimated remaining effort.}
+\end{table}
+
+The completed work includes migration from Automerge to Loro CRDT (January 2026), which provides better performance for tree-structured documents with its native movable tree CRDT. Remaining work focuses on real-time collaboration, UI polish, and demonstration of formative examples from the original Denicek paper.
+
+
+\section{Form of collaboration}
+
+Collaboration with the supervisor, Mgr. Tomáš Petříček, Ph.D., is essential for ensuring alignment with the original Denicek design and research objectives.
+
+\subsection{Consulting plan}
+
+\textbf{Regular Meetings} Weekly meetings (approximately every week) with the supervisor, each lasting 30--60 minutes. Meetings cover:
+\begin{itemize}
+\setlength{\itemsep}{-5pt}
+\item Progress updates on implementation
+\item Discussion of technical challenges
+\item Design decisions for conflict resolution
+\item Alignment with original Denicek semantics
+\item Planning for upcoming work
+\end{itemize}
+
+\textbf{Ad-hoc Communication} Email and messaging for quick questions and clarifications between meetings.
+
+\textbf{Code Reviews} The supervisor may review code and provide feedback on architecture and implementation decisions.
+
+\subsection{Repository management}
+
+The project is hosted on GitHub at \url{https://github.com/krsion/MyDenicek}. Development follows standard Git workflow with feature branches and pull requests. The main branch is deployed to GitHub Pages for the live demo.
+
+
+\bibliographystyle{plain}
+\begin{thebibliography}{9}
+\bibitem{denicek2024}
+T. Petříček, et al. \textit{Denicek: Computational Substrate for Document-Oriented End-User Programming.} In Proceedings of the 38th Annual ACM Symposium on User Interface Software and Technology (UIST '25). no. 32, pp. 1--19.
+
+\bibitem{klep2019}
+M. Kleppmann, et al. Local-first software: you own your data, in spite of the cloud. Proceedings of the 2019 ACM SIGPLAN International Symposium on New Ideas, New Paradigms, and Reflections on Programming and Software. 2019.
+
+\bibitem{klokmose2024}
+Clemens Nylandsted Klokmose, James R. Eagan, and Peter van Hardenberg. 2024. MyWebstrates: Webstrates as Local-first Software. In Proceedings of the 37th Annual ACM Symposium on User Interface Software and Technology (UIST '24). Association for Computing Machinery, New York, NY, USA, Article 42, 1–12.
+
+\bibitem{loro}
+Loro: Reimagine state management with CRDTs. \url{https://loro.dev/}
+
+\bibitem{crdtoverview}
+N. Preguiça. \textit{Conflict-free Replicated Data Types: An Overview.} 2018. \url{https://arxiv.org/abs/1806.10254}.
+
+\end{thebibliography}
+
+\end{document}
