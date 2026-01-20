@@ -2,7 +2,8 @@ import { Badge, Button, Card, CardHeader, Checkbox, Table, TableBody, TableCell,
 import { TargetRegular } from "@fluentui/react-icons";
 import { type DenicekAction } from "@mydenicek/react-v2";
 
-import { ShortenedId } from "./components/ShortenedId";
+import { NodeId } from "./components/NodeId";
+import { usePeerAlias } from "./context/PeerAliasContext";
 import { getCreationInfo, getDependencyInfo, type ScriptAnalysis } from "./utils/scriptAnalysis";
 
 // Check if a path segment looks like a Loro OpId (peer@counter format)
@@ -27,12 +28,15 @@ interface RecordedScriptViewProps {
     selectedIndices?: Set<number>;
     onSelectionChange?: (indices: Set<number>) => void;
     targetOverrides?: Map<number, string>;
+    sourceOverrides?: Map<number, string>;
     onRetarget?: (index: number, newNodeId: string) => void;
+    onRetargetSource?: (index: number, newSourceId: string) => void;
     currentNodeId?: string | null;
     analysis?: ScriptAnalysis | null;
 }
 
-export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSelectionChange, targetOverrides, onRetarget, currentNodeId, analysis }: RecordedScriptViewProps) {
+export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSelectionChange, targetOverrides, sourceOverrides, onRetarget, onRetargetSource, currentNodeId, analysis }: RecordedScriptViewProps) {
+    const { formatValue } = usePeerAlias();
     const hasSelection = selectedIndices !== undefined && onSelectionChange !== undefined;
     const allSelected = hasSelection && script.length > 0 && selectedIndices.size === script.length;
     const someSelected = hasSelection && selectedIndices.size > 0 && selectedIndices.size < script.length;
@@ -103,18 +107,20 @@ export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSel
                                 </TableHeaderCell>
                             )}
                             <TableHeaderCell style={{ width: '60px' }}>Action</TableHeaderCell>
-                            <TableHeaderCell style={{ width: '120px' }}>Node</TableHeaderCell>
+                            <TableHeaderCell style={{ width: '130px' }}>Node</TableHeaderCell>
                             <TableHeaderCell>Value</TableHeaderCell>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {script.map((patch, i) => {
+                        {[...script].reverse().map((patch, reversedIndex) => {
+                            // Calculate original index (newest first, so reverse the index)
+                            const i = script.length - 1 - reversedIndex;
                             const originalNodeId = extractNodeId(patch.path);
                             const overriddenNodeId = targetOverrides?.get(i);
                             const displayNodeId = overriddenNodeId ?? originalNodeId;
                             const isOverridden = overriddenNodeId !== undefined;
                             const value = (patch as unknown as { value?: unknown; values?: unknown }).value ??
-                                          (patch as unknown as { value?: unknown; values?: unknown }).values;
+                                (patch as unknown as { value?: unknown; values?: unknown }).values;
                             const isSelected = hasSelection && selectedIndices.has(i);
 
                             // Get creation/dependency info from analysis
@@ -148,6 +154,17 @@ export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSel
                                     </TableCell>
                                     <TableCell style={{ padding: '4px 8px' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px', width: '100%' }}>
+
+                                            {/* Node ID with overflow hidden */}
+                                            <span style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                                                {displayNodeId ? (
+                                                    <span style={isOverridden ? { backgroundColor: 'rgba(34, 197, 94, 0.2)', borderRadius: '3px' } : undefined}>
+                                                        <NodeId id={displayNodeId} onClick={onNodeClick} />
+                                                    </span>
+                                                ) : (
+                                                    <span style={{ color: '#999' }}>-</span>
+                                                )}
+                                            </span>
                                             {/* Fixed-width slot for dependency badge */}
                                             <span style={{ width: '28px', flexShrink: 0, display: 'flex', justifyContent: 'center' }}>
                                                 {dependencyInfo ? (
@@ -158,16 +175,7 @@ export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSel
                                                     </Tooltip>
                                                 ) : null}
                                             </span>
-                                            {/* Node ID with overflow hidden */}
-                                            <span style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-                                                {displayNodeId ? (
-                                                    <span style={isOverridden ? { backgroundColor: 'rgba(34, 197, 94, 0.2)', borderRadius: '3px' } : undefined}>
-                                                        <ShortenedId id={displayNodeId} onClick={onNodeClick} maxLength={100} />
-                                                    </span>
-                                                ) : (
-                                                    <span style={{ color: '#999' }}>-</span>
-                                                )}
-                                            </span>
+
                                             {/* Target button - fixed width slot */}
                                             <span style={{ width: '24px', flexShrink: 0, display: 'flex', justifyContent: 'center' }}>
                                                 {onRetarget && currentNodeId && originalNodeId ? (
@@ -186,9 +194,42 @@ export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSel
                                         </div>
                                     </TableCell>
                                     <TableCell style={{ wordBreak: 'break-word' }}>
-                                        {value !== undefined ? (
+                                        {patch.action === "copy" && value && typeof value === 'object' && 'sourceId' in value ? (() => {
+                                            const copyValue = value as { sourceId: string; id?: string; sourceAttr?: string };
+                                            const originalSourceId = copyValue.sourceId;
+                                            const overriddenSourceId = sourceOverrides?.get(i);
+                                            const displaySourceId = overriddenSourceId ?? originalSourceId;
+                                            const isSourceOverridden = overriddenSourceId !== undefined;
+                                            const sourceAttr = copyValue.sourceAttr;
+                                            return (
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                    <span style={{ fontFamily: 'monospace', fontSize: '11px' }}>
+                                                        copy from{sourceAttr ? ` .${sourceAttr}` : ''}
+                                                    </span>
+                                                    <span style={isSourceOverridden ? { backgroundColor: 'rgba(34, 197, 94, 0.2)', borderRadius: '3px' } : undefined}>
+                                                        <NodeId id={displaySourceId} onClick={onNodeClick} />
+                                                    </span>
+                                                    {onRetargetSource && currentNodeId && (
+                                                        <Tooltip content="Use currently selected node as copy source" relationship="label">
+                                                            <Button
+                                                                size="small"
+                                                                appearance="subtle"
+                                                                icon={<TargetRegular />}
+                                                                onClick={() => onRetargetSource(i, currentNodeId)}
+                                                                disabled={displaySourceId === currentNodeId}
+                                                                style={{ minWidth: 'auto', padding: '2px' }}
+                                                            />
+                                                        </Tooltip>
+                                                    )}
+                                                </div>
+                                            );
+                                        })() : patch.action === "splice" ? (
                                             <span style={{ fontFamily: 'monospace', fontSize: '11px' }}>
-                                                {JSON.stringify(value)}
+                                                pos={patch.path[3]} del={patch.length ?? 0} ins={JSON.stringify(formatValue(patch.value ?? ""))}
+                                            </span>
+                                        ) : value !== undefined ? (
+                                            <span style={{ fontFamily: 'monospace', fontSize: '11px' }}>
+                                                {JSON.stringify(formatValue(value))}
                                             </span>
                                         ) : (
                                             <span style={{ color: '#999' }}>-</span>

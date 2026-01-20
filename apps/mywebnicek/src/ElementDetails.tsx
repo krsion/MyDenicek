@@ -3,7 +3,7 @@ import { AddRegular, DeleteRegular } from "@fluentui/react-icons";
 import type { SelectedNodeDetails } from "@mydenicek/react-v2";
 import { useEffect, useState } from "react";
 
-import { ShortenedId } from "./components/ShortenedId";
+import { NodeId } from "./components/NodeId";
 
 function AttributeRow({ attrKey, value, onSave, onDelete }: { attrKey: string, value: unknown, onSave: (key: string, value: unknown) => void, onDelete: (key: string) => void }) {
   const [localValue, setLocalValue] = useState(typeof value === 'object' ? JSON.stringify(value) : String(value));
@@ -78,7 +78,7 @@ export function ElementDetails({ details, attributes, onAttributeChange, onIdCli
           <TableCell>GUID</TableCell>
           <TableCell>
             {details.id ? (
-              <ShortenedId id={details.id} onClick={onIdClick} />
+              <NodeId id={details.id} onClick={onIdClick} />
             ) : (
               <span style={{ color: "#999" }}>(none)</span>
             )}

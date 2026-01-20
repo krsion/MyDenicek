@@ -8,12 +8,13 @@
  * - Each document converges to the same state
  */
 
-import { DenicekDocument, type NodeData } from "@mydenicek/core-v2";
+import { DenicekDocument } from "@mydenicek/core-v2";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+
 import {
+    type ServerProcessContext,
     startServerProcess,
     stopServerProcess,
-    type ServerProcessContext,
 } from "./helpers/server-process.js";
 
 const ROOM_ID = "wrap-conflict-test-room";
@@ -102,7 +103,7 @@ describe("Concurrent Wrap Conflict Resolution", () => {
         // Verify tree structure is still valid (target is nested inside wrapper)
         const targetNode = finalNodes1[targetNodeId];
         expect(targetNode).toBeDefined();
-        expect(targetNode.kind).toBe("element");
+        expect(targetNode!.kind).toBe("element");
     }, 30000);
 
     it("verifies both documents converge to identical state after concurrent wraps", async () => {
@@ -150,8 +151,10 @@ describe("Concurrent Wrap Conflict Resolution", () => {
 
         // Verify all node data matches
         for (const id of Object.keys(nodes1)) {
-            const n1 = nodes1[id];
-            const n2 = nodes2[id];
+            const n1 = nodes1[id]!;
+            const n2 = nodes2[id]!;
+            expect(n1).toBeDefined();
+            expect(n2).toBeDefined();
             expect(n1.kind).toBe(n2.kind);
             if (n1.kind === "element" && n2.kind === "element") {
                 expect(n1.tag).toBe(n2.tag);
@@ -392,7 +395,7 @@ async function waitForSync(
             for (const id of ids1) {
                 const n1 = nodes1[id];
                 const n2 = nodes2[id];
-                if (n1.kind !== n2.kind) {
+                if (!n1 || !n2 || n1.kind !== n2.kind) {
                     allMatch = false;
                     break;
                 }

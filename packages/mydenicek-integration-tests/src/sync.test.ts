@@ -10,10 +10,11 @@
 
 import { DenicekDocument, type NodeData } from "@mydenicek/core-v2";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
 import {
+    type ServerProcessContext,
     startServerProcess,
     stopServerProcess,
-    type ServerProcessContext,
 } from "./helpers/server-process.js";
 
 const ROOM_ID = "test-room";

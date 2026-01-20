@@ -7,6 +7,7 @@
 
 import type { CrdtType, Permission } from "loro-protocol";
 import { SimpleServer } from "loro-websocket/server";
+
 import { initPersistence, loadDocument, saveDocument } from "./persistence.js";
 
 function timestamp(): string {

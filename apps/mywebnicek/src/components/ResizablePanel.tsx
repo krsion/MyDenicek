@@ -56,9 +56,12 @@ export function ResizablePanel({
                 width,
                 flexShrink: 0,
                 display: 'flex',
+                flexDirection: 'column',
                 borderLeft: '1px solid #e0e0e0',
                 backgroundColor: '#fafafa',
                 position: 'relative',
+                height: '100%',
+                overflow: 'hidden',
             }}
         >
             {/* Resize handle */}
@@ -84,7 +87,7 @@ export function ResizablePanel({
                 }}
             />
             {/* Content */}
-            <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                 {children}
             </div>
         </div>

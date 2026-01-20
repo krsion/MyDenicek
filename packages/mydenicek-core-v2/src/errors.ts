@@ -6,13 +6,18 @@
  * Custom error class for Denicek operations
  */
 export class DenicekError extends Error {
+    readonly operation: string;
+    readonly context?: Record<string, unknown>;
+
     constructor(
         message: string,
-        public readonly operation: string,
-        public readonly context?: Record<string, unknown>
+        operation: string,
+        context?: Record<string, unknown>
     ) {
         super(message);
         this.name = 'DenicekError';
+        this.operation = operation;
+        this.context = context;
     }
 }
 

@@ -4,8 +4,9 @@
 
 import type { NodeData } from "@mydenicek/core-v2";
 import { useContext, useMemo } from "react";
-import { DenicekContext, DenicekSelectionContext } from "./DenicekProvider.js";
+
 import { DENICEK_NODE_ID_ATTR } from "./constants.js";
+import { DenicekContext, DenicekSelectionContext } from "./DenicekProvider.js";
 
 export interface SelectedNodeDetails {
     id: string;

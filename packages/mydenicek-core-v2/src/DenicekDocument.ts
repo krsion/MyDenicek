@@ -4,8 +4,9 @@
  * Includes undo/redo, history tracking, sync, and replay functionality
  */
 
-import { Frontiers, LoroDoc, UndoManager } from "loro-crdt";
+import { type Frontiers, LoroDoc, UndoManager } from "loro-crdt";
 import type { LoroWebsocketClient, LoroWebsocketClientRoom } from "loro-websocket/client";
+
 import { DenicekModel } from "./DenicekModel.js";
 import {
     areNodesConcurrent,
@@ -513,8 +514,8 @@ export class DenicekDocument {
                 // Apply
                 const result = model.applyPatch(concretePatch);
 
-                // If inserted a node, map the ID
-                if (patch.action === "insert" && patch.path.length >= 3 && patch.path[2] === "children") {
+                // If inserted or copied a node, map the ID
+                if ((patch.action === "insert" || patch.action === "copy") && patch.path.length >= 3 && patch.path[2] === "children") {
                     const val = patch.value as Record<string, unknown>;
                     if (val && val.id && typeof val.id === "string" && val.id.startsWith("$")) {
                         if (typeof result === "string") {

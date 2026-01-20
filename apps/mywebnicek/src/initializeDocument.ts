@@ -41,6 +41,17 @@ function createDemoContent(model: DenicekModel, rootId: string): void {
     model.addValueChildNode(h2BId, "Article B");
     const pBId = model.addElementChildNode(articleBId, "p");
     model.addValueChildNode(pBId, "Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.");
+
+    // Input field
+    const inputContainerId = model.addElementChildNode(articleBId, "div");
+    model.updateAttribute(inputContainerId, "style", { display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 });
+    const labelId = model.addElementChildNode(inputContainerId, "label");
+    model.addValueChildNode(labelId, "Input:");
+    const inputId = model.addElementChildNode(inputContainerId, "input");
+    model.updateAttribute(inputId, "type", "text");
+    model.updateAttribute(inputId, "placeholder", "Type here...");
+    model.updateAttribute(inputId, "style", { padding: 4, border: '1px solid #ccc', borderRadius: 4 });
+
     const divBId = model.addElementChildNode(articleBId, "div");
     model.updateAttribute(divBId, "style", { display: 'flex', gap: 8 });
     const btn1Id = model.addElementChildNode(divBId, "button");

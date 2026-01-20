@@ -6,9 +6,8 @@
  */
 
 // Main classes
-export { DenicekDocument } from "./DenicekDocument.js";
 export type { DenicekDocumentOptions, SyncOptions } from "./DenicekDocument.js";
-
+export { DenicekDocument } from "./DenicekDocument.js";
 export { DenicekModel } from "./DenicekModel.js";
 
 
@@ -19,23 +18,23 @@ export { DenicekError, handleModelError } from "./errors.js";
 // Types
 export type {
     DenicekAction,
-    // Public node data types
-    ElementNodeData,
-    NodeData,
-    ValueNodeData,
-    // Snapshot for temporal comparisons
-    Snapshot,
     // Internal node types (for model operations)
     ElementNode,
+    // Public node data types
+    ElementNodeData,
+    // Other types
+    GeneralizedPatch,
     Node,
-    ValueNode,
+    NodeData,
+    OpId,
+    // Snapshot for temporal comparisons
+    Snapshot,
+    SpliceInfo,
     // Sync types
     SyncState,
     SyncStatus,
-    // Other types
-    GeneralizedPatch,
-    OpId,
-    SpliceInfo,
+    ValueNode,
+    ValueNodeData,
     Version,
 } from "./types.js";
 

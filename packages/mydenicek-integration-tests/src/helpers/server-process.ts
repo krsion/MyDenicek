@@ -2,7 +2,7 @@
  * Server process helper - spawns the actual sync server and captures logs
  */
 
-import { spawn, type ChildProcess } from "child_process";
+import { type ChildProcess,spawn } from "child_process";
 import { existsSync, mkdtempSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { dirname, join } from "path";

@@ -17,6 +17,7 @@ export interface ElementNodeData {
     kind: "element";
     tag: string;
     attrs: Record<string, unknown>;
+    sourceId?: string;  // Reference to source node if this is a copy
 }
 
 /**
@@ -26,6 +27,7 @@ export interface ValueNodeData {
     id: string;
     kind: "value";
     value: string;
+    sourceId?: string;  // Reference to source node if this is a copy
 }
 
 /**
@@ -46,8 +48,10 @@ export interface Snapshot {
 
 
 // ============================================================================
-// Internal Node Types
+// Internal Node Types (Loro types used here are not exported publicly)
 // ============================================================================
+
+import type { LoroText } from "loro-crdt";
 
 /**
  * Internal element node - includes children IDs for tree operations
@@ -58,15 +62,17 @@ export interface ElementNode {
     tag: string;
     attrs: Record<string, unknown>;
     children: string[];
+    sourceId?: string;  // Reference to source node if this is a copy
 }
 
 /**
- * Internal value node
+ * Internal value node - uses LoroText for CRDT text operations
  * @internal
  */
 export interface ValueNode {
     kind: "value";
-    value: string;
+    value: LoroText;
+    sourceId?: string;  // Reference to source node if this is a copy
 }
 
 /**
@@ -74,6 +80,7 @@ export interface ValueNode {
  * @internal
  */
 export type Node = ElementNode | ValueNode;
+
 
 /**
  * Splice info for text operations
@@ -100,7 +107,7 @@ export type Version = OpId[];
 /**
  * Generalized patch for recording/replay
  */
-export type PatchAction = "put" | "del" | "insert" | "splice" | "inc" | "move";
+export type PatchAction = "put" | "del" | "insert" | "splice" | "inc" | "move" | "copy";
 
 export interface GeneralizedPatch {
     action: PatchAction;

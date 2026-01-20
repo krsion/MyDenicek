@@ -10,7 +10,7 @@ import {
     DenicekModel,
     type SyncState,
 } from "@mydenicek/core-v2";
-import { createContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, type ReactNode,useEffect, useMemo, useState } from "react";
 
 // Context types
 export interface DenicekContextValue {
@@ -80,6 +80,7 @@ export function DenicekProvider({
                 setVersion(v => v + 1);
             });
         }
+        return undefined;
     }, [initialDocument]);
 
     // Sync state tracking

@@ -3,7 +3,8 @@
  * Internal utilities for working with Loro CRDT types
  */
 
-import { LoroDoc, LoroMap, LoroText, LoroTree, LoroTreeNode, TreeID } from "loro-crdt";
+import { LoroDoc, LoroMap, LoroText, LoroTree, LoroTreeNode, type TreeID } from "loro-crdt";
+
 import type { ElementNode, Node, NodeData, ValueNode } from "./types.js";
 
 /**
@@ -18,6 +19,7 @@ export const NODE_KIND = "kind";
 export const NODE_TAG = "tag";
 export const NODE_ATTRS = "attrs";
 export const NODE_TEXT = "text";
+export const NODE_SOURCE_ID = "sourceId";
 
 /**
  * Convert TreeID to a stable string ID for our public API
@@ -39,16 +41,20 @@ export function stringToTreeId(id: string): TreeID {
 /**
  * Convert a LoroTreeNode to our public Node type
  */
-export function loroNodeToNode(treeNode: LoroTreeNode, tree: LoroTree): Node {
+export function loroNodeToNode(treeNode: LoroTreeNode, _tree: LoroTree): Node {
     const data = treeNode.data;
     const kind = data.get(NODE_KIND) as "element" | "value" | undefined;
+    const sourceId = data.get(NODE_SOURCE_ID) as string | undefined;
 
     if (kind === "value") {
         const textContainer = data.get(NODE_TEXT) as LoroText | undefined;
-        const value = textContainer ? textContainer.toString() : "";
+        if (!textContainer) {
+            throw new Error("Value node missing text container");
+        }
         const node: ValueNode = {
             kind: "value",
-            value,
+            value: textContainer,
+            ...(sourceId && { sourceId }),
         };
         return node;
     } else {
@@ -77,6 +83,7 @@ export function loroNodeToNode(treeNode: LoroTreeNode, tree: LoroTree): Node {
             tag,
             attrs,
             children,
+            ...(sourceId && { sourceId }),
         };
         return node;
     }
@@ -104,23 +111,28 @@ export function buildDocumentIndex(doc: LoroDoc): DocumentIndex {
     const parents = new Map<string, string | null>();
     const childIds = new Map<string, string[]>();
 
-    if (roots.length === 0) {
+    const rootNode = roots[0];
+    if (!rootNode) {
         return { nodes, parents, childIds, rootId: null };
     }
 
-    const rootId = treeIdToString(roots[0].id);
+    const rootId = treeIdToString(rootNode.id);
 
     function walkNode(treeNode: LoroTreeNode, parentId: string | null): void {
         const id = treeIdToString(treeNode.id);
         const data = treeNode.data;
         const kind = data.get(NODE_KIND) as "element" | "value" | undefined;
+        const sourceId = data.get(NODE_SOURCE_ID) as string | undefined;
 
         parents.set(id, parentId);
 
         if (kind === "value") {
             const textContainer = data.get(NODE_TEXT) as LoroText | undefined;
-            const value = textContainer ? textContainer.toString() : "";
-            nodes.set(id, { id, kind: "value", value });
+            if (!textContainer) {
+                throw new Error(`Value node ${id} missing text container`);
+            }
+            // Convert LoroText to string for public API (no Loro types exposed)
+            nodes.set(id, { id, kind: "value", value: textContainer.toString(), ...(sourceId && { sourceId }) });
             childIds.set(id, []);
         } else {
             const tag = (data.get(NODE_TAG) as string) || "div";
@@ -134,7 +146,7 @@ export function buildDocumentIndex(doc: LoroDoc): DocumentIndex {
                 }
             }
 
-            nodes.set(id, { id, kind: "element", tag, attrs });
+            nodes.set(id, { id, kind: "element", tag, attrs, ...(sourceId && { sourceId }) });
 
             const children: string[] = [];
             const childNodes = treeNode.children();
@@ -148,7 +160,7 @@ export function buildDocumentIndex(doc: LoroDoc): DocumentIndex {
         }
     }
 
-    walkNode(roots[0], null);
+    walkNode(rootNode, null);
 
     return { nodes, parents, childIds, rootId };
 }

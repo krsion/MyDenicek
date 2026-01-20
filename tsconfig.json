@@ -12,6 +12,9 @@
         },
         {
             "path": "./packages/mydenicek-integration-tests"
+        },
+        {
+            "path": "./apps/mywebnicek"
         }
     ]
 }

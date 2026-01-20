@@ -46,6 +46,14 @@ const useStyles = makeStyles({
 export function RenderedDocument({ document }: { document: DenicekDocument; version?: unknown }) {
   const styles = useStyles();
 
+  // Sync input value to CRDT on blur (so copy can read the current value)
+  const handleInputBlur = React.useCallback((e: React.FocusEvent<HTMLInputElement>, nodeId: string) => {
+    const value = e.target.value;
+    document.change((model) => {
+      model.updateAttribute(nodeId, "data-copy-value", value);
+    });
+  }, [document]);
+
   function renderById(id: string): React.ReactNode {
     const node = document.getNode(id);
     if (!node) return undefined;
@@ -79,6 +87,11 @@ export function RenderedDocument({ document }: { document: DenicekDocument; vers
         // about style being a string.
         delete attrs["style"];
       }
+    }
+
+    // Add blur handler for input elements to sync value to CRDT
+    if (node.tag === "input") {
+      attrs["onBlur"] = (e: React.FocusEvent<HTMLInputElement>) => handleInputBlur(e, id);
     }
 
     const childIds = document.getChildIds(id);

@@ -9,7 +9,8 @@ import {
     type SpliceInfo,
     type SyncStatus,
 } from "@mydenicek/core-v2";
-import { useCallback, useContext, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
+
 import { DenicekContext } from "./DenicekProvider.js";
 
 /**
@@ -20,10 +21,13 @@ function useBulkAction<TArgs extends unknown[]>(
     document: DenicekDocument,
     operation: (model: DenicekModel, id: string, ...args: TArgs) => void,
 ) {
+    const operationRef = useRef(operation);
+    operationRef.current = operation;
+
     return useCallback((nodeIds: string[], ...args: TArgs) => {
         document.change((model: DenicekModel) => {
             for (const id of nodeIds) {
-                operation(model, id, ...args);
+                operationRef.current(model, id, ...args);
             }
         });
     }, [document]);
