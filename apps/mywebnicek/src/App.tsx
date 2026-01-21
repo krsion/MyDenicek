@@ -1,5 +1,6 @@
-import { Badge, Button, Card, CardHeader, Dialog, DialogBody, DialogContent, DialogSurface, DialogTrigger, Spinner, Switch, Tag, TagGroup, Text, Toast, Toaster, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip, useId, useToastController } from "@fluentui/react-components";
-import { ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackRegular, CameraRegular, ClipboardPasteRegular, CodeRegular, CopyRegular, EditRegular, LinkRegular, PlayRegular, RecordRegular, RenameRegular, StopRegular } from "@fluentui/react-icons";
+import { Badge, Button, Card, CardHeader, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogTrigger, Spinner, Switch, Tag, TagGroup, Text, Toast, Toaster, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip, useId, useToastController } from "@fluentui/react-components";
+import { AddRegular, ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackRegular, CameraRegular, ClipboardPasteRegular, CodeRegular, CopyRegular, EditRegular, LinkRegular, PlayRegular, RecordRegular, RenameRegular, StopRegular } from "@fluentui/react-icons";
+import type { GeneralizedPatch } from "@mydenicek/core";
 import type { Snapshot } from "@mydenicek/react";
 import {
   useConnectivity,
@@ -21,7 +22,7 @@ import { useClipboard } from "./hooks/useClipboard";
 import { JsonView } from "./JsonView.tsx";
 import { RecordedScriptView } from "./RecordedScriptView";
 import { RenderedDocument } from "./RenderedDocument.tsx";
-import { ToolbarPopoverButton, validateTagName } from "./ToolbarPopoverButton";
+import { sanitizeTagName, ToolbarPopoverButton, validateTagName } from "./ToolbarPopoverButton";
 import { analyzeScript, generalizeScript, type ScriptAnalysis } from "./utils/scriptAnalysis";
 import { generalizeSelection } from "./utils/selectionUtils";
 
@@ -37,7 +38,7 @@ function getRoomIdFromHash(): string {
 }
 
 export const App = () => {
-  const { document } = useDocumentState();
+  const { document, version } = useDocumentState();
   const {
     undo, redo, canUndo, canRedo,
     updateAttribute, updateTag, wrapNodes,
@@ -64,6 +65,31 @@ export const App = () => {
   const [selectedActionIndices, setSelectedActionIndices] = useState<Set<number>>(new Set());
   const [targetOverrides, setTargetOverrides] = useState<Map<number, string>>(new Map());
   const [sourceOverrides, setSourceOverrides] = useState<Map<number, string>>(new Map());
+
+  // Add to Button dialog state
+  const [showAddToButtonDialog, setShowAddToButtonDialog] = useState(false);
+  const [selectedActionNodeId, setSelectedActionNodeId] = useState<string | null>(null);
+
+  // Find all action nodes in document
+  const actionNodes = useMemo(() => {
+    const nodes: { id: string; label: string; target: string }[] = [];
+    const traverse = (id: string) => {
+      const node = document.getNode(id);
+      if (!node) return;
+      if (node.kind === "action") {
+        nodes.push({ id, label: node.label, target: node.target });
+      }
+      if (node.kind === "element") {
+        const childIds = document.getChildIds(id);
+        for (const childId of childIds) {
+          traverse(childId);
+        }
+      }
+    };
+    const rootId = document.getRootId();
+    if (rootId) traverse(rootId);
+    return nodes;
+  }, [document, version]);
 
   // Toast for share notification
   const toasterId = useId("share-toaster");
@@ -202,6 +228,65 @@ export const App = () => {
     });
   }, []);
 
+  // Add selected actions to an existing action node
+  const handleAddToButton = useCallback(() => {
+    if (!recordingHistory || selectedActionIndices.size === 0 || !selectedActionNodeId) return;
+
+    // Get indices to use (selected actions)
+    const indicesToUse = Array.from(selectedActionIndices).sort((a, b) => a - b);
+    const actionsToUse = indicesToUse
+      .map(i => recordingHistory[i])
+      .filter((action): action is NonNullable<typeof action> => action !== null);
+
+    if (actionsToUse.length === 0) return;
+
+    // Analyze and generalize the script
+    const analysis = analyzeScript(actionsToUse);
+    const generalizedActions = generalizeScript(actionsToUse, analysis);
+
+    // Apply target/source overrides
+    const finalActions = generalizedActions.map((action, newIdx) => {
+      const origIdx = indicesToUse[newIdx]!;
+      const targetOverride = targetOverrides.get(origIdx);
+      const sourceOverride = sourceOverrides.get(origIdx);
+
+      let result = action;
+
+      if (targetOverride) {
+        const newPath = action.path.map(segment => {
+          const str = String(segment);
+          if (/^\d+@\d+$/.test(str)) {
+            return targetOverride;
+          }
+          return segment;
+        });
+        result = { ...result, path: newPath };
+      }
+
+      if (sourceOverride && action.action === "copy" && action.value && typeof action.value === 'object' && 'sourceId' in action.value) {
+        result = {
+          ...result,
+          value: { ...action.value, sourceId: sourceOverride }
+        };
+      }
+
+      return result;
+    });
+
+    // Append actions to the existing action node
+    document.change((model) => {
+      model.appendActions(selectedActionNodeId, finalActions);
+    });
+
+    setShowAddToButtonDialog(false);
+    setSelectedActionNodeId(null);
+  }, [recordingHistory, selectedActionIndices, targetOverrides, sourceOverrides, document, selectedActionNodeId]);
+
+  // Handler for action button clicks
+  const handleActionClick = useCallback((actions: GeneralizedPatch[], target: string) => {
+    replay(actions, target);
+  }, [replay]);
+
   const triggerNavigation = (action: 'parent' | 'child' | 'prev' | 'next' | 'clear') => {
     if (!navigatorRef.current) return;
     switch (action) {
@@ -319,27 +404,70 @@ export const App = () => {
                 <AddNodePopoverButton
                   disabled={node?.kind !== "element"}
                   initialValue={selectedNodeFirstChildTag || ""}
-                  onAddChild={(content, isValue) => {
-                    if (selectedNodeIds.length === 0) return;
-                    const newIds = addChildren(selectedNodeIds, isValue ? "value" : "element", content);
-                    if (newIds.length > 0) setSelectedNodeIds(newIds);
-                  }}
-                  onAddBefore={(content, _isValue) => {
-                    if (selectedNodeIds.length === 0) return;
-                    const newIds = addSiblings(selectedNodeIds, "before");
-                    // If content was provided, update it immediately
-                    if (newIds.length > 0) {
-                      updateValue(newIds, content, "");
-                      setSelectedNodeIds(newIds);
+                  onAddChild={(content, kind) => {
+                    if (selectedNodeIds.length === 0 || !selectedNodeId) return;
+                    if (kind === "action") {
+                      // Create empty action node as child
+                      document.change((model) => {
+                        const newId = model.addChild(selectedNodeId, {
+                          kind: "action",
+                          label: content,
+                          actions: [],
+                          target: selectedNodeId // Target parent initially
+                        });
+                        if (newId) setSelectedNodeIds([newId]);
+                      });
+                    } else {
+                      const newIds = addChildren(selectedNodeIds, kind, content);
+                      if (newIds.length > 0) setSelectedNodeIds(newIds);
                     }
                   }}
-                  onAddAfter={(content, _isValue) => {
-                    if (selectedNodeIds.length === 0) return;
-                    const newIds = addSiblings(selectedNodeIds, "after");
-                    // If content was provided, update it immediately
-                    if (newIds.length > 0) {
-                      updateValue(newIds, content, "");
-                      setSelectedNodeIds(newIds);
+                  onAddBefore={(content, kind) => {
+                    if (selectedNodeIds.length === 0 || !selectedNodeId) return;
+                    if (kind === "action") {
+                      // Create empty action node before selected
+                      const parentId = document.getParentId(selectedNodeId);
+                      if (!parentId) return;
+                      document.change((model) => {
+                        const newId = model.addSibling(selectedNodeId, "before", {
+                          kind: "action",
+                          label: content,
+                          actions: [],
+                          target: selectedNodeId
+                        });
+                        if (newId) setSelectedNodeIds([newId]);
+                      });
+                    } else if (kind === "value") {
+                      const newIds = addSiblings(selectedNodeIds, "before", { kind: "value", value: content });
+                      if (newIds.length > 0) setSelectedNodeIds(newIds);
+                    } else {
+                      // element
+                      const newIds = addSiblings(selectedNodeIds, "before", { kind: "element", tag: content, attrs: {}, children: [] });
+                      if (newIds.length > 0) setSelectedNodeIds(newIds);
+                    }
+                  }}
+                  onAddAfter={(content, kind) => {
+                    if (selectedNodeIds.length === 0 || !selectedNodeId) return;
+                    if (kind === "action") {
+                      // Create empty action node after selected
+                      const parentId = document.getParentId(selectedNodeId);
+                      if (!parentId) return;
+                      document.change((model) => {
+                        const newId = model.addSibling(selectedNodeId, "after", {
+                          kind: "action",
+                          label: content,
+                          actions: [],
+                          target: selectedNodeId
+                        });
+                        if (newId) setSelectedNodeIds([newId]);
+                      });
+                    } else if (kind === "value") {
+                      const newIds = addSiblings(selectedNodeIds, "after", { kind: "value", value: content });
+                      if (newIds.length > 0) setSelectedNodeIds(newIds);
+                    } else {
+                      // element
+                      const newIds = addSiblings(selectedNodeIds, "after", { kind: "element", tag: content, attrs: {}, children: [] });
+                      if (newIds.length > 0) setSelectedNodeIds(newIds);
                     }
                   }}
                 />
@@ -366,9 +494,12 @@ export const App = () => {
                     placeholder="Tag name (e.g. div)"
                     initialValue={details?.tag || details?.dom?.tagName || ""}
                     validate={validateTagName}
-                    onSubmit={(tag) => {
-                      updateTag(selectedNodeIds, tag);
-                      if (selectedNodeId) clickOnSelectedNode(selectedNodeId);
+                    onSubmit={(value) => {
+                      const { tag } = sanitizeTagName(value);
+                      if (tag) {
+                        updateTag(selectedNodeIds, tag);
+                        if (selectedNodeId) clickOnSelectedNode(selectedNodeId);
+                      }
                     }}
                   />
                 )}
@@ -379,9 +510,12 @@ export const App = () => {
                   ariaLabel="Wrap"
                   placeholder="Tag name (e.g. div)"
                   validate={validateTagName}
-                  onSubmit={(tag) => {
-                    wrapNodes(selectedNodeIds, tag);
-                    if (selectedNodeId) clickOnSelectedNode(selectedNodeId);
+                  onSubmit={(value) => {
+                    const { tag } = sanitizeTagName(value);
+                    if (tag) {
+                      wrapNodes(selectedNodeIds, tag);
+                      if (selectedNodeId) clickOnSelectedNode(selectedNodeId);
+                    }
                   }}
                 />
 
@@ -452,7 +586,7 @@ export const App = () => {
 
             <DomNavigator ref={navigatorRef} onSelectedChange={(ids) => { setSelectedNodeIds(ids); }} selectedNodeIds={selectedNodeIds} remoteSelections={remoteSelections} generalizer={handleGeneralize}>
               <ErrorBoundary>
-                <RenderedDocument document={document} />
+                <RenderedDocument document={document} onActionClick={handleActionClick} />
               </ErrorBoundary>
             </DomNavigator>
 
@@ -480,8 +614,45 @@ export const App = () => {
         </div>
         <ResizablePanel open={showHistory} defaultWidth={700} minWidth={200} maxWidth={1200}>
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+            {/* Show action node details when one is selected */}
+            {node?.kind === "action" && (
+              <div style={{ borderBottom: '2px solid #0078d4', background: '#f0f6ff' }}>
+                <div style={{ padding: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <Text weight="semibold" style={{ color: '#0078d4' }}>Button: {node.label}</Text>
+                    <Text size={200} style={{ display: 'block', marginTop: 4 }}>Target: {node.target}</Text>
+                  </div>
+                  <Badge appearance="filled" color="brand">{node.actions.length} action{node.actions.length !== 1 ? 's' : ''}</Badge>
+                </div>
+                {node.actions.length > 0 && (
+                  <div style={{ maxHeight: 200, overflow: 'auto', padding: '0 8px 8px' }}>
+                    <RecordedScriptView
+                      script={node.actions}
+                      onNodeClick={(id) => setSelectedNodeIds([id])}
+                      selectedIndices={new Set()}
+                      onSelectionChange={() => { }}
+                      targetOverrides={new Map()}
+                      sourceOverrides={new Map()}
+                      onRetarget={() => { }}
+                      onRetargetSource={() => { }}
+                      currentNodeId={selectedNodeId ?? null}
+                      analysis={null}
+                      mode="view"
+                      onDeleteAction={(index) => {
+                        if (selectedNodeId) {
+                          document.change((model) => {
+                            model.deleteAction(selectedNodeId, index);
+                          });
+                        }
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
             <div style={{ padding: '12px', borderBottom: '1px solid #e0e0e0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-              <Text weight="semibold">Actions</Text>
+              <Text weight="semibold">Recorded History</Text>
               <ToolbarButton
                 appearance="subtle"
                 icon={<StopRegular />}
@@ -503,19 +674,76 @@ export const App = () => {
                 analysis={scriptAnalysis}
               />
             </div>
-            <div style={{ padding: '12px', borderTop: '1px solid #e0e0e0' }}>
+            <div style={{ padding: '12px', borderTop: '1px solid #e0e0e0', display: 'flex', gap: '8px' }}>
               <Tooltip content="Apply selected actions to the currently selected node" relationship="label">
                 <Button
                   icon={<PlayRegular />}
                   onClick={handleReplay}
                   disabled={!recordingHistory?.length || !selectedNodeId}
                   appearance="primary"
-                  style={{ width: '100%' }}
+                  style={{ flex: 1 }}
                 >
                   {selectedActionIndices.size > 0 ? `Apply (${selectedActionIndices.size})` : "Apply all"}
                 </Button>
               </Tooltip>
+              <Tooltip content="Add selected actions to an existing action button" relationship="label">
+                <Button
+                  icon={<AddRegular />}
+                  onClick={() => setShowAddToButtonDialog(true)}
+                  disabled={!recordingHistory?.length || selectedActionIndices.size === 0 || actionNodes.length === 0}
+                  appearance="secondary"
+                >
+                  Add to Button
+                </Button>
+              </Tooltip>
             </div>
+
+            {/* Add to Button Dialog */}
+            <Dialog open={showAddToButtonDialog} onOpenChange={(_, data) => {
+              setShowAddToButtonDialog(data.open);
+              if (!data.open) setSelectedActionNodeId(null);
+            }}>
+              <DialogSurface>
+                <DialogBody>
+                  <DialogTitle>Add Actions to Button</DialogTitle>
+                  <DialogContent>
+                    <Text size={200} style={{ marginBottom: 12, display: 'block' }}>
+                      Select a button to add {selectedActionIndices.size} action{selectedActionIndices.size !== 1 ? 's' : ''} to:
+                    </Text>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {actionNodes.map(({ id, label, target }) => (
+                        <Button
+                          key={id}
+                          appearance={selectedActionNodeId === id ? 'primary' : 'secondary'}
+                          onClick={() => setSelectedActionNodeId(id)}
+                          style={{ justifyContent: 'flex-start' }}
+                        >
+                          <span style={{ fontWeight: 'bold' }}>{label}</span>
+                          <span style={{ marginLeft: 8, opacity: 0.7, fontSize: '0.9em' }}>→ {target}</span>
+                        </Button>
+                      ))}
+                      {actionNodes.length === 0 && (
+                        <Text size={200} style={{ color: '#666' }}>
+                          No action buttons found. Create one first using the toolbar.
+                        </Text>
+                      )}
+                    </div>
+                  </DialogContent>
+                  <DialogActions>
+                    <DialogTrigger disableButtonEnhancement>
+                      <Button appearance="secondary">Cancel</Button>
+                    </DialogTrigger>
+                    <Button
+                      appearance="primary"
+                      onClick={handleAddToButton}
+                      disabled={!selectedActionNodeId}
+                    >
+                      Add
+                    </Button>
+                  </DialogActions>
+                </DialogBody>
+              </DialogSurface>
+            </Dialog>
           </div>
         </ResizablePanel>
       </div>

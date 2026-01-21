@@ -6,6 +6,8 @@
 
 // Re-export types from core
 export type {
+    ActionNode,
+    ActionNodeData,
     DenicekAction,
     ElementNode,
     ElementNodeData,

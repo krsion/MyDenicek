@@ -1,5 +1,5 @@
 import { makeStyles, mergeClasses } from "@fluentui/react-components";
-import { type DenicekDocument } from "@mydenicek/core";
+import { type DenicekDocument, type GeneralizedPatch } from "@mydenicek/core";
 import { DENICEK_NODE_ID_ATTR } from "@mydenicek/react";
 import React from "react";
 
@@ -43,7 +43,13 @@ const useStyles = makeStyles({
 });
 
 
-export function RenderedDocument({ document }: { document: DenicekDocument; version?: unknown }) {
+interface RenderedDocumentProps {
+  document: DenicekDocument;
+  version?: unknown;
+  onActionClick?: (actions: GeneralizedPatch[], target: string) => void;
+}
+
+export function RenderedDocument({ document, onActionClick }: RenderedDocumentProps) {
   const styles = useStyles();
 
   // Sync input value to CRDT on blur (so copy can read the current value)
@@ -54,12 +60,51 @@ export function RenderedDocument({ document }: { document: DenicekDocument; vers
     });
   }, [document]);
 
+  // Handler for action button clicks
+  const handleActionClick = React.useCallback((nodeId: string) => {
+    const node = document.getNode(nodeId);
+    if (!node || node.kind !== "action") return;
+
+    // Get the action node's script and target
+    const { actions, target } = node;
+    if (!actions.length || !target) return;
+
+    // Call the handler or replay directly
+    if (onActionClick) {
+      onActionClick(actions, target);
+    } else {
+      // Fallback: replay directly on the document
+      document.replay(actions, target);
+    }
+  }, [document, onActionClick]);
+
   function renderById(id: string): React.ReactNode {
     const node = document.getNode(id);
     if (!node) return undefined;
 
     if (node.kind === "value") {
       return React.createElement('x-value', { [DENICEK_NODE_ID_ATTR]: id }, node.value);
+    }
+
+    // Handle action nodes - render as buttons
+    if (node.kind === "action") {
+      return React.createElement(
+        'button',
+        {
+          [DENICEK_NODE_ID_ATTR]: id,
+          className: styles.button,
+          onClick: (e: React.MouseEvent) => {
+            // Allow Ctrl+click/Shift+click for selection (don't execute)
+            if (e.ctrlKey || e.metaKey || e.shiftKey) {
+              return; // Let event bubble for selection
+            }
+            e.stopPropagation();  // Don't trigger selection on regular click
+            handleActionClick(id);
+          },
+          title: `Target: ${node.target}`,
+        },
+        node.label
+      );
     }
 
     const attrs = { ...(node.attrs || {}), [DENICEK_NODE_ID_ATTR]: id } as Record<string, unknown>;

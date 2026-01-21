@@ -17,10 +17,12 @@ export { DenicekError, handleModelError } from "./errors.js";
 
 // Types
 export type {
-    DenicekAction,
     // Internal node types (for model operations)
-    ElementNode,
+    ActionNode,
     // Public node data types
+    ActionNodeData,
+    DenicekAction,
+    ElementNode,
     ElementNodeData,
     // Other types
     GeneralizedPatch,

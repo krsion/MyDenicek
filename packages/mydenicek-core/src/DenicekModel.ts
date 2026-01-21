@@ -5,15 +5,18 @@
  * It is created inside a change() callback and provides methods to read and modify the document.
  */
 
-import { LoroDoc, LoroMap, LoroText, LoroTree } from "loro-crdt";
+import { LoroDoc, LoroList, LoroMap, LoroText, LoroTree } from "loro-crdt";
 
 import { DenicekError, handleModelError } from "./errors.js";
 import {
     loroNodeToNode,
+    NODE_ACTIONS,
     NODE_ATTRS,
     NODE_KIND,
+    NODE_LABEL,
     NODE_SOURCE_ID,
     NODE_TAG,
+    NODE_TARGET,
     NODE_TEXT,
     stringToTreeId,
     TREE_CONTAINER,
@@ -27,7 +30,10 @@ import type {
 } from "./types.js";
 
 /** Input type for creating nodes - string values converted to LoroText internally */
-type NodeInput = ElementNode | { kind: "value"; value: string };
+type NodeInput =
+    | ElementNode
+    | { kind: "value"; value: string }
+    | { kind: "action"; label: string; actions: GeneralizedPatch[]; target: string };
 
 /**
  * Sanitize and validate a tag name for use with HTML elements.
@@ -218,6 +224,159 @@ export class DenicekModel {
         }
     }
 
+    /**
+     * Generic property update for any node type.
+     * Supports: label, target, actions (for action nodes), tag (for element nodes)
+     */
+    updateNodeProperty(id: string, property: string, value: unknown): void {
+        try {
+            const treeId = stringToTreeId(id);
+            const treeNode = this.tree.getNodeByID(treeId);
+            if (!treeNode) return;
+
+            const data = treeNode.data;
+            const kind = data.get(NODE_KIND) as "element" | "value" | "action" | undefined;
+
+            // Handle action node properties
+            if (kind === "action") {
+                if (property === "label") {
+                    data.set(NODE_LABEL, value as string);
+                    this.emitPatch({
+                        action: "put",
+                        path: ["nodes", id, "label"],
+                        value: value
+                    });
+                } else if (property === "target") {
+                    data.set(NODE_TARGET, value as string);
+                    this.emitPatch({
+                        action: "put",
+                        path: ["nodes", id, "target"],
+                        value: value
+                    });
+                } else if (property === "actions") {
+                    // Replace entire actions list
+                    const actionsContainer = data.get(NODE_ACTIONS) as LoroList | undefined;
+                    if (actionsContainer) {
+                        // Clear and repopulate
+                        const length = actionsContainer.length;
+                        if (length > 0) {
+                            actionsContainer.delete(0, length);
+                        }
+                        for (const action of value as GeneralizedPatch[]) {
+                            actionsContainer.push(action);
+                        }
+                        this.emitPatch({
+                            action: "put",
+                            path: ["nodes", id, "actions"],
+                            value: value
+                        });
+                    }
+                }
+            } else if (kind === "element") {
+                // Handle element node properties
+                if (property === "tag") {
+                    this.updateTag(id, value as string);
+                }
+            }
+        } catch (e) {
+            handleModelError("updateNodeProperty", e);
+        }
+    }
+
+    // ==================== ACTION NODE LIST OPERATIONS ====================
+
+    /**
+     * Append actions to an action node's actions list
+     */
+    appendActions(id: string, actions: GeneralizedPatch[]): void {
+        try {
+            const treeId = stringToTreeId(id);
+            const treeNode = this.tree.getNodeByID(treeId);
+            if (!treeNode) return;
+
+            const data = treeNode.data;
+            const kind = data.get(NODE_KIND);
+            if (kind !== "action") return;
+
+            const actionsList = data.get(NODE_ACTIONS) as LoroList | undefined;
+            if (!actionsList) return;
+
+            for (const action of actions) {
+                actionsList.push(action);
+            }
+
+            this.emitPatch({
+                action: "insert",
+                path: ["nodes", id, "actions", actionsList.length - actions.length],
+                value: actions
+            });
+        } catch (e) {
+            handleModelError("appendActions", e);
+        }
+    }
+
+    /**
+     * Delete an action from an action node's actions list
+     */
+    deleteAction(id: string, index: number): void {
+        try {
+            const treeId = stringToTreeId(id);
+            const treeNode = this.tree.getNodeByID(treeId);
+            if (!treeNode) return;
+
+            const data = treeNode.data;
+            const kind = data.get(NODE_KIND);
+            if (kind !== "action") return;
+
+            const actionsList = data.get(NODE_ACTIONS) as LoroList | undefined;
+            if (!actionsList) return;
+
+            actionsList.delete(index, 1);
+
+            this.emitPatch({
+                action: "del",
+                path: ["nodes", id, "actions", index]
+            });
+        } catch (e) {
+            handleModelError("deleteAction", e);
+        }
+    }
+
+    /**
+     * Move an action within an action node's actions list
+     */
+    moveAction(id: string, fromIndex: number, toIndex: number): void {
+        try {
+            const treeId = stringToTreeId(id);
+            const treeNode = this.tree.getNodeByID(treeId);
+            if (!treeNode) return;
+
+            const data = treeNode.data;
+            const kind = data.get(NODE_KIND);
+            if (kind !== "action") return;
+
+            const actionsList = data.get(NODE_ACTIONS) as LoroList | undefined;
+            if (!actionsList) return;
+
+            // LoroList doesn't have moveTo, so we use delete + insert
+            const item = actionsList.get(fromIndex);
+            if (item === undefined) return;
+
+            actionsList.delete(fromIndex, 1);
+            // Adjust toIndex if needed (if we deleted before the target)
+            const adjustedToIndex = fromIndex < toIndex ? toIndex - 1 : toIndex;
+            actionsList.insert(adjustedToIndex, item);
+
+            this.emitPatch({
+                action: "move",
+                path: ["nodes", id, "actions", fromIndex],
+                value: { toIndex }
+            });
+        } catch (e) {
+            handleModelError("moveAction", e);
+        }
+    }
+
     deleteNode(id: string): void {
         try {
             const treeId = stringToTreeId(id);
@@ -399,6 +558,15 @@ export class DenicekModel {
                 for (const [key, value] of Object.entries(sanitizedChild.attrs)) {
                     attrsMap.set(key, value);
                 }
+            } else if (sanitizedChild.kind === "action") {
+                data.set(NODE_KIND, "action");
+                data.set(NODE_LABEL, sanitizedChild.label);
+                data.set(NODE_TARGET, sanitizedChild.target);
+                // Create LoroList for actions and populate it
+                const actionsList = data.setContainer(NODE_ACTIONS, new LoroList()) as LoroList;
+                for (const action of sanitizedChild.actions) {
+                    actionsList.push(action);
+                }
             } else {
                 data.set(NODE_KIND, "value");
                 const textContainer = data.setContainer(NODE_TEXT, new LoroText()) as LoroText;
@@ -422,7 +590,7 @@ export class DenicekModel {
         }
     }
 
-    addSibling(siblingId: string, position: "before" | "after"): string | undefined {
+    addSibling(siblingId: string, position: "before" | "after", nodeInput?: NodeInput): string | undefined {
         const offset = position === "before" ? 0 : 1;
         try {
             const siblingTreeId = stringToTreeId(siblingId);
@@ -448,14 +616,30 @@ export class DenicekModel {
             const newNode = this.tree.createNode(parent.id, siblingIndex + offset);
             const data = newNode.data;
 
-            if (sibling.kind === "element") {
+            // Use nodeInput if provided, otherwise clone the sibling
+            const input = nodeInput ?? sibling;
+
+            if (input.kind === "element") {
                 data.set(NODE_KIND, "element");
-                data.set(NODE_TAG, sibling.tag);
+                data.set(NODE_TAG, "tag" in input ? input.tag : (sibling.kind === "element" ? sibling.tag : "div"));
                 data.setContainer(NODE_ATTRS, new LoroMap());
-            } else {
+            } else if (input.kind === "value") {
                 data.set(NODE_KIND, "value");
                 const textContainer = data.setContainer(NODE_TEXT, new LoroText()) as LoroText;
-                textContainer.insert(0, sibling.value.toString());
+                const textValue = "value" in input && typeof input.value === "string" ? input.value :
+                                  (sibling.kind === "value" ? sibling.value.toString() : "");
+                textContainer.insert(0, textValue);
+            } else if (input.kind === "action") {
+                data.set(NODE_KIND, "action");
+                data.set(NODE_LABEL, "label" in input ? input.label : (sibling.kind === "action" ? sibling.label : "Action"));
+                data.set(NODE_TARGET, "target" in input ? input.target : (sibling.kind === "action" ? sibling.target : ""));
+                const actionsList = data.setContainer(NODE_ACTIONS, new LoroList()) as LoroList;
+                // If actions provided, populate them
+                if ("actions" in input && Array.isArray(input.actions)) {
+                    for (const action of input.actions) {
+                        actionsList.push(action);
+                    }
+                }
             }
 
             return treeIdToString(newNode.id);
@@ -608,6 +792,27 @@ export class DenicekModel {
                         const insertText = value as string;
                         const deleteCount = length || 0;
                         this.spliceValue(id, index, deleteCount, insertText);
+                    }
+                }
+                // Handle action node property updates
+                else if (field === "label" && action === "put") {
+                    this.updateNodeProperty(id, "label", value);
+                } else if (field === "target" && action === "put") {
+                    this.updateNodeProperty(id, "target", value);
+                } else if (field === "actions") {
+                    if (action === "put") {
+                        this.updateNodeProperty(id, "actions", value);
+                    } else if (action === "insert" && path.length === 4) {
+                        // Insert actions at specific index
+                        const actions = value as GeneralizedPatch[];
+                        this.appendActions(id, actions);
+                    } else if (action === "del" && path.length === 4) {
+                        const index = path[3] as number;
+                        this.deleteAction(id, index);
+                    } else if (action === "move" && path.length === 4) {
+                        const fromIndex = path[3] as number;
+                        const { toIndex } = value as { toIndex: number };
+                        this.moveAction(id, fromIndex, toIndex);
                     }
                 }
             }

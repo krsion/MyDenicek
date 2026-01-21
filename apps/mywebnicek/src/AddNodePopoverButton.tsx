@@ -5,19 +5,21 @@ import { type KeyboardEvent, useEffect, useState } from "react";
 
 import { sanitizeTagName, validateTagName } from "./ToolbarPopoverButton";
 
+export type NodeKind = "element" | "value" | "action";
+
 type Props = {
     disabled: boolean;
     initialValue?: string;
-    onAddChild: (content: string, isValue: boolean) => void;
-    onAddBefore: (content: string, isValue: boolean) => void;
-    onAddAfter: (content: string, isValue: boolean) => void;
+    onAddChild: (content: string, kind: NodeKind) => void;
+    onAddBefore: (content: string, kind: NodeKind) => void;
+    onAddAfter: (content: string, kind: NodeKind) => void;
 };
 
 export const AddNodePopoverButton = ({ disabled, initialValue, onAddChild, onAddBefore, onAddAfter }: Props) => {
     const [open, setOpen] = useState(false);
     const [value, setValue] = useState(initialValue || "");
     const [mode, setMode] = useState<"child" | "before" | "after">("child");
-    const [nodeType, setNodeType] = useState<"tag" | "value">("tag");
+    const [nodeType, setNodeType] = useState<"tag" | "value" | "action">("tag");
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -27,12 +29,12 @@ export const AddNodePopoverButton = ({ disabled, initialValue, onAddChild, onAdd
 
     const handleSubmit = () => {
         const content = value.trim();
-        if (!content) return;
 
-        const isValue = nodeType === "value";
+        // Require content for tag and action nodes, but allow empty value nodes
+        if (!content && nodeType !== "value") return;
 
-        // Validate tag names
-        if (!isValue) {
+        // Validate tag names (not for value or action nodes)
+        if (nodeType === "tag") {
             const validationError = validateTagName(content);
             if (validationError) {
                 setError(validationError);
@@ -40,13 +42,16 @@ export const AddNodePopoverButton = ({ disabled, initialValue, onAddChild, onAdd
             }
         }
 
-        // Sanitize tag name (strip angle brackets, lowercase)
-        const finalContent = isValue ? content : sanitizeTagName(content).tag || content;
+        // Sanitize tag name (strip angle brackets, lowercase) - only for tag type
+        const finalContent = nodeType === "tag" ? (sanitizeTagName(content).tag || content) : content;
+
+        // Map nodeType to NodeKind
+        const kind: NodeKind = nodeType === "tag" ? "element" : nodeType;
 
         setError(null);
-        if (mode === "child") onAddChild(finalContent, isValue);
-        else if (mode === "before") onAddBefore(finalContent, isValue);
-        else if (mode === "after") onAddAfter(finalContent, isValue);
+        if (mode === "child") onAddChild(finalContent, kind);
+        else if (mode === "before") onAddBefore(finalContent, kind);
+        else if (mode === "after") onAddAfter(finalContent, kind);
 
         setOpen(false);
     };
@@ -66,15 +71,16 @@ export const AddNodePopoverButton = ({ disabled, initialValue, onAddChild, onAdd
                 <Label>Add element</Label>
 
                 <RadioGroup value={nodeType} onChange={(_, data) => {
-                    setNodeType(data.value as "tag" | "value");
+                    setNodeType(data.value as "tag" | "value" | "action");
                     setError(null);
                 }} layout="horizontal">
                     <Radio value="tag" label="Tag" />
                     <Radio value="value" label="Value" />
+                    <Radio value="action" label="Action" />
                 </RadioGroup>
 
                 <Input
-                    placeholder={nodeType === "tag" ? "Tag name (e.g. div)" : "Value content"}
+                    placeholder={nodeType === "tag" ? "Tag name (e.g. div)" : nodeType === "action" ? "Button label" : "Value content (optional)"}
                     value={value}
                     onChange={(e) => {
                         setValue((e.target as HTMLInputElement).value);

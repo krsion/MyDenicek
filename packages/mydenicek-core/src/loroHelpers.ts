@@ -3,9 +3,9 @@
  * Internal utilities for working with Loro CRDT types
  */
 
-import { LoroDoc, LoroMap, LoroText, LoroTree, LoroTreeNode, type TreeID } from "loro-crdt";
+import { LoroDoc, LoroList, LoroMap, LoroText, LoroTree, LoroTreeNode, type TreeID } from "loro-crdt";
 
-import type { ElementNode, Node, NodeData, ValueNode } from "./types.js";
+import type { ActionNode, ElementNode, GeneralizedPatch, Node, NodeData, ValueNode } from "./types.js";
 
 /**
  * Internal constants for Loro container names
@@ -20,6 +20,13 @@ export const NODE_TAG = "tag";
 export const NODE_ATTRS = "attrs";
 export const NODE_TEXT = "text";
 export const NODE_SOURCE_ID = "sourceId";
+
+/**
+ * Action node data keys
+ */
+export const NODE_LABEL = "label";
+export const NODE_ACTIONS = "actions";
+export const NODE_TARGET = "target";
 
 /**
  * Convert TreeID to a stable string ID for our public API
@@ -43,7 +50,7 @@ export function stringToTreeId(id: string): TreeID {
  */
 export function loroNodeToNode(treeNode: LoroTreeNode, _tree: LoroTree): Node {
     const data = treeNode.data;
-    const kind = data.get(NODE_KIND) as "element" | "value" | undefined;
+    const kind = data.get(NODE_KIND) as "element" | "value" | "action" | undefined;
     const sourceId = data.get(NODE_SOURCE_ID) as string | undefined;
 
     if (kind === "value") {
@@ -54,6 +61,21 @@ export function loroNodeToNode(treeNode: LoroTreeNode, _tree: LoroTree): Node {
         const node: ValueNode = {
             kind: "value",
             value: textContainer,
+            ...(sourceId && { sourceId }),
+        };
+        return node;
+    } else if (kind === "action") {
+        const label = (data.get(NODE_LABEL) as string) || "Action";
+        const actionsContainer = data.get(NODE_ACTIONS) as LoroList | undefined;
+        if (!actionsContainer) {
+            throw new Error("Action node missing actions container");
+        }
+        const target = (data.get(NODE_TARGET) as string) || "";
+        const node: ActionNode = {
+            kind: "action",
+            label,
+            actions: actionsContainer,
+            target,
             ...(sourceId && { sourceId }),
         };
         return node;
@@ -121,7 +143,7 @@ export function buildDocumentIndex(doc: LoroDoc): DocumentIndex {
     function walkNode(treeNode: LoroTreeNode, parentId: string | null): void {
         const id = treeIdToString(treeNode.id);
         const data = treeNode.data;
-        const kind = data.get(NODE_KIND) as "element" | "value" | undefined;
+        const kind = data.get(NODE_KIND) as "element" | "value" | "action" | undefined;
         const sourceId = data.get(NODE_SOURCE_ID) as string | undefined;
 
         parents.set(id, parentId);
@@ -134,6 +156,17 @@ export function buildDocumentIndex(doc: LoroDoc): DocumentIndex {
             // Convert LoroText to string for public API (no Loro types exposed)
             nodes.set(id, { id, kind: "value", value: textContainer.toString(), ...(sourceId && { sourceId }) });
             childIds.set(id, []);
+        } else if (kind === "action") {
+            const label = (data.get(NODE_LABEL) as string) || "Action";
+            const actionsContainer = data.get(NODE_ACTIONS) as LoroList | undefined;
+            if (!actionsContainer) {
+                throw new Error(`Action node ${id} missing actions container`);
+            }
+            // Convert LoroList to array for public API (no Loro types exposed)
+            const actions = actionsContainer.toJSON() as GeneralizedPatch[];
+            const target = (data.get(NODE_TARGET) as string) || "";
+            nodes.set(id, { id, kind: "action", label, actions, target, ...(sourceId && { sourceId }) });
+            childIds.set(id, []);  // Action nodes have no children
         } else {
             const tag = (data.get(NODE_TAG) as string) || "div";
             const attrsData = data.get(NODE_ATTRS);

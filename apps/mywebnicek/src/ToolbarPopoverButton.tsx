@@ -55,9 +55,6 @@ export const ToolbarPopoverButton = ({ icon, disabled, placeholder, ariaLabel, c
 
     const handleSubmit = (inputValue: string) => {
         const trimmed = inputValue.trim();
-        if (!trimmed) return;
-
-        // Use custom validation if provided, otherwise no validation
         if (validate) {
             const validationError = validate(trimmed);
             if (validationError) {
@@ -65,12 +62,8 @@ export const ToolbarPopoverButton = ({ icon, disabled, placeholder, ariaLabel, c
                 return;
             }
         }
-
-        // For tag inputs, sanitize the value (strip angle brackets, lowercase)
-        const { tag } = sanitizeTagName(trimmed);
-
         setError(null);
-        onSubmit(tag || trimmed);
+        onSubmit(trimmed);
         setOpen(false);
     };
 

@@ -190,11 +190,15 @@ export function useDocumentActions() {
         return newIds;
     }, [document]);
 
-    const addSiblings = useCallback((referenceIds: string[], position: "before" | "after") => {
+    const addSiblings = useCallback((
+        referenceIds: string[],
+        position: "before" | "after",
+        nodeInput?: Parameters<DenicekModel['addSibling']>[2]
+    ) => {
         const newIds: string[] = [];
         document.change((model: DenicekModel) => {
             for (const id of referenceIds) {
-                const newId = model.addSibling(id, position);
+                const newId = model.addSibling(id, position, nodeInput);
                 if (newId) newIds.push(newId);
             }
         });

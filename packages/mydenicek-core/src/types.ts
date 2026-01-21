@@ -31,9 +31,22 @@ export interface ValueNodeData {
 }
 
 /**
+ * Action node data - public read-only view of a programmable button node
+ * Actions are stored in a LoroList internally for editability
+ */
+export interface ActionNodeData {
+    id: string;
+    kind: "action";
+    label: string;
+    actions: GeneralizedPatch[];
+    target: string;  // Node ID for $0 during replay
+    sourceId?: string;  // Reference to source node if this is a copy
+}
+
+/**
  * Union type for public node data
  */
-export type NodeData = ElementNodeData | ValueNodeData;
+export type NodeData = ElementNodeData | ValueNodeData | ActionNodeData;
 
 /**
  * Immutable snapshot of document state for temporal comparisons.
@@ -51,7 +64,7 @@ export interface Snapshot {
 // Internal Node Types (Loro types used here are not exported publicly)
 // ============================================================================
 
-import type { LoroText } from "loro-crdt";
+import type { LoroList, LoroText } from "loro-crdt";
 
 /**
  * Internal element node - includes children IDs for tree operations
@@ -76,10 +89,22 @@ export interface ValueNode {
 }
 
 /**
+ * Internal action node - programmable button with LoroList for actions
+ * @internal
+ */
+export interface ActionNode {
+    kind: "action";
+    label: string;
+    actions: LoroList;  // LoroList for CRDT list operations
+    target: string;
+    sourceId?: string;  // Reference to source node if this is a copy
+}
+
+/**
  * Internal union type for all node types
  * @internal
  */
-export type Node = ElementNode | ValueNode;
+export type Node = ElementNode | ValueNode | ActionNode;
 
 
 /**

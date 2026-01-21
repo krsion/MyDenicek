@@ -11,6 +11,8 @@ import type { DenicekModel } from "@mydenicek/core";
 const el = (tag: string) => ({ kind: "element" as const, tag, attrs: {}, children: [] });
 /** Shorthand for creating value nodes */
 const val = (value: string) => ({ kind: "value" as const, value });
+/** Shorthand for creating action nodes (programmable buttons) */
+const action = (label: string, target: string) => ({ kind: "action" as const, label, actions: [], target });
 
 /**
  * Initialize a document with a sample structure
@@ -59,12 +61,10 @@ function createDemoContent(model: DenicekModel, rootId: string): void {
 
     const divBId = model.addChild(articleBId, el("div"));
     model.updateAttribute(divBId, "style", { display: 'flex', gap: 8 });
-    const btn1Id = model.addChild(divBId, el("button"));
-    model.addChild(btn1Id, val("Button 1"));
-    const btn2Id = model.addChild(divBId, el("button"));
-    model.addChild(btn2Id, val("Button 2"));
-    const btn3Id = model.addChild(divBId, el("button"));
-    model.addChild(btn3Id, val("Button 3"));
+    // Action nodes (programmable buttons) - target the list in Article A
+    model.addChild(divBId, action("Add Item", ulAId));
+    model.addChild(divBId, action("Clear List", ulAId));
+    model.addChild(divBId, action("Button 3", ulAId));
 
     // Article C
     const articleCId = model.addChild(sectionId, el("article"));
