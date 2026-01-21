@@ -44,16 +44,27 @@ export function useClipboard({ selectedNodeId, node, document: doc }: UseClipboa
         }
     }, [selectedNodeId, isValueSelected, isInputSelected, doc]);
 
+    const isElementSelected = node?.kind === "element";
+
     const handlePaste = useCallback(() => {
-        if (!selectedNodeId || !isValueSelected || !clipboard) return;
+        if (!selectedNodeId || !clipboard) return;
 
-        const parentId = doc.getParentId(selectedNodeId);
-        if (!parentId) return;
+        if (isValueSelected) {
+            // Paste as sibling of value node
+            const parentId = doc.getParentId(selectedNodeId);
+            if (!parentId) return;
+            doc.change((model) => {
+                model.copyNode(clipboard.sourceNodeId, parentId, { sourceAttr: clipboard.sourceAttr });
+            });
+        } else if (isElementSelected) {
+            // Paste as child of element node (create value node and copy to it)
+            doc.change((model) => {
+                model.copyNode(clipboard.sourceNodeId, selectedNodeId, { sourceAttr: clipboard.sourceAttr });
+            });
+        }
+    }, [selectedNodeId, isValueSelected, isElementSelected, clipboard, doc]);
 
-        doc.change((model) => {
-            model.copyNode(clipboard.sourceNodeId, parentId, { sourceAttr: clipboard.sourceAttr });
-        });
-    }, [selectedNodeId, isValueSelected, clipboard, doc]);
+    const canPaste = clipboard !== null && (isValueSelected || isElementSelected);
 
     // Keyboard shortcuts
     useEffect(() => {
@@ -62,20 +73,21 @@ export function useClipboard({ selectedNodeId, node, document: doc }: UseClipboa
                 e.preventDefault();
                 handleCopy();
             }
-            if ((e.ctrlKey || e.metaKey) && e.key === "v" && isValueSelected && clipboard) {
+            if ((e.ctrlKey || e.metaKey) && e.key === "v" && canPaste) {
                 e.preventDefault();
                 handlePaste();
             }
         };
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [isInputSelected, isValueSelected, clipboard, handleCopy, handlePaste]);
+    }, [isInputSelected, isValueSelected, canPaste, handleCopy, handlePaste]);
 
     return {
         isInputSelected,
         isValueSelected,
+        isElementSelected,
         handleCopy,
         handlePaste,
-        hasClipboardData: clipboard !== null,
+        canPaste,
     };
 }

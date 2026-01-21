@@ -314,7 +314,7 @@ export const App = () => {
   };
 
   // Clipboard: copy creates a "copy" action referencing the source node
-  const { hasClipboardData, isInputSelected, isValueSelected, handleCopy, handlePaste } = useClipboard({
+  const { canPaste, isInputSelected, isValueSelected, handleCopy, handlePaste } = useClipboard({
     selectedNodeId: selectedNodeId ?? null,
     node,
     document,
@@ -531,7 +531,7 @@ export const App = () => {
                   <ToolbarButton
                     icon={<ClipboardPasteRegular />}
                     onClick={handlePaste}
-                    disabled={!isValueSelected || !hasClipboardData}
+                    disabled={!canPaste}
                   />
                 </Tooltip>
               </ToolbarGroup>
