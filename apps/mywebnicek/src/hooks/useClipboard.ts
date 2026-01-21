@@ -34,7 +34,7 @@ export function useClipboard({ selectedNodeId, node, document: doc }: UseClipboa
         if (isValueSelected) {
             const valueNode = doc.getNode(selectedNodeId);
             if (valueNode?.kind === "value") {
-                setClipboard({ sourceNodeId: selectedNodeId, textValue: valueNode.value });
+                setClipboard({ sourceNodeId: selectedNodeId, textValue: String(valueNode.value) });
             }
         } else if (isInputSelected) {
             const inputEl = document.querySelector(`[data-node-guid="${selectedNodeId}"]`) as HTMLInputElement | null;

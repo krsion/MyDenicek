@@ -1,23 +1,25 @@
 import { Badge, Button, Card, CardHeader, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogTrigger, Spinner, Switch, Tag, TagGroup, Text, Toast, Toaster, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip, useId, useToastController } from "@fluentui/react-components";
-import { AddRegular, ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackRegular, CameraRegular, ClipboardPasteRegular, CodeRegular, CopyRegular, EditRegular, LinkRegular, PlayRegular, RecordRegular, RenameRegular, StopRegular } from "@fluentui/react-icons";
+import { AddRegular, ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackRegular, CalculatorRegular, CameraRegular, ClipboardPasteRegular, CodeRegular, CopyRegular, EditRegular, InfoRegular, LinkRegular, PlayRegular, RecordRegular, RenameRegular, StopRegular } from "@fluentui/react-icons";
 import type { GeneralizedPatch } from "@mydenicek/core";
 import type { Snapshot } from "@mydenicek/react";
 import {
   useConnectivity,
   useDocumentActions,
   useDocumentState,
+  useFormulaViewMode,
   useRecording,
   useSelectedNode,
   useSelection
 } from "@mydenicek/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { AddNodePopoverButton } from "./AddNodePopoverButton";
+import { AddNodePopoverButton, type NodeKind } from "./AddNodePopoverButton";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ResizablePanel } from "./components/ResizablePanel";
 import { PeerAliasProvider } from "./context/PeerAliasContext";
 import { DomNavigator, type DomNavigatorHandle } from "./DomNavigator";
 import { ElementDetails } from "./ElementDetails.tsx";
+import { FormulaToolbar } from "./FormulaToolbar";
 import { useClipboard } from "./hooks/useClipboard";
 import { JsonView } from "./JsonView.tsx";
 import { RecordedScriptView } from "./RecordedScriptView";
@@ -38,20 +40,23 @@ function getRoomIdFromHash(): string {
 }
 
 export const App = () => {
-  const { document, version } = useDocumentState();
+  const { document } = useDocumentState();
   const {
     undo, redo, canUndo, canRedo,
     updateAttribute, updateTag, wrapNodes,
-    updateValue, addChildren, addSiblings,
+    updateValue,
     deleteNodes: _deleteNodes
   } = useDocumentActions();
   const recordingObj = useRecording();
   const { history: recordingHistory, clearHistory, replay } = recordingObj;
   const [showHistory, setShowHistory] = useState(true);
+  const [showDetails, setShowDetails] = useState(true);
+  const [refPickMode, setRefPickMode] = useState<{ parentId: string; position: "child" | "before" | "after" } | null>(null);
 
   const { connect, disconnect, status, latency, error } = useConnectivity();
   const { setSelectedNodeIds, remoteSelections, userId } = useSelection();
   const { selectedNodeId, selectedNodeIds, node, details } = useSelectedNode();
+  const { mode: formulaViewMode, toggleMode: toggleFormulaViewMode, isFormulaMode } = useFormulaViewMode();
 
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [filterPatches, setFilterPatches] = useState(false);
@@ -69,6 +74,20 @@ export const App = () => {
   // Add to Button dialog state
   const [showAddToButtonDialog, setShowAddToButtonDialog] = useState(false);
   const [selectedActionNodeId, setSelectedActionNodeId] = useState<string | null>(null);
+
+  /**
+   * Convert node kind + content to proper node data structure.
+   * This is a "define errors out of existence" pattern - the function always returns valid node data.
+   */
+  const createNodeData = useCallback((kind: NodeKind, content: string, defaultTarget: string) => {
+    switch (kind) {
+      case "value": return { kind: "value" as const, value: content };
+      case "element": return { kind: "element" as const, tag: content, attrs: {}, children: [] };
+      case "formula": return { kind: "formula" as const, operation: content };
+      case "ref": return { kind: "ref" as const, target: content };
+      case "action": return { kind: "action" as const, label: content, actions: [], target: defaultTarget };
+    }
+  }, []);
 
   // Find all action nodes in document
   const actionNodes = useMemo(() => {
@@ -377,7 +396,7 @@ export const App = () => {
       <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
         <Toaster toasterId={toasterId} position="bottom-end" />
         <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column" }}>
-          <Card appearance="subtle" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+          <Card appearance="subtle" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
             <Toolbar style={{ display: "flex", flexWrap: "wrap", gap: "4px", justifyContent: "space-between" }}>
               <ToolbarGroup>
                 <Tooltip content="Undo" relationship="label">
@@ -402,72 +421,32 @@ export const App = () => {
                 </Tooltip>
                 <ToolbarDivider />
                 <AddNodePopoverButton
-                  disabled={node?.kind !== "element"}
+                  disabled={node?.kind !== "element" && node?.kind !== "formula"}
                   initialValue={selectedNodeFirstChildTag || ""}
                   onAddChild={(content, kind) => {
-                    if (selectedNodeIds.length === 0 || !selectedNodeId) return;
-                    if (kind === "action") {
-                      // Create empty action node as child
-                      document.change((model) => {
-                        const newId = model.addChild(selectedNodeId, {
-                          kind: "action",
-                          label: content,
-                          actions: [],
-                          target: selectedNodeId // Target parent initially
-                        });
-                        if (newId) setSelectedNodeIds([newId]);
-                      });
-                    } else {
-                      const newIds = addChildren(selectedNodeIds, kind, content);
-                      if (newIds.length > 0) setSelectedNodeIds(newIds);
-                    }
+                    if (!selectedNodeId) return;
+                    document.change((model) => {
+                      const newId = model.addChild(selectedNodeId, createNodeData(kind, content, selectedNodeId));
+                      if (newId) setSelectedNodeIds([newId]);
+                    });
                   }}
                   onAddBefore={(content, kind) => {
-                    if (selectedNodeIds.length === 0 || !selectedNodeId) return;
-                    if (kind === "action") {
-                      // Create empty action node before selected
-                      const parentId = document.getParentId(selectedNodeId);
-                      if (!parentId) return;
-                      document.change((model) => {
-                        const newId = model.addSibling(selectedNodeId, "before", {
-                          kind: "action",
-                          label: content,
-                          actions: [],
-                          target: selectedNodeId
-                        });
-                        if (newId) setSelectedNodeIds([newId]);
-                      });
-                    } else if (kind === "value") {
-                      const newIds = addSiblings(selectedNodeIds, "before", { kind: "value", value: content });
-                      if (newIds.length > 0) setSelectedNodeIds(newIds);
-                    } else {
-                      // element
-                      const newIds = addSiblings(selectedNodeIds, "before", { kind: "element", tag: content, attrs: {}, children: [] });
-                      if (newIds.length > 0) setSelectedNodeIds(newIds);
-                    }
+                    if (!selectedNodeId) return;
+                    document.change((model) => {
+                      const newId = model.addSibling(selectedNodeId, "before", createNodeData(kind, content, selectedNodeId));
+                      if (newId) setSelectedNodeIds([newId]);
+                    });
                   }}
                   onAddAfter={(content, kind) => {
-                    if (selectedNodeIds.length === 0 || !selectedNodeId) return;
-                    if (kind === "action") {
-                      // Create empty action node after selected
-                      const parentId = document.getParentId(selectedNodeId);
-                      if (!parentId) return;
-                      document.change((model) => {
-                        const newId = model.addSibling(selectedNodeId, "after", {
-                          kind: "action",
-                          label: content,
-                          actions: [],
-                          target: selectedNodeId
-                        });
-                        if (newId) setSelectedNodeIds([newId]);
-                      });
-                    } else if (kind === "value") {
-                      const newIds = addSiblings(selectedNodeIds, "after", { kind: "value", value: content });
-                      if (newIds.length > 0) setSelectedNodeIds(newIds);
-                    } else {
-                      // element
-                      const newIds = addSiblings(selectedNodeIds, "after", { kind: "element", tag: content, attrs: {}, children: [] });
-                      if (newIds.length > 0) setSelectedNodeIds(newIds);
+                    if (!selectedNodeId) return;
+                    document.change((model) => {
+                      const newId = model.addSibling(selectedNodeId, "after", createNodeData(kind, content, selectedNodeId));
+                      if (newId) setSelectedNodeIds([newId]);
+                    });
+                  }}
+                  onStartRefPick={(position) => {
+                    if (selectedNodeId) {
+                      setRefPickMode({ parentId: selectedNodeId, position });
                     }
                   }}
                 />
@@ -479,9 +458,9 @@ export const App = () => {
                     disabled={false}
                     ariaLabel="Edit"
                     placeholder="Value content"
-                    initialValue={details?.value || ""}
+                    initialValue={String(details?.value ?? "")}
                     onSubmit={(value) => {
-                      const originalValue = details?.value || "";
+                      const originalValue = String(details?.value ?? "");
                       updateValue(selectedNodeIds, value, originalValue);
                     }}
                   />
@@ -519,6 +498,8 @@ export const App = () => {
                   }}
                 />
 
+                <FormulaToolbar document={document} selectedNodeId={selectedNodeId} node={node} />
+
                 <Tooltip content="Copy (Ctrl+C)" relationship="label">
                   <ToolbarButton
                     icon={<CopyRegular />}
@@ -533,6 +514,18 @@ export const App = () => {
                     onClick={handlePaste}
                     disabled={!canPaste}
                   />
+                </Tooltip>
+
+                <ToolbarDivider />
+
+                <Tooltip content={isFormulaMode ? "Showing formula structure" : "Showing formula results"} relationship="label">
+                  <ToolbarButton
+                    icon={<CalculatorRegular />}
+                    onClick={toggleFormulaViewMode}
+                    appearance={isFormulaMode ? "primary" : "subtle"}
+                  >
+                    {isFormulaMode ? "Formulas" : "Results"}
+                  </ToolbarButton>
                 </Tooltip>
               </ToolbarGroup>
 
@@ -567,6 +560,11 @@ export const App = () => {
                 </Dialog>
                 <ToolbarButton icon={<CameraRegular />} onClick={() => setSnapshot(document.getSnapshot())}>Snapshot</ToolbarButton>
                 <ToolbarDivider />
+                {showDetails ? (
+                  <ToolbarButton icon={<InfoRegular />} onClick={() => setShowDetails(!showDetails)} appearance="primary">Details</ToolbarButton>
+                ) : (
+                  <ToolbarButton icon={<InfoRegular />} onClick={() => setShowDetails(!showDetails)}>Details</ToolbarButton>
+                )}
                 {showHistory ? (
                   <ToolbarButton icon={<RecordRegular />} onClick={() => setShowHistory(!showHistory)} appearance="primary">Actions</ToolbarButton>
                 ) : (
@@ -584,20 +582,55 @@ export const App = () => {
             </TagGroup>}
             />
 
-            <DomNavigator ref={navigatorRef} onSelectedChange={(ids) => { setSelectedNodeIds(ids); }} selectedNodeIds={selectedNodeIds} remoteSelections={remoteSelections} generalizer={handleGeneralize}>
-              <ErrorBoundary>
-                <RenderedDocument document={document} onActionClick={handleActionClick} />
-              </ErrorBoundary>
-            </DomNavigator>
+            <div style={{ flex: 1, overflow: "auto", minHeight: 0, position: "relative" }}>
+              {refPickMode && (
+                <div style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  padding: "8px 12px",
+                  background: "#fff3cd",
+                  borderBottom: "1px solid #ffc107",
+                  zIndex: 10,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center"
+                }}>
+                  <Text>Click on a node to create a reference to it</Text>
+                  <Button size="small" onClick={() => setRefPickMode(null)}>Cancel</Button>
+                </div>
+              )}
+              <DomNavigator ref={navigatorRef} onSelectedChange={(ids) => {
+                const targetId = ids[0];
+                if (refPickMode && targetId) {
+                  const { parentId, position } = refPickMode;
+                  document.change((model) => {
+                    if (position === "child") {
+                      model.addChild(parentId, { kind: "ref", target: targetId });
+                    } else {
+                      model.addSibling(parentId, position, { kind: "ref", target: targetId });
+                    }
+                  });
+                  setRefPickMode(null);
+                  return;
+                }
+                setSelectedNodeIds(ids);
+              }} selectedNodeIds={selectedNodeIds} remoteSelections={remoteSelections} generalizer={handleGeneralize}>
+                <ErrorBoundary>
+                  <RenderedDocument document={document} onActionClick={handleActionClick} viewMode={formulaViewMode} onRefClick={(targetId) => setSelectedNodeIds([targetId])} />
+                </ErrorBoundary>
+              </DomNavigator>
+            </div>
 
-            <ElementDetails
-              details={details}
-              attributes={selectedNodeAttributes}
-              onAttributeChange={handleAttributeChange}
-              onIdClick={(id) => setSelectedNodeIds([id])}
-            />
-
-
+            {showDetails && (
+              <ElementDetails
+                details={details}
+                attributes={selectedNodeAttributes}
+                onAttributeChange={handleAttributeChange}
+                onIdClick={(id) => setSelectedNodeIds([id])}
+              />
+            )}
 
             {snapshot && (
               <Card>

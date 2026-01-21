@@ -12,7 +12,7 @@ export interface SelectedNodeDetails {
     id: string;
     node: NodeData | undefined;
     tag: string | undefined;
-    value: string | undefined;
+    value: string | number | undefined;  // Supports both strings and numbers for formulas
     attrs: Record<string, unknown> | undefined;
     dom?: {
         tagName: string;

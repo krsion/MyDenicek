@@ -1,7 +1,9 @@
 import { makeStyles, mergeClasses } from "@fluentui/react-components";
-import { type DenicekDocument, type GeneralizedPatch } from "@mydenicek/core";
-import { DENICEK_NODE_ID_ATTR } from "@mydenicek/react";
+import { type DenicekDocument, evaluateFormula, type GeneralizedPatch, getNodeValue, isFormulaError, type Operation } from "@mydenicek/core";
+import { DENICEK_NODE_ID_ATTR, type FormulaViewMode } from "@mydenicek/react";
 import React from "react";
+
+import { defaultOperationsMap } from "./formula";
 
 const useStyles = makeStyles({
   article: {
@@ -39,7 +41,33 @@ const useStyles = makeStyles({
       backgroundColor: "#f9f9f9",
     },
   },
-
+  formula: {
+    display: "inline-block",
+    backgroundColor: "#e8f4e8",
+    padding: "2px 6px",
+    borderRadius: "4px",
+    fontFamily: "monospace",
+    fontSize: "0.9em",
+  },
+  formulaError: {
+    backgroundColor: "#ffe8e8",
+    color: "#c00",
+  },
+  formulaStructure: {
+    backgroundColor: "#f0f0ff",
+    border: "1px dashed #aaf",
+  },
+  ref: {
+    display: "inline-block",
+    backgroundColor: "#fff8e0",
+    padding: "2px 6px",
+    borderRadius: "4px",
+    fontStyle: "italic",
+  },
+  refTarget: {
+    color: "#666",
+    fontSize: "0.8em",
+  },
 });
 
 
@@ -47,10 +75,28 @@ interface RenderedDocumentProps {
   document: DenicekDocument;
   version?: unknown;
   onActionClick?: (actions: GeneralizedPatch[], target: string) => void;
+  /** View mode for formulas: "result" shows computed values, "formula" shows structure */
+  viewMode?: FormulaViewMode;
+  /** Custom operations map. If not provided, uses defaultOperationsMap */
+  operations?: Map<string, Operation>;
+  /** Callback when a ref link is clicked */
+  onRefClick?: (targetId: string) => void;
 }
 
-export function RenderedDocument({ document, onActionClick }: RenderedDocumentProps) {
+export function RenderedDocument({ document, onActionClick, viewMode = "result", operations, onRefClick }: RenderedDocumentProps) {
   const styles = useStyles();
+
+  // Use provided operations or default ones
+  const opsMap = React.useMemo(() => operations ?? defaultOperationsMap, [operations]);
+
+  // Create formula context for evaluation
+  const formulaContext = React.useMemo(() => ({
+    operations: opsMap,
+    document: {
+      getNode: (id: string) => document.getNode(id) ?? undefined,
+      getChildIds: (id: string) => document.getChildIds(id),
+    },
+  }), [opsMap, document]);
 
   // Sync input value to CRDT on Enter key (so copy can read the current value)
   const handleInputKeyDown = React.useCallback((e: React.KeyboardEvent<HTMLInputElement>, nodeId: string) => {
@@ -85,6 +131,109 @@ export function RenderedDocument({ document, onActionClick }: RenderedDocumentPr
 
     if (node.kind === "value") {
       return React.createElement('x-value', { [DENICEK_NODE_ID_ATTR]: id }, node.value);
+    }
+
+    // Handle ref nodes
+    if (node.kind === "ref") {
+      const targetNode = document.getNode(node.target);
+      const value = getNodeValue(node.target, formulaContext);
+      const displayValue = isFormulaError(value) ? value : String(value ?? "");
+      const targetLabel = targetNode?.kind === "value" ? `"${displayValue}"` :
+        targetNode?.kind === "formula" ? `ƒ ${(targetNode as { operation: string }).operation}` :
+          targetNode?.kind === "element" ? `<${(targetNode as { tag: string }).tag}>` :
+            node.target.slice(0, 8);
+
+      if (viewMode === "formula") {
+        // Show the reference structure with clickable link
+        return React.createElement(
+          'x-ref',
+          {
+            [DENICEK_NODE_ID_ATTR]: id,
+            className: styles.ref,
+          },
+          "→ ",
+          React.createElement(
+            'a',
+            {
+              href: "#",
+              className: styles.refTarget,
+              style: { cursor: 'pointer', textDecoration: 'underline' },
+              onClick: (e: React.MouseEvent) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onRefClick?.(node.target);
+              },
+            },
+            targetLabel
+          )
+        );
+      } else {
+        // Show the resolved value with clickable indicator
+        return React.createElement(
+          'x-ref',
+          {
+            [DENICEK_NODE_ID_ATTR]: id,
+            className: mergeClasses(styles.ref, isFormulaError(value) ? styles.formulaError : undefined),
+            title: `Click to go to: ${targetLabel}`,
+            style: { cursor: 'pointer' },
+            onClick: (e: React.MouseEvent) => {
+              if (e.ctrlKey || e.metaKey) {
+                e.stopPropagation();
+                onRefClick?.(node.target);
+              }
+            },
+          },
+          displayValue,
+          React.createElement(
+            'span',
+            {
+              style: { fontSize: '0.7em', opacity: 0.6, marginLeft: 4 },
+            },
+            "↗"
+          )
+        );
+      }
+    }
+
+    // Handle formula nodes
+    if (node.kind === "formula") {
+      if (viewMode === "formula") {
+        // Show the formula structure: operation(arg1, arg2, ...)
+        const childIds = document.getChildIds(id);
+        const childElements = childIds.map((childId, idx) => {
+          const rendered = renderById(childId);
+          return React.createElement(
+            'span',
+            { key: childId },
+            idx > 0 ? ", " : "",
+            rendered
+          );
+        });
+
+        return React.createElement(
+          'x-formula',
+          {
+            [DENICEK_NODE_ID_ATTR]: id,
+            className: mergeClasses(styles.formula, styles.formulaStructure),
+          },
+          `${node.operation}(`,
+          ...childElements,
+          ")"
+        );
+      } else {
+        // Show the computed result
+        const result = evaluateFormula(id, formulaContext);
+        const displayValue = isFormulaError(result) ? result : String(result ?? "");
+        return React.createElement(
+          'x-formula',
+          {
+            [DENICEK_NODE_ID_ATTR]: id,
+            className: mergeClasses(styles.formula, isFormulaError(result) ? styles.formulaError : undefined),
+            title: `Formula: ${node.operation}`,
+          },
+          displayValue
+        );
+      }
     }
 
     // Handle action nodes - render as buttons

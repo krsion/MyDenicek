@@ -26,7 +26,7 @@ export interface ElementNodeData {
 export interface ValueNodeData {
     id: string;
     kind: "value";
-    value: string;
+    value: string | number;  // Supports both strings and numbers for formulas
     sourceId?: string;  // Reference to source node if this is a copy
 }
 
@@ -44,9 +44,29 @@ export interface ActionNodeData {
 }
 
 /**
+ * Ref node data - references another node's value
+ */
+export interface RefNodeData {
+    id: string;
+    kind: "ref";
+    target: string;  // ID of the referenced node
+    sourceId?: string;  // Reference to source node if this is a copy
+}
+
+/**
+ * Formula node data - computes a value from children using an operation
+ */
+export interface FormulaNodeData {
+    id: string;
+    kind: "formula";
+    operation: string;  // Operation name - implementation must be registered
+    sourceId?: string;  // Reference to source node if this is a copy
+}
+
+/**
  * Union type for public node data
  */
-export type NodeData = ElementNodeData | ValueNodeData | ActionNodeData;
+export type NodeData = ElementNodeData | ValueNodeData | ActionNodeData | RefNodeData | FormulaNodeData;
 
 /**
  * Immutable snapshot of document state for temporal comparisons.
@@ -101,10 +121,30 @@ export interface ActionNode {
 }
 
 /**
+ * Internal ref node - references another node's value
+ * @internal
+ */
+export interface RefNode {
+    kind: "ref";
+    target: string;  // ID of the referenced node
+    sourceId?: string;  // Reference to source node if this is a copy
+}
+
+/**
+ * Internal formula node - computes a value from children using an operation
+ * @internal
+ */
+export interface FormulaNode {
+    kind: "formula";
+    operation: string;  // Operation name
+    sourceId?: string;  // Reference to source node if this is a copy
+}
+
+/**
  * Internal union type for all node types
  * @internal
  */
-export type Node = ElementNode | ValueNode | ActionNode;
+export type Node = ElementNode | ValueNode | ActionNode | RefNode | FormulaNode;
 
 
 /**
@@ -170,3 +210,33 @@ export interface SyncState {
     error: string | null;
 }
 
+
+// ============================================================================
+// Formula Types
+// ============================================================================
+
+/**
+ * Document accessor interface for formula evaluation
+ * Avoids circular dependency with DenicekDocument
+ */
+export interface FormulaDocumentAccessor {
+    getNode(id: string): NodeData | undefined;
+    getChildIds(id: string): string[];
+}
+
+/**
+ * Operation definition for formula evaluation
+ */
+export interface Operation {
+    name: string;
+    arity: number;  // -1 for variadic
+    execute: (args: unknown[], context: FormulaContext) => unknown;
+}
+
+/**
+ * Context passed to formula evaluation
+ */
+export interface FormulaContext {
+    operations: Map<string, Operation>;
+    document: FormulaDocumentAccessor;
+}

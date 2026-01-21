@@ -5,7 +5,7 @@
 
 import { LoroDoc, LoroList, LoroMap, LoroText, LoroTree, LoroTreeNode, type TreeID } from "loro-crdt";
 
-import type { ActionNode, ElementNode, GeneralizedPatch, Node, NodeData, ValueNode } from "./types.js";
+import type { ActionNode, ElementNode, FormulaNode, GeneralizedPatch, Node, NodeData, RefNode, ValueNode } from "./types.js";
 
 /**
  * Internal constants for Loro container names
@@ -29,6 +29,16 @@ export const NODE_ACTIONS = "actions";
 export const NODE_TARGET = "target";
 
 /**
+ * Formula node data keys
+ */
+export const NODE_OPERATION = "operation";
+
+/**
+ * Ref node data keys
+ */
+export const NODE_REF_TARGET = "refTarget";
+
+/**
  * Convert TreeID to a stable string ID for our public API
  */
 export function treeIdToString(id: TreeID): string {
@@ -50,7 +60,7 @@ export function stringToTreeId(id: string): TreeID {
  */
 export function loroNodeToNode(treeNode: LoroTreeNode, _tree: LoroTree): Node {
     const data = treeNode.data;
-    const kind = data.get(NODE_KIND) as "element" | "value" | "action" | undefined;
+    const kind = data.get(NODE_KIND) as "element" | "value" | "action" | "ref" | "formula" | undefined;
     const sourceId = data.get(NODE_SOURCE_ID) as string | undefined;
 
     if (kind === "value") {
@@ -76,6 +86,22 @@ export function loroNodeToNode(treeNode: LoroTreeNode, _tree: LoroTree): Node {
             label,
             actions: actionsContainer,
             target,
+            ...(sourceId && { sourceId }),
+        };
+        return node;
+    } else if (kind === "ref") {
+        const target = (data.get(NODE_REF_TARGET) as string) || "";
+        const node: RefNode = {
+            kind: "ref",
+            target,
+            ...(sourceId && { sourceId }),
+        };
+        return node;
+    } else if (kind === "formula") {
+        const operation = (data.get(NODE_OPERATION) as string) || "";
+        const node: FormulaNode = {
+            kind: "formula",
+            operation,
             ...(sourceId && { sourceId }),
         };
         return node;
@@ -143,7 +169,7 @@ export function buildDocumentIndex(doc: LoroDoc): DocumentIndex {
     function walkNode(treeNode: LoroTreeNode, parentId: string | null): void {
         const id = treeIdToString(treeNode.id);
         const data = treeNode.data;
-        const kind = data.get(NODE_KIND) as "element" | "value" | "action" | undefined;
+        const kind = data.get(NODE_KIND) as "element" | "value" | "action" | "ref" | "formula" | undefined;
         const sourceId = data.get(NODE_SOURCE_ID) as string | undefined;
 
         parents.set(id, parentId);
@@ -167,6 +193,23 @@ export function buildDocumentIndex(doc: LoroDoc): DocumentIndex {
             const target = (data.get(NODE_TARGET) as string) || "";
             nodes.set(id, { id, kind: "action", label, actions, target, ...(sourceId && { sourceId }) });
             childIds.set(id, []);  // Action nodes have no children
+        } else if (kind === "ref") {
+            const target = (data.get(NODE_REF_TARGET) as string) || "";
+            nodes.set(id, { id, kind: "ref", target, ...(sourceId && { sourceId }) });
+            childIds.set(id, []);  // Ref nodes have no children
+        } else if (kind === "formula") {
+            const operation = (data.get(NODE_OPERATION) as string) || "";
+            nodes.set(id, { id, kind: "formula", operation, ...(sourceId && { sourceId }) });
+            // Formula nodes CAN have children (their arguments)
+            const children: string[] = [];
+            const childNodes = treeNode.children();
+            if (childNodes) {
+                for (const child of childNodes) {
+                    children.push(treeIdToString(child.id));
+                    walkNode(child, id);
+                }
+            }
+            childIds.set(id, children);
         } else {
             const tag = (data.get(NODE_TAG) as string) || "div";
             const attrsData = data.get(NODE_ATTRS);

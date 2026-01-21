@@ -193,9 +193,7 @@ npm run test -w mywebnicek             # E2E tests (Playwright)
 ```
 
 ## TODO
-- Programmable buttons
 - Formula engine
-
 
 ### High Priority
 

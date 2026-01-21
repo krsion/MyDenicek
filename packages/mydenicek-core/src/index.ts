@@ -24,11 +24,19 @@ export type {
     DenicekAction,
     ElementNode,
     ElementNodeData,
+    FormulaContext,
+    FormulaDocumentAccessor,
+    FormulaNode,
+    FormulaNodeData,
     // Other types
     GeneralizedPatch,
     Node,
     NodeData,
+    // Formula types
+    Operation,
     OpId,
+    RefNode,
+    RefNodeData,
     // Snapshot for temporal comparisons
     Snapshot,
     SpliceInfo,
@@ -39,4 +47,7 @@ export type {
     ValueNodeData,
     Version
 } from "./types.js";
+
+// Formula engine
+export { evaluateFormula, getNodeValue, isFormulaError } from "./formula/index.js";
 

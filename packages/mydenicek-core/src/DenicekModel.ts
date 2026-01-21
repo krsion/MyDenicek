@@ -14,6 +14,8 @@ import {
     NODE_ATTRS,
     NODE_KIND,
     NODE_LABEL,
+    NODE_OPERATION,
+    NODE_REF_TARGET,
     NODE_SOURCE_ID,
     NODE_TAG,
     NODE_TARGET,
@@ -33,7 +35,9 @@ import type {
 type NodeInput =
     | ElementNode
     | { kind: "value"; value: string }
-    | { kind: "action"; label: string; actions: GeneralizedPatch[]; target: string };
+    | { kind: "action"; label: string; actions: GeneralizedPatch[]; target: string }
+    | { kind: "formula"; operation: string }
+    | { kind: "ref"; target: string };
 
 /**
  * Sanitize and validate a tag name for use with HTML elements.
@@ -226,7 +230,8 @@ export class DenicekModel {
 
     /**
      * Generic property update for any node type.
-     * Supports: label, target, actions (for action nodes), tag (for element nodes)
+     * Supports: label, target, actions (for action nodes), tag (for element nodes),
+     * operation (for formula nodes), refTarget (for ref nodes)
      */
     updateNodeProperty(id: string, property: string, value: unknown): void {
         try {
@@ -235,7 +240,23 @@ export class DenicekModel {
             if (!treeNode) return;
 
             const data = treeNode.data;
-            const kind = data.get(NODE_KIND) as "element" | "value" | "action" | undefined;
+            const kind = data.get(NODE_KIND) as "element" | "value" | "action" | "formula" | "ref" | undefined;
+
+            // Handle formula node properties
+            if (kind === "formula") {
+                if (property === "operation") {
+                    this.updateFormulaOperation(id, value as string);
+                }
+                return;
+            }
+
+            // Handle ref node properties
+            if (kind === "ref") {
+                if (property === "refTarget" || property === "target") {
+                    this.updateRefTarget(id, value as string);
+                }
+                return;
+            }
 
             // Handle action node properties
             if (kind === "action") {
@@ -416,7 +437,7 @@ export class DenicekModel {
 
     // ==================== WRAP ====================
 
-    wrapNode(targetId: string, wrapperTag: string, wrapperId?: string): string {
+    wrapNode(targetId: string, wrapperTag: string): string {
         try {
             // Sanitize and validate wrapper tag name
             const sanitizedTag = sanitizeTagName(wrapperTag);
@@ -428,29 +449,6 @@ export class DenicekModel {
             const targetTreeId = stringToTreeId(targetId);
             const targetNode = this.tree.getNodeByID(targetTreeId);
             if (!targetNode) return "";
-
-            const actualWrapperId = wrapperId ?? ("w-" + targetId);
-
-            // Check if wrapper already exists with correct structure
-            try {
-                const existingTreeId = stringToTreeId(actualWrapperId);
-                const existingWrapper = this.tree.getNodeByID(existingTreeId);
-                if (existingWrapper) {
-                    const data = existingWrapper.data;
-                    const kind = data.get(NODE_KIND);
-                    const tag = data.get(NODE_TAG);
-                    const children = existingWrapper.children();
-
-                    const firstChild = children?.[0];
-                    if (kind === "element" && tag === sanitizedTag &&
-                        firstChild && children.length === 1 &&
-                        treeIdToString(firstChild.id) === targetId) {
-                        return actualWrapperId;
-                    }
-                }
-            } catch {
-                // Wrapper doesn't exist, continue
-            }
 
             const parent = targetNode.parent();
             if (!parent) return "";
@@ -500,6 +498,142 @@ export class DenicekModel {
             return createdWrapperId;
         } catch (e) {
             handleModelError("wrapNode", e);
+            return "";
+        }
+    }
+
+    // ==================== FORMULA & REF OPERATIONS ====================
+
+    /**
+     * Update a formula node's operation
+     * @param id - The formula node ID
+     * @param operation - The new operation name
+     */
+    updateFormulaOperation(id: string, operation: string): void {
+        try {
+            const treeId = stringToTreeId(id);
+            const treeNode = this.tree.getNodeByID(treeId);
+            if (!treeNode) return;
+
+            const data = treeNode.data;
+            const kind = data.get(NODE_KIND);
+            if (kind !== "formula") return;
+
+            data.set(NODE_OPERATION, operation);
+            this.emitPatch({
+                action: "put",
+                path: ["nodes", id, "operation"],
+                value: operation
+            });
+        } catch (e) {
+            handleModelError("updateFormulaOperation", e);
+        }
+    }
+
+    /**
+     * Update a ref node's target
+     * @param id - The ref node ID
+     * @param target - The new target node ID
+     */
+    updateRefTarget(id: string, target: string): void {
+        try {
+            const treeId = stringToTreeId(id);
+            const treeNode = this.tree.getNodeByID(treeId);
+            if (!treeNode) return;
+
+            const data = treeNode.data;
+            const kind = data.get(NODE_KIND);
+            if (kind !== "ref") return;
+
+            data.set(NODE_REF_TARGET, target);
+            this.emitPatch({
+                action: "put",
+                path: ["nodes", id, "refTarget"],
+                value: target
+            });
+        } catch (e) {
+            handleModelError("updateRefTarget", e);
+        }
+    }
+
+    /**
+     * Wrap a node in a formula with optional additional arguments.
+     * The wrapped node becomes the first child of the formula.
+     * Additional arguments are added as subsequent children.
+     *
+     * @param nodeId - The node to wrap (becomes first argument)
+     * @param operation - The formula operation name
+     * @param additionalArgs - Additional arguments (value strings or ref targets)
+     * @returns The ID of the created formula node
+     */
+    wrapInFormula(nodeId: string, operation: string, additionalArgs?: Array<{ kind: "value"; value: string } | { kind: "ref"; target: string }>): string {
+        try {
+            const targetTreeId = stringToTreeId(nodeId);
+            const targetNode = this.tree.getNodeByID(targetTreeId);
+            if (!targetNode) return "";
+
+            const parent = targetNode.parent();
+            if (!parent) return "";
+
+            const siblings = parent.children();
+            if (!siblings) return "";
+
+            // Find target's index
+            let targetIndex = 0;
+            for (let i = 0; i < siblings.length; i++) {
+                const sibling = siblings[i];
+                if (sibling && treeIdToString(sibling.id) === nodeId) {
+                    targetIndex = i;
+                    break;
+                }
+            }
+
+            // Create formula node at the same position
+            const formulaNode = parent.createNode(targetIndex);
+            const formulaData = formulaNode.data;
+            formulaData.set(NODE_KIND, "formula");
+            formulaData.set(NODE_OPERATION, operation);
+
+            // Move target to be first child of formula
+            targetNode.move(formulaNode, 0);
+
+            const formulaId = treeIdToString(formulaNode.id);
+            const parentId = treeIdToString(parent.id);
+
+            // Emit insert patch for the formula
+            this.emitPatch({
+                action: "insert",
+                path: ["nodes", parentId, "children", targetIndex],
+                value: {
+                    id: formulaId,
+                    kind: "formula",
+                    operation
+                }
+            });
+
+            // Emit move patch for the target node
+            this.emitPatch({
+                action: "move",
+                path: ["nodes", nodeId],
+                value: { parentId: formulaId, index: 0 }
+            });
+
+            // Add additional arguments as children
+            if (additionalArgs) {
+                for (let i = 0; i < additionalArgs.length; i++) {
+                    const arg = additionalArgs[i];
+                    if (!arg) continue;
+                    if (arg.kind === "value") {
+                        this.addChild(formulaId, { kind: "value", value: arg.value }, i + 1);
+                    } else if (arg.kind === "ref") {
+                        this.addChild(formulaId, { kind: "ref", target: arg.target }, i + 1);
+                    }
+                }
+            }
+
+            return formulaId;
+        } catch (e) {
+            handleModelError("wrapInFormula", e);
             return "";
         }
     }
@@ -567,6 +701,12 @@ export class DenicekModel {
                 for (const action of sanitizedChild.actions) {
                     actionsList.push(action);
                 }
+            } else if (sanitizedChild.kind === "formula") {
+                data.set(NODE_KIND, "formula");
+                data.set(NODE_OPERATION, sanitizedChild.operation);
+            } else if (sanitizedChild.kind === "ref") {
+                data.set(NODE_KIND, "ref");
+                data.set(NODE_REF_TARGET, sanitizedChild.target);
             } else {
                 data.set(NODE_KIND, "value");
                 const textContainer = data.setContainer(NODE_TEXT, new LoroText()) as LoroText;
@@ -644,6 +784,12 @@ export class DenicekModel {
                         actionsList.push(action);
                     }
                 }
+            } else if (input.kind === "formula") {
+                data.set(NODE_KIND, "formula");
+                data.set(NODE_OPERATION, "operation" in input ? input.operation : (sibling.kind === "formula" ? sibling.operation : ""));
+            } else if (input.kind === "ref") {
+                data.set(NODE_KIND, "ref");
+                data.set(NODE_REF_TARGET, "target" in input ? input.target : (sibling.kind === "ref" ? sibling.target : ""));
             }
 
             return treeIdToString(newNode.id);
@@ -702,7 +848,7 @@ export class DenicekModel {
             textContainer.insert(0, attrValue);
         } else {
             // Copy whole node
-            const sourceKind = sourceData.get(NODE_KIND) as "element" | "value" | undefined;
+            const sourceKind = sourceData.get(NODE_KIND) as "element" | "value" | "action" | "formula" | "ref" | undefined;
             if (sourceKind === "element") {
                 data.set(NODE_KIND, "element");
                 data.set(NODE_TAG, (sourceData.get(NODE_TAG) as string) || "div");
@@ -713,7 +859,25 @@ export class DenicekModel {
                         attrsMap.set(key, value);
                     }
                 }
+            } else if (sourceKind === "action") {
+                data.set(NODE_KIND, "action");
+                data.set(NODE_LABEL, (sourceData.get(NODE_LABEL) as string) || "Action");
+                data.set(NODE_TARGET, (sourceData.get(NODE_TARGET) as string) || "");
+                const actionsList = data.setContainer(NODE_ACTIONS, new LoroList()) as LoroList;
+                const sourceActions = sourceData.get(NODE_ACTIONS) as LoroList | undefined;
+                if (sourceActions) {
+                    for (const action of sourceActions.toJSON() as GeneralizedPatch[]) {
+                        actionsList.push(action);
+                    }
+                }
+            } else if (sourceKind === "formula") {
+                data.set(NODE_KIND, "formula");
+                data.set(NODE_OPERATION, (sourceData.get(NODE_OPERATION) as string) || "");
+            } else if (sourceKind === "ref") {
+                data.set(NODE_KIND, "ref");
+                data.set(NODE_REF_TARGET, (sourceData.get(NODE_REF_TARGET) as string) || "");
             } else {
+                // Default: value node
                 data.set(NODE_KIND, "value");
                 const textContainer = data.setContainer(NODE_TEXT, new LoroText()) as LoroText;
                 const sourceText = sourceData.get(NODE_TEXT) as LoroText | undefined;
@@ -807,6 +971,14 @@ export class DenicekModel {
                     this.updateNodeProperty(id, "label", value);
                 } else if (field === "target" && action === "put") {
                     this.updateNodeProperty(id, "target", value);
+                }
+                // Handle formula node operation update
+                else if (field === "operation" && action === "put") {
+                    this.updateFormulaOperation(id, value as string);
+                }
+                // Handle ref node target update
+                else if (field === "refTarget" && action === "put") {
+                    this.updateRefTarget(id, value as string);
                 } else if (field === "actions") {
                     if (action === "put") {
                         this.updateNodeProperty(id, "actions", value);
