@@ -52,9 +52,10 @@ interface RenderedDocumentProps {
 export function RenderedDocument({ document, onActionClick }: RenderedDocumentProps) {
   const styles = useStyles();
 
-  // Sync input value to CRDT on blur (so copy can read the current value)
-  const handleInputBlur = React.useCallback((e: React.FocusEvent<HTMLInputElement>, nodeId: string) => {
-    const value = e.target.value;
+  // Sync input value to CRDT on Enter key (so copy can read the current value)
+  const handleInputKeyDown = React.useCallback((e: React.KeyboardEvent<HTMLInputElement>, nodeId: string) => {
+    if (e.key !== "Enter") return;
+    const value = e.currentTarget.value;
     document.change((model) => {
       model.updateAttribute(nodeId, "data-copy-value", value);
     });
@@ -134,9 +135,9 @@ export function RenderedDocument({ document, onActionClick }: RenderedDocumentPr
       }
     }
 
-    // Add blur handler for input elements to sync value to CRDT
+    // Add keydown handler for input elements to sync value to CRDT on Enter
     if (node.tag === "input") {
-      attrs["onBlur"] = (e: React.FocusEvent<HTMLInputElement>) => handleInputBlur(e, id);
+      attrs["onKeyDown"] = (e: React.KeyboardEvent<HTMLInputElement>) => handleInputKeyDown(e, id);
     }
 
     const childIds = document.getChildIds(id);

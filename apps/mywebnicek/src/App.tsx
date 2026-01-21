@@ -89,7 +89,7 @@ export const App = () => {
     const rootId = document.getRootId();
     if (rootId) traverse(rootId);
     return nodes;
-  }, [document, version]);
+  }, [document]);
 
   // Toast for share notification
   const toasterId = useId("share-toaster");
