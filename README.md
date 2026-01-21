@@ -72,13 +72,8 @@ packages/
 
 **DenicekDocument** (`packages/mydenicek-core/src/DenicekDocument.ts`)
 - Entry point for all document operations
-- Wraps Loro internals via LoroDocWrapper (no Loro types exposed publicly)
-- Provides: snapshots, mutations via `change()`, export/import, subscriptions, history/checkout
-
-**DenicekStore** (`packages/mydenicek-core/src/DenicekStore.ts`)
-- Transaction management with `modify()` and `modifyTransaction()`
-- Undo/Redo via Loro's UndoManager
-- Patch history recording for replay functionality
+- Wraps Loro internals (no Loro types exposed publicly)
+- Provides: mutations via `change()`, undo/redo, export/import, subscriptions, history, replay
 
 **DenicekModel** (`packages/mydenicek-core/src/DenicekModel.ts`)
 - Facade for read/write operations, created inside `change()` callbacks
@@ -174,7 +169,7 @@ The following table outlines how the system resolves specific concurrent operati
 
 ## Recording/Replay (Programming by Demonstration)
 
-Patches are recorded with generalized node IDs (`$0`, `$1`, etc.). During replay, `$0` is bound to a new starting node, enabling recorded actions to be applied elsewhere. See `DenicekStore.replay()`.
+Patches are recorded with generalized node IDs (`$0`, `$1`, etc.). During replay, `$0` is bound to a new starting node, enabling recorded actions to be applied elsewhere. See `DenicekDocument.replay()`.
 
 ## Development
 
@@ -193,7 +188,6 @@ npm run test -w mywebnicek             # E2E tests (Playwright)
 ```
 
 ## TODO
-- Formula engine
 
 ### High Priority
 
@@ -216,14 +210,12 @@ npm run test -w mywebnicek             # E2E tests (Playwright)
 | Add stress tests for large documents | Performance under load untested |
 | Consolidate generalization logic | Duplicated in `scriptAnalysis.ts` and `App.tsx` |
 | Add deployment guide for sync server | Missing from docs |
-| Measure and document sync latency | Configurable but not measured (NFR-04) |
-
 ### Implementation Status
 
 ```
-Core Library (FR-01 to FR-10):     10/10 fully implemented
-MyWebnicek UI (FR-11 to FR-19):     7/9 full, 2 partial
-Non-functional (NFR-01 to NFR-09):  5/9 full, 4 partial
+Core Library (FR-01 to FR-13):     13/13 fully implemented
+MyWebnicek UI (FR-14 to FR-24):    9/11 full, 2 partial
+Non-functional (NFR-01 to NFR-09):  6/9 full, 3 partial
 
-Overall: ~92% feature-complete
+Overall: ~95% feature-complete
 ```

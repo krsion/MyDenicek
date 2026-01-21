@@ -81,7 +81,7 @@ The user journey through MyWebnicek consists of the following phases:
 
 \item \textbf{Document Navigation:} Users navigate the document tree using keyboard shortcuts or mouse clicks. The selected node is highlighted in both the rendered view and the JSON inspector.
 
-\item \textbf{Document Editing:} Users perform edit operations through direct manipulation and toolbar controls. Operations include adding nodes, editing values, wrapping nodes, and deleting nodes.
+\item \textbf{Document Editing:} Users perform edit operations through toolbar controls. Operations include adding nodes, editing values, wrapping nodes, and deleting nodes.
 
 \item \textbf{Recording/Replay:} Users can record a sequence of edit operations and replay them on different parts of the document, enabling programming by demonstration.
 
@@ -106,7 +106,7 @@ The following functional requirements specify the capabilities of the system. Re
 \textbf{FR-04: Node Operations} [Core] The system shall support the following operations on nodes:
 \begin{itemize}
 \setlength{\itemsep}{-5pt}
-\item \texttt{addChild}: Add a new child node (element or value) to a parent node
+\item \texttt{addChild}: Add a new child node (element, value, formula, ref, or action) to a parent
 \item \texttt{addSibling}: Add a new sibling node before or after an existing node
 \item \texttt{deleteNode}: Remove a node and its descendants from the document
 \item \texttt{moveNode}: Move a node to a different parent or position
@@ -134,23 +134,31 @@ The following functional requirements specify the capabilities of the system. Re
 
 \textbf{FR-09: Transformations} [Core] The system shall support defining transformations on element nodes that are automatically applied to new children. This enables pattern-based document manipulation.
 
+\textbf{FR-10: Formula Nodes} [Core] Formula nodes compute values from an \texttt{operation} and child arguments (value nodes, ref nodes, or nested formulas). Evaluation detects circular references and enforces max recursion depth.
+
+\textbf{FR-11: Formula Operations} [Core] Built-in operations: string (\texttt{concat}, \texttt{uppercase}, etc.), math (\texttt{plus}, \texttt{multiply}, etc.), array (\texttt{atIndex}, \texttt{splitString}), and tree (\texttt{countChildren}).
+
+\textbf{FR-12: Ref Nodes} [Core] Ref nodes reference other nodes via a \texttt{target} ID. In formulas, they resolve to the target's value.
+
+\textbf{FR-13: Action Nodes} [Core] Action nodes store recorded operations as generalized patches. They have a \texttt{label}, \texttt{target} (bound to \texttt{\$0}), and \texttt{actions} list. Triggering replays patches on the target.
+
 \subsubsection{Web Application Requirements}
 
-\textbf{FR-10: Document Rendering} [Web] The application shall render the document tree as HTML, allowing users to see the final document appearance.
+\textbf{FR-14: Document Rendering} [Web] The application shall render the document tree as HTML, allowing users to see the final document appearance.
 
-\textbf{FR-11: Node Selection} [Web] Users shall be able to select nodes by clicking on them in the rendered view or navigating with keyboard shortcuts (arrow keys, Tab).
+\textbf{FR-15: Node Selection} [Web] Users shall be able to select nodes by clicking on them in the rendered view or navigating with keyboard shortcuts (arrow keys, Tab).
 
-\textbf{FR-12: JSON Inspector} [Web] The application shall display a JSON view of the document structure, highlighting the currently selected node.
+\textbf{FR-16: JSON Inspector} [Web] The application shall display a JSON view of the document structure, highlighting the currently selected node.
 
-\textbf{FR-13: Element Details Panel} [Web] When an element node is selected, the application shall display its tag, attributes, and available operations.
+\textbf{FR-17: Element Details Panel} [Web] When an element node is selected, the application shall display its tag, attributes, and available operations.
 
-\textbf{FR-14: Add Node Interface} [Web] Users shall be able to add child nodes through a popover interface that allows specifying the tag name or text content.
+\textbf{FR-18: Add Node Interface} [Web] Users shall be able to add child nodes through a popover interface that allows specifying the tag name or text content.
 
-\textbf{FR-15: Recording Controls} [Web] The application shall provide controls to start and stop recording, and display the recorded script.
+\textbf{FR-19: Recording Controls} [Web] The application shall provide controls to start and stop recording, and display the recorded script.
 
-\textbf{FR-16: Replay Controls} [Web] The application shall provide controls to replay a recorded script on the currently selected node.
+\textbf{FR-20: Replay Controls} [Web] The application shall provide controls to replay a recorded script on the currently selected node.
 
-\textbf{FR-17: Keyboard Shortcuts} [Web] The application shall support keyboard shortcuts for common operations:
+\textbf{FR-21: Keyboard Shortcuts} [Web] The application shall support keyboard shortcuts for common operations:
 \begin{itemize}
 \setlength{\itemsep}{-5pt}
 \item Arrow keys: Navigate between nodes
@@ -159,7 +167,11 @@ The following functional requirements specify the capabilities of the system. Re
 \item Ctrl+Y / Ctrl+Shift+Z: Redo
 \end{itemize}
 
-\textbf{FR-18: WebSocket Synchronization} [Web] The application shall synchronize document changes with other clients via WebSocket connection to a sync server.
+\textbf{FR-22: WebSocket Synchronization} [Web] The application shall synchronize document changes with other clients via WebSocket connection to a sync server.
+
+\textbf{FR-23: Formula Rendering} [Web] Formula nodes display computed results or formula structure (for debugging).
+
+\textbf{FR-24: Action Node Rendering} [Web] Action nodes render as buttons; clicking triggers replay on the target.
 
 
 \subsection{Non-functional requirements}
@@ -172,19 +184,17 @@ The following non-functional requirements specify quality attributes and system 
 
 \textbf{NFR-03: Response Time} User interface operations (node selection, editing) shall complete within 100ms to provide responsive feedback.
 
-\textbf{NFR-04: Synchronization Latency} Document changes shall be propagated to connected clients within 500ms under normal network conditions.
+\textbf{NFR-04: Browser Compatibility} The web application shall function correctly on current versions of Chrome, Firefox, Safari, and Edge.
 
-\textbf{NFR-05: Browser Compatibility} The web application shall function correctly on current versions of Chrome, Firefox, Safari, and Edge.
+\textbf{NFR-05: Type Safety} The codebase shall use TypeScript with strict type checking. The use of \texttt{any} type is prohibited; \texttt{unknown} or specific types shall be used instead.
 
-\textbf{NFR-06: Type Safety} The codebase shall use TypeScript with strict type checking. The use of \texttt{any} type is prohibited; \texttt{unknown} or specific types shall be used instead.
+\textbf{NFR-06: Code Quality} The codebase shall pass ESLint checks with no errors. Unused imports shall be removed automatically, and imports shall be sorted consistently.
 
-\textbf{NFR-07: Code Quality} The codebase shall pass ESLint checks with no errors. Unused imports shall be removed automatically, and imports shall be sorted consistently.
+\textbf{NFR-07: Test Coverage} Core library functionality shall be covered by unit tests (Vitest). User interface functionality shall be covered by end-to-end tests (Playwright).
 
-\textbf{NFR-08: Test Coverage} Core library functionality shall be covered by unit tests (Vitest). User interface functionality shall be covered by end-to-end tests (Playwright).
+\textbf{NFR-08: Documentation} Public APIs shall be documented with JSDoc comments. The README shall contain setup instructions and usage examples.
 
-\textbf{NFR-09: Documentation} Public APIs shall be documented with JSDoc comments. The README shall contain setup instructions and usage examples.
-
-\textbf{NFR-10: Reproducibility} The development environment shall be reproducible using npm. All dependencies shall be specified in package.json with locked versions.
+\textbf{NFR-09: Reproducibility} The development environment shall be reproducible using npm. All dependencies shall be specified in package.json with locked versions.
 
 
 \subsection{Architecture}
@@ -202,39 +212,167 @@ packages/
 
 \subsubsection{Core Library Architecture}
 
-The core library (\texttt{@mydenicek/core}) provides three main classes:
+The core library (\texttt{@mydenicek/core}) provides two main classes:
 
-\textbf{DenicekStore} is the entry point for document operations. It wraps a Loro document and provides:
+\textbf{DenicekDocument} is the entry point. It wraps a Loro document and provides:
 \begin{itemize}
 \setlength{\itemsep}{-5pt}
-\item \texttt{modify(doc, updater)}: Execute a single change on the document
-\item \texttt{modifyTransaction(doc, updater)}: Execute multiple changes as a single undo step
-\item \texttt{undo(doc)} / \texttt{redo(doc)}: Undo/redo operations
-\item \texttt{startRecording(nodeId)} / \texttt{stopRecording()}: Recording controls
-\item \texttt{replay(doc, script, startNodeId)}: Replay a recorded script
+\item \texttt{change(fn)}: Execute mutations via a DenicekModel callback
+\item \texttt{undo()} / \texttt{redo()}: Undo/redo operations
+\item \texttt{replay(script, startNodeId)}: Replay a recorded script
+\item \texttt{connectToSync()} / \texttt{disconnectSync()}: WebSocket synchronization
+\item \texttt{export()} / \texttt{import()}: Serialization for sync
 \end{itemize}
 
-\textbf{DenicekModel} provides read/write operations within \texttt{modify()} callbacks:
+\textbf{DenicekModel} provides read/write operations within \texttt{change()} callbacks:
 \begin{itemize}
 \setlength{\itemsep}{-5pt}
-\item Read: \texttt{getNode()}, \texttt{getAllNodes()}, \texttt{getParentId()}, \texttt{getChildren()}
+\item Read: \texttt{getNode()}, \texttt{getParentId()}, \texttt{getChildren()}
 \item Write: \texttt{updateAttribute()}, \texttt{updateTag()}, \texttt{wrapNode()}, \texttt{deleteNode()}, \texttt{moveNode()}, \texttt{spliceValue()}, \texttt{addChild()}, \texttt{addSibling()}, \texttt{copyNode()}
 \end{itemize}
-
-\textbf{UndoManager} maintains undo/redo stacks by capturing inverse patches for each operation.
 
 \subsubsection{Data Flow}
 
 \begin{enumerate}
 \item User performs an action in the UI (e.g., clicks ``Add Child'')
-\item React component calls \texttt{store.modify(doc, model => \{ ... \})}
+\item React component calls \texttt{document.change(model => \{ ... \})}
 \item DenicekModel applies the change to the Loro document
-\item Loro generates patches and notifies the UndoManager
-\item If recording is active, patches are captured by the Recorder
+\item Loro generates patches; undo manager captures inverse
+\item If subscribed, patches are recorded for replay
 \item Loro synchronizes changes to connected peers via WebSocket
 \item Remote peers receive patches and update their local document
 \item React re-renders based on the updated document state
 \end{enumerate}
+
+
+\subsection{Formula Engine}
+
+The formula engine enables spreadsheet-like reactive computation. Nodes derive values from other nodes through operations.
+
+\subsubsection{Node Types}
+
+\textbf{Formula Nodes} compute values. They have an \texttt{operation} attribute (e.g., ``plus'') and children serving as arguments.
+
+\textbf{Ref Nodes} reference other nodes via a \texttt{target} attribute. In formulas, they resolve to the target's value.
+
+\textbf{Value Nodes} provide literal arguments.
+
+\subsubsection{Evaluation}
+
+The evaluator traverses the formula tree recursively:
+\begin{enumerate}
+\item Check recursion depth (max 100) and circular references
+\item Evaluate each child: value nodes yield literals, ref nodes resolve targets, formula nodes recurse
+\item Look up operation, validate arity, invoke with arguments
+\item Return result or error (\texttt{\#ERR:} prefix)
+\end{enumerate}
+
+\subsubsection{Built-in Operations}
+
+\textbf{String:} \texttt{lowerText}, \texttt{upperText}, \texttt{capitalize}, \texttt{concat} (variadic), \texttt{trim}, \texttt{length}, \texttt{replace}
+
+\textbf{Math:} \texttt{plus}, \texttt{minus}, \texttt{multiply}, \texttt{divide}, \texttt{mod}, \texttt{round}, \texttt{floor}, \texttt{ceil}, \texttt{abs}
+
+\textbf{Array:} \texttt{atIndex}, \texttt{splitString}, \texttt{arrayLength}
+
+\textbf{Tree:} \texttt{countChildren}
+
+\subsubsection{Errors}
+
+\begin{itemize}
+\setlength{\itemsep}{-5pt}
+\item \texttt{\#ERR: max depth exceeded}
+\item \texttt{\#ERR: circular reference}
+\item \texttt{\#ERR: node deleted}
+\item \texttt{\#ERR: \{op\} not found}
+\item \texttt{\#ERR: \{op\} expects \{X\} args, got \{Y\}}
+\item \texttt{\#ERR: division by zero}
+\end{itemize}
+
+\subsubsection{Example}
+
+Nested formulas compute a formatted name. Given value nodes \texttt{"john"} and \texttt{"doe"}, the formula \texttt{concat(capitalize(ref->john), " ", capitalize(ref->doe))} evaluates to \texttt{"John Doe"}.
+
+
+\subsection{Programmable Buttons (Action Nodes)}
+
+Action nodes enable programming by demonstration: users record operations and save them to a button for replay.
+
+\subsubsection{Structure}
+
+An action node stores: \texttt{label} (display text), \texttt{target} (node bound to \texttt{\$0}), and \texttt{actions} (list of \texttt{GeneralizedPatch} objects).
+
+\subsubsection{Generalized Patches}
+
+Patches use variable placeholders instead of concrete node IDs:
+\begin{verbatim}
+GeneralizedPatch {
+    action: "put" | "del" | "insert" | "splice" | "move" | "copy"
+    path: (string | number)[]   // Contains $0, $1, etc.
+    value?: unknown
+    length?: number
+}
+\end{verbatim}
+
+Variables: \texttt{\$0} is the target node; \texttt{\$1}, \texttt{\$2}, ... are nodes created during replay.
+
+\subsubsection{Recording}
+
+\begin{enumerate}
+\item Select target node, click ``Start Recording''
+\item Perform operations (add, edit, delete nodes)
+\item Recorder captures patches, generalizing node IDs to variables
+\item Click ``Stop Recording''; patches are stored in an action node
+\end{enumerate}
+
+\subsubsection{Replay}
+
+\begin{enumerate}
+\item Click button or use replay controls
+\item System maps \texttt{\$0} to target node
+\item For each patch: substitute variables, apply patch, assign new variables to created nodes
+\end{enumerate}
+
+\subsubsection{Rendering}
+
+Action nodes render as buttons. Click triggers replay; Ctrl+click selects for editing.
+
+
+\subsection{Formative Examples}
+
+These examples from the original Denicek paper demonstrate the end-user programming model.
+
+\subsubsection{Counter}
+
+Demonstrates formulas and action buttons. The document contains a value node storing the count (e.g., \texttt{"5"}), a ref node displaying it, and two action buttons targeting the value.
+
+The ``+1'' button records wrapping the target in \texttt{formula(plus)} with argument \texttt{"1"}. Clicking transforms \texttt{"5"} into a formula \texttt{plus(ref, "1")} that evaluates to \texttt{"6"}. The ``-1'' button similarly wraps with \texttt{minus}.
+
+\subsubsection{Todo List}
+
+Demonstrates recording an ``add item'' pattern. The document contains a \texttt{ul} with existing \texttt{li} items (each with a checkbox and text), plus an ``Add'' action button targeting the list.
+
+To create the button: select the \texttt{ul}, record adding a new \texttt{li} with checkbox and text value, save to the action node. Each click replays the pattern, appending a new item.
+
+\subsubsection{Conference List (Schema Refactoring)}
+
+Demonstrates concurrent editing with CRDT conflict resolution. The document contains a list of conferences, each with name and location.
+
+\textbf{Scenario:} User A adds a ``year'' field to existing conferences (records wrapping each \texttt{li}'s content). User B concurrently adds a new conference.
+
+\textbf{Result:} Both operations succeed. A's changes apply to existing items; B's new item appears without the year field. A can replay the transformation on B's new item to add the field.
+
+\subsubsection{Hello World (Bulk Transformation)}
+
+Demonstrates applying transformations across multiple items. The document contains a \texttt{ul} with several \texttt{li} items (``Hello'', ``World'', ``Denicek'') and an ``Emphasize'' action button.
+
+Record wrapping content in \texttt{<strong>} and appending ``!''. Replay on each \texttt{li} transforms ``Hello'' to ``Hello!'' wrapped in \texttt{strong}.
+
+\subsubsection{Price Calculator (Formulas)}
+
+Demonstrates reactive computation. The document contains value nodes for quantity (\texttt{"3"}) and price (\texttt{"25"}), plus a \texttt{formula(multiply)} node referencing both. The formula evaluates to \texttt{"75"} and updates automatically when either value changes.
+
+Additional formulas like \texttt{countChildren} can count items in a list dynamically.
 
 
 \section{Platform and technologies}
@@ -276,7 +414,8 @@ The project uses the following technologies:
 \begin{itemize}
 \setlength{\itemsep}{-5pt}
 \item npm workspaces -- monorepo management
-\item GitHub Pages -- deployment of web application
+\item GitHub Pages -- web application hosting
+\item Azure App Service -- sync server hosting
 \item WebSocket -- real-time synchronization
 \end{itemize}
 \end{itemize}
@@ -305,14 +444,7 @@ The evaluation approach focuses on demonstrating that the CRDT-based synchroniza
 \item Bulk operations on multiple nodes
 \end{itemize}
 
-\textbf{Formative Examples} The system will be evaluated against the formative examples from the Denicek paper:
-\begin{itemize}
-\setlength{\itemsep}{-5pt}
-\item Counter app: Record incrementing a value and replay on button click
-\item Todo app: Record adding a list item and replay to add new todos
-\item Conference list: Concurrent editing with schema refactoring
-\item Hello world: Apply transformations across multiple items
-\end{itemize}
+\textbf{Formative Examples} Evaluation against examples from the Denicek paper (Section 2.7): counter (reactive values, action buttons), todo list (recording patterns), conference list (concurrent schema changes), hello world (bulk transformations), price calculator (formula engine).
 
 \textbf{Comparison with Original Denicek} A qualitative comparison will assess:
 \begin{itemize}
@@ -338,53 +470,17 @@ The evaluation approach focuses on demonstrating that the CRDT-based synchroniza
 
 \section{Milestones / Deliverables}
 
-By the project's conclusion, the following deliverables will be provided:
+\textbf{MyDenicek Library:} TypeScript library with CRDT-based documents (element, value, formula, ref, action nodes), edit operations, formula engine (19 operations), action nodes with recording/replay, Loro-based conflict resolution, and undo/redo.
 
-\textbf{Functional MyDenicek Library} A TypeScript library providing:
-\begin{itemize}
-\setlength{\itemsep}{-5pt}
-\item CRDT-based document representation
-\item Complete set of edit operations
-\item Automatic conflict resolution
-\item Undo/redo support
-\item Recording and replay functionality
-\end{itemize}
+\textbf{MyWebnicek Application:} React web app with document rendering, toolbar-based editing, recording/replay UI, and WebSocket collaboration.
 
-\textbf{Functional MyWebnicek Application} A React web application providing:
-\begin{itemize}
-\setlength{\itemsep}{-5pt}
-\item Document rendering and navigation
-\item Visual editing interface
-\item Recording/replay UI
-\item Real-time collaboration via WebSocket
-\end{itemize}
+\textbf{Documentation:} README, API docs, architecture overview, conflict resolution rules.
 
-\textbf{Technical Documentation} Comprehensive documentation including:
-\begin{itemize}
-\setlength{\itemsep}{-5pt}
-\item README with setup and usage instructions
-\item API documentation for the core library
-\item Architecture overview
-\item Conflict resolution rules
-\end{itemize}
+\textbf{Tests:} Unit tests (Vitest) for core library; E2E tests (Playwright) for web app.
 
-\textbf{Test Suite} Automated tests including:
-\begin{itemize}
-\setlength{\itemsep}{-5pt}
-\item Unit tests for core library (Vitest)
-\item End-to-end tests for web application (Playwright)
-\end{itemize}
+\textbf{Demo:} Live demonstration of editing, recording/replay, collaboration, and conflict resolution.
 
-\textbf{Demo} A live demonstration showing:
-\begin{itemize}
-\setlength{\itemsep}{-5pt}
-\item Document editing and navigation
-\item Recording and replaying operations
-\item Real-time collaboration between multiple users
-\item Conflict resolution in action
-\end{itemize}
-
-\textbf{Source Code} The project will be available as an open-source repository on GitHub, with clear commit history and documentation.
+\textbf{Source Code:} Open-source GitHub repository.
 
 
 \section{Time Schedule}
@@ -409,11 +505,15 @@ Monorepo + Tests & Package structure, unit/E2E tests & Jan 2026 & 6 & Done \\
 \hline
 Loro Migration & Replace Automerge with Loro CRDT & Jan 2026 & 4 & Done \\
 \hline
+Programmable Buttons & Action nodes, recording to buttons & Jan 2026 & 2 & Done \\
 \hline
-\multicolumn{3}{|l|}{\textbf{Completed}} & \textbf{34} & \\
+Formula Engine & Evaluation, operations, ref nodes & Jan 2026 & 2 & Done \\
 \hline
 \hline
-Sync \& Collaboration & WebSocket sync, multi-user testing & Jan--Feb 2026 & 8 & Planned \\
+\multicolumn{3}{|l|}{\textbf{Completed}} & \textbf{38} & \\
+\hline
+\hline
+Sync Server Deployment & Deploy to Azure, public collaboration & Jan--Feb 2026 & 4 & Planned \\
 \hline
 Web Application Polish & UI improvements, conflict feedback & Feb 2026 & 6 & Planned \\
 \hline
@@ -426,7 +526,7 @@ Documentation & README, API docs, video demo & Mar 2026 & 4 & Planned \\
 Finalization & Polish, presentation preparation & Mar 2026 & 3 & Planned \\
 \hline
 \hline
-\multicolumn{3}{|l|}{\textbf{Remaining (estimated)}} & \textbf{31} & \\
+\multicolumn{3}{|l|}{\textbf{Remaining (estimated)}} & \textbf{27} & \\
 \hline
 \hline
 \multicolumn{3}{|l|}{\textbf{Total}} & \textbf{65} & \\
@@ -435,7 +535,7 @@ Finalization & Polish, presentation preparation & Mar 2026 & 3 & Planned \\
 \caption{Project timeline: completed work (DARE2025 summer school + git history) and estimated remaining effort.}
 \end{table}
 
-The completed work includes migration from Automerge to Loro CRDT (January 2026), which provides better performance for tree-structured documents with its native movable tree CRDT. Remaining work focuses on real-time collaboration, UI polish, and demonstration of formative examples from the original Denicek paper.
+The completed work includes migration from Automerge to Loro CRDT (January 2026), formula engine, and programmable buttons. WebSocket synchronization works locally; remaining work focuses on deploying the sync server to Azure App Service for public collaboration, UI polish, and formative example demonstrations.
 
 
 \section{Form of collaboration}
@@ -444,17 +544,9 @@ Collaboration with the supervisor, Mgr. Tomáš Petříček, Ph.D., is essential
 
 \subsection{Consulting plan}
 
-\textbf{Regular Meetings} Weekly meetings (approximately every week) with the supervisor, each lasting 30--60 minutes. Meetings cover:
-\begin{itemize}
-\setlength{\itemsep}{-5pt}
-\item Progress updates on implementation
-\item Discussion of technical challenges
-\item Design decisions for conflict resolution
-\item Alignment with original Denicek semantics
-\item Planning for upcoming work
-\end{itemize}
+\textbf{Regular Meetings} Weekly meetings with the supervisor, 60--90 minutes each. Topics: progress updates, technical challenges, design decisions, alignment with original Denicek semantics.
 
-\textbf{Ad-hoc Communication} Email and messaging for quick questions and clarifications between meetings.
+\textbf{Ad-hoc Communication} Discord for quick questions between meetings.
 
 \textbf{Code Reviews} The supervisor may review code and provide feedback on architecture and implementation decisions.
 
