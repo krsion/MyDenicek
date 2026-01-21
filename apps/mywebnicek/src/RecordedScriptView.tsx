@@ -138,7 +138,7 @@ export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSel
                             // Path rest (after node ID)
                             const pathRest = patch.path.slice(2);
                             const pathStr = pathRest.map((seg, idx) => {
-                                if (typeof seg === 'number') return `[${seg}]`;
+                                if (typeof seg === 'number') return seg === -1 ? '[end]' : `[${seg}]`;
                                 if (idx === 0) return String(seg);
                                 return `.${seg}`;
                             }).join('');
@@ -247,7 +247,7 @@ export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSel
                                         : 0;
                                     // Path without the index for display
                                     const fieldPath = pathRest.slice(0, -1).map((seg, idx) => {
-                                        if (typeof seg === 'number') return `[${seg}]`;
+                                        if (typeof seg === 'number') return seg === -1 ? '[end]' : `[${seg}]`;
                                         if (idx === 0) return String(seg);
                                         return `.${seg}`;
                                     }).join('') || 'value';
@@ -333,7 +333,7 @@ export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSel
                                             {actions.map((act, idx) => {
                                                 const actPath = Array.isArray(act.path) ? act.path.slice(2) : [];
                                                 const actPathStr = actPath.map((seg: string | number, ai: number) => {
-                                                    if (typeof seg === 'number') return `[${seg}]`;
+                                                    if (typeof seg === 'number') return seg === -1 ? '[end]' : `[${seg}]`;
                                                     if (ai === 0) return String(seg);
                                                     return `.${seg}`;
                                                 }).join('');
@@ -382,7 +382,7 @@ export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSel
                                                         : 0;
                                                     // Field path without the index
                                                     const spliceFieldPath = actPath.slice(0, -1).map((seg: string | number, ai: number) => {
-                                                        if (typeof seg === 'number') return `[${seg}]`;
+                                                        if (typeof seg === 'number') return seg === -1 ? '[end]' : `[${seg}]`;
                                                         if (ai === 0) return String(seg);
                                                         return `.${seg}`;
                                                     }).join('') || 'value';

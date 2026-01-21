@@ -575,11 +575,15 @@ export class DenicekModel {
 
             const newId = treeIdToString(newNode.id);
             const children = parentNode.children();
-            const actualIndex = index ?? (children ? children.length - 1 : 0);
+            const countAfter = children ? children.length : 0;
+            const countBefore = countAfter - 1;
+            const actualIndex = index ?? countBefore;
+            // Use -1 for "end" position to make replays append correctly
+            const emitIndex = actualIndex === countBefore ? -1 : actualIndex;
 
             this.emitPatch({
                 action: "insert",
-                path: ["nodes", parentId, "children", actualIndex],
+                path: ["nodes", parentId, "children", emitIndex],
                 value: { ...sanitizedChild, id: newId }
             });
 
@@ -746,7 +750,9 @@ export class DenicekModel {
 
             if (action === "insert" && path.length >= 4 && path[2] === "children") {
                 const parentId = id;
-                const index = path[3] as number;
+                const rawIndex = path[3] as number;
+                // -1 means "append to end"
+                const index = rawIndex === -1 ? undefined : rawIndex;
                 const nodeDef = value as NodeInput;
                 return this.addChild(parentId, nodeDef, index);
             }
@@ -754,7 +760,9 @@ export class DenicekModel {
             // Handle copy action - reads CURRENT value from source
             if (action === "copy" && path.length >= 4 && path[2] === "children") {
                 const parentId = id;
-                const index = path[3] as number;
+                const rawIndex = path[3] as number;
+                // -1 means "append to end"
+                const index = rawIndex === -1 ? undefined : rawIndex;
                 const copyDef = value as { sourceId: string; sourceAttr?: string };
 
                 if (!copyDef.sourceId) {
