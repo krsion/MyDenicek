@@ -193,6 +193,9 @@ npm run test -w mywebnicek             # E2E tests (Playwright)
 ```
 
 ## TODO
+- Programmable buttons
+- Formula engine
+
 
 ### High Priority
 
@@ -206,7 +209,6 @@ npm run test -w mywebnicek             # E2E tests (Playwright)
 |------|---------|
 | Implement remote selection visualization | `useSelection.ts:36` has stubs for `remoteSelections`/`userId` |
 | Add Snapshot View UI | `document.getSnapshot()` exists but not exposed in UI (FR-19) |
-| Make JSON View interactive | Currently read-only; implement JSON patch on edit (FR-18) |
 | Generate API documentation | No generated docs for public APIs (NFR-09) |
 
 ### Low Priority

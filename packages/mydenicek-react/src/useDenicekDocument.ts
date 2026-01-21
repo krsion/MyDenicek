@@ -181,8 +181,8 @@ export function useDocumentActions() {
                 const node = model.getNode(id);
                 if (node?.kind === "element") {
                     const newId = type === "value"
-                        ? model.addValueChildNode(id, content)
-                        : model.addElementChildNode(id, content);
+                        ? model.addChild(id, { kind: "value", value: content })
+                        : model.addChild(id, { kind: "element", tag: content, attrs: {}, children: [] });
                     newIds.push(newId);
                 }
             }
@@ -194,9 +194,7 @@ export function useDocumentActions() {
         const newIds: string[] = [];
         document.change((model: DenicekModel) => {
             for (const id of referenceIds) {
-                const newId = position === "before"
-                    ? model.addSiblingNodeBefore(id)
-                    : model.addSiblingNodeAfter(id);
+                const newId = model.addSibling(id, position);
                 if (newId) newIds.push(newId);
             }
         });

@@ -106,8 +106,8 @@ The following functional requirements specify the capabilities of the system. Re
 \textbf{FR-04: Node Operations} [Core] The system shall support the following operations on nodes:
 \begin{itemize}
 \setlength{\itemsep}{-5pt}
-\item \texttt{addElementChildNode}: Add a new element child to a parent node
-\item \texttt{addValueChildNode}: Add a new value child to a parent node
+\item \texttt{addChild}: Add a new child node (element or value) to a parent node
+\item \texttt{addSibling}: Add a new sibling node before or after an existing node
 \item \texttt{deleteNode}: Remove a node and its descendants from the document
 \item \texttt{moveNode}: Move a node to a different parent or position
 \item \texttt{copyNode}: Create a copy of a node under a target parent
@@ -218,7 +218,7 @@ The core library (\texttt{@mydenicek/core}) provides three main classes:
 \begin{itemize}
 \setlength{\itemsep}{-5pt}
 \item Read: \texttt{getNode()}, \texttt{getAllNodes()}, \texttt{getParentId()}, \texttt{getChildren()}
-\item Write: \texttt{updateAttribute()}, \texttt{updateTag()}, \texttt{wrapNode()}, \texttt{deleteNode()}, \texttt{moveNode()}, \texttt{spliceValue()}, \texttt{addElementChildNode()}, \texttt{addValueChildNode()}, \texttt{copyNode()}
+\item Write: \texttt{updateAttribute()}, \texttt{updateTag()}, \texttt{wrapNode()}, \texttt{deleteNode()}, \texttt{moveNode()}, \texttt{spliceValue()}, \texttt{addChild()}, \texttt{addSibling()}, \texttt{copyNode()}
 \end{itemize}
 
 \textbf{UndoManager} maintains undo/redo stacks by capturing inverse patches for each operation.

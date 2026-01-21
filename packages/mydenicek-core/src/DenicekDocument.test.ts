@@ -6,7 +6,7 @@ import type { DenicekModel } from "./DenicekModel.js";
 /** Simple test initializer - creates a minimal document structure */
 function testInitializer(model: DenicekModel): void {
     const rootId = model.createRootNode("section");
-    model.addElementChildNode(rootId, "p");
+    model.addChild(rootId, { kind: "element", tag: "p", attrs: {}, children: [] });
 }
 
 describe("DenicekDocument", () => {
@@ -84,7 +84,7 @@ describe("DenicekDocument", () => {
             let nodeId: string;
             doc.change((model) => {
                 const rootId = model.rootId;
-                nodeId = model.addElementChildNode(rootId, "test");
+                nodeId = model.addChild(rootId, { kind: "element", tag: "test", attrs: {}, children: [] });
             });
 
             // Verify node was added
@@ -114,7 +114,7 @@ describe("DenicekDocument", () => {
 
             docWithCallback.change((model) => {
                 const rootId = model.rootId;
-                model.addElementChildNode(rootId, "test");
+                model.addChild(rootId, { kind: "element", tag: "test", attrs: {}, children: [] });
             });
 
             expect(versions.length).toBeGreaterThan(0);
@@ -144,7 +144,7 @@ describe("DenicekModel", () => {
         it("should add element child", () => {
             doc.change((model) => {
                 const rootId = model.rootId;
-                const newId = model.addElementChildNode(rootId, "span");
+                const newId = model.addChild(rootId, { kind: "element", tag: "span", attrs: {}, children: [] });
                 expect(newId).toBeTruthy();
 
                 const newNode = model.getNode(newId);
@@ -159,9 +159,9 @@ describe("DenicekModel", () => {
             doc.change((model) => {
                 const rootId = model.rootId;
                 // First add an element to hold the value
-                const containerId = model.addElementChildNode(rootId, "p");
+                const containerId = model.addChild(rootId, { kind: "element", tag: "p", attrs: {}, children: [] });
 
-                const valueId = model.addValueChildNode(containerId, "Hello World");
+                const valueId = model.addChild(containerId, { kind: "value", value: "Hello World" });
                 expect(valueId).toBeTruthy();
 
                 const valueNode = model.getNode(valueId);
@@ -175,7 +175,7 @@ describe("DenicekModel", () => {
         it("should update tag", () => {
             doc.change((model) => {
                 const rootId = model.rootId;
-                const newId = model.addElementChildNode(rootId, "div");
+                const newId = model.addChild(rootId, { kind: "element", tag: "div", attrs: {}, children: [] });
                 model.updateTag(newId, "span");
 
                 const node = model.getNode(newId);
@@ -188,7 +188,7 @@ describe("DenicekModel", () => {
         it("should update attribute", () => {
             doc.change((model) => {
                 const rootId = model.rootId;
-                const newId = model.addElementChildNode(rootId, "div");
+                const newId = model.addChild(rootId, { kind: "element", tag: "div", attrs: {}, children: [] });
                 model.updateAttribute(newId, "class", "container");
 
                 const node = model.getNode(newId);
@@ -201,8 +201,8 @@ describe("DenicekModel", () => {
         it("should splice value", () => {
             doc.change((model) => {
                 const rootId = model.rootId;
-                const containerId = model.addElementChildNode(rootId, "p");
-                const valueId = model.addValueChildNode(containerId, "Hello");
+                const containerId = model.addChild(rootId, { kind: "element", tag: "p", attrs: {}, children: [] });
+                const valueId = model.addChild(containerId, { kind: "value", value: "Hello" });
 
                 model.spliceValue(valueId, 5, 0, " World");
 
@@ -219,7 +219,7 @@ describe("DenicekModel", () => {
             let nodeId: string;
             doc.change((model) => {
                 const rootId = model.rootId;
-                nodeId = model.addElementChildNode(rootId, "div");
+                nodeId = model.addChild(rootId, { kind: "element", tag: "div", attrs: {}, children: [] });
             });
 
             doc.change((model) => {
@@ -234,7 +234,7 @@ describe("DenicekModel", () => {
         it("should copy an element node with tag and attrs", () => {
             doc.change((model) => {
                 const rootId = model.rootId;
-                const sourceId = model.addChildNode(rootId, {
+                const sourceId = model.addChild(rootId, {
                     kind: "element",
                     tag: "div",
                     attrs: { class: "source", "data-test": 123 },
@@ -256,8 +256,8 @@ describe("DenicekModel", () => {
         it("should copy a value node with current text value", () => {
             doc.change((model) => {
                 const rootId = model.rootId;
-                const containerId = model.addElementChildNode(rootId, "p");
-                const sourceId = model.addValueChildNode(containerId, "original text");
+                const containerId = model.addChild(rootId, { kind: "element", tag: "p", attrs: {}, children: [] });
+                const sourceId = model.addChild(containerId, { kind: "value", value: "original text" });
 
                 const copyId = model.copyNode(sourceId, containerId);
 
@@ -275,7 +275,7 @@ describe("DenicekModel", () => {
 
             doc.change((model) => {
                 const rootId = model.rootId;
-                sourceId = model.addElementChildNode(rootId, "span");
+                sourceId = model.addChild(rootId, { kind: "element", tag: "span", attrs: {}, children: [] });
                 copyId = model.copyNode(sourceId, rootId);
             });
 
@@ -289,8 +289,8 @@ describe("DenicekModel", () => {
 
             doc.change((model) => {
                 const rootId = model.rootId;
-                const containerId = model.addElementChildNode(rootId, "p");
-                sourceId = model.addValueChildNode(containerId, "test");
+                const containerId = model.addChild(rootId, { kind: "element", tag: "p", attrs: {}, children: [] });
+                sourceId = model.addChild(containerId, { kind: "value", value: "test" });
                 copyId = model.copyNode(sourceId, containerId);
             });
 
@@ -309,7 +309,7 @@ describe("DenicekModel", () => {
         it("should throw when parent node doesn't exist", () => {
             let sourceId: string;
             doc.change((model) => {
-                sourceId = model.addElementChildNode(model.rootId, "div");
+                sourceId = model.addChild(model.rootId, { kind: "element", tag: "div", attrs: {}, children: [] });
             });
 
             expect(() => {
@@ -325,7 +325,7 @@ describe("DenicekModel", () => {
 
             doc.change((model) => {
                 const rootId = model.rootId;
-                sourceId = model.addElementChildNode(rootId, "div");
+                sourceId = model.addChild(rootId, { kind: "element", tag: "div", attrs: {}, children: [] });
                 model.copyNode(sourceId, rootId);
             });
 
@@ -338,8 +338,8 @@ describe("DenicekModel", () => {
         it("should copy CURRENT value when source is modified before copy", () => {
             doc.change((model) => {
                 const rootId = model.rootId;
-                const containerId = model.addElementChildNode(rootId, "p");
-                const sourceId = model.addValueChildNode(containerId, "initial");
+                const containerId = model.addChild(rootId, { kind: "element", tag: "p", attrs: {}, children: [] });
+                const sourceId = model.addChild(containerId, { kind: "value", value: "initial" });
 
                 // Modify source value
                 model.spliceValue(sourceId, 0, 7, "modified");
@@ -365,8 +365,8 @@ describe("DenicekModel", () => {
             // Create source with initial value
             doc.change((model) => {
                 const rootId = model.rootId;
-                containerId = model.addElementChildNode(rootId, "p");
-                sourceId = model.addValueChildNode(containerId, "original");
+                containerId = model.addChild(rootId, { kind: "element", tag: "p", attrs: {}, children: [] });
+                sourceId = model.addChild(containerId, { kind: "value", value: "original" });
             });
 
             // Get count of children before recording
@@ -425,8 +425,8 @@ describe("DenicekModel", () => {
 
             doc.change((model) => {
                 const rootId = model.rootId;
-                containerId = model.addElementChildNode(rootId, "div");
-                sourceId = model.addValueChildNode(containerId, "test value");
+                containerId = model.addChild(rootId, { kind: "element", tag: "div", attrs: {}, children: [] });
+                sourceId = model.addChild(containerId, { kind: "value", value: "test value" });
             });
 
             // Apply a copy patch directly

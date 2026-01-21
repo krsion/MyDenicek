@@ -57,7 +57,7 @@ describe("Sync Integration", () => {
         // Initialize and make changes
         doc1.change((model) => {
             const rootId = model.createRootNode("section");
-            const nodeId = model.addElementChildNode(rootId, "test-element");
+            const nodeId = model.addChild(rootId, { kind: "element", tag: "test-element", attrs: {}, children: [] });
             model.updateAttribute(nodeId, "testAttr", "fromClient1");
         });
 
@@ -75,7 +75,7 @@ describe("Sync Integration", () => {
         // Client 2 makes changes
         doc2.change((model) => {
             const rootId = model.rootId;
-            const nodeId = model.addElementChildNode(rootId, "test-element-2");
+            const nodeId = model.addChild(rootId, { kind: "element", tag: "test-element-2", attrs: {}, children: [] });
             model.updateAttribute(nodeId, "testAttr", "fromClient2");
         });
 

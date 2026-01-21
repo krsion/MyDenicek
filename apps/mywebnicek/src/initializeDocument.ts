@@ -7,6 +7,11 @@
 
 import type { DenicekModel } from "@mydenicek/core";
 
+/** Shorthand for creating element nodes */
+const el = (tag: string) => ({ kind: "element" as const, tag, attrs: {}, children: [] });
+/** Shorthand for creating value nodes */
+const val = (value: string) => ({ kind: "value" as const, value });
+
 /**
  * Initialize a document with a sample structure
  */
@@ -17,95 +22,95 @@ export function initializeDocument(model: DenicekModel): void {
 
 function createDemoContent(model: DenicekModel, rootId: string): void {
     // Create initial document structure
-    const sectionId = model.addElementChildNode(rootId, "section");
+    const sectionId = model.addChild(rootId, el("section"));
     model.updateAttribute(sectionId, "style", { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 });
     model.updateAttribute(sectionId, "data-testid", "section");
 
     // Article A
-    const articleAId = model.addElementChildNode(sectionId, "article");
-    const h2AId = model.addElementChildNode(articleAId, "h2");
-    model.addValueChildNode(h2AId, "Article A");
-    const pAId = model.addElementChildNode(articleAId, "p");
-    model.addValueChildNode(pAId, "Lorem ipsum dolor sit amet, consectetur adipiscing elit.");
-    const ulAId = model.addElementChildNode(articleAId, "ul");
-    const li1Id = model.addElementChildNode(ulAId, "li");
-    model.addValueChildNode(li1Id, "Item A1");
-    const li2Id = model.addElementChildNode(ulAId, "li");
-    model.addValueChildNode(li2Id, "Item A2");
-    const li3Id = model.addElementChildNode(ulAId, "li");
-    model.addValueChildNode(li3Id, "Item A3");
+    const articleAId = model.addChild(sectionId, el("article"));
+    const h2AId = model.addChild(articleAId, el("h2"));
+    model.addChild(h2AId, val("Article A"));
+    const pAId = model.addChild(articleAId, el("p"));
+    model.addChild(pAId, val("Lorem ipsum dolor sit amet, consectetur adipiscing elit."));
+    const ulAId = model.addChild(articleAId, el("ul"));
+    const li1Id = model.addChild(ulAId, el("li"));
+    model.addChild(li1Id, val("Item A1"));
+    const li2Id = model.addChild(ulAId, el("li"));
+    model.addChild(li2Id, val("Item A2"));
+    const li3Id = model.addChild(ulAId, el("li"));
+    model.addChild(li3Id, val("Item A3"));
 
     // Article B
-    const articleBId = model.addElementChildNode(sectionId, "article");
-    const h2BId = model.addElementChildNode(articleBId, "h2");
-    model.addValueChildNode(h2BId, "Article B");
-    const pBId = model.addElementChildNode(articleBId, "p");
-    model.addValueChildNode(pBId, "Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.");
+    const articleBId = model.addChild(sectionId, el("article"));
+    const h2BId = model.addChild(articleBId, el("h2"));
+    model.addChild(h2BId, val("Article B"));
+    const pBId = model.addChild(articleBId, el("p"));
+    model.addChild(pBId, val("Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."));
 
     // Input field
-    const inputContainerId = model.addElementChildNode(articleBId, "div");
+    const inputContainerId = model.addChild(articleBId, el("div"));
     model.updateAttribute(inputContainerId, "style", { display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 });
-    const labelId = model.addElementChildNode(inputContainerId, "label");
-    model.addValueChildNode(labelId, "Input:");
-    const inputId = model.addElementChildNode(inputContainerId, "input");
+    const labelId = model.addChild(inputContainerId, el("label"));
+    model.addChild(labelId, val("Input:"));
+    const inputId = model.addChild(inputContainerId, el("input"));
     model.updateAttribute(inputId, "type", "text");
     model.updateAttribute(inputId, "placeholder", "Type here...");
     model.updateAttribute(inputId, "style", { padding: 4, border: '1px solid #ccc', borderRadius: 4 });
 
-    const divBId = model.addElementChildNode(articleBId, "div");
+    const divBId = model.addChild(articleBId, el("div"));
     model.updateAttribute(divBId, "style", { display: 'flex', gap: 8 });
-    const btn1Id = model.addElementChildNode(divBId, "button");
-    model.addValueChildNode(btn1Id, "Button 1");
-    const btn2Id = model.addElementChildNode(divBId, "button");
-    model.addValueChildNode(btn2Id, "Button 2");
-    const btn3Id = model.addElementChildNode(divBId, "button");
-    model.addValueChildNode(btn3Id, "Button 3");
+    const btn1Id = model.addChild(divBId, el("button"));
+    model.addChild(btn1Id, val("Button 1"));
+    const btn2Id = model.addChild(divBId, el("button"));
+    model.addChild(btn2Id, val("Button 2"));
+    const btn3Id = model.addChild(divBId, el("button"));
+    model.addChild(btn3Id, val("Button 3"));
 
     // Article C
-    const articleCId = model.addElementChildNode(sectionId, "article");
+    const articleCId = model.addChild(sectionId, el("article"));
     model.updateAttribute(articleCId, "style", { gridColumn: 'span 2' });
-    const h2CId = model.addElementChildNode(articleCId, "h2");
-    model.addValueChildNode(h2CId, "Article C");
-    const gridCId = model.addElementChildNode(articleCId, "div");
+    const h2CId = model.addChild(articleCId, el("h2"));
+    model.addChild(h2CId, val("Article C"));
+    const gridCId = model.addChild(articleCId, el("div"));
     model.updateAttribute(gridCId, "style", { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 });
     for (let i = 0; i < 9; i++) {
-        const boxId = model.addElementChildNode(gridCId, "div");
+        const boxId = model.addChild(gridCId, el("div"));
         model.updateAttribute(boxId, "style", { padding: 12, background: '#f7f7f7', border: '1px dashed #ccc', borderRadius: 6 });
-        model.addValueChildNode(boxId, `Box ${i + 1}`);
+        model.addChild(boxId, val(`Box ${i + 1}`));
     }
 
     // Article D (Table)
-    const articleDId = model.addElementChildNode(sectionId, "article");
+    const articleDId = model.addChild(sectionId, el("article"));
     model.updateAttribute(articleDId, "style", { gridColumn: 'span 2' });
-    const h2DId = model.addElementChildNode(articleDId, "h2");
-    model.addValueChildNode(h2DId, "Table Data");
-    const tableId = model.addElementChildNode(articleDId, "table");
+    const h2DId = model.addChild(articleDId, el("h2"));
+    model.addChild(h2DId, val("Table Data"));
+    const tableId = model.addChild(articleDId, el("table"));
     model.updateAttribute(tableId, "border", "1");
     model.updateAttribute(tableId, "style", { width: '100%', borderCollapse: 'collapse' });
 
-    const theadId = model.addElementChildNode(tableId, "thead");
-    const theadTrId = model.addElementChildNode(theadId, "tr");
-    const th1Id = model.addElementChildNode(theadTrId, "th");
-    model.addValueChildNode(th1Id, "Name");
-    const th2Id = model.addElementChildNode(theadTrId, "th");
-    model.addValueChildNode(th2Id, "Role");
-    const th3Id = model.addElementChildNode(theadTrId, "th");
-    model.addValueChildNode(th3Id, "Status");
+    const theadId = model.addChild(tableId, el("thead"));
+    const theadTrId = model.addChild(theadId, el("tr"));
+    const th1Id = model.addChild(theadTrId, el("th"));
+    model.addChild(th1Id, val("Name"));
+    const th2Id = model.addChild(theadTrId, el("th"));
+    model.addChild(th2Id, val("Role"));
+    const th3Id = model.addChild(theadTrId, el("th"));
+    model.addChild(th3Id, val("Status"));
 
-    const tbodyId = model.addElementChildNode(tableId, "tbody");
-    const tr1Id = model.addElementChildNode(tbodyId, "tr");
-    const td1aId = model.addElementChildNode(tr1Id, "td");
-    model.addValueChildNode(td1aId, "Alice");
-    const td1bId = model.addElementChildNode(tr1Id, "td");
-    model.addValueChildNode(td1bId, "Developer");
-    const td1cId = model.addElementChildNode(tr1Id, "td");
-    model.addValueChildNode(td1cId, "Active");
+    const tbodyId = model.addChild(tableId, el("tbody"));
+    const tr1Id = model.addChild(tbodyId, el("tr"));
+    const td1aId = model.addChild(tr1Id, el("td"));
+    model.addChild(td1aId, val("Alice"));
+    const td1bId = model.addChild(tr1Id, el("td"));
+    model.addChild(td1bId, val("Developer"));
+    const td1cId = model.addChild(tr1Id, el("td"));
+    model.addChild(td1cId, val("Active"));
 
-    const tr2Id = model.addElementChildNode(tbodyId, "tr");
-    const td2aId = model.addElementChildNode(tr2Id, "td");
-    model.addValueChildNode(td2aId, "Bob");
-    const td2bId = model.addElementChildNode(tr2Id, "td");
-    model.addValueChildNode(td2bId, "Designer");
-    const td2cId = model.addElementChildNode(tr2Id, "td");
-    model.addValueChildNode(td2cId, "Inactive");
+    const tr2Id = model.addChild(tbodyId, el("tr"));
+    const td2aId = model.addChild(tr2Id, el("td"));
+    model.addChild(td2aId, val("Bob"));
+    const td2bId = model.addChild(tr2Id, el("td"));
+    model.addChild(td2bId, val("Designer"));
+    const td2cId = model.addChild(tr2Id, el("td"));
+    model.addChild(td2cId, val("Inactive"));
 }

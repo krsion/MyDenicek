@@ -57,8 +57,8 @@ describe("Concurrent Wrap Conflict Resolution", () => {
         let targetNodeId: string = "";
         doc1.change((model) => {
             const rootId = model.createRootNode("div");
-            targetNodeId = model.addElementChildNode(rootId, "paragraph");
-            model.addValueChildNode(targetNodeId, "Hello World");
+            targetNodeId = model.addChild(rootId, { kind: "element", tag: "paragraph", attrs: {}, children: [] });
+            model.addChild(targetNodeId, { kind: "value", value: "Hello World" });
         });
 
         // Wait for doc2 to receive the initial structure
@@ -118,7 +118,7 @@ describe("Concurrent Wrap Conflict Resolution", () => {
         let targetNodeId: string = "";
         doc1.change((model) => {
             const rootId = model.createRootNode("div");
-            targetNodeId = model.addElementChildNode(rootId, "span");
+            targetNodeId = model.addChild(rootId, { kind: "element", tag: "span", attrs: {}, children: [] });
         });
 
         await waitForSync(doc1, doc2, 5000);
@@ -188,9 +188,9 @@ describe("Concurrent Wrap Conflict Resolution", () => {
 
         doc1.change((model) => {
             rootId = model.createRootNode("div");
-            child1Id = model.addElementChildNode(rootId, "header");
-            targetId = model.addElementChildNode(rootId, "content");
-            child2Id = model.addElementChildNode(rootId, "footer");
+            child1Id = model.addChild(rootId, { kind: "element", tag: "header", attrs: {}, children: [] });
+            targetId = model.addChild(rootId, { kind: "element", tag: "content", attrs: {}, children: [] });
+            child2Id = model.addChild(rootId, { kind: "element", tag: "footer", attrs: {}, children: [] });
         });
 
         await waitForSync(doc1, doc2, 5000);
@@ -259,7 +259,7 @@ describe("Concurrent Wrap Conflict Resolution", () => {
         let targetId: string = "";
         doc1.change((model) => {
             const rootId = model.createRootNode("div");
-            targetId = model.addElementChildNode(rootId, "text");
+            targetId = model.addChild(rootId, { kind: "element", tag: "text", attrs: {}, children: [] });
         });
 
         await waitForSync(doc1, doc2, 5000);
@@ -330,7 +330,7 @@ describe("Concurrent Wrap Conflict Resolution", () => {
         let targetId: string = "";
         doc1.change((model) => {
             const rootId = model.createRootNode("div");
-            targetId = model.addElementChildNode(rootId, "content");
+            targetId = model.addChild(rootId, { kind: "element", tag: "content", attrs: {}, children: [] });
         });
 
         await waitForSync(doc1, doc2, 5000);

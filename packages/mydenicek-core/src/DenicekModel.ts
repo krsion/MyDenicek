@@ -372,14 +372,14 @@ export class DenicekModel {
         }
     }
 
-    addChildNode(parentId: string, child: NodeInput, index?: number): string {
+    addChild(parentId: string, child: NodeInput, index?: number): string {
         try {
             // For element nodes, sanitize and validate tag name
             let sanitizedChild = child;
             if (child.kind === "element") {
                 const sanitizedTag = sanitizeTagName(child.tag);
                 if (!sanitizedTag) {
-                    handleModelError("addChildNode", new Error(`Invalid tag name: "${child.tag}"`));
+                    handleModelError("addChild", new Error(`Invalid tag name: "${child.tag}"`));
                     return "";
                 }
                 sanitizedChild = { ...child, tag: sanitizedTag };
@@ -417,29 +417,13 @@ export class DenicekModel {
 
             return newId;
         } catch (e) {
-            handleModelError("addChildNode", e);
+            handleModelError("addChild", e);
             return "";
         }
     }
 
-    addElementChildNode(parentId: string, tag: string): string {
-        const node: ElementNode = { kind: "element", tag, attrs: {}, children: [] };
-        return this.addChildNode(parentId, node);
-    }
-
-    addValueChildNode(parentId: string, value: string): string {
-        return this.addChildNode(parentId, { kind: "value", value });
-    }
-
-    addSiblingNodeBefore(siblingId: string): string | undefined {
-        return this.addSiblingNode(siblingId, 0);
-    }
-
-    addSiblingNodeAfter(siblingId: string): string | undefined {
-        return this.addSiblingNode(siblingId, 1);
-    }
-
-    private addSiblingNode(siblingId: string, offset: number): string | undefined {
+    addSibling(siblingId: string, position: "before" | "after"): string | undefined {
+        const offset = position === "before" ? 0 : 1;
         try {
             const siblingTreeId = stringToTreeId(siblingId);
             const siblingNode = this.tree.getNodeByID(siblingTreeId);
@@ -476,7 +460,7 @@ export class DenicekModel {
 
             return treeIdToString(newNode.id);
         } catch (e) {
-            handleModelError("addSiblingNode", e);
+            handleModelError("addSibling", e);
             return undefined;
         }
     }
@@ -580,7 +564,7 @@ export class DenicekModel {
                 const parentId = id;
                 const index = path[3] as number;
                 const nodeDef = value as NodeInput;
-                return this.addChildNode(parentId, nodeDef, index);
+                return this.addChild(parentId, nodeDef, index);
             }
 
             // Handle copy action - reads CURRENT value from source
