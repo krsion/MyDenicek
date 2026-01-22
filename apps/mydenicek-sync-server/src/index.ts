@@ -16,10 +16,16 @@ if (isMainModule) {
 
     const PORT = parseInt(process.env.PORT || "3001", 10);
     const PERSISTENCE_PATH = process.env.PERSISTENCE_PATH || "./data";
+    const AZURE_STORAGE_CONNECTION_STRING = process.env.AZURE_STORAGE_CONNECTION_STRING;
+    const BLOB_CONTAINER_NAME = process.env.BLOB_CONTAINER_NAME;
 
     await createSyncServer({
         port: PORT,
-        persistencePath: PERSISTENCE_PATH,
+        // Azure Blob Storage takes priority if connection string is set
+        azureStorageConnectionString: AZURE_STORAGE_CONNECTION_STRING,
+        blobContainerName: BLOB_CONTAINER_NAME,
+        // Fall back to file-based persistence if no Azure connection
+        persistencePath: AZURE_STORAGE_CONNECTION_STRING ? undefined : PERSISTENCE_PATH,
         saveInterval: 5000,
     });
 

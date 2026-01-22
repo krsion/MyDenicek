@@ -10,6 +10,7 @@
         "dev": "tsx src/index.ts"
     },
     "dependencies": {
+        "@azure/storage-blob": "^12.17.0",
         "loro-crdt": "^1.0.0",
         "loro-websocket": "^0.1.0"
     },
