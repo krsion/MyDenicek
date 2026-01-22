@@ -1,5 +1,6 @@
 # MyDenicek: Local-first Software Implementation
 
+- **Specification:** [View PDF](https://github.com/krsion/MyDenicek/blob/main/specification/specification.pdf)
 - **Research Project Proposal:** [View PDF](https://github.com/krsion/MyDenicek/blob/main/proposal/proposal.pdf)
 - **Live Demo:** [Launch App](https://krsion.github.io/MyDenicek/)
 - **Sync Server:** `wss://mydenicek-sync-prod.azurewebsites.net` (Azure App Service)
