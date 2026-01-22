@@ -124,11 +124,7 @@ After deployment:
 
 3. **Check blobs**:
    ```bash
-   az storage blob list \
-     --account-name mydenicekprodstor \
-     --container-name loro-documents \
-     --auth-mode login \
-     --output table
+   az storage blob list --account-name mydenicekprodstor --container-name loro-documents --auth-mode key --output table
    ```
 
 ## Infrastructure Updates

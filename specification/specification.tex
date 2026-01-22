@@ -57,7 +57,7 @@
 
 The original \emph{Denicek} system provides end-user programming experiences including collaborative editing, programming by demonstration (recording and replaying user actions), incremental recomputation, and schema change control. However, its OT-based synchronization is complex, error-prone, and requires a central server. This project creates an alternative built on CRDTs that enables true peer-to-peer collaboration without a central authority.
 
-\emph{MyWebnicek} is a web-based programming system built on top of \emph{MyDenicek}, providing a user interface for document navigation, editing, and collaborative features. It demonstrates the end-user programming capabilities through formative examples such as counter apps, todo lists, and document refactoring scenarios.
+\emph{MyWebnicek} is a web-based programming system built on top of \emph{MyDenicek}, providing a user interface for document navigation, editing, and collaborative features. It demonstrates the end-user programming capabilities through formative examples such as counter apps, todo lists, and document refactoring scenarios. The application is deployed at \url{https://krsion.github.io/MyDenicek/} with real-time collaboration enabled via a WebSocket sync server hosted on Azure App Service.
 
 The project is inspired by \emph{MyWebstrates}~\cite{klokmose2024}, a local-first CRDT-based alternative to Webstrates. Both \emph{MyDenicek} (the core library) and \emph{MyWebnicek} (the web application) are implemented in TypeScript.
 
@@ -195,6 +195,8 @@ The following non-functional requirements specify quality attributes and system 
 \textbf{NFR-08: Documentation} Public APIs shall be documented with JSDoc comments. The README shall contain setup instructions and usage examples.
 
 \textbf{NFR-09: Reproducibility} The development environment shall be reproducible using npm. All dependencies shall be specified in package.json with locked versions.
+
+\textbf{NFR-10: Deployment} The web application shall be deployed to GitHub Pages at \url{https://krsion.github.io/MyDenicek/}. The sync server shall be deployed to Azure App Service at \url{wss://mydenicek-sync-prod.azurewebsites.net}, enabling real-time collaboration between users.
 
 
 \subsection{Architecture}
@@ -509,11 +511,11 @@ Programmable Buttons & Action nodes, recording to buttons & Jan 2026 & 2 & Done 
 \hline
 Formula Engine & Evaluation, operations, ref nodes & Jan 2026 & 2 & Done \\
 \hline
+Sync Server Deployment & Deploy to Azure, public collaboration & Jan 2026 & 4 & Done \\
 \hline
-\multicolumn{3}{|l|}{\textbf{Completed}} & \textbf{38} & \\
 \hline
+\multicolumn{3}{|l|}{\textbf{Completed}} & \textbf{42} & \\
 \hline
-Sync Server Deployment & Deploy to Azure, public collaboration & Jan--Feb 2026 & 4 & Planned \\
 \hline
 Web Application Polish & UI improvements, conflict feedback & Feb 2026 & 6 & Planned \\
 \hline
@@ -526,7 +528,7 @@ Documentation & README, API docs, video demo & Mar 2026 & 4 & Planned \\
 Finalization & Polish, presentation preparation & Mar 2026 & 3 & Planned \\
 \hline
 \hline
-\multicolumn{3}{|l|}{\textbf{Remaining (estimated)}} & \textbf{27} & \\
+\multicolumn{3}{|l|}{\textbf{Remaining (estimated)}} & \textbf{23} & \\
 \hline
 \hline
 \multicolumn{3}{|l|}{\textbf{Total}} & \textbf{65} & \\
@@ -535,7 +537,7 @@ Finalization & Polish, presentation preparation & Mar 2026 & 3 & Planned \\
 \caption{Project timeline: completed work (DARE2025 summer school + git history) and estimated remaining effort.}
 \end{table}
 
-The completed work includes migration from Automerge to Loro CRDT (January 2026), formula engine, and programmable buttons. WebSocket synchronization works locally; remaining work focuses on deploying the sync server to Azure App Service for public collaboration, UI polish, and formative example demonstrations.
+The completed work includes migration from Automerge to Loro CRDT (January 2026), formula engine, programmable buttons, and sync server deployment. Online collaboration is now functional (see NFR-10 for deployment URLs). Remaining work focuses on UI polish and formative example demonstrations.
 
 
 \section{Form of collaboration}

@@ -1,11 +1,14 @@
 # MyDenicek: Local-first Software Implementation
 
 - **Research Project Proposal:** [View PDF](https://github.com/krsion/MyDenicek/blob/main/proposal/proposal.pdf)
-- **Live Demo (WIP):** [Launch App](https://krsion.github.io/MyDenicek/)
+- **Live Demo:** [Launch App](https://krsion.github.io/MyDenicek/)
+- **Sync Server:** `wss://mydenicek-sync-prod.azurewebsites.net` (Azure App Service)
 
 ## Project Overview
 
 MyDenicek is a local-first collaborative document editor using **Loro CRDTs** for synchronization. It is a monorepo with npm workspaces containing a React web app, core libraries, and a sync server. The project builds upon the concepts from the original [Denicek](https://dl.acm.org/doi/10.1145/3746059.3747646) system, replacing Operational Transformation with CRDTs for more robust conflict resolution.
+
+**Online collaboration is live!** Open the [demo](https://krsion.github.io/MyDenicek/) in multiple browser windows to collaborate in real-time. Changes sync automatically via WebSocket.
 
 ## Internal State Representation
 
