@@ -15,29 +15,25 @@ MyDenicek is a local-first collaborative document editor using **Loro CRDTs** fo
 
 The application is built on **Loro**, which synchronizes tree-structured state using Conflict-free Replicated Data Types (CRDTs).
 
-### DocumentView Class
+### DenicekDocument Read API
 
-The document state is exposed via a `DocumentView` class that encapsulates the tree structure and provides read-only access through methods:
+The `DenicekDocument` class provides read-only access to the document tree:
 
 ```typescript
-class DocumentView {
-  // Read-only API - internal tree structure is hidden
+class DenicekDocument {
+  // Read-only API
   getRootId(): string | null;
   getNode(id: string): NodeData | null;
   getChildIds(parentId: string): string[];
   getParentId(nodeId: string): string | null;
-  getAllNodeIds(): string[];
-  hasNode(id: string): boolean;
-  getNodeCount(): number;
-
-  // Iteration
-  *walkDepthFirst(): Generator<{ node: NodeData; depth: number; parentId: string | null }>;
+  getAllNodes(): Record<string, NodeData>;
+  getSnapshot(): Snapshot;
 }
 ```
 
 ### NodeData Types
 
-Nodes returned by `DocumentView.getNode()` contain only the node's own data (no children array):
+Nodes returned by `getNode()` contain only the node's own data (no children array):
 
 ```typescript
 interface ElementNodeData {
@@ -56,7 +52,7 @@ interface ValueNodeData {
 type NodeData = ElementNodeData | ValueNodeData;
 ```
 
-To get children, use `view.getChildIds(parentId)` instead of direct property access.
+To get children, use `doc.getChildIds(parentId)` instead of direct property access.
 
 ## Architecture
 
@@ -129,11 +125,11 @@ Storing nodes in a list of objects—e.g., `[{id: "A", ...}, {id: "B", ...}]`—
 
 A Dictionary (`Record<string, Node>`) enforces uniqueness by ID and allows O(1) access. However, because JSON dictionaries are unordered, we store the order of nodes separately in the `children[]` array of the parent element. Note that there could be duplicate IDs in the `children[]` array caused by concurrent adds of the same node.
 
-### 4. Why use a DocumentView class instead of exposing the Tree directly?
+### 4. Why does DenicekDocument provide a read-only API instead of exposing the Tree directly?
 
 Internally, the document is stored as a `LoroTree`—Loro's native movable tree CRDT that handles concurrent structural edits, move operations, and conflict resolution automatically.
 
-The `DocumentView` class provides a **read-only public API** that:
+The `DenicekDocument` class provides a **read-only public API** that:
 - **Hides CRDT internals**: No Loro types are exposed; applications work with plain TypeScript objects
 - **Enables O(1) lookup**: Internal index maps allow efficient node, parent, and children lookups
 - **Prevents direct mutation**: Users access data through methods (`getNode()`, `getChildIds()`) instead of property access
