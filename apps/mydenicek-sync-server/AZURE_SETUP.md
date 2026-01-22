@@ -104,6 +104,24 @@ After deployment:
 
 2. **Test WebSocket**: Connect to `wss://mydenicek-sync-prod.azurewebsites.net`
 
+   Using PowerShell:
+   ```powershell
+   $ws = New-Object System.Net.WebSockets.ClientWebSocket
+   $ws.ConnectAsync("wss://mydenicek-sync-prod.azurewebsites.net", [Threading.CancellationToken]::None).Wait()
+   $ws.State  # Should show "Open"
+   ```
+
+   Using wscat (Node.js):
+   ```bash
+   npm install -g wscat
+   wscat -c wss://mydenicek-sync-prod.azurewebsites.net
+   ```
+
+   Using websocat (Rust):
+   ```bash
+   websocat wss://mydenicek-sync-prod.azurewebsites.net
+   ```
+
 3. **Check blobs**:
    ```bash
    az storage blob list \

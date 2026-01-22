@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AddNodePopoverButton, type NodeKind } from "./AddNodePopoverButton";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ResizablePanel } from "./components/ResizablePanel";
+import { config } from "./config";
 import { PeerAliasProvider } from "./context/PeerAliasContext";
 import { DomNavigator, type DomNavigatorHandle } from "./DomNavigator";
 import { ElementDetails } from "./ElementDetails.tsx";
@@ -123,7 +124,7 @@ export const App = () => {
 
   // Auto-connect on mount
   useEffect(() => {
-    connect("ws://localhost:3001", roomId);
+    connect(config.syncServerUrl, roomId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -148,7 +149,7 @@ export const App = () => {
     if (status === "connected" || status === "connecting") {
       disconnect();
     } else {
-      connect("ws://localhost:3001", roomId);
+      connect(config.syncServerUrl, roomId);
     }
   }, [status, connect, disconnect, roomId]);
 
