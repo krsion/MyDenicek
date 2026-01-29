@@ -168,52 +168,17 @@ const arrayLength: Operation = {
 // Math operations
 // =============================================================================
 
-const plus: Operation = {
-    name: "plus",
-    arity: 2,
-    execute: ([a, b]) => {
-        const na = requireNumber(a, "plus");
-        if (typeof na === "string") return na;
-        const nb = requireNumber(b, "plus");
-        if (typeof nb === "string") return nb;
-        return na + nb;
-    },
-};
-
-const minus: Operation = {
-    name: "minus",
-    arity: 2,
-    execute: ([a, b]) => {
-        const na = requireNumber(a, "minus");
-        if (typeof na === "string") return na;
-        const nb = requireNumber(b, "minus");
-        if (typeof nb === "string") return nb;
-        return na - nb;
-    },
-};
-
-const multiply: Operation = {
-    name: "multiply",
-    arity: 2,
-    execute: ([a, b]) => {
-        const na = requireNumber(a, "multiply");
-        if (typeof na === "string") return na;
-        const nb = requireNumber(b, "multiply");
-        if (typeof nb === "string") return nb;
-        return na * nb;
-    },
-};
-
-const divide: Operation = {
-    name: "divide",
-    arity: 2,
-    execute: ([a, b]) => {
-        const na = requireNumber(a, "divide");
-        if (typeof na === "string") return na;
-        const nb = requireNumber(b, "divide");
-        if (typeof nb === "string") return nb;
-        if (nb === 0) return `#ERR: division by zero`;
-        return na / nb;
+const product: Operation = {
+    name: "product",
+    arity: -1, // Variadic - multiplies all children
+    execute: (args) => {
+        let result = 1;
+        for (const arg of args) {
+            const n = requireNumber(arg, "product");
+            if (typeof n === "string") return n; // Error
+            result *= n;
+        }
+        return result;
     },
 };
 
@@ -269,6 +234,20 @@ const abs: Operation = {
     },
 };
 
+const sum: Operation = {
+    name: "sum",
+    arity: -1, // Variadic - sums all children
+    execute: (args) => {
+        let total = 0;
+        for (const arg of args) {
+            const n = requireNumber(arg, "sum");
+            if (typeof n === "string") return n; // Error
+            total += n;
+        }
+        return total;
+    },
+};
+
 // =============================================================================
 // Tree operations
 // =============================================================================
@@ -301,15 +280,13 @@ export const builtinOperations: Operation[] = [
     splitString,
     arrayLength,
     // Math
-    plus,
-    minus,
-    multiply,
-    divide,
+    product,
     mod,
     round,
     floor,
     ceil,
     abs,
+    sum,
     // Tree
     countChildren,
 ];

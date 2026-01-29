@@ -50,24 +50,16 @@ const addConferenceActions: GeneralizedPatch[] = [
     { action: "insert", path: ["nodes", "$3", "children", -1], value: { kind: "value", value: "Location" } },
 ];
 
-/** Actions for "+1" button - wrap value in plus formula */
+/** Actions for "+1" button - add "1" child to sum formula */
 const incrementActions: GeneralizedPatch[] = [
-    // Insert formula as sibling before $0
-    { action: "insert", path: ["nodes", "$0", "sibling", "before"], value: { id: "$1", kind: "formula", operation: "plus" } },
-    // Move $0 into the formula as first child
-    { action: "move", path: ["nodes", "$0"], value: { parentId: "$1", index: 0 } },
-    // Add "1" as second child of formula
-    { action: "insert", path: ["nodes", "$1", "children", -1], value: { kind: "value", value: "1" } },
+    // Add "1" as child of the sum formula ($0)
+    { action: "insert", path: ["nodes", "$0", "children", -1], value: { kind: "value", value: "1" } },
 ];
 
-/** Actions for "-1" button - wrap value in minus formula */
+/** Actions for "-1" button - add "-1" child to sum formula */
 const decrementActions: GeneralizedPatch[] = [
-    // Insert formula as sibling before $0
-    { action: "insert", path: ["nodes", "$0", "sibling", "before"], value: { id: "$1", kind: "formula", operation: "minus" } },
-    // Move $0 into the formula as first child
-    { action: "move", path: ["nodes", "$0"], value: { parentId: "$1", index: 0 } },
-    // Add "1" as second child of formula
-    { action: "insert", path: ["nodes", "$1", "children", -1], value: { kind: "value", value: "1" } },
+    // Add "-1" as child of the sum formula ($0)
+    { action: "insert", path: ["nodes", "$0", "children", -1], value: { kind: "value", value: "-1" } },
 ];
 
 /**
@@ -95,7 +87,7 @@ function createFormativeExamples(model: DenicekModel, rootId: string): void {
 
     const counterDescId = model.addChild(counterArticleId, el("p"));
     model.updateAttribute(counterDescId, "style", { fontSize: '0.9em', color: '#666', marginBottom: 12 });
-    model.addChild(counterDescId, val("Click +1/-1 buttons to wrap the value in a formula."));
+    model.addChild(counterDescId, val("Click +1/-1 buttons to add values to the sum formula."));
 
     // Counter display container
     const counterDisplayId = model.addChild(counterArticleId, el("div"));
@@ -105,17 +97,18 @@ function createFormativeExamples(model: DenicekModel, rootId: string): void {
     model.updateAttribute(counterLabelId, "style", { fontWeight: 'bold' });
     model.addChild(counterLabelId, val("Count:"));
 
-    // The counter value node
-    const counterValueId = model.addChild(counterDisplayId, val("5"));
+    // The counter is a sum formula with initial value
+    const counterFormulaId = model.addChild(counterDisplayId, formula("sum"));
+    model.addChild(counterFormulaId, val("5"));
 
     // Counter buttons container
     const counterButtonsId = model.addChild(counterArticleId, el("div"));
     model.updateAttribute(counterButtonsId, "style", { display: 'flex', gap: 8 });
 
-    // +1 button - wraps target in plus formula
-    model.addChild(counterButtonsId, action("+1", counterValueId, incrementActions));
-    // -1 button - wraps target in minus formula
-    model.addChild(counterButtonsId, action("-1", counterValueId, decrementActions));
+    // +1 button - adds "1" child to sum formula
+    model.addChild(counterButtonsId, action("+1", counterFormulaId, incrementActions));
+    // -1 button - adds "-1" child to sum formula
+    model.addChild(counterButtonsId, action("-1", counterFormulaId, decrementActions));
 
     // =========================================================================
     // Example 2: Todo List
@@ -212,8 +205,8 @@ function createFormativeExamples(model: DenicekModel, rootId: string): void {
     model.updateAttribute(totalLabelId, "style", { fontWeight: 'bold' });
     model.addChild(totalLabelId, val("Total:"));
 
-    // multiply(qty, price) formula
-    const totalFormulaId = model.addChild(priceGridId, formula("multiply"));
+    // product(qty, price) formula
+    const totalFormulaId = model.addChild(priceGridId, formula("product"));
     model.addChild(totalFormulaId, ref(qtyValueId));
     model.addChild(totalFormulaId, ref(priceValueId));
 
@@ -343,33 +336,17 @@ function createFormativeExamples(model: DenicekModel, rootId: string): void {
     model.addChild(replaceFormulaId, val("baz"));
 
     // Math operations
-    const plusBoxId = createFormulaBox("plus", "#e3f2fd", "#90caf9");
-    const plusAId = model.addChild(plusBoxId, val("10"));
-    const plusBId = model.addChild(plusBoxId, val("5"));
-    const plusFormulaId = model.addChild(plusBoxId, formula("plus"));
-    model.addChild(plusFormulaId, ref(plusAId));
-    model.addChild(plusFormulaId, ref(plusBId));
+    const sumBoxId = createFormulaBox("sum", "#e3f2fd", "#90caf9");
+    const sumFormulaId = model.addChild(sumBoxId, formula("sum"));
+    model.addChild(sumFormulaId, val("10"));
+    model.addChild(sumFormulaId, val("5"));
+    model.addChild(sumFormulaId, val("3"));
 
-    const minusBoxId = createFormulaBox("minus", "#e3f2fd", "#90caf9");
-    const minusAId = model.addChild(minusBoxId, val("100"));
-    const minusBId = model.addChild(minusBoxId, val("37"));
-    const minusFormulaId = model.addChild(minusBoxId, formula("minus"));
-    model.addChild(minusFormulaId, ref(minusAId));
-    model.addChild(minusFormulaId, ref(minusBId));
-
-    const multiplyBoxId = createFormulaBox("multiply", "#e3f2fd", "#90caf9");
-    const mulAId = model.addChild(multiplyBoxId, val("7"));
-    const mulBId = model.addChild(multiplyBoxId, val("6"));
-    const mulFormulaId = model.addChild(multiplyBoxId, formula("multiply"));
-    model.addChild(mulFormulaId, ref(mulAId));
-    model.addChild(mulFormulaId, ref(mulBId));
-
-    const divideBoxId = createFormulaBox("divide", "#e3f2fd", "#90caf9");
-    const divAId = model.addChild(divideBoxId, val("84"));
-    const divBId = model.addChild(divideBoxId, val("4"));
-    const divFormulaId = model.addChild(divideBoxId, formula("divide"));
-    model.addChild(divFormulaId, ref(divAId));
-    model.addChild(divFormulaId, ref(divBId));
+    const productBoxId = createFormulaBox("product", "#e3f2fd", "#90caf9");
+    const productFormulaId = model.addChild(productBoxId, formula("product"));
+    model.addChild(productFormulaId, val("2"));
+    model.addChild(productFormulaId, val("3"));
+    model.addChild(productFormulaId, val("7"));
 
     const modBoxId = createFormulaBox("mod", "#e3f2fd", "#90caf9");
     const modAId = model.addChild(modBoxId, val("17"));
