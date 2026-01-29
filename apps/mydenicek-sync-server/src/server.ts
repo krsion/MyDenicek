@@ -8,8 +8,8 @@
 import type { CrdtType, Permission } from "loro-protocol";
 import { SimpleServer } from "loro-websocket/server";
 
-import * as filePersistence from "./persistence.js";
 import * as blobPersistence from "./blob-persistence.js";
+import * as filePersistence from "./persistence.js";
 
 function timestamp(): string {
     return new Date().toISOString();

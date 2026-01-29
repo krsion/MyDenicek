@@ -81,9 +81,11 @@ interface RenderedDocumentProps {
   operations?: Map<string, Operation>;
   /** Callback when a ref link is clicked */
   onRefClick?: (targetId: string) => void;
+  /** Node IDs that are currently cut (will be styled with dimmed appearance) */
+  cutNodeIds?: string[];
 }
 
-export function RenderedDocument({ document, onActionClick, viewMode = "result", operations, onRefClick }: RenderedDocumentProps) {
+export function RenderedDocument({ document, onActionClick, viewMode = "result", operations, onRefClick, cutNodeIds = [] }: RenderedDocumentProps) {
   const styles = useStyles();
 
   // Use provided operations or default ones
@@ -259,6 +261,9 @@ export function RenderedDocument({ document, onActionClick, viewMode = "result",
 
     const attrs = { ...(node.attrs || {}), [DENICEK_NODE_ID_ATTR]: id } as Record<string, unknown>;
 
+    // Apply cut styling if this node is in the cut list
+    const isCut = cutNodeIds.includes(id);
+
     const classNames = [];
     if (node.tag === "article") classNames.push(styles.article);
     if (node.tag === "button") classNames.push(styles.button);
@@ -282,6 +287,18 @@ export function RenderedDocument({ document, onActionClick, viewMode = "result",
         // about style being a string.
         delete attrs["style"];
       }
+    }
+
+    // Apply cut node styling (dimmed with dashed border)
+    if (isCut) {
+      const existingStyle = (attrs["style"] as React.CSSProperties) || {};
+      attrs["style"] = {
+        ...existingStyle,
+        opacity: 0.5,
+        borderStyle: "dashed",
+        borderWidth: existingStyle.borderWidth || "1px",
+        borderColor: existingStyle.borderColor || "#999",
+      };
     }
 
     // Add keydown handler for input elements to sync value to CRDT on Enter

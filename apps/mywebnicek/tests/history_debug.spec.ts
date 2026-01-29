@@ -43,9 +43,9 @@ test('history sidebar shows actions', async ({ page }) => {
   await expect(sidebarHeader).toBeVisible();
 
   // Check that the history table shows the action
-  // The table has columns: Action, Path, Value
-  // Use first() since there may be multiple 'put' actions from the initial document creation
-  await expect(page.getByRole('cell', { name: 'put', exact: true }).first()).toBeVisible();
+  // The new design shows actions as sentences in a single "Details" column
+  // Look for 'put' action text and the new tag name
+  await expect(page.locator('span', { hasText: 'put' }).first()).toBeVisible();
   // The value is JSON stringified, so it appears with quotes
   await expect(page.getByText('"section-test"')).toBeVisible();
 });

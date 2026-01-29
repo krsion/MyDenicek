@@ -1,5 +1,5 @@
 import { Badge, Button, Card, CardHeader, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogTrigger, Spinner, Switch, Tag, TagGroup, Text, Toast, Toaster, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip, useId, useToastController } from "@fluentui/react-components";
-import { AddRegular, ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, BackpackRegular, CalculatorRegular, CameraRegular, ClipboardPasteRegular, CodeRegular, CopyRegular, EditRegular, InfoRegular, LinkRegular, PlayRegular, RecordRegular, RenameRegular, StopRegular } from "@fluentui/react-icons";
+import { AddRegular, ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, CalculatorRegular, CameraRegular, ClipboardPasteRegular, CodeRegular, CopyRegular, DeleteRegular, EditRegular, InfoRegular, LinkRegular, PlayRegular, RecordRegular, RenameRegular, StopRegular } from "@fluentui/react-icons";
 import type { GeneralizedPatch } from "@mydenicek/core";
 import type { Snapshot } from "@mydenicek/react";
 import {
@@ -44,9 +44,9 @@ export const App = () => {
   const { document } = useDocumentState();
   const {
     undo, redo, canUndo, canRedo,
-    updateAttribute, updateTag, wrapNodes,
+    updateAttribute, updateTag,
     updateValue,
-    deleteNodes: _deleteNodes
+    deleteNodes
   } = useDocumentActions();
   const recordingObj = useRecording();
   const { history: recordingHistory, clearHistory, replay } = recordingObj;
@@ -75,6 +75,8 @@ export const App = () => {
   // Add to Button dialog state
   const [showAddToButtonDialog, setShowAddToButtonDialog] = useState(false);
   const [selectedActionNodeId, setSelectedActionNodeId] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [cutNodeIds, setCutNodeIds] = useState<string[]>([]);
 
   /**
    * Convert node kind + content to proper node data structure.
@@ -121,6 +123,49 @@ export const App = () => {
       window.history.replaceState(null, "", `#${roomId}`);
     }
   }, [roomId]);
+
+  // Keyboard shortcuts for cut/paste move operations
+  useEffect(() => {
+    const rootId = document.getRootId();
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't intercept if user is typing in an input/textarea
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      // Ctrl+X: Cut selected nodes
+      if (e.ctrlKey && e.key === 'x' && selectedNodeIds.length > 0) {
+        e.preventDefault();
+        // Don't allow cutting root
+        const cuttableIds = selectedNodeIds.filter(id => id !== rootId);
+        if (cuttableIds.length > 0) {
+          setCutNodeIds(cuttableIds);
+        }
+      }
+
+      // Ctrl+V: Paste cut nodes as children of selected node
+      if (e.ctrlKey && e.key === 'v' && cutNodeIds.length > 0 && selectedNodeIds.length === 1) {
+        e.preventDefault();
+        const targetId = selectedNodeIds[0]!;
+        // Move each cut node to the target
+        document.change((model) => {
+          for (const nodeId of cutNodeIds) {
+            model.moveNode(nodeId, targetId);
+          }
+        });
+        setCutNodeIds([]);
+      }
+
+      // Escape: Cancel cut
+      if (e.key === 'Escape' && cutNodeIds.length > 0) {
+        setCutNodeIds([]);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedNodeIds, cutNodeIds, document]);
 
   // Auto-connect on mount
   useEffect(() => {
@@ -307,6 +352,31 @@ export const App = () => {
     replay(actions, target);
   }, [replay]);
 
+  // Handler for move up/down buttons
+  const handleMoveInSiblings = useCallback((direction: -1 | 1) => {
+    if (selectedNodeIds.length !== 1) return;
+    const nodeId = selectedNodeIds[0]!;
+    const rootId = document.getRootId();
+    if (nodeId === rootId) return;
+
+    const parentId = document.getParentId(nodeId);
+    if (!parentId) return;
+
+    const siblings = document.getChildIds(parentId);
+    const currentIndex = siblings.indexOf(nodeId);
+    if (currentIndex === -1) return;
+
+    const newIndex = currentIndex + direction;
+    if (newIndex < 0 || newIndex >= siblings.length) return;
+
+    document.change((model) => {
+      model.moveNode(nodeId, parentId, newIndex);
+    });
+
+    // Re-focus on the moved node to update the selection overlay
+    clickOnSelectedNode(nodeId);
+  }, [selectedNodeIds, document]);
+
   const triggerNavigation = (action: 'parent' | 'child' | 'prev' | 'next' | 'clear') => {
     if (!navigatorRef.current) return;
     switch (action) {
@@ -483,22 +553,6 @@ export const App = () => {
                     }}
                   />
                 )}
-                <ToolbarPopoverButton
-                  text="Wrap"
-                  icon={<BackpackRegular />}
-                  disabled={!selectedNodeId}
-                  ariaLabel="Wrap"
-                  placeholder="Tag name (e.g. div)"
-                  validate={validateTagName}
-                  onSubmit={(value) => {
-                    const { tag } = sanitizeTagName(value);
-                    if (tag) {
-                      wrapNodes(selectedNodeIds, tag);
-                      if (selectedNodeId) clickOnSelectedNode(selectedNodeId);
-                    }
-                  }}
-                />
-
                 <FormulaToolbar document={document} selectedNodeId={selectedNodeId} node={node} />
 
                 <Tooltip content="Copy (Ctrl+C)" relationship="label">
@@ -514,6 +568,14 @@ export const App = () => {
                     icon={<ClipboardPasteRegular />}
                     onClick={handlePaste}
                     disabled={!canPaste}
+                  />
+                </Tooltip>
+
+                <Tooltip content="Delete selected nodes" relationship="label">
+                  <ToolbarButton
+                    icon={<DeleteRegular />}
+                    disabled={selectedNodeIds.length === 0 || selectedNodeIds.includes(document.getRootId() ?? "")}
+                    onClick={() => setShowDeleteConfirm(true)}
                   />
                 </Tooltip>
 
@@ -580,6 +642,9 @@ export const App = () => {
               <Tag icon={<ArrowLeftRegular />} onClick={() => triggerNavigation('prev')} style={{ cursor: 'pointer' }}> Prev sibling</Tag>
               <Tag icon={<ArrowRightRegular />} onClick={() => triggerNavigation('next')} style={{ cursor: 'pointer' }}> Next sibling</Tag>
               <Tag icon={<Text>Esc</Text>} onClick={() => triggerNavigation('clear')} style={{ cursor: 'pointer' }}>Clear</Tag>
+              <Text style={{ margin: '0 8px', color: '#666' }}>|</Text>
+              <Tag icon={<ArrowUpRegular />} onClick={() => handleMoveInSiblings(-1)} style={{ cursor: 'pointer', background: '#e3f2fd' }}> Move ↑</Tag>
+              <Tag icon={<ArrowDownRegular />} onClick={() => handleMoveInSiblings(1)} style={{ cursor: 'pointer', background: '#e3f2fd' }}> Move ↓</Tag>
             </TagGroup>}
             />
 
@@ -602,6 +667,24 @@ export const App = () => {
                   <Button size="small" onClick={() => setRefPickMode(null)}>Cancel</Button>
                 </div>
               )}
+              {cutNodeIds.length > 0 && (
+                <div style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  padding: "8px 12px",
+                  background: "#e3f2fd",
+                  borderBottom: "1px solid #2196f3",
+                  zIndex: 10,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center"
+                }}>
+                  <Text>{cutNodeIds.length} node{cutNodeIds.length !== 1 ? "s" : ""} cut. Select target and press Ctrl+V to paste.</Text>
+                  <Button size="small" onClick={() => setCutNodeIds([])}>Cancel</Button>
+                </div>
+              )}
               <DomNavigator ref={navigatorRef} onSelectedChange={(ids) => {
                 const targetId = ids[0];
                 if (refPickMode && targetId) {
@@ -619,7 +702,7 @@ export const App = () => {
                 setSelectedNodeIds(ids);
               }} selectedNodeIds={selectedNodeIds} remoteSelections={remoteSelections} generalizer={handleGeneralize}>
                 <ErrorBoundary>
-                  <RenderedDocument document={document} onActionClick={handleActionClick} viewMode={formulaViewMode} onRefClick={(targetId) => setSelectedNodeIds([targetId])} />
+                  <RenderedDocument document={document} onActionClick={handleActionClick} viewMode={formulaViewMode} onRefClick={(targetId) => setSelectedNodeIds([targetId])} cutNodeIds={cutNodeIds} />
                 </ErrorBoundary>
               </DomNavigator>
             </div>
@@ -731,6 +814,25 @@ export const App = () => {
                 </Button>
               </Tooltip>
             </div>
+
+            {/* Delete Confirmation Dialog */}
+            <Dialog open={showDeleteConfirm} onOpenChange={(_, data) => setShowDeleteConfirm(data.open)}>
+              <DialogSurface>
+                <DialogBody>
+                  <DialogTitle>Delete {selectedNodeIds.length} node{selectedNodeIds.length !== 1 ? "s" : ""}?</DialogTitle>
+                  <DialogContent>
+                    This action can be undone with Ctrl+Z.
+                  </DialogContent>
+                  <DialogActions>
+                    <Button appearance="secondary" onClick={() => setShowDeleteConfirm(false)}>Cancel</Button>
+                    <Button appearance="primary" onClick={() => {
+                      deleteNodes(selectedNodeIds);
+                      setShowDeleteConfirm(false);
+                    }}>Delete</Button>
+                  </DialogActions>
+                </DialogBody>
+              </DialogSurface>
+            </Dialog>
 
             {/* Add to Button Dialog */}
             <Dialog open={showAddToButtonDialog} onOpenChange={(_, data) => {

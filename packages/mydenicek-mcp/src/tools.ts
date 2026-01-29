@@ -33,21 +33,6 @@ export const DENICEK_TOOLS = [
   {
     type: "function",
     function: {
-      name: "wrapNodes",
-      description: "Wrap specific elements with a new parent element.",
-      parameters: {
-        type: "object",
-        properties: {
-          nodeIds: { type: "array", items: { type: "string" }, description: "List of element IDs to wrap." },
-          wrapperTag: { type: "string", description: "The tag name of the wrapper element." }
-        },
-        required: ["nodeIds", "wrapperTag"]
-      }
-    }
-  },
-  {
-    type: "function",
-    function: {
       name: "updateValue",
       description: "Update the text content of a value node.",
       parameters: {
@@ -97,7 +82,6 @@ export const DENICEK_TOOLS = [
 export interface DenicekActions {
   updateAttribute: (nodeIds: string[], key: string, value: unknown | undefined) => void;
   updateTag: (nodeIds: string[], newTag: string) => void;
-  wrapNodes: (nodeIds: string[], wrapperTag: string) => void;
   updateValue: (nodeIds: string[], newValue: string, originalValue: string) => void;
   addChildren: (parentIds: string[], type: "element" | "value", content: string) => string[];
   deleteNodes: (nodeIds: string[]) => void;

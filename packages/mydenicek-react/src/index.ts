@@ -39,6 +39,6 @@ export {
 export {
     calculateSplice, type DenicekActions,
 useConnectivity, useDenicekDocument, useDocumentActions, useDocumentState, useRecording} from "./useDenicekDocument.js";
-export { type SelectedNodeDetails,useSelectedNode, useSelection } from "./useSelection.js";
 export { type FormulaViewMode, type FormulaViewModeState, useFormulaViewMode } from "./useFormulaViewMode.js";
+export { type SelectedNodeDetails,useSelectedNode, useSelection } from "./useSelection.js";
 

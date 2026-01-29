@@ -6,8 +6,8 @@ test.describe('Recording and Replay', () => {
   });
 
   test('Record adding li with value to ul, then replay on same ul', async ({ page }) => {
-    // Select an li element first, then navigate to parent (ul)
-    const li = page.locator('li', { hasText: 'Item A1' });
+    // Select an li element first from the Todo List, then navigate to parent (ul)
+    const li = page.locator('li', { hasText: 'Learn CRDTs' });
     await expect(li).toBeVisible();
     await li.click();
 
@@ -30,11 +30,11 @@ test.describe('Recording and Replay', () => {
     // Now we should have the new li selected, add a value child to it
     await page.getByRole('button', { name: 'Add element' }).click();
     await page.getByRole('radio', { name: 'Value' }).check();
-    await page.getByPlaceholder('Value content').fill('Item A xx');
+    await page.getByPlaceholder('Value content').fill('New Todo Item');
     await page.getByRole('button', { name: 'Add', exact: true }).click();
 
     // Verify the new item exists
-    await expect(page.locator('x-value', { hasText: 'Item A xx' })).toBeVisible();
+    await expect(page.locator('x-value', { hasText: 'New Todo Item' })).toBeVisible();
 
     // Check what was recorded - should have the script in the drawer
     await expect(page.locator('text=Recorded Actions')).toBeVisible();
@@ -64,16 +64,16 @@ test.describe('Recording and Replay', () => {
     // Click Apply
     await applyButton.click();
 
-    // After replay, we should have TWO "Item A xx" values (original + replayed)
-    const itemCount = await page.locator('x-value', { hasText: 'Item A xx' }).count();
-    console.log(`Found ${itemCount} "Item A xx" items after replay`);
+    // After replay, we should have TWO "New Todo Item" values (original + replayed)
+    const itemCount = await page.locator('x-value', { hasText: 'New Todo Item' }).count();
+    console.log(`Found ${itemCount} "New Todo Item" items after replay`);
 
     expect(itemCount).toBe(2);
 
     // Also verify both items are inside <li> elements, not <div>
-    const liWithItemAxx = page.locator('li x-value', { hasText: 'Item A xx' });
-    const liCount = await liWithItemAxx.count();
-    console.log(`Found ${liCount} "Item A xx" items inside <li> elements`);
+    const liWithNewTodo = page.locator('li x-value', { hasText: 'New Todo Item' });
+    const liCount = await liWithNewTodo.count();
+    console.log(`Found ${liCount} "New Todo Item" items inside <li> elements`);
     expect(liCount).toBe(2);
   });
 });

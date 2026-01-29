@@ -14,7 +14,6 @@
   "dependencies": {
     "@fluentui/react-components": "^9.72.7",
     "@mydenicek/core": "file:../../packages/mydenicek-core",
-    "@mydenicek/mcp": "*",
     "@mydenicek/react": "file:../../packages/mydenicek-react",
     "@uiw/react-json-view": "^2.0.0-alpha.39",
     "react": "^19.2.0",
@@ -32,7 +31,7 @@
     "babel-plugin-react-compiler": "^19.1.0-rc.3",
     "esbuild": "^0.25.0",
     "eslint": "^9.39.1",
-    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "eslint-plugin-simple-import-sort": "^12.1.1",
     "eslint-plugin-unused-imports": "^4.3.0",

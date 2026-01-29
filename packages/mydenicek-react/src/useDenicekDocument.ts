@@ -161,7 +161,6 @@ export function useDocumentActions() {
     // Simple bulk actions using the factory
     const updateAttribute = useBulkAction(document, (m, id, key: string, value: unknown | undefined) => m.updateAttribute(id, key, value));
     const updateTag = useBulkAction(document, (m, id, newTag: string) => m.updateTag(id, newTag));
-    const wrapNodes = useBulkAction(document, (m, id, wrapperTag: string) => m.wrapNode(id, wrapperTag));
     const deleteNodes = useBulkAction(document, (m, id) => m.deleteNode(id));
 
     // Actions with special logic that don't fit the bulk pattern
@@ -214,12 +213,10 @@ export function useDocumentActions() {
         canRedo: document.canRedo,
         updateAttribute,
         updateTag,
-        wrapNodes,
         updateValue,
         addChildren,
         addSiblings,
         deleteNodes,
-
     };
 }
 

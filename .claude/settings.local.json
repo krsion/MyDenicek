@@ -9,7 +9,14 @@
       "Bash(dir:*)",
       "WebFetch(domain:www.loro.dev)",
       "Bash(npm install)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run test:*)",
+      "Bash(npm test:*)",
+      "Bash(npm run lint)",
+      "Bash(npm run lint:*)",
+      "Bash(tsc:*)",
+      "Bash(npx playwright test:*)"
     ]
   }
 }

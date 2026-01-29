@@ -87,37 +87,25 @@ If we identified nodes by path (e.g., `doc.body.children[2]`), we would face the
 
 By using unique IDs, we address the object itself regardless of where it moves in the tree. This aligns with the approach taken in [Martin Kleppmann's JSON CRDT](https://ieeexplore.ieee.org/abstract/document/7909007).
 
-### 2. How should concurrent "Wrap" operations behave?
+### 2. Why is "Wrap" not supported as a single operation?
 
-Consider a scenario where Alice wraps a list item `<li>` in a `<ul>` (unordered list), while Bob concurrently wraps the same `<li>` in an `<ol>` (ordered list).
+The "wrap" operation (create a new parent element and move an existing node into it) was intentionally removed from the system. **Wrap is a compound operation** (create + move), and compound operations cannot be made atomic in local-first software due to the CAP theorem.
 
-**Possible Outcomes:**
-1. **Winner-Takes-All (Preferred):** The result is either `<ul><li>...</li></ul>` OR `<ol><li>...</li></ol>`. The conflict is resolved by the system, but the user can switch the tag later via the UI.
-2. **Double Wrapping:** `<ul><ol><li>...</li></ol></ul>`. This creates a nested list that neither user intended.
-3. **Duplication:** `<ul><li>...</li></ul>` AND `<ol><li>...</li></ol>` (Two separate lists). This requires manual conflict resolution to delete the duplicate.
+**The Problem:**
+When two users concurrently wrap the same node, both create wrapper elements and attempt to move the target. After sync:
+- One wrapper "wins" the move (gets the child)
+- The other wrapper becomes an orphaned empty element
 
-**Current Behavior (Implemented):**
-We achieve **outcome #1 (Winner-Takes-All)** through post-merge cleanup:
-1. After sync completes, we detect orphaned empty wrappers created concurrently with a sibling wrapper
-2. Using Loro's lamport timestamps, we apply LWW to determine the winning tag
-3. The orphaned wrapper is deleted, leaving a single wrapper with the winning tag
+The orphaned wrapper cannot be automatically cleaned up because it is **observationally indistinguishable** from an intentionally created empty element. Any cleanup algorithm would risk deleting legitimate user data.
 
-**Implementation Details:**
-Since Loro's tree API (`LoroTree.createNode()`) doesn't support custom IDs, we can't prevent double-wrapping at creation time. Instead, the `cleanupRedundantWrappers()` method runs after sync to:
-* Detect orphaned empty wrappers (one wrapper "won" the move conflict, leaving the other empty)
-* Use `areNodesConcurrent()` to verify they were created concurrently (not intentional sequential nesting)
-* Delete the orphaned wrapper while preserving intentional nested structures
+**The Solution:**
+Instead of wrap, users can:
+1. **Create** a new parent element manually
+2. **Move** the target node into it using Ctrl+X/Ctrl+V (cut/paste)
 
-See `packages/mydenicek-integration-tests/src/concurrent-wrap.test.ts` for tests verifying the behavior.
+This decomposition ensures each operation is atomic and conflict-free. Move operations use Last-Writer-Wins (LWW) resolution, which is well-defined and predictable.
 
-**Why not "Mass Actions"?**
-An earlier approach considered propagating structural operations (like wrap) to causally concurrent additions—e.g., if user A wraps all list items while user B adds a new item, A's wrap would automatically apply to B's new item after sync. This "mass actions" approach was abandoned because:
-* It required fragile synchronization between action metadata and document state
-* LWW conflicts between concurrent transformations could desync replicas
-* Undo-redo operations would themselves need syncing, compounding fragility
-* Building this on top of Loro's existing CRDT semantics was fundamentally hacky
-
-The current approach adopts **traditional CRDT semantics**: operations only affect causally preceding state (per [Shapiro et al.](https://hal.inria.fr/inria-00555588)). This is more predictable—concurrent operations don't unexpectedly affect each other. Users can explicitly replay actions on new nodes via the Recording/Replay feature if needed. See [Issue #6](https://github.com/krsion/MyDenicek/issues/6) for the full rationale.
+See `docs/design/compound-operation-decomposition.md` for the full theoretical analysis, including proofs based on the CAP theorem and CALM theorem.
 
 ### 3. Why are nodes stored in a Dictionary (Map) and not a List?
 
@@ -156,13 +144,12 @@ The following table outlines how the system resolves specific concurrent operati
 
 | Concurrent Operations | Resolution Behavior | Logic |
 | :--- | :--- | :--- |
-| **Wrap (A) vs Wrap (B)** | **One Wrapper Wins** | Post-merge cleanup detects concurrent wrappers and deletes the orphaned one. LWW determines the winning tag. See Design Decisions #2. |
+| **Move (A) vs Move (B)** | **One Move Wins** | Last-Writer-Wins (LWW) determines the final parent. See Loro's movable tree CRDT. |
 | **Add Child vs Add Child** | **Both Added** | `addChild` generates a random unique ID. Both nodes appear in the parent's children list. |
 | **Rename Tag vs Rename Tag** | **One Tag Wins** | Last-Writer-Wins (LWW) on the `tag` property. |
 | **Edit Value vs Edit Value** | **One Value Wins** | LWW on the `value` property. |
-| **Wrap vs Add Child** | **Success** | The child is added to the intended parent (inner node), not the wrapper. |
-| **Wrap vs Rename Tag** | **Success** | The correct node is wrapped, and the correct node is renamed. |
-| **Wrap vs Edit Value** | **Success** | The correct node is wrapped, and its content is updated. |
+| **Delete vs Delete** | **Node Deleted** | Idempotent operation. Node is removed regardless of which delete arrives first. |
+| **Move vs Delete** | **Delete Wins** | If a node is deleted, any concurrent move operations are ignored. |
 | **Add Child vs Rename Tag** | **Success** | The child is added to the element, which now has a new tag name. |
 | **Add Child vs Edit** | **Unreachable** | `Add child` operation is allowed only for `ElementNodes`, while `Edit` operation is allowed only for `ValueNodes`. |
 | **Rename Tag vs Edit** | **Unreachable** | `Rename Tag` operation is allowed only for `ElementNodes`, while `Edit` operation is allowed only for `ValueNodes`. |
@@ -193,7 +180,7 @@ npm run test -w mywebnicek             # E2E tests (Playwright)
 
 | Task | Details |
 |------|---------|
-| Complete E2E test coverage | Missing: keyboard navigation, attribute editing, wrap operations |
+| Complete E2E test coverage | Missing: keyboard navigation, attribute editing, delete confirmation, cut/paste move |
 
 ### Medium Priority
 
