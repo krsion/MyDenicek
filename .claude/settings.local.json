@@ -16,7 +16,10 @@
       "Bash(npm run lint)",
       "Bash(npm run lint:*)",
       "Bash(tsc:*)",
-      "Bash(npx playwright test:*)"
+      "Bash(npx playwright test:*)",
+      "Bash(npx vitest run:*)",
+      "Bash(ls:*)",
+      "Bash(npm run clean:*)"
     ]
   }
 }

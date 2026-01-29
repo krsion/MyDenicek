@@ -3,12 +3,15 @@ import { expect, test } from '@playwright/test';
 test('Bulk Rename elements', async ({ page }) => {
   await page.goto('/');
 
+  // Wait for the page to fully render (webkit is slower)
+  await page.waitForLoadState('networkidle');
+
   // Use the Hello World list - find the <li> elements directly
   // The li elements contain x-value children with "Hello", "World", "Denicek"
   const helloLi = page.locator('li').filter({ has: page.locator('x-value', { hasText: 'Hello' }) });
   const worldLi = page.locator('li').filter({ has: page.locator('x-value', { hasText: 'World' }) });
 
-  await expect(helloLi).toBeVisible();
+  await expect(helloLi).toBeVisible({ timeout: 10000 });
   await expect(worldLi).toBeVisible();
 
   // Click on the li elements themselves (not the x-value children) to select element nodes

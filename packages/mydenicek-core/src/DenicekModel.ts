@@ -725,7 +725,16 @@ export class DenicekModel {
                 data.set(NODE_REF_TARGET, "target" in input ? input.target : (sibling.kind === "ref" ? sibling.target : ""));
             }
 
-            return treeIdToString(newNode.id);
+            const newId = treeIdToString(newNode.id);
+
+            // Emit patch for recording - use sibling path format
+            this.emitPatch({
+                action: "insert",
+                path: ["nodes", siblingId, "sibling", position],
+                value: { ...input, id: newId }
+            });
+
+            return newId;
         } catch (e) {
             handleModelError("addSibling", e);
             return undefined;
@@ -867,6 +876,15 @@ export class DenicekModel {
                 }
 
                 return this.copyNode(copyDef.sourceId, parentId, { index, sourceAttr: copyDef.sourceAttr });
+            }
+
+            // Handle sibling insert - insert relative to a node without knowing parent
+            // Path format: ["nodes", siblingId, "sibling", "before"|"after"]
+            if (action === "insert" && path.length === 4 && path[2] === "sibling") {
+                const siblingId = id;
+                const position = path[3] as "before" | "after";
+                const nodeDef = value as NodeInput;
+                return this.addSibling(siblingId, position, nodeDef);
             }
 
             if (path.length === 2 && action === "del") {

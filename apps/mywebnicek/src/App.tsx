@@ -1,5 +1,5 @@
 import { Badge, Button, Card, CardHeader, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogTrigger, Spinner, Switch, Tag, TagGroup, Text, Toast, Toaster, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip, useId, useToastController } from "@fluentui/react-components";
-import { AddRegular, ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, CalculatorRegular, CameraRegular, ClipboardPasteRegular, CodeRegular, CopyRegular, DeleteRegular, EditRegular, InfoRegular, LinkRegular, PlayRegular, RecordRegular, RenameRegular, StopRegular } from "@fluentui/react-icons";
+import { AddRegular, ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, CalculatorRegular, CameraRegular, ClipboardPasteRegular, CodeRegular, CopyRegular, DeleteRegular, EditRegular, InfoRegular, LinkRegular, PersonRegular, PlayRegular, RecordRegular, RenameRegular, StopRegular } from "@fluentui/react-icons";
 import type { GeneralizedPatch } from "@mydenicek/core";
 import type { Snapshot } from "@mydenicek/react";
 import {
@@ -22,6 +22,7 @@ import { DomNavigator, type DomNavigatorHandle } from "./DomNavigator";
 import { ElementDetails } from "./ElementDetails.tsx";
 import { FormulaToolbar } from "./FormulaToolbar";
 import { useClipboard } from "./hooks/useClipboard";
+import { initializeDocument } from "./initializeDocument";
 import { JsonView } from "./JsonView.tsx";
 import { RecordedScriptView } from "./RecordedScriptView";
 import { RenderedDocument } from "./RenderedDocument.tsx";
@@ -40,6 +41,9 @@ function getRoomIdFromHash(): string {
   return hash || generateRoomId();
 }
 
+// LocalStorage key for peer name
+const PEER_NAME_STORAGE_KEY = "mydenicek-peer-name";
+
 export const App = () => {
   const { document } = useDocumentState();
   const {
@@ -55,7 +59,7 @@ export const App = () => {
   const [refPickMode, setRefPickMode] = useState<{ parentId: string; position: "child" | "before" | "after" } | null>(null);
 
   const { connect, disconnect, status, latency, error } = useConnectivity();
-  const { setSelectedNodeIds, remoteSelections, userId } = useSelection();
+  const { setSelectedNodeIds, remoteSelections } = useSelection();
   const { selectedNodeId, selectedNodeIds, node, details } = useSelectedNode();
   const { mode: formulaViewMode, toggleMode: toggleFormulaViewMode, isFormulaMode } = useFormulaViewMode();
 
@@ -77,6 +81,56 @@ export const App = () => {
   const [selectedActionNodeId, setSelectedActionNodeId] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [cutNodeIds, setCutNodeIds] = useState<string[]>([]);
+
+  // Peer name state
+  const [peerName, setPeerName] = useState<string>(() =>
+    localStorage.getItem(PEER_NAME_STORAGE_KEY) || ""
+  );
+  const [peerNames, setPeerNames] = useState<Record<string, string>>({});
+
+  // Get peer ID from document
+  const peerId = useMemo(() => document.getPeerId(), [document]);
+
+  // Load initial peer names and set our name if we have one saved
+  useEffect(() => {
+    // Load current peer names
+    const initialNames = document.getPeerNames();
+    console.log('[DEBUG] Initial peerNames:', initialNames, 'myPeerId:', document.getPeerId());
+    setPeerNames(initialNames);
+
+    // Subscribe to peer names changes FIRST
+    const unsubscribe = document.onPeerNamesChange((names) => {
+      console.log('[DEBUG] peerNames changed:', names);
+      setPeerNames(names);
+    });
+
+    // Also subscribe to document changes to see when sync arrives
+    const unsubDoc = document.subscribe(() => {
+      const rootId = document.getRootId();
+      console.log('[DEBUG] Document changed! Root:', rootId);
+    });
+
+    // Set our name in CRDT AFTER subscription is set up
+    const savedName = localStorage.getItem(PEER_NAME_STORAGE_KEY);
+    if (savedName) {
+      document.setPeerName(savedName);
+    }
+
+    return () => {
+      unsubscribe();
+      unsubDoc();
+    };
+  }, [document]);
+
+  // Handler for name edit
+  const handlePeerNameChange = useCallback((newName: string) => {
+    const trimmed = newName.trim();
+    setPeerName(trimmed);
+    localStorage.setItem(PEER_NAME_STORAGE_KEY, trimmed);
+    if (trimmed) {
+      document.setPeerName(trimmed);
+    }
+  }, [document]);
 
   /**
    * Convert node kind + content to proper node data structure.
@@ -172,6 +226,65 @@ export const App = () => {
     connect(config.syncServerUrl, roomId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Track if we've already initialized
+  const hasInitialized = useRef(false);
+
+  // Initialize document AFTER sync data has a chance to arrive
+  // We watch for document changes - if we get a root via sync, we don't need to initialize
+  useEffect(() => {
+    if (hasInitialized.current) return undefined;
+
+    // Check immediately if document already has content (from sync or previous session)
+    const existingRoot = document.getRootId();
+    if (existingRoot) {
+      console.log('[DEBUG] Document already has root on mount:', existingRoot);
+      hasInitialized.current = true;
+      return undefined;
+    }
+
+    console.log('[DEBUG] Document empty on mount, waiting for sync...');
+
+    // Subscribe to document changes to detect if sync brings data
+    const checkAndMaybeInit = () => {
+      if (hasInitialized.current) return;
+
+      const rootId = document.getRootId();
+      console.log('[DEBUG] Checking for root after change:', rootId);
+      if (rootId) {
+        // Sync brought us data, no need to initialize
+        console.log('[DEBUG] Root appeared via sync, skipping initialization');
+        hasInitialized.current = true;
+        unsubscribe();
+        clearTimeout(initTimeout);
+      }
+    };
+
+    const unsubscribe = document.subscribe(() => {
+      checkAndMaybeInit();
+    });
+
+    // Fallback: if no root appears after 2 seconds, initialize
+    const initTimeout = setTimeout(() => {
+      if (hasInitialized.current) return;
+
+      const rootId = document.getRootId();
+      if (!rootId) {
+        hasInitialized.current = true;
+        document.change((model) => {
+          initializeDocument(model);
+        });
+      } else {
+        hasInitialized.current = true;
+      }
+      unsubscribe();
+    }, 2000);
+
+    return () => {
+      unsubscribe();
+      clearTimeout(initTimeout);
+    };
+  }, [document]);
 
   // Handle share button click
   const handleShare = useCallback(() => {
@@ -463,7 +576,7 @@ export const App = () => {
   }, [recordingHistory, remoteSelections]);
 
   return (
-    <PeerAliasProvider selfPeerId={userId ?? null} knownPeerIds={knownPeerIds}>
+    <PeerAliasProvider selfPeerId={peerId} knownPeerIds={knownPeerIds} peerNames={peerNames}>
       <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
         <Toaster toasterId={toasterId} position="bottom-end" />
         <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column" }}>
@@ -492,7 +605,8 @@ export const App = () => {
                 </Tooltip>
                 <ToolbarDivider />
                 <AddNodePopoverButton
-                  disabled={node?.kind !== "element" && node?.kind !== "formula"}
+                  disabled={!node || (node.kind !== "element" && node.kind !== "formula" && node.kind !== "value")}
+                  canAddChild={node?.kind === "element" || node?.kind === "formula"}
                   initialValue={selectedNodeFirstChildTag || ""}
                   onAddChild={(content, kind) => {
                     if (!selectedNodeId) return;
@@ -593,7 +707,17 @@ export const App = () => {
               </ToolbarGroup>
 
               <ToolbarGroup>
-                <Text>{userId}</Text>
+                <ToolbarPopoverButton
+                  text="Edit your display name"
+                  icon={<PersonRegular />}
+                  disabled={false}
+                  ariaLabel="Edit name"
+                  placeholder="Your name"
+                  initialValue={peerName}
+                  onSubmit={handlePeerNameChange}
+                >
+                  {peerName || "Anonymous"}
+                </ToolbarPopoverButton>
                 <SyncStatusIndicator status={status} latency={latency} error={error} />
                 <Switch
                   checked={status === "connected" || status === "connecting"}

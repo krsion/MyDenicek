@@ -50,6 +50,8 @@ export interface DenicekProviderProps {
     initializer?: (model: DenicekModel) => void;
     /** Callback when document changes */
     onChange?: () => void;
+    /** Optional peer ID for CRDT operations (should be persisted across sessions) */
+    peerId?: bigint;
 }
 
 /**
@@ -60,6 +62,7 @@ export function DenicekProvider({
     initialDocument,
     initializer,
     onChange,
+    peerId,
 }: DenicekProviderProps) {
     // Version counter for triggering re-renders
     const [version, setVersion] = useState(0);
@@ -67,7 +70,7 @@ export function DenicekProvider({
     // Create or use provided document
     const document = useMemo(() => {
         return initialDocument ?? DenicekDocument.create(
-            { onVersionChange: () => setVersion(v => v + 1) },
+            { onVersionChange: () => setVersion(v => v + 1), peerId },
             initializer
         );
         // eslint-disable-next-line react-hooks/exhaustive-deps

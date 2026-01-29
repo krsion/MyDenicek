@@ -10,6 +10,7 @@ export type NodeKind = "element" | "value" | "action" | "formula" | "ref";
 
 type Props = {
     disabled: boolean;
+    canAddChild?: boolean;
     initialValue?: string;
     onAddChild: (content: string, kind: NodeKind) => void;
     onAddBefore: (content: string, kind: NodeKind) => void;
@@ -17,10 +18,10 @@ type Props = {
     onStartRefPick?: (position: "child" | "before" | "after") => void;
 };
 
-export const AddNodePopoverButton = ({ disabled, initialValue, onAddChild, onAddBefore, onAddAfter, onStartRefPick }: Props) => {
+export const AddNodePopoverButton = ({ disabled, canAddChild = true, initialValue, onAddChild, onAddBefore, onAddAfter, onStartRefPick }: Props) => {
     const [open, setOpen] = useState(false);
     const [value, setValue] = useState(initialValue || "");
-    const [mode, setMode] = useState<"child" | "before" | "after">("child");
+    const [mode, setMode] = useState<"child" | "before" | "after">(canAddChild ? "child" : "before");
     const [nodeType, setNodeType] = useState<"tag" | "value" | "action" | "formula" | "ref">("tag");
     const [operation, setOperation] = useState<string>("plus");
     const [error, setError] = useState<string | null>(null);
@@ -144,7 +145,7 @@ export const AddNodePopoverButton = ({ disabled, initialValue, onAddChild, onAdd
                     </Text>
                 )}
                 <RadioGroup value={mode} onChange={(_, data) => setMode(data.value as "child" | "before" | "after")} layout="horizontal">
-                    <Radio value="child" label="Child" />
+                    <Radio value="child" label="Child" disabled={!canAddChild} />
                     <Radio value="before" label="Before" />
                     <Radio value="after" label="After" />
                 </RadioGroup>

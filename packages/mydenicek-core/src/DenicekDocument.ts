@@ -4,6 +4,7 @@
  * Includes undo/redo, history tracking, sync, and replay functionality
  */
 
+import type { CrdtDocAdaptor } from "loro-adaptors";
 import { type Frontiers, LoroDoc, UndoManager } from "loro-crdt";
 import type { LoroWebsocketClient, LoroWebsocketClientRoom } from "loro-websocket/client";
 
@@ -72,6 +73,7 @@ export class DenicekDocument {
     private syncClient: LoroWebsocketClient | null = null;
     private syncRoom: LoroWebsocketClientRoom | null = null;
     private _syncRoomId: string | null = null;
+    private _syncEnabled: boolean = false; // Flag to control sync - must be true to send/receive
 
     // Sync status tracking
     private syncStatusListeners: Set<(state: SyncState) => void> = new Set();
@@ -131,6 +133,7 @@ export class DenicekDocument {
         // Disconnect existing connection if any
         await this.disconnectSync();
 
+        this._syncEnabled = true;
         this.setSyncStatus("connecting");
 
         try {
@@ -145,19 +148,28 @@ export class DenicekDocument {
 
             // Subscribe to status changes BEFORE connecting
             this.statusUnsubscribe = client.onStatusChange((status) => {
-                this.setSyncStatus(status);
+                // Only update status if sync is still enabled
+                if (this._syncEnabled) {
+                    this.setSyncStatus(status);
+                }
             });
 
             this.latencyUnsubscribe = client.onLatency((ms) => {
-                this._syncLatency = ms;
-                this.notifySyncStateChange();
+                if (this._syncEnabled) {
+                    this._syncLatency = ms;
+                    this.notifySyncStateChange();
+                }
             });
 
             await client.connect();
 
+            // Create a wrapper adaptor that checks _syncEnabled before sending
+            const innerAdaptor = new LoroAdaptor(this._doc);
+            const wrappedAdaptor = this.createSyncControlledAdaptor(innerAdaptor);
+
             const room = await client.join({
                 roomId: options.roomId,
-                crdtAdaptor: new LoroAdaptor(this._doc),
+                crdtAdaptor: wrappedAdaptor,
             });
 
             await room.waitForReachingServerVersion();
@@ -169,6 +181,7 @@ export class DenicekDocument {
             this._syncRoomId = options.roomId;
             // Status is already "connected" via onStatusChange callback
         } catch (error) {
+            this._syncEnabled = false;
             const errorMessage = error instanceof Error ? error.message : "Connection failed";
             this.setSyncStatus("disconnected", errorMessage);
             throw error;
@@ -176,19 +189,60 @@ export class DenicekDocument {
     }
 
     /**
+     * Creates a wrapper adaptor that only sends updates when _syncEnabled is true
+     */
+    private createSyncControlledAdaptor(innerAdaptor: CrdtDocAdaptor): CrdtDocAdaptor {
+        const isSyncEnabled = () => this._syncEnabled;
+        return {
+            crdtType: innerAdaptor.crdtType,
+            setCtx: (ctx) => {
+                // Wrap the send function to check _syncEnabled
+                const wrappedCtx = {
+                    ...ctx,
+                    send: (updates: Uint8Array[]) => {
+                        if (isSyncEnabled()) {
+                            ctx.send(updates);
+                        }
+                    }
+                };
+                innerAdaptor.setCtx(wrappedCtx);
+            },
+            handleJoinOk: (res) => innerAdaptor.handleJoinOk(res),
+            waitForReachingServerVersion: () => innerAdaptor.waitForReachingServerVersion(),
+            applyUpdate: (updates: Uint8Array[]) => {
+                // Only apply incoming updates if sync is enabled
+                if (isSyncEnabled()) {
+                    innerAdaptor.applyUpdate(updates);
+                }
+            },
+            cmpVersion: (v: Uint8Array) => innerAdaptor.cmpVersion(v),
+            getVersion: () => innerAdaptor.getVersion(),
+            getAlternativeVersion: innerAdaptor.getAlternativeVersion?.bind(innerAdaptor),
+            handleUpdateError: innerAdaptor.handleUpdateError?.bind(innerAdaptor),
+            handleJoinErr: innerAdaptor.handleJoinErr?.bind(innerAdaptor),
+            destroy: () => innerAdaptor.destroy(),
+        };
+    }
+
+    /**
      * Disconnect from the sync server
      */
     async disconnectSync(): Promise<void> {
+        // Disable sync first to stop any pending sends
+        this._syncEnabled = false;
+
         // Cleanup status subscriptions
         this.statusUnsubscribe?.();
         this.latencyUnsubscribe?.();
         this.statusUnsubscribe = undefined;
         this.latencyUnsubscribe = undefined;
 
+        // Destroy room (cleans up adaptor)
         if (this.syncRoom) {
-            await this.syncRoom.leave().catch(() => {});
+            await this.syncRoom.destroy().catch(() => {});
             this.syncRoom = null;
         }
+        // Close client (stops auto-reconnect)
         if (this.syncClient) {
             this.syncClient.close();
             this.syncClient = null;
@@ -199,10 +253,10 @@ export class DenicekDocument {
     }
 
     /**
-     * Check if connected to a sync server
+     * Check if sync is active (connected and enabled)
      */
     get isSyncConnected(): boolean {
-        return this.syncClient !== null && this.syncRoom !== null;
+        return this._syncEnabled && this.syncClient !== null && this.syncRoom !== null;
     }
 
     /**
@@ -248,6 +302,51 @@ export class DenicekDocument {
         this._syncStatus = status;
         this._syncError = error ?? null;
         this.notifySyncStateChange();
+    }
+
+    // === Peer Names ===
+
+    private static PEER_NAMES_CONTAINER = "peerNames";
+
+    /**
+     * Get the peer ID as a string
+     */
+    getPeerId(): string {
+        return this._doc.peerIdStr;
+    }
+
+    /**
+     * Set the name for the current peer
+     */
+    setPeerName(name: string): void {
+        const map = this._doc.getMap(DenicekDocument.PEER_NAMES_CONTAINER);
+        map.set(this._doc.peerIdStr, name);
+        this._doc.commit();
+    }
+
+    /**
+     * Get all peer names as a record
+     */
+    getPeerNames(): Record<string, string> {
+        const map = this._doc.getMap(DenicekDocument.PEER_NAMES_CONTAINER);
+        return map.toJSON() as Record<string, string>;
+    }
+
+    /**
+     * Subscribe to peer names changes
+     * Uses document-level subscription to catch sync/import changes
+     * @returns Unsubscribe function
+     */
+    onPeerNamesChange(listener: (names: Record<string, string>) => void): () => void {
+        // Use document-level subscription to catch all changes including sync imports
+        let lastNames = JSON.stringify(this.getPeerNames());
+        return this._doc.subscribe(() => {
+            const currentNames = JSON.stringify(this.getPeerNames());
+            if (currentNames !== lastNames) {
+                lastNames = currentNames;
+                listener(this.getPeerNames());
+            }
+        });
     }
 
     // === Version ===
@@ -509,7 +608,8 @@ export class DenicekDocument {
                 const result = model.applyPatch(concretePatch);
 
                 // If inserted or copied a node, map the ID
-                if ((patch.action === "insert" || patch.action === "copy") && patch.path.length >= 3 && patch.path[2] === "children") {
+                // Handles both children inserts and sibling inserts
+                if ((patch.action === "insert" || patch.action === "copy") && patch.path.length >= 3 && (patch.path[2] === "children" || patch.path[2] === "sibling")) {
                     const val = patch.value as Record<string, unknown>;
                     if (val && val.id && typeof val.id === "string" && val.id.startsWith("$")) {
                         if (typeof result === "string") {

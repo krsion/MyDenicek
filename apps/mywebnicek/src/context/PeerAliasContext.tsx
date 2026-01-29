@@ -20,23 +20,26 @@ interface PeerAliasProviderProps {
     children: ReactNode;
     selfPeerId: string | null;
     knownPeerIds?: string[];
+    peerNames?: Record<string, string>;
 }
 
-export function PeerAliasProvider({ children, selfPeerId, knownPeerIds = [] }: PeerAliasProviderProps) {
+export function PeerAliasProvider({ children, selfPeerId, knownPeerIds = [], peerNames = {} }: PeerAliasProviderProps) {
     const value = useMemo(() => {
         // Build alias map
         const aliasMap = new Map<string, string>();
         let peerCounter = 1;
 
-        // Self always gets "You"
+        // Self always gets their name or "You"
         if (selfPeerId) {
-            aliasMap.set(selfPeerId, "You");
+            const selfName = peerNames[selfPeerId];
+            aliasMap.set(selfPeerId, selfName || "You");
         }
 
         // Assign aliases to other known peers
         for (const peerId of knownPeerIds) {
             if (!aliasMap.has(peerId)) {
-                aliasMap.set(peerId, `peer${peerCounter++}`);
+                const name = peerNames[peerId];
+                aliasMap.set(peerId, name || `peer${peerCounter++}`);
             }
         }
 
@@ -44,8 +47,14 @@ export function PeerAliasProvider({ children, selfPeerId, knownPeerIds = [] }: P
             if (aliasMap.has(peerId)) {
                 return aliasMap.get(peerId)!;
             }
-            // Assign a new alias for unknown peers
-            const alias = peerId === selfPeerId ? "You" : `Peer ${peerCounter++}`;
+            // Check peerNames for unknown peers
+            const name = peerNames[peerId];
+            if (name) {
+                aliasMap.set(peerId, name);
+                return name;
+            }
+            // Assign a new alias for unknown peers - use "Peer N", NOT self's name
+            const alias = peerId === selfPeerId ? (peerNames[selfPeerId] || "You") : `Peer ${peerCounter++}`;
             aliasMap.set(peerId, alias);
             return alias;
         };
@@ -89,7 +98,7 @@ export function PeerAliasProvider({ children, selfPeerId, knownPeerIds = [] }: P
             formatNodeId,
             formatValue,
         };
-    }, [selfPeerId, knownPeerIds]);
+    }, [selfPeerId, knownPeerIds, peerNames]);
 
     return (
         <PeerAliasContext.Provider value={value}>
