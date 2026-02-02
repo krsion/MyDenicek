@@ -5,7 +5,7 @@
  * On replay, the copy reads the CURRENT value from the source.
  */
 
-import type { DenicekDocument, NodeData } from "@mydenicek/react";
+import type { DenicekDocument, NodeData } from "@mydenicek/core";
 import { useCallback, useEffect, useState } from "react";
 
 interface ClipboardData {

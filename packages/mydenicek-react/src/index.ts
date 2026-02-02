@@ -1,31 +1,10 @@
 /**
  * MyDenicek React v2
- * 
+ *
  * React hooks for Loro-based Denicek documents.
+ *
+ * Note: Import types (NodeData, Snapshot, etc.) directly from @mydenicek/core
  */
-
-// Re-export types from core
-export type {
-    ActionNode,
-    ActionNodeData,
-    DenicekAction,
-    ElementNode,
-    ElementNodeData,
-    FormulaContext,
-    FormulaDocumentAccessor,
-    FormulaNode,
-    FormulaNodeData,
-    Node,
-    NodeData,
-    Operation,
-    RefNode,
-    RefNodeData,
-    Snapshot,
-    SpliceInfo,
-    ValueNode,
-    ValueNodeData
-} from "@mydenicek/core";
-export { DenicekDocument, DenicekModel, evaluateFormula, getNodeValue, isFormulaError } from "@mydenicek/core";
 
 // Constants
 export { DENICEK_NODE_ID_ATTR } from "./constants.js";

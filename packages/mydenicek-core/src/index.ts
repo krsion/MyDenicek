@@ -21,7 +21,6 @@ export type {
     ActionNode,
     // Public node data types
     ActionNodeData,
-    DenicekAction,
     ElementNode,
     ElementNodeData,
     FormulaContext,

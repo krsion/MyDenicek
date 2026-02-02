@@ -1,7 +1,6 @@
 import { Badge, Button, Card, CardHeader, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogTrigger, Spinner, Switch, Tag, TagGroup, Text, Toast, Toaster, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip, useId, useToastController } from "@fluentui/react-components";
 import { AddRegular, ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, CalculatorRegular, CameraRegular, ClipboardPasteRegular, CodeRegular, CopyRegular, DeleteRegular, EditRegular, InfoRegular, LinkRegular, PersonRegular, PlayRegular, RecordRegular, RenameRegular, StopRegular } from "@fluentui/react-icons";
-import type { GeneralizedPatch } from "@mydenicek/core";
-import type { Snapshot } from "@mydenicek/react";
+import type { GeneralizedPatch, Snapshot } from "@mydenicek/core";
 import {
   useConnectivity,
   useDocumentActions,
@@ -95,19 +94,11 @@ export const App = () => {
   useEffect(() => {
     // Load current peer names
     const initialNames = document.getPeerNames();
-    console.log('[DEBUG] Initial peerNames:', initialNames, 'myPeerId:', document.getPeerId());
     setPeerNames(initialNames);
 
-    // Subscribe to peer names changes FIRST
+    // Subscribe to peer names changes
     const unsubscribe = document.onPeerNamesChange((names) => {
-      console.log('[DEBUG] peerNames changed:', names);
       setPeerNames(names);
-    });
-
-    // Also subscribe to document changes to see when sync arrives
-    const unsubDoc = document.subscribe(() => {
-      const rootId = document.getRootId();
-      console.log('[DEBUG] Document changed! Root:', rootId);
     });
 
     // Set our name in CRDT AFTER subscription is set up
@@ -116,10 +107,7 @@ export const App = () => {
       document.setPeerName(savedName);
     }
 
-    return () => {
-      unsubscribe();
-      unsubDoc();
-    };
+    return unsubscribe;
   }, [document]);
 
   // Handler for name edit
@@ -238,22 +226,17 @@ export const App = () => {
     // Check immediately if document already has content (from sync or previous session)
     const existingRoot = document.getRootId();
     if (existingRoot) {
-      console.log('[DEBUG] Document already has root on mount:', existingRoot);
       hasInitialized.current = true;
       return undefined;
     }
-
-    console.log('[DEBUG] Document empty on mount, waiting for sync...');
 
     // Subscribe to document changes to detect if sync brings data
     const checkAndMaybeInit = () => {
       if (hasInitialized.current) return;
 
       const rootId = document.getRootId();
-      console.log('[DEBUG] Checking for root after change:', rootId);
       if (rootId) {
         // Sync brought us data, no need to initialize
-        console.log('[DEBUG] Root appeared via sync, skipping initialization');
         hasInitialized.current = true;
         unsubscribe();
         clearTimeout(initTimeout);

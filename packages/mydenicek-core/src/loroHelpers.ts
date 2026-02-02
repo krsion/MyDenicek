@@ -3,7 +3,7 @@
  * Internal utilities for working with Loro CRDT types
  */
 
-import { LoroDoc, LoroList, LoroMap, LoroText, LoroTree, LoroTreeNode, type TreeID } from "loro-crdt";
+import { LoroDoc, LoroList, LoroMap, LoroText, LoroTreeNode, type TreeID } from "loro-crdt";
 
 import type { ActionNode, ElementNode, FormulaNode, GeneralizedPatch, Node, NodeData, RefNode, ValueNode } from "./types.js";
 
@@ -58,7 +58,7 @@ export function stringToTreeId(id: string): TreeID {
 /**
  * Convert a LoroTreeNode to our public Node type
  */
-export function loroNodeToNode(treeNode: LoroTreeNode, _tree: LoroTree): Node {
+export function loroNodeToNode(treeNode: LoroTreeNode): Node {
     const data = treeNode.data;
     const kind = data.get(NODE_KIND) as "element" | "value" | "action" | "ref" | "formula" | undefined;
     const sourceId = data.get(NODE_SOURCE_ID) as string | undefined;

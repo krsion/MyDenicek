@@ -1,6 +1,6 @@
 import { Badge, Button, Card, CardHeader, Checkbox, Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Text, Tooltip } from "@fluentui/react-components";
 import { DeleteRegular, TargetRegular } from "@fluentui/react-icons";
-import { type DenicekAction } from "@mydenicek/react";
+import { type GeneralizedPatch } from "@mydenicek/core";
 
 import { NodeId } from "./components/NodeId";
 import { usePeerAlias } from "./context/PeerAliasContext";
@@ -23,7 +23,7 @@ function extractNodeId(path: (string | number)[]): string | null {
 }
 
 interface RecordedScriptViewProps {
-    script: DenicekAction[];
+    script: GeneralizedPatch[];
     onNodeClick?: (id: string) => void;
     selectedIndices?: Set<number>;
     onSelectionChange?: (indices: Set<number>) => void;

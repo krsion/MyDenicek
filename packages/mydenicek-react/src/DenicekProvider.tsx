@@ -22,10 +22,6 @@ export interface DenicekContextValue {
     syncManager?: {
         connect: (url: string, roomId: string) => Promise<void>;
         disconnect: () => Promise<void>;
-        /** @deprecated Use syncState.status === "connected" instead */
-        isConnected: boolean;
-        /** @deprecated Use syncState.roomId instead */
-        roomId: string | null;
         /** Current sync state with status, latency, error */
         syncState: SyncState;
     };
@@ -122,8 +118,6 @@ export function DenicekProvider({
         syncManager: {
             connect,
             disconnect,
-            isConnected: syncState.status === "connected",
-            roomId: syncState.roomId,
             syncState,
         }
     };

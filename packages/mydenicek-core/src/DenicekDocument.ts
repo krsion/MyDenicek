@@ -542,23 +542,6 @@ export class DenicekDocument {
         return this._doc.subscribeLocalUpdates(listener);
     }
 
-    // === History ===
-
-    /**
-     * Checkout to a specific version
-     * This allows time-travel to a previous state
-     */
-    checkout(version: Version): void {
-        this._doc.checkout(version as Frontiers);
-    }
-
-    /**
-     * Checkout to the latest version (head)
-     */
-    checkoutToHead(): void {
-        this._doc.checkoutToLatest();
-    }
-
     // === Patch History (for recording/replay) ===
 
     /**

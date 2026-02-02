@@ -113,7 +113,7 @@ export class DenicekModel {
             const treeNode = this.tree.getNodeByID(treeId);
             if (!treeNode) return undefined;
             if (treeNode.isDeleted?.()) return undefined;
-            return loroNodeToNode(treeNode, this.tree);
+            return loroNodeToNode(treeNode);
         } catch {
             return undefined;
         }
@@ -674,7 +674,7 @@ export class DenicekModel {
             const siblingNode = this.tree.getNodeByID(siblingTreeId);
             if (!siblingNode) return undefined;
 
-            const sibling = loroNodeToNode(siblingNode, this.tree);
+            const sibling = loroNodeToNode(siblingNode);
             const parent = siblingNode.parent();
             if (!parent) return undefined;
 

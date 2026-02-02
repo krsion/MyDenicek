@@ -181,11 +181,6 @@ export interface GeneralizedPatch {
     length?: number;
 }
 
-/**
- * DenicekAction - alias for GeneralizedPatch for backwards compatibility
- */
-export type DenicekAction = GeneralizedPatch;
-
 
 // ============================================================================
 // Sync Types

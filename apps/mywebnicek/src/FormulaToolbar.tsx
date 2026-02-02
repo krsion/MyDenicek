@@ -9,7 +9,7 @@
 
 import { Button, Combobox, Dialog, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogTrigger, Option, Text, ToolbarButton, Tooltip } from "@fluentui/react-components";
 import { CalculatorRegular } from "@fluentui/react-icons";
-import type { DenicekDocument, NodeData } from "@mydenicek/react";
+import type { DenicekDocument, NodeData } from "@mydenicek/core";
 
 import { builtinOperationNames, defaultOperationsMap } from "./formula";
 
