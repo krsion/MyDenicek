@@ -16,7 +16,7 @@ export {
 
 // Hooks
 export {
-useConnectivity, useDocumentActions, useDocumentState, useRecording} from "./useDenicekDocument.js";
+useConnectivity, useDocumentState, useRecording} from "./useDenicekDocument.js";
 export { type FormulaViewMode, type FormulaViewModeState, useFormulaViewMode } from "./useFormulaViewMode.js";
 export { type SelectedNodeDetails,useSelectedNode, useSelection } from "./useSelection.js";
 

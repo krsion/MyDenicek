@@ -73,7 +73,6 @@ const useStyles = makeStyles({
 
 interface RenderedDocumentProps {
   document: DenicekDocument;
-  version?: unknown;
   onActionClick?: (actions: GeneralizedPatch[], target: string) => void;
   /** View mode for formulas: "result" shows computed values, "formula" shows structure */
   viewMode?: FormulaViewMode;

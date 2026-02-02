@@ -4,35 +4,12 @@
 
 import {
     type GeneralizedPatch,
-    type SpliceInfo,
     type SyncStatus,
 } from "@mydenicek/core";
-import { useCallback, useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 
 import { DenicekContext } from "./DenicekProvider.js";
 
-/**
- * Calculates the minimal splice operation needed to transform oldVal into newVal.
- */
-function calculateSplice(oldVal: string, newVal: string): SpliceInfo {
-    let start = 0;
-    while (start < oldVal.length && start < newVal.length && oldVal[start] === newVal[start]) {
-        start++;
-    }
-
-    let oldEnd = oldVal.length;
-    let newEnd = newVal.length;
-
-    while (oldEnd > start && newEnd > start && oldVal[oldEnd - 1] === newVal[newEnd - 1]) {
-        oldEnd--;
-        newEnd--;
-    }
-
-    const deleteCount = oldEnd - start;
-    const insertText = newVal.slice(start, newEnd);
-
-    return { index: start, deleteCount, insertText };
-}
 
 /**
  * Hook to access document state.
@@ -127,58 +104,4 @@ export function useRecording() {
     };
 }
 
-/**
- * Hook for document actions (mutations)
- */
-export function useDocumentActions() {
-    const { document } = useDocumentState();
-
-    const undo = useCallback(() => document.undo(), [document]);
-    const redo = useCallback(() => document.redo(), [document]);
-
-    // Direct actions using the Document API (core handles arrays)
-    const updateAttribute = useCallback((nodeIds: string[], key: string, value: unknown | undefined) => {
-        document.updateAttribute(nodeIds, key, value);
-    }, [document]);
-
-    const updateTag = useCallback((nodeIds: string[], newTag: string) => {
-        document.updateTag(nodeIds, newTag);
-    }, [document]);
-
-    const deleteNodes = useCallback((nodeIds: string[]) => {
-        document.deleteNodes(nodeIds);
-    }, [document]);
-
-    const updateValue = useCallback((nodeIds: string[], newValue: string, originalValue: string) => {
-        const splice = calculateSplice(originalValue, newValue);
-        document.spliceValue(nodeIds, splice.index, splice.deleteCount, splice.insertText);
-    }, [document]);
-
-    const addChildren = useCallback((parentIds: string[], type: "element" | "value", content: string) => {
-        const newIds: string[] = [];
-        for (const id of parentIds) {
-            const node = document.getNode(id);
-            if (node?.kind === "element") {
-                const child = type === "value"
-                    ? { kind: "value" as const, value: content }
-                    : { kind: "element" as const, tag: content, attrs: {}, children: [] };
-                const [newId] = document.addChildren(id, [child]);
-                if (newId) newIds.push(newId);
-            }
-        }
-        return newIds;
-    }, [document]);
-
-    return {
-        undo,
-        redo,
-        canUndo: document.canUndo,
-        canRedo: document.canRedo,
-        updateAttribute,
-        updateTag,
-        updateValue,
-        addChildren,
-        deleteNodes,
-    };
-}
 

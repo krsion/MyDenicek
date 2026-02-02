@@ -842,6 +842,30 @@ export class DenicekDocument {
     }
 
     /**
+     * Update the text value of value nodes by computing minimal splice
+     */
+    updateValue(nodeIds: string[], oldValue: string, newValue: string): void {
+        // Calculate minimal splice operation
+        let start = 0;
+        while (start < oldValue.length && start < newValue.length && oldValue[start] === newValue[start]) {
+            start++;
+        }
+
+        let oldEnd = oldValue.length;
+        let newEnd = newValue.length;
+
+        while (oldEnd > start && newEnd > start && oldValue[oldEnd - 1] === newValue[newEnd - 1]) {
+            oldEnd--;
+            newEnd--;
+        }
+
+        const deleteCount = oldEnd - start;
+        const insertText = newValue.slice(start, newEnd);
+
+        this.spliceValue(nodeIds, start, deleteCount, insertText);
+    }
+
+    /**
      * Update a formula node's operation
      */
     updateFormulaOperation(id: string, operation: string): void {

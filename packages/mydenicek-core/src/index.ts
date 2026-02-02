@@ -11,8 +11,6 @@ export { DenicekDocument } from "./DenicekDocument.js";
 
 
 
-// Error handling
-export { DenicekError } from "./errors.js";
 
 // Types
 export type {

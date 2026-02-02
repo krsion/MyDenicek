@@ -3,7 +3,6 @@ import { AddRegular, ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, Arrow
 import type { GeneralizedPatch, Snapshot } from "@mydenicek/core";
 import {
   useConnectivity,
-  useDocumentActions,
   useDocumentState,
   useFormulaViewMode,
   useRecording,
@@ -45,12 +44,6 @@ const PEER_NAME_STORAGE_KEY = "mydenicek-peer-name";
 
 export const App = () => {
   const { document } = useDocumentState();
-  const {
-    undo, redo, canUndo, canRedo,
-    updateAttribute, updateTag,
-    updateValue,
-    deleteNodes
-  } = useDocumentActions();
   const recordingObj = useRecording();
   const { history: recordingHistory, clearHistory, replay } = recordingObj;
   const [showHistory, setShowHistory] = useState(true);
@@ -485,7 +478,7 @@ export const App = () => {
 
   const handleAttributeChange = (key: string, value: unknown | undefined) => {
     if (selectedNodeIds.length === 0) return;
-    updateAttribute(selectedNodeIds, key, value);
+    document.updateAttribute(selectedNodeIds, key, value);
   };
 
   // Clipboard: copy creates a "copy" action referencing the source node
@@ -559,20 +552,20 @@ export const App = () => {
                   <ToolbarButton
                     icon={<ArrowUndoRegular />}
                     onClick={() => {
-                      undo();
+                      document.undo();
                       if (selectedNodeId) clickOnSelectedNode(selectedNodeId);
                     }}
-                    disabled={!canUndo}
+                    disabled={!document.canUndo}
                   />
                 </Tooltip>
                 <Tooltip content="Redo" relationship="label">
                   <ToolbarButton
                     icon={<ArrowRedoRegular />}
                     onClick={() => {
-                      redo();
+                      document.redo();
                       if (selectedNodeId) clickOnSelectedNode(selectedNodeId);
                     }}
-                    disabled={!canRedo}
+                    disabled={!document.canRedo}
                   />
                 </Tooltip>
                 <ToolbarDivider />
@@ -602,7 +595,7 @@ export const App = () => {
                     initialValue={String(details?.value ?? "")}
                     onSubmit={(value) => {
                       const originalValue = String(details?.value ?? "");
-                      updateValue(selectedNodeIds, value, originalValue);
+                      document.updateValue(selectedNodeIds, originalValue, value);
                     }}
                   />
                 ) : (
@@ -617,7 +610,7 @@ export const App = () => {
                     onSubmit={(value) => {
                       const { tag } = sanitizeTagName(value);
                       if (tag) {
-                        updateTag(selectedNodeIds, tag);
+                        document.updateTag(selectedNodeIds, tag);
                         if (selectedNodeId) clickOnSelectedNode(selectedNodeId);
                       }
                     }}
@@ -898,7 +891,7 @@ export const App = () => {
                   <DialogActions>
                     <Button appearance="secondary" onClick={() => setShowDeleteConfirm(false)}>Cancel</Button>
                     <Button appearance="primary" onClick={() => {
-                      deleteNodes(selectedNodeIds);
+                      document.deleteNodes(selectedNodeIds);
                       setShowDeleteConfirm(false);
                     }}>Delete</Button>
                   </DialogActions>
