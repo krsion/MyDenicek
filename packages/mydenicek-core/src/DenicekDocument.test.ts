@@ -1,12 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { DenicekDocument } from "./DenicekDocument.js";
-import type { DenicekModel } from "./DenicekModel.js";
 
 /** Simple test initializer - creates a minimal document structure */
-function testInitializer(model: DenicekModel): void {
-    const rootId = model.createRootNode("section");
-    model.addChild(rootId, { kind: "element", tag: "p", attrs: {}, children: [] });
+function testInitializer(doc: DenicekDocument): void {
+    const rootId = doc.createRootNode("section");
+    doc.addChild(rootId, { kind: "element", tag: "p", attrs: {}, children: [] });
 }
 
 describe("DenicekDocument", () => {
@@ -24,19 +23,16 @@ describe("DenicekDocument", () => {
         });
 
         it("should create a document with initial structure via initializer", () => {
-            doc = DenicekDocument.create({}, (model) => {
-                model.createRootNode("section");
+            doc = DenicekDocument.create({}, (d) => {
+                d.createRootNode("section");
             });
             expect(doc.getRootId()).toBeTruthy();
             const snapshot = doc.getSnapshot();
             expect(snapshot.nodes.size).toBe(1);
         });
 
-        it("should add nodes via change()", () => {
-            doc.change((model) => {
-                model.createRootNode("root");
-            });
-
+        it("should add nodes directly", () => {
+            doc.createRootNode("root");
             expect(doc.getRootId()).toBeTruthy();
         });
     });
@@ -46,7 +42,8 @@ describe("DenicekDocument", () => {
             doc = DenicekDocument.create({}, testInitializer);
             const bytes = doc.export("snapshot");
 
-            const doc2 = DenicekDocument.fromBytes(bytes);
+            const doc2 = new DenicekDocument();
+            doc2.import(bytes);
 
             expect(doc2.getRootId()).toBe(doc.getRootId());
             expect(doc2.getSnapshot().nodes.size).toBe(doc.getSnapshot().nodes.size);
@@ -60,9 +57,7 @@ describe("DenicekDocument", () => {
                 notified = true;
             });
 
-            doc.change((model) => {
-                model.createRootNode("root");
-            });
+            doc.createRootNode("root");
 
             expect(notified).toBe(true);
         });
@@ -81,14 +76,11 @@ describe("DenicekDocument", () => {
         });
 
         it("should undo changes", () => {
-            let nodeId: string;
-            doc.change((model) => {
-                const rootId = model.rootId;
-                nodeId = model.addChild(rootId, { kind: "element", tag: "test", attrs: {}, children: [] });
-            });
+            const rootId = doc.getRootId()!;
+            const nodeId = doc.addChild(rootId, { kind: "element", tag: "test", attrs: {}, children: [] });
 
             // Verify node was added
-            expect(doc.getNode(nodeId!)).toBeTruthy();
+            expect(doc.getNode(nodeId)).toBeTruthy();
 
             // Undo should be available now
             expect(doc.canUndo).toBe(true);
@@ -97,7 +89,7 @@ describe("DenicekDocument", () => {
             doc.undo();
 
             // Verify node was removed
-            expect(doc.getNode(nodeId!)).toBeNull();
+            expect(doc.getNode(nodeId)).toBeNull();
 
             // Redo should be available
             expect(doc.canRedo).toBe(true);
@@ -112,17 +104,15 @@ describe("DenicekDocument", () => {
                 testInitializer
             );
 
-            docWithCallback.change((model) => {
-                const rootId = model.rootId;
-                model.addChild(rootId, { kind: "element", tag: "test", attrs: {}, children: [] });
-            });
+            const rootId = docWithCallback.getRootId()!;
+            docWithCallback.addChild(rootId, { kind: "element", tag: "test", attrs: {}, children: [] });
 
             expect(versions.length).toBeGreaterThan(0);
         });
     });
 });
 
-describe("DenicekModel", () => {
+describe("DenicekDocument mutations", () => {
     let doc: DenicekDocument;
 
     beforeEach(() => {
@@ -131,227 +121,169 @@ describe("DenicekModel", () => {
 
     describe("node operations", () => {
         it("should get root node", () => {
-            doc.change((model) => {
-                const rootId = model.rootId;
-                expect(rootId).toBeTruthy();
+            const rootId = doc.getRootId();
+            expect(rootId).toBeTruthy();
 
-                const rootNode = model.getNode(rootId);
-                expect(rootNode).toBeTruthy();
-                expect(rootNode?.kind).toBe("element");
-            });
+            const rootNode = doc.getNode(rootId!);
+            expect(rootNode).toBeTruthy();
+            expect(rootNode?.kind).toBe("element");
         });
 
         it("should add element child", () => {
-            doc.change((model) => {
-                const rootId = model.rootId;
-                const newId = model.addChild(rootId, { kind: "element", tag: "span", attrs: {}, children: [] });
-                expect(newId).toBeTruthy();
+            const rootId = doc.getRootId()!;
+            const newId = doc.addChild(rootId, { kind: "element", tag: "span", attrs: {}, children: [] });
+            expect(newId).toBeTruthy();
 
-                const newNode = model.getNode(newId);
-                expect(newNode?.kind).toBe("element");
-                if (newNode?.kind === "element") {
-                    expect(newNode.tag).toBe("span");
-                }
-            });
+            const newNode = doc.getNode(newId);
+            expect(newNode?.kind).toBe("element");
+            if (newNode?.kind === "element") {
+                expect(newNode.tag).toBe("span");
+            }
         });
 
         it("should add value child", () => {
-            doc.change((model) => {
-                const rootId = model.rootId;
-                // First add an element to hold the value
-                const containerId = model.addChild(rootId, { kind: "element", tag: "p", attrs: {}, children: [] });
+            const rootId = doc.getRootId()!;
+            // First add an element to hold the value
+            const containerId = doc.addChild(rootId, { kind: "element", tag: "p", attrs: {}, children: [] });
 
-                const valueId = model.addChild(containerId, { kind: "value", value: "Hello World" });
-                expect(valueId).toBeTruthy();
+            const valueId = doc.addChild(containerId, { kind: "value", value: "Hello World" });
+            expect(valueId).toBeTruthy();
 
-                const valueNode = model.getNode(valueId);
-                expect(valueNode?.kind).toBe("value");
-                if (valueNode?.kind === "value") {
-                    expect(valueNode.value.toString()).toBe("Hello World");
-                }
-            });
+            const valueNode = doc.getNode(valueId);
+            expect(valueNode?.kind).toBe("value");
+            if (valueNode?.kind === "value") {
+                expect(valueNode.value).toBe("Hello World");
+            }
         });
 
         it("should update tag", () => {
-            doc.change((model) => {
-                const rootId = model.rootId;
-                const newId = model.addChild(rootId, { kind: "element", tag: "div", attrs: {}, children: [] });
-                model.updateTag(newId, "span");
+            const rootId = doc.getRootId()!;
+            const newId = doc.addChild(rootId, { kind: "element", tag: "div", attrs: {}, children: [] });
+            doc.updateTag(newId, "span");
 
-                const node = model.getNode(newId);
-                if (node?.kind === "element") {
-                    expect(node.tag).toBe("span");
-                }
-            });
+            const node = doc.getNode(newId);
+            if (node?.kind === "element") {
+                expect(node.tag).toBe("span");
+            }
         });
 
         it("should update attribute", () => {
-            doc.change((model) => {
-                const rootId = model.rootId;
-                const newId = model.addChild(rootId, { kind: "element", tag: "div", attrs: {}, children: [] });
-                model.updateAttribute(newId, "class", "container");
+            const rootId = doc.getRootId()!;
+            const newId = doc.addChild(rootId, { kind: "element", tag: "div", attrs: {}, children: [] });
+            doc.updateAttribute(newId, "class", "container");
 
-                const node = model.getNode(newId);
-                if (node?.kind === "element") {
-                    expect(node.attrs.class).toBe("container");
-                }
-            });
+            const node = doc.getNode(newId);
+            if (node?.kind === "element") {
+                expect(node.attrs.class).toBe("container");
+            }
         });
 
         it("should splice value", () => {
-            doc.change((model) => {
-                const rootId = model.rootId;
-                const containerId = model.addChild(rootId, { kind: "element", tag: "p", attrs: {}, children: [] });
-                const valueId = model.addChild(containerId, { kind: "value", value: "Hello" });
+            const rootId = doc.getRootId()!;
+            const containerId = doc.addChild(rootId, { kind: "element", tag: "p", attrs: {}, children: [] });
+            const valueId = doc.addChild(containerId, { kind: "value", value: "Hello" });
 
-                model.spliceValue(valueId, 5, 0, " World");
+            doc.spliceValue(valueId, 5, 0, " World");
 
-                const node = model.getNode(valueId);
-                if (node?.kind === "value") {
-                    expect(node.value.toString()).toBe("Hello World");
-                }
-            });
+            const node = doc.getNode(valueId);
+            if (node?.kind === "value") {
+                expect(node.value).toBe("Hello World");
+            }
         });
     });
 
     describe("tree operations", () => {
         it("should delete node", () => {
-            let nodeId: string;
-            doc.change((model) => {
-                const rootId = model.rootId;
-                nodeId = model.addChild(rootId, { kind: "element", tag: "div", attrs: {}, children: [] });
-            });
+            const rootId = doc.getRootId()!;
+            const nodeId = doc.addChild(rootId, { kind: "element", tag: "div", attrs: {}, children: [] });
 
-            doc.change((model) => {
-                model.deleteNode(nodeId!);
-                const node = model.getNode(nodeId!);
-                expect(node).toBeUndefined();
-            });
+            doc.deleteNode(nodeId);
+            const node = doc.getNode(nodeId);
+            expect(node).toBeNull();
         });
     });
 
     describe("copy operations", () => {
         it("should copy an element node with tag and attrs", () => {
-            doc.change((model) => {
-                const rootId = model.rootId;
-                const sourceId = model.addChild(rootId, {
-                    kind: "element",
-                    tag: "div",
-                    attrs: { class: "source", "data-test": 123 },
-                    children: []
-                });
-
-                const copyId = model.copyNode(sourceId, rootId);
-
-                const copy = model.getNode(copyId);
-                expect(copy?.kind).toBe("element");
-                if (copy?.kind === "element") {
-                    expect(copy.tag).toBe("div");
-                    expect(copy.attrs.class).toBe("source");
-                    expect(copy.attrs["data-test"]).toBe(123);
-                }
+            const rootId = doc.getRootId()!;
+            const sourceId = doc.addChild(rootId, {
+                kind: "element",
+                tag: "div",
+                attrs: { class: "source", "data-test": 123 },
+                children: []
             });
+
+            const copyId = doc.copyNode(sourceId, rootId);
+
+            const copy = doc.getNode(copyId);
+            expect(copy?.kind).toBe("element");
+            if (copy?.kind === "element") {
+                expect(copy.tag).toBe("div");
+                expect(copy.attrs.class).toBe("source");
+                expect(copy.attrs["data-test"]).toBe(123);
+            }
         });
 
         it("should copy a value node with current text value", () => {
-            doc.change((model) => {
-                const rootId = model.rootId;
-                const containerId = model.addChild(rootId, { kind: "element", tag: "p", attrs: {}, children: [] });
-                const sourceId = model.addChild(containerId, { kind: "value", value: "original text" });
+            const rootId = doc.getRootId()!;
+            const containerId = doc.addChild(rootId, { kind: "element", tag: "p", attrs: {}, children: [] });
+            const sourceId = doc.addChild(containerId, { kind: "value", value: "original text" });
 
-                const copyId = model.copyNode(sourceId, containerId);
+            const copyId = doc.copyNode(sourceId, containerId);
 
-                const copy = model.getNode(copyId);
-                expect(copy?.kind).toBe("value");
-                if (copy?.kind === "value") {
-                    expect(copy.value.toString()).toBe("original text");
-                }
-            });
+            const copy = doc.getNode(copyId);
+            expect(copy?.kind).toBe("value");
+            if (copy?.kind === "value") {
+                expect(copy.value).toBe("original text");
+            }
         });
 
         it("should store sourceId on the copied element node", () => {
-            let sourceId: string;
-            let copyId: string;
+            const rootId = doc.getRootId()!;
+            const sourceId = doc.addChild(rootId, { kind: "element", tag: "span", attrs: {}, children: [] });
+            const copyId = doc.copyNode(sourceId, rootId);
 
-            doc.change((model) => {
-                const rootId = model.rootId;
-                sourceId = model.addChild(rootId, { kind: "element", tag: "span", attrs: {}, children: [] });
-                copyId = model.copyNode(sourceId, rootId);
-            });
-
-            const copyData = doc.getNode(copyId!);
-            expect(copyData?.sourceId).toBe(sourceId!);
+            const copyData = doc.getNode(copyId);
+            expect(copyData?.sourceId).toBe(sourceId);
         });
 
         it("should store sourceId on the copied value node", () => {
-            let sourceId: string;
-            let copyId: string;
+            const rootId = doc.getRootId()!;
+            const containerId = doc.addChild(rootId, { kind: "element", tag: "p", attrs: {}, children: [] });
+            const sourceId = doc.addChild(containerId, { kind: "value", value: "test" });
+            const copyId = doc.copyNode(sourceId, containerId);
 
-            doc.change((model) => {
-                const rootId = model.rootId;
-                const containerId = model.addChild(rootId, { kind: "element", tag: "p", attrs: {}, children: [] });
-                sourceId = model.addChild(containerId, { kind: "value", value: "test" });
-                copyId = model.copyNode(sourceId, containerId);
-            });
-
-            const copyData = doc.getNode(copyId!);
-            expect(copyData?.sourceId).toBe(sourceId!);
-        });
-
-        it("should throw when source node doesn't exist", () => {
-            expect(() => {
-                doc.change((model) => {
-                    model.copyNode("nonexistent@123", model.rootId);
-                });
-            }).toThrow("Source node not found");
-        });
-
-        it("should throw when parent node doesn't exist", () => {
-            let sourceId: string;
-            doc.change((model) => {
-                sourceId = model.addChild(model.rootId, { kind: "element", tag: "div", attrs: {}, children: [] });
-            });
-
-            expect(() => {
-                doc.change((model) => {
-                    model.copyNode(sourceId!, "nonexistent@456");
-                });
-            }).toThrow("Parent node not found");
+            const copyData = doc.getNode(copyId);
+            expect(copyData?.sourceId).toBe(sourceId);
         });
 
         it("should emit copy patch with sourceId", () => {
             doc.clearHistory();
-            let sourceId: string;
-
-            doc.change((model) => {
-                const rootId = model.rootId;
-                sourceId = model.addChild(rootId, { kind: "element", tag: "div", attrs: {}, children: [] });
-                model.copyNode(sourceId, rootId);
-            });
+            const rootId = doc.getRootId()!;
+            const sourceId = doc.addChild(rootId, { kind: "element", tag: "div", attrs: {}, children: [] });
+            doc.copyNode(sourceId, rootId);
 
             const history = doc.getHistory();
             const copyPatch = history.find(p => p.action === "copy");
             expect(copyPatch).toBeTruthy();
-            expect(copyPatch?.value).toHaveProperty("sourceId", sourceId!);
+            expect(copyPatch?.value).toHaveProperty("sourceId", sourceId);
         });
 
         it("should copy CURRENT value when source is modified before copy", () => {
-            doc.change((model) => {
-                const rootId = model.rootId;
-                const containerId = model.addChild(rootId, { kind: "element", tag: "p", attrs: {}, children: [] });
-                const sourceId = model.addChild(containerId, { kind: "value", value: "initial" });
+            const rootId = doc.getRootId()!;
+            const containerId = doc.addChild(rootId, { kind: "element", tag: "p", attrs: {}, children: [] });
+            const sourceId = doc.addChild(containerId, { kind: "value", value: "initial" });
 
-                // Modify source value
-                model.spliceValue(sourceId, 0, 7, "modified");
+            // Modify source value
+            doc.spliceValue(sourceId, 0, 7, "modified");
 
-                // Copy should get "modified" value
-                const copyId = model.copyNode(sourceId, containerId);
+            // Copy should get "modified" value
+            const copyId = doc.copyNode(sourceId, containerId);
 
-                const copy = model.getNode(copyId);
-                if (copy?.kind === "value") {
-                    expect(copy.value.toString()).toBe("modified");
-                }
-            });
+            const copy = doc.getNode(copyId);
+            if (copy?.kind === "value") {
+                expect(copy.value).toBe("modified");
+            }
         });
 
         it("should read CURRENT value during replay (not value at recording time)", () => {
@@ -359,98 +291,50 @@ describe("DenicekModel", () => {
             // When a copy patch is replayed, it should read the CURRENT value
             // from the source, not the value that existed when the copy was recorded.
 
-            let sourceId: string;
-            let containerId: string;
-
-            // Create source with initial value
-            doc.change((model) => {
-                const rootId = model.rootId;
-                containerId = model.addChild(rootId, { kind: "element", tag: "p", attrs: {}, children: [] });
-                sourceId = model.addChild(containerId, { kind: "value", value: "original" });
-            });
+            const rootId = doc.getRootId()!;
+            const containerId = doc.addChild(rootId, { kind: "element", tag: "p", attrs: {}, children: [] });
+            const sourceId = doc.addChild(containerId, { kind: "value", value: "original" });
 
             // Get count of children before recording
             const snapshotBefore = doc.getSnapshot();
-            const childrenBefore = snapshotBefore.childIds.get(containerId!) ?? [];
+            const childrenBefore = snapshotBefore.childIds.get(containerId) ?? [];
             const childCountBeforeRecording = childrenBefore.length;
 
             // Record a copy operation
             doc.clearHistory();
-            doc.change((model) => {
-                model.copyNode(sourceId!, containerId!);
-            });
+            doc.copyNode(sourceId, containerId);
             const copyScript = doc.getHistory();
 
             // Get count of children after recording (includes the first copy)
             const snapshotAfterRecording = doc.getSnapshot();
-            const childrenAfterRecording = snapshotAfterRecording.childIds.get(containerId!) ?? [];
+            const childrenAfterRecording = snapshotAfterRecording.childIds.get(containerId) ?? [];
             const childCountAfterRecording = childrenAfterRecording.length;
             expect(childCountAfterRecording).toBe(childCountBeforeRecording + 1);
 
             // Now modify the source value AFTER recording
-            doc.change((model) => {
-                model.spliceValue(sourceId!, 0, 8, "updated");
-            });
+            doc.spliceValue(sourceId, 0, 8, "updated");
 
             // Verify source is now "updated"
-            const sourceNode = doc.getNode(sourceId!);
+            const sourceNode = doc.getNode(sourceId);
             if (sourceNode?.kind === "value") {
                 expect(sourceNode.value).toBe("updated");
             }
 
             // Replay the copy script - should create another copy with "updated"
-            doc.replay(copyScript, containerId!);
+            doc.replay(copyScript, containerId);
 
             // Now we should have one more child
             const snapshotAfterReplay = doc.getSnapshot();
-            const childrenAfterReplay = snapshotAfterReplay.childIds.get(containerId!) ?? [];
+            const childrenAfterReplay = snapshotAfterReplay.childIds.get(containerId) ?? [];
             expect(childrenAfterReplay.length).toBe(childCountAfterRecording + 1);
 
-            // The replayed copy is inserted at index 1 (as per the recorded patch)
-            // This shifts the original first copy to the end
-            // So we need to check the child at the index where it was inserted (index 1)
-            // OR we can check that at least one copy has "updated"
+            // At least one copy should have "updated" (the replayed one)
             const allCopiesWithUpdated = childrenAfterReplay
-                .filter(id => id !== sourceId!)
+                .filter(id => id !== sourceId)
                 .map(id => doc.getNode(id))
                 .filter(node => node?.kind === "value" && node.value === "updated");
 
-            // At least one copy should have "updated" (the replayed one)
             expect(allCopiesWithUpdated.length).toBeGreaterThanOrEqual(1);
-        });
-
-        it("should apply copy via applyPatch", () => {
-            let sourceId: string;
-            let containerId: string;
-
-            doc.change((model) => {
-                const rootId = model.rootId;
-                containerId = model.addChild(rootId, { kind: "element", tag: "div", attrs: {}, children: [] });
-                sourceId = model.addChild(containerId, { kind: "value", value: "test value" });
-            });
-
-            // Apply a copy patch directly
-            doc.change((model) => {
-                const result = model.applyPatch({
-                    action: "copy",
-                    path: ["nodes", containerId!, "children", 1],
-                    value: { sourceId: sourceId! }
-                });
-                expect(typeof result).toBe("string");
-            });
-
-            // Verify copy was created
-            const snapshot = doc.getSnapshot();
-            const containerChildren = snapshot.childIds.get(containerId!) ?? [];
-            expect(containerChildren.length).toBe(2);
-
-            const copyNodeId = containerChildren[1];
-            expect(copyNodeId).toBeDefined();
-            const copyNode = doc.getNode(copyNodeId!);
-            expect(copyNode?.kind).toBe("value");
-            if (copyNode?.kind === "value") {
-                expect(copyNode.value).toBe("test value");
-            }
         });
     });
 });

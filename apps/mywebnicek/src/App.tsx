@@ -55,7 +55,7 @@ export const App = () => {
   const { history: recordingHistory, clearHistory, replay } = recordingObj;
   const [showHistory, setShowHistory] = useState(true);
   const [showDetails, setShowDetails] = useState(true);
-  const [refPickMode, setRefPickMode] = useState<{ parentId: string; position: "child" | "before" | "after" } | null>(null);
+  const [refPickMode, setRefPickMode] = useState<{ parentId: string } | null>(null);
 
   const { connect, disconnect, status, latency, error } = useConnectivity();
   const { setSelectedNodeIds, remoteSelections } = useSelection();
@@ -191,11 +191,9 @@ export const App = () => {
         e.preventDefault();
         const targetId = selectedNodeIds[0]!;
         // Move each cut node to the target
-        document.change((model) => {
-          for (const nodeId of cutNodeIds) {
-            model.moveNode(nodeId, targetId);
-          }
-        });
+        for (const nodeId of cutNodeIds) {
+          document.moveNode(nodeId, targetId);
+        }
         setCutNodeIds([]);
       }
 
@@ -254,9 +252,7 @@ export const App = () => {
       const rootId = document.getRootId();
       if (!rootId) {
         hasInitialized.current = true;
-        document.change((model) => {
-          initializeDocument(model);
-        });
+        initializeDocument(document);
       } else {
         hasInitialized.current = true;
       }
@@ -435,9 +431,7 @@ export const App = () => {
     });
 
     // Append actions to the existing action node
-    document.change((model) => {
-      model.appendActions(selectedActionNodeId, finalActions);
-    });
+    document.appendActions(selectedActionNodeId, finalActions);
 
     setShowAddToButtonDialog(false);
     setSelectedActionNodeId(null);
@@ -465,9 +459,7 @@ export const App = () => {
     const newIndex = currentIndex + direction;
     if (newIndex < 0 || newIndex >= siblings.length) return;
 
-    document.change((model) => {
-      model.moveNode(nodeId, parentId, newIndex);
-    });
+    document.moveNode(nodeId, parentId, newIndex);
 
     // Re-focus on the moved node to update the selection overlay
     clickOnSelectedNode(nodeId);
@@ -593,28 +585,12 @@ export const App = () => {
                   initialValue={selectedNodeFirstChildTag || ""}
                   onAddChild={(content, kind) => {
                     if (!selectedNodeId) return;
-                    document.change((model) => {
-                      const newId = model.addChild(selectedNodeId, createNodeData(kind, content, selectedNodeId));
-                      if (newId) setSelectedNodeIds([newId]);
-                    });
+                    const newId = document.addChild(selectedNodeId, createNodeData(kind, content, selectedNodeId));
+                    if (newId) setSelectedNodeIds([newId]);
                   }}
-                  onAddBefore={(content, kind) => {
-                    if (!selectedNodeId) return;
-                    document.change((model) => {
-                      const newId = model.addSibling(selectedNodeId, "before", createNodeData(kind, content, selectedNodeId));
-                      if (newId) setSelectedNodeIds([newId]);
-                    });
-                  }}
-                  onAddAfter={(content, kind) => {
-                    if (!selectedNodeId) return;
-                    document.change((model) => {
-                      const newId = model.addSibling(selectedNodeId, "after", createNodeData(kind, content, selectedNodeId));
-                      if (newId) setSelectedNodeIds([newId]);
-                    });
-                  }}
-                  onStartRefPick={(position) => {
+                  onStartRefPick={() => {
                     if (selectedNodeId) {
-                      setRefPickMode({ parentId: selectedNodeId, position });
+                      setRefPickMode({ parentId: selectedNodeId });
                     }
                   }}
                 />
@@ -795,14 +771,8 @@ export const App = () => {
               <DomNavigator ref={navigatorRef} onSelectedChange={(ids) => {
                 const targetId = ids[0];
                 if (refPickMode && targetId) {
-                  const { parentId, position } = refPickMode;
-                  document.change((model) => {
-                    if (position === "child") {
-                      model.addChild(parentId, { kind: "ref", target: targetId });
-                    } else {
-                      model.addSibling(parentId, position, { kind: "ref", target: targetId });
-                    }
-                  });
+                  const { parentId } = refPickMode;
+                  document.addChild(parentId, { kind: "ref", target: targetId });
                   setRefPickMode(null);
                   return;
                 }
@@ -864,9 +834,7 @@ export const App = () => {
                       mode="view"
                       onDeleteAction={(index) => {
                         if (selectedNodeId) {
-                          document.change((model) => {
-                            model.deleteAction(selectedNodeId, index);
-                          });
+                          document.deleteAction(selectedNodeId, index);
                         }
                       }}
                     />

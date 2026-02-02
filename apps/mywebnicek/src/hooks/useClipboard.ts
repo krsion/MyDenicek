@@ -53,14 +53,10 @@ export function useClipboard({ selectedNodeId, node, document: doc }: UseClipboa
             // Paste as sibling of value node
             const parentId = doc.getParentId(selectedNodeId);
             if (!parentId) return;
-            doc.change((model) => {
-                model.copyNode(clipboard.sourceNodeId, parentId, { sourceAttr: clipboard.sourceAttr });
-            });
+            doc.copyNode(clipboard.sourceNodeId, parentId, { sourceAttr: clipboard.sourceAttr });
         } else if (isElementSelected) {
             // Paste as child of element node (create value node and copy to it)
-            doc.change((model) => {
-                model.copyNode(clipboard.sourceNodeId, selectedNodeId, { sourceAttr: clipboard.sourceAttr });
-            });
+            doc.copyNode(clipboard.sourceNodeId, selectedNodeId, { sourceAttr: clipboard.sourceAttr });
         }
     }, [selectedNodeId, isValueSelected, isElementSelected, clipboard, doc]);
 

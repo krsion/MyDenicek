@@ -5,15 +5,57 @@
  */
 
 import type { CrdtDocAdaptor } from "loro-adaptors";
-import { type Frontiers, LoroDoc, UndoManager } from "loro-crdt";
+import { type Frontiers, LoroDoc, LoroList, LoroMap, LoroText, LoroTree, UndoManager } from "loro-crdt";
 import type { LoroWebsocketClient, LoroWebsocketClientRoom } from "loro-websocket/client";
 
-import { DenicekModel } from "./DenicekModel.js";
+import { handleModelError } from "./errors.js";
 import {
     buildDocumentIndex,
     type DocumentIndex,
+    NODE_ACTIONS,
+    NODE_ATTRS,
+    NODE_KIND,
+    NODE_LABEL,
+    NODE_OPERATION,
+    NODE_REF_TARGET,
+    NODE_SOURCE_ID,
+    NODE_TAG,
+    NODE_TARGET,
+    NODE_TEXT,
+    stringToTreeId,
+    TREE_CONTAINER,
+    treeIdToString,
 } from "./loroHelpers.js";
-import type { GeneralizedPatch, NodeData, Snapshot, SyncState, SyncStatus, Version } from "./types.js";
+import type { ElementNode, GeneralizedPatch, NodeData, Snapshot, SyncState, SyncStatus, Version } from "./types.js";
+
+/** Input type for creating nodes - string values converted to LoroText internally */
+export type NodeInput =
+    | ElementNode
+    | { kind: "value"; value: string }
+    | { kind: "action"; label: string; actions: GeneralizedPatch[]; target: string }
+    | { kind: "formula"; operation: string }
+    | { kind: "ref"; target: string };
+
+/**
+ * Sanitize and validate a tag name for use with HTML elements.
+ * Returns the sanitized tag name or null if invalid.
+ */
+function sanitizeTagName(input: string): string | null {
+    // Strip angle brackets and whitespace, convert to lowercase
+    const tag = input.replace(/[<>]/g, "").trim().toLowerCase();
+
+    if (!tag) {
+        return null;
+    }
+
+    // HTML tag names must start with a letter and contain only letters, digits, or hyphens
+    const validTagPattern = /^[a-z][a-z0-9-]*$/;
+    if (!validTagPattern.test(tag)) {
+        return null;
+    }
+
+    return tag;
+}
 
 /**
  * Options for connecting to a sync server
@@ -48,7 +90,7 @@ export interface DenicekDocumentOptions {
  *
  * This class provides:
  * - Document state access (snapshot, nodes)
- * - Mutation API via change() method
+ * - Mutation API (addChild, updateAttribute, etc.) - each auto-commits
  * - Undo/redo functionality
  * - Export/import for sync
  * - Event subscriptions
@@ -85,6 +127,16 @@ export class DenicekDocument {
 
     // Cached index for O(1) lookups
     private _cachedIndex: DocumentIndex | null = null;
+
+    /** Get the Loro tree container */
+    private get tree(): LoroTree {
+        return this._doc.getTree(TREE_CONTAINER);
+    }
+
+    /** Emit a patch for history recording */
+    private emitPatch(patch: GeneralizedPatch): void {
+        this._recordPatch(patch);
+    }
 
     constructor(options?: DenicekDocumentOptions) {
         this._doc = new LoroDoc();
@@ -431,25 +483,560 @@ export class DenicekDocument {
         return { root: index.rootId, nodes: result };
     }
 
-    // === Modifications ===
+    // === Mutations ===
 
     /**
-     * Make changes to the document
-     * All modifications should be done inside the callback using the model
-     * Changes are automatically committed after the callback
+     * Create a root element node (no parent)
+     * @returns The ID of the created root node
      */
-    change(fn: (model: DenicekModel) => void): void {
-        const model = new DenicekModel(
-            this._doc,
-            { getAllNodes: () => this.getAllNodes() },
-            (p) => this._recordPatch(p)
-        );
-        fn(model);
-        this._doc.commit();
+    createRootNode(tag: string): string {
+        try {
+            const sanitizedTag = sanitizeTagName(tag);
+            if (!sanitizedTag) {
+                handleModelError("createRootNode", new Error(`Invalid tag name: "${tag}"`));
+                return "";
+            }
+
+            const rootNode = this.tree.createNode();
+            const data = rootNode.data;
+            data.set(NODE_KIND, "element");
+            data.set(NODE_TAG, sanitizedTag);
+            data.setContainer(NODE_ATTRS, new LoroMap());
+            this._doc.commit();
+            return treeIdToString(rootNode.id);
+        } catch (e) {
+            handleModelError("createRootNode", e);
+            return "";
+        }
     }
 
     /**
-     * Commit pending changes
+     * Add a child node to a parent
+     * @returns The ID of the created node
+     */
+    addChild(parentId: string, child: NodeInput, index?: number): string {
+        try {
+            let sanitizedChild = child;
+            if (child.kind === "element") {
+                const sanitizedTag = sanitizeTagName(child.tag);
+                if (!sanitizedTag) {
+                    handleModelError("addChild", new Error(`Invalid tag name: "${child.tag}"`));
+                    return "";
+                }
+                sanitizedChild = { ...child, tag: sanitizedTag };
+            }
+
+            const parentTreeId = stringToTreeId(parentId);
+            const parentNode = this.tree.getNodeByID(parentTreeId);
+            if (!parentNode) return "";
+
+            const newNode = parentNode.createNode(index);
+            const data = newNode.data;
+
+            if (sanitizedChild.kind === "element") {
+                data.set(NODE_KIND, "element");
+                data.set(NODE_TAG, sanitizedChild.tag);
+                const attrsMap = data.setContainer(NODE_ATTRS, new LoroMap()) as LoroMap;
+                for (const [key, value] of Object.entries(sanitizedChild.attrs)) {
+                    attrsMap.set(key, value);
+                }
+            } else if (sanitizedChild.kind === "action") {
+                data.set(NODE_KIND, "action");
+                data.set(NODE_LABEL, sanitizedChild.label);
+                data.set(NODE_TARGET, sanitizedChild.target);
+                const actionsList = data.setContainer(NODE_ACTIONS, new LoroList()) as LoroList;
+                for (const action of sanitizedChild.actions) {
+                    actionsList.push(action);
+                }
+            } else if (sanitizedChild.kind === "formula") {
+                data.set(NODE_KIND, "formula");
+                data.set(NODE_OPERATION, sanitizedChild.operation);
+            } else if (sanitizedChild.kind === "ref") {
+                data.set(NODE_KIND, "ref");
+                data.set(NODE_REF_TARGET, sanitizedChild.target);
+            } else {
+                data.set(NODE_KIND, "value");
+                const textContainer = data.setContainer(NODE_TEXT, new LoroText()) as LoroText;
+                textContainer.insert(0, sanitizedChild.value);
+            }
+
+            const newId = treeIdToString(newNode.id);
+            const children = parentNode.children();
+            const countAfter = children ? children.length : 0;
+            const countBefore = countAfter - 1;
+            const actualIndex = index ?? countBefore;
+            const emitIndex = actualIndex === countBefore ? -1 : actualIndex;
+
+            this.emitPatch({
+                action: "insert",
+                path: ["nodes", parentId, "children", emitIndex],
+                value: { ...sanitizedChild, id: newId }
+            });
+
+            this._doc.commit();
+            return newId;
+        } catch (e) {
+            handleModelError("addChild", e);
+            return "";
+        }
+    }
+
+    /**
+     * Delete a node from the document
+     */
+    deleteNode(id: string): void {
+        try {
+            const treeId = stringToTreeId(id);
+            this.tree.delete(treeId);
+            this.emitPatch({
+                action: "del",
+                path: ["nodes", id]
+            });
+            this._doc.commit();
+        } catch (e) {
+            handleModelError("deleteNode", e);
+        }
+    }
+
+    /**
+     * Move a node to a new parent
+     */
+    moveNode(nodeId: string, newParentId: string, index?: number): void {
+        try {
+            const treeId = stringToTreeId(nodeId);
+            const parentTreeId = stringToTreeId(newParentId);
+            const treeNode = this.tree.getNodeByID(treeId);
+            const parentNode = this.tree.getNodeByID(parentTreeId);
+            if (!treeNode || !parentNode) return;
+
+            if (index !== undefined) {
+                treeNode.move(parentNode, index);
+            } else {
+                treeNode.move(parentNode);
+            }
+
+            this.emitPatch({
+                action: "move",
+                path: ["nodes", nodeId],
+                value: { parentId: newParentId, index }
+            });
+            this._doc.commit();
+        } catch (e) {
+            handleModelError("moveNode", e);
+        }
+    }
+
+    /**
+     * Copy a node as a child of the specified parent
+     * @returns The ID of the newly created copy
+     */
+    copyNode(sourceId: string, parentId: string, options?: { index?: number; sourceAttr?: string }): string {
+        try {
+            const { index, sourceAttr } = options ?? {};
+
+            const sourceTreeId = stringToTreeId(sourceId);
+            const sourceTreeNode = this.tree.getNodeByID(sourceTreeId);
+            if (!sourceTreeNode || sourceTreeNode.isDeleted?.()) {
+                handleModelError("copyNode", new Error(`Source node not found: ${sourceId}`));
+                return "";
+            }
+
+            const parentTreeId = stringToTreeId(parentId);
+            const parentNode = this.tree.getNodeByID(parentTreeId);
+            if (!parentNode) {
+                handleModelError("copyNode", new Error(`Parent node not found: ${parentId}`));
+                return "";
+            }
+
+            const sourceData = sourceTreeNode.data;
+            const newNode = parentNode.createNode(index);
+            const data = newNode.data;
+
+            if (sourceAttr) {
+                const sourceAttrs = sourceData.get(NODE_ATTRS);
+                let attrValue = "";
+                if (sourceAttrs && sourceAttrs instanceof LoroMap) {
+                    const val = sourceAttrs.get(sourceAttr);
+                    attrValue = val != null ? String(val) : "";
+                }
+                data.set(NODE_KIND, "value");
+                const textContainer = data.setContainer(NODE_TEXT, new LoroText()) as LoroText;
+                textContainer.insert(0, attrValue);
+            } else {
+                const sourceKind = sourceData.get(NODE_KIND) as "element" | "value" | "action" | "formula" | "ref" | undefined;
+                if (sourceKind === "element") {
+                    data.set(NODE_KIND, "element");
+                    data.set(NODE_TAG, (sourceData.get(NODE_TAG) as string) || "div");
+                    const attrsMap = data.setContainer(NODE_ATTRS, new LoroMap()) as LoroMap;
+                    const sourceAttrs = sourceData.get(NODE_ATTRS);
+                    if (sourceAttrs && sourceAttrs instanceof LoroMap) {
+                        for (const [key, value] of Object.entries(sourceAttrs.toJSON() as Record<string, unknown>)) {
+                            attrsMap.set(key, value);
+                        }
+                    }
+                } else if (sourceKind === "action") {
+                    data.set(NODE_KIND, "action");
+                    data.set(NODE_LABEL, (sourceData.get(NODE_LABEL) as string) || "Action");
+                    data.set(NODE_TARGET, (sourceData.get(NODE_TARGET) as string) || "");
+                    const actionsList = data.setContainer(NODE_ACTIONS, new LoroList()) as LoroList;
+                    const sourceActions = sourceData.get(NODE_ACTIONS) as LoroList | undefined;
+                    if (sourceActions) {
+                        for (const action of sourceActions.toJSON() as GeneralizedPatch[]) {
+                            actionsList.push(action);
+                        }
+                    }
+                } else if (sourceKind === "formula") {
+                    data.set(NODE_KIND, "formula");
+                    data.set(NODE_OPERATION, (sourceData.get(NODE_OPERATION) as string) || "");
+                } else if (sourceKind === "ref") {
+                    data.set(NODE_KIND, "ref");
+                    data.set(NODE_REF_TARGET, (sourceData.get(NODE_REF_TARGET) as string) || "");
+                } else {
+                    data.set(NODE_KIND, "value");
+                    const textContainer = data.setContainer(NODE_TEXT, new LoroText()) as LoroText;
+                    const sourceText = sourceData.get(NODE_TEXT) as LoroText | undefined;
+                    if (sourceText) {
+                        textContainer.insert(0, sourceText.toString());
+                    }
+                }
+            }
+
+            data.set(NODE_SOURCE_ID, sourceId);
+
+            const newId = treeIdToString(newNode.id);
+            const children = parentNode.children();
+            const actualIndex = index ?? (children ? children.length - 1 : 0);
+
+            this.emitPatch({
+                action: "copy",
+                path: ["nodes", parentId, "children", actualIndex],
+                value: { id: newId, sourceId, ...(sourceAttr && { sourceAttr }) }
+            });
+
+            this._doc.commit();
+            return newId;
+        } catch (e) {
+            handleModelError("copyNode", e);
+            return "";
+        }
+    }
+
+    /**
+     * Update an attribute on an element node
+     * Pass undefined to delete the attribute
+     */
+    updateAttribute(id: string, key: string, value: unknown | undefined): void {
+        try {
+            const treeId = stringToTreeId(id);
+            const treeNode = this.tree.getNodeByID(treeId);
+            if (!treeNode) return;
+
+            const data = treeNode.data;
+            const kind = data.get(NODE_KIND);
+            if (kind !== "element") return;
+
+            let attrsMap = data.get(NODE_ATTRS) as LoroMap | undefined;
+            if (!attrsMap) {
+                attrsMap = data.setContainer(NODE_ATTRS, new LoroMap()) as LoroMap;
+            }
+
+            if (value === undefined) {
+                attrsMap.delete(key);
+                this.emitPatch({
+                    action: "del",
+                    path: ["nodes", id, "attrs", key]
+                });
+            } else {
+                attrsMap.set(key, value);
+                this.emitPatch({
+                    action: "put",
+                    path: ["nodes", id, "attrs", key],
+                    value: value
+                });
+            }
+            this._doc.commit();
+        } catch (e) {
+            handleModelError("updateAttribute", e);
+        }
+    }
+
+    /**
+     * Update the tag name of an element node
+     */
+    updateTag(id: string, newTag: string): void {
+        try {
+            const sanitizedTag = sanitizeTagName(newTag);
+            if (!sanitizedTag) {
+                handleModelError("updateTag", new Error(`Invalid tag name: "${newTag}"`));
+                return;
+            }
+
+            const treeId = stringToTreeId(id);
+            const treeNode = this.tree.getNodeByID(treeId);
+            if (!treeNode) return;
+
+            const data = treeNode.data;
+            const kind = data.get(NODE_KIND);
+            if (kind !== "element") return;
+
+            data.set(NODE_TAG, sanitizedTag);
+            this.emitPatch({
+                action: "put",
+                path: ["nodes", id, "tag"],
+                value: sanitizedTag
+            });
+            this._doc.commit();
+        } catch (e) {
+            handleModelError("updateTag", e);
+        }
+    }
+
+    /**
+     * Edit text in a value node (insert, delete, or replace)
+     */
+    spliceValue(id: string, index: number, deleteCount: number, insertText: string): void {
+        try {
+            const treeId = stringToTreeId(id);
+            const treeNode = this.tree.getNodeByID(treeId);
+            if (!treeNode) return;
+
+            const data = treeNode.data;
+            const kind = data.get(NODE_KIND);
+            if (kind !== "value") return;
+
+            const text = data.get(NODE_TEXT) as LoroText | undefined;
+            if (!text) return;
+
+            text.splice(index, deleteCount, insertText);
+
+            this.emitPatch({
+                action: "splice",
+                path: ["nodes", id, "value", index],
+                length: deleteCount,
+                value: insertText
+            });
+            this._doc.commit();
+        } catch (e) {
+            handleModelError("spliceValue", e);
+        }
+    }
+
+    /**
+     * Update a formula node's operation
+     */
+    updateFormulaOperation(id: string, operation: string): void {
+        try {
+            const treeId = stringToTreeId(id);
+            const treeNode = this.tree.getNodeByID(treeId);
+            if (!treeNode) return;
+
+            const data = treeNode.data;
+            const kind = data.get(NODE_KIND);
+            if (kind !== "formula") return;
+
+            data.set(NODE_OPERATION, operation);
+            this.emitPatch({
+                action: "put",
+                path: ["nodes", id, "operation"],
+                value: operation
+            });
+            this._doc.commit();
+        } catch (e) {
+            handleModelError("updateFormulaOperation", e);
+        }
+    }
+
+    /**
+     * Update a ref node's target
+     */
+    updateRefTarget(id: string, target: string): void {
+        try {
+            const treeId = stringToTreeId(id);
+            const treeNode = this.tree.getNodeByID(treeId);
+            if (!treeNode) return;
+
+            const data = treeNode.data;
+            const kind = data.get(NODE_KIND);
+            if (kind !== "ref") return;
+
+            data.set(NODE_REF_TARGET, target);
+            this.emitPatch({
+                action: "put",
+                path: ["nodes", id, "refTarget"],
+                value: target
+            });
+            this._doc.commit();
+        } catch (e) {
+            handleModelError("updateRefTarget", e);
+        }
+    }
+
+    /**
+     * Append actions to an action node's actions list
+     */
+    appendActions(id: string, actions: GeneralizedPatch[]): void {
+        try {
+            const treeId = stringToTreeId(id);
+            const treeNode = this.tree.getNodeByID(treeId);
+            if (!treeNode) return;
+
+            const data = treeNode.data;
+            const kind = data.get(NODE_KIND);
+            if (kind !== "action") return;
+
+            const actionsList = data.get(NODE_ACTIONS) as LoroList | undefined;
+            if (!actionsList) return;
+
+            for (const action of actions) {
+                actionsList.push(action);
+            }
+
+            this.emitPatch({
+                action: "insert",
+                path: ["nodes", id, "actions", actionsList.length - actions.length],
+                value: actions
+            });
+            this._doc.commit();
+        } catch (e) {
+            handleModelError("appendActions", e);
+        }
+    }
+
+    /**
+     * Delete an action from an action node's actions list
+     */
+    deleteAction(id: string, index: number): void {
+        try {
+            const treeId = stringToTreeId(id);
+            const treeNode = this.tree.getNodeByID(treeId);
+            if (!treeNode) return;
+
+            const data = treeNode.data;
+            const kind = data.get(NODE_KIND);
+            if (kind !== "action") return;
+
+            const actionsList = data.get(NODE_ACTIONS) as LoroList | undefined;
+            if (!actionsList) return;
+
+            actionsList.delete(index, 1);
+
+            this.emitPatch({
+                action: "del",
+                path: ["nodes", id, "actions", index]
+            });
+            this._doc.commit();
+        } catch (e) {
+            handleModelError("deleteAction", e);
+        }
+    }
+
+    /**
+     * Move an action within an action node's actions list
+     */
+    moveAction(id: string, fromIndex: number, toIndex: number): void {
+        try {
+            const treeId = stringToTreeId(id);
+            const treeNode = this.tree.getNodeByID(treeId);
+            if (!treeNode) return;
+
+            const data = treeNode.data;
+            const kind = data.get(NODE_KIND);
+            if (kind !== "action") return;
+
+            const actionsList = data.get(NODE_ACTIONS) as LoroList | undefined;
+            if (!actionsList) return;
+
+            const item = actionsList.get(fromIndex);
+            if (item === undefined) return;
+
+            actionsList.delete(fromIndex, 1);
+            const adjustedToIndex = fromIndex < toIndex ? toIndex - 1 : toIndex;
+            actionsList.insert(adjustedToIndex, item);
+
+            this.emitPatch({
+                action: "move",
+                path: ["nodes", id, "actions", fromIndex],
+                value: { toIndex }
+            });
+            this._doc.commit();
+        } catch (e) {
+            handleModelError("moveAction", e);
+        }
+    }
+
+    /**
+     * Generic property update for any node type
+     */
+    updateNodeProperty(id: string, property: string, value: unknown): void {
+        try {
+            const treeId = stringToTreeId(id);
+            const treeNode = this.tree.getNodeByID(treeId);
+            if (!treeNode) return;
+
+            const data = treeNode.data;
+            const kind = data.get(NODE_KIND) as "element" | "value" | "action" | "formula" | "ref" | undefined;
+
+            if (kind === "formula") {
+                if (property === "operation") {
+                    this.updateFormulaOperation(id, value as string);
+                }
+                return;
+            }
+
+            if (kind === "ref") {
+                if (property === "refTarget" || property === "target") {
+                    this.updateRefTarget(id, value as string);
+                }
+                return;
+            }
+
+            if (kind === "action") {
+                if (property === "label") {
+                    data.set(NODE_LABEL, value as string);
+                    this.emitPatch({
+                        action: "put",
+                        path: ["nodes", id, "label"],
+                        value: value
+                    });
+                    this._doc.commit();
+                } else if (property === "target") {
+                    data.set(NODE_TARGET, value as string);
+                    this.emitPatch({
+                        action: "put",
+                        path: ["nodes", id, "target"],
+                        value: value
+                    });
+                    this._doc.commit();
+                } else if (property === "actions") {
+                    const actionsContainer = data.get(NODE_ACTIONS) as LoroList | undefined;
+                    if (actionsContainer) {
+                        const length = actionsContainer.length;
+                        if (length > 0) {
+                            actionsContainer.delete(0, length);
+                        }
+                        for (const action of value as GeneralizedPatch[]) {
+                            actionsContainer.push(action);
+                        }
+                        this.emitPatch({
+                            action: "put",
+                            path: ["nodes", id, "actions"],
+                            value: value
+                        });
+                        this._doc.commit();
+                    }
+                }
+            } else if (kind === "element") {
+                if (property === "tag") {
+                    this.updateTag(id, value as string);
+                }
+            }
+        } catch (e) {
+            handleModelError("updateNodeProperty", e);
+        }
+    }
+
+    /**
+     * Commit pending changes (usually not needed - mutations auto-commit)
      */
     commit(origin?: string): void {
         if (origin) {
@@ -564,44 +1151,134 @@ export class DenicekDocument {
      * @param startNodeId The node ID to use as $0 for this replay
      */
     replay(script: GeneralizedPatch[], startNodeId: string): void {
-        this.change(model => {
-            const vars = new Map<string, string>();
-            vars.set("$0", startNodeId);
+        const vars = new Map<string, string>();
+        vars.set("$0", startNodeId);
 
-            for (const patch of script) {
-                // Degeneralize path
-                const concretePath = patch.path.map(p => {
-                    if (typeof p === "string" && p.startsWith("$")) {
-                        return vars.get(p) || p;
-                    }
-                    return p;
-                });
+        for (const patch of script) {
+            // Degeneralize path
+            const concretePath = patch.path.map(p => {
+                if (typeof p === "string" && p.startsWith("$")) {
+                    return vars.get(p) || p;
+                }
+                return p;
+            });
 
-                // Degeneralize value
-                const concreteValue = this.degeneralizeValue(patch.value, vars);
+            // Degeneralize value
+            const concreteValue = this.degeneralizeValue(patch.value, vars);
 
-                // Construct concrete patch
-                const concretePatch: GeneralizedPatch = {
-                    ...patch,
-                    path: concretePath,
-                    value: concreteValue
-                };
+            // Construct concrete patch
+            const concretePatch: GeneralizedPatch = {
+                ...patch,
+                path: concretePath,
+                value: concreteValue
+            };
 
-                // Apply
-                const result = model.applyPatch(concretePatch);
+            // Apply (without auto-commit)
+            const result = this.applyPatchInternal(concretePatch);
 
-                // If inserted or copied a node, map the ID
-                // Handles both children inserts and sibling inserts
-                if ((patch.action === "insert" || patch.action === "copy") && patch.path.length >= 3 && (patch.path[2] === "children" || patch.path[2] === "sibling")) {
-                    const val = patch.value as Record<string, unknown>;
-                    if (val && val.id && typeof val.id === "string" && val.id.startsWith("$")) {
-                        if (typeof result === "string") {
-                            vars.set(val.id, result);
-                        }
+            // If inserted or copied a node, map the ID
+            if ((patch.action === "insert" || patch.action === "copy") && patch.path.length >= 3 && (patch.path[2] === "children" || patch.path[2] === "sibling")) {
+                const val = patch.value as Record<string, unknown>;
+                if (val && val.id && typeof val.id === "string" && val.id.startsWith("$")) {
+                    if (typeof result === "string") {
+                        vars.set(val.id, result);
                     }
                 }
             }
-        });
+        }
+        // Each operation auto-commits; Loro's merge interval groups them for undo
+    }
+
+    /**
+     * Apply a patch - used for replay. Uses public methods (each auto-commits,
+     * but Loro's merge interval groups them for undo).
+     */
+    private applyPatchInternal(patch: GeneralizedPatch): unknown {
+        try {
+            const { action, path, value, length } = patch;
+            const targetType = path[0];
+            if (targetType !== "nodes") return;
+
+            const id = path[1] as string;
+
+            if (action === "insert" && path.length >= 4 && path[2] === "children") {
+                const parentId = id;
+                const rawIndex = path[3] as number;
+                const index = rawIndex === -1 ? undefined : rawIndex;
+                const nodeDef = value as NodeInput;
+                return this.addChild(parentId, nodeDef, index);
+            }
+
+            if (action === "copy" && path.length >= 4 && path[2] === "children") {
+                const parentId = id;
+                const rawIndex = path[3] as number;
+                const index = rawIndex === -1 ? undefined : rawIndex;
+                const copyDef = value as { sourceId: string; sourceAttr?: string };
+                if (!copyDef.sourceId) {
+                    handleModelError("applyPatch", new Error("Copy patch missing sourceId"));
+                    return undefined;
+                }
+                return this.copyNode(copyDef.sourceId, parentId, { index, sourceAttr: copyDef.sourceAttr });
+            }
+
+            if (path.length === 2 && action === "del") {
+                this.deleteNode(id);
+                return undefined;
+            }
+
+            if (path.length === 2 && action === "move") {
+                const { parentId, index } = value as { parentId: string; index?: number };
+                this.moveNode(id, parentId, index);
+                return undefined;
+            }
+
+            if (path.length >= 3) {
+                const field = path[2];
+                if (field === "tag" && action === "put") {
+                    this.updateTag(id, value as string);
+                } else if (field === "attrs" && path.length === 4) {
+                    const key = path[3] as string;
+                    if (action === "put") {
+                        this.updateAttribute(id, key, value);
+                    } else if (action === "del") {
+                        this.updateAttribute(id, key, undefined);
+                    }
+                } else if (field === "value" && action === "splice") {
+                    if (path.length === 4) {
+                        const idx = path[3] as number;
+                        const insertText = value as string;
+                        const deleteCount = length || 0;
+                        this.spliceValue(id, idx, deleteCount, insertText);
+                    }
+                } else if (field === "label" && action === "put") {
+                    this.updateNodeProperty(id, "label", value);
+                } else if (field === "target" && action === "put") {
+                    this.updateNodeProperty(id, "target", value);
+                } else if (field === "operation" && action === "put") {
+                    this.updateFormulaOperation(id, value as string);
+                } else if (field === "refTarget" && action === "put") {
+                    this.updateRefTarget(id, value as string);
+                } else if (field === "actions") {
+                    if (action === "put") {
+                        this.updateNodeProperty(id, "actions", value);
+                    } else if (action === "insert" && path.length === 4) {
+                        const actions = value as GeneralizedPatch[];
+                        this.appendActions(id, actions);
+                    } else if (action === "del" && path.length === 4) {
+                        const idx = path[3] as number;
+                        this.deleteAction(id, idx);
+                    } else if (action === "move" && path.length === 4) {
+                        const fromIndex = path[3] as number;
+                        const { toIndex } = value as { toIndex: number };
+                        this.moveAction(id, fromIndex, toIndex);
+                    }
+                }
+            }
+            return undefined;
+        } catch (e) {
+            handleModelError("applyPatch", e);
+            return undefined;
+        }
     }
 
     private degeneralizeValue(value: unknown, vars: Map<string, string>): unknown {
@@ -644,21 +1321,12 @@ export class DenicekDocument {
      */
     static create(
         options?: DenicekDocumentOptions,
-        initializer?: (model: DenicekModel) => void
+        initializer?: (doc: DenicekDocument) => void
     ): DenicekDocument {
         const doc = new DenicekDocument(options);
         if (initializer) {
-            doc.change(initializer);
+            initializer(doc);
         }
-        return doc;
-    }
-
-    /**
-     * Create a document from exported bytes
-     */
-    static fromBytes(bytes: Uint8Array, options?: DenicekDocumentOptions): DenicekDocument {
-        const doc = new DenicekDocument(options);
-        doc.import(bytes);
         return doc;
     }
 

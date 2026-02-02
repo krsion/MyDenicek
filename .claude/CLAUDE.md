@@ -19,6 +19,12 @@ cd packages/mydenicek-core && npm run build
 
 ---
 
+## Backwards Compatibility
+
+**Do not worry about backwards compatibility.** When refactoring or writing code, feel free to rename functions, change signatures, remove unused code, and restructure APIs as needed. This is a personal project without external consumers—prioritize clean design over preserving old interfaces.
+
+---
+
 ## Software Design Philosophy (Ousterhout)
 
 Core principle: **complexity is the root cause of most software problems**. Every design decision should minimize complexity.

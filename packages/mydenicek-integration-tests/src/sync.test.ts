@@ -55,11 +55,9 @@ describe("Sync Integration", () => {
         await doc2.connectToSync({ url: server.url, roomId: ROOM_ID, pingIntervalMs: 1000 });
 
         // Initialize and make changes
-        doc1.change((model) => {
-            const rootId = model.createRootNode("section");
-            const nodeId = model.addChild(rootId, { kind: "element", tag: "test-element", attrs: {}, children: [] });
-            model.updateAttribute(nodeId, "testAttr", "fromClient1");
-        });
+        const rootId = doc1.createRootNode("section");
+        const nodeId = doc1.addChild(rootId, { kind: "element", tag: "test-element", attrs: {}, children: [] });
+        doc1.updateAttribute(nodeId, "testAttr", "fromClient1");
 
         // Wait for sync
         await waitForSync(doc1, doc2, 5000);
@@ -73,11 +71,9 @@ describe("Sync Integration", () => {
         }
 
         // Client 2 makes changes
-        doc2.change((model) => {
-            const rootId = model.rootId;
-            const nodeId = model.addChild(rootId, { kind: "element", tag: "test-element-2", attrs: {}, children: [] });
-            model.updateAttribute(nodeId, "testAttr", "fromClient2");
-        });
+        const rootId2 = doc2.getRootId()!;
+        const nodeId2 = doc2.addChild(rootId2, { kind: "element", tag: "test-element-2", attrs: {}, children: [] });
+        doc2.updateAttribute(nodeId2, "testAttr", "fromClient2");
 
         // Wait for sync
         await waitForSync(doc1, doc2, 5000);

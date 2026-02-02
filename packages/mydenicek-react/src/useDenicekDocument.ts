@@ -3,40 +3,18 @@
  */
 
 import {
-    DenicekDocument,
-    DenicekModel,
     type GeneralizedPatch,
     type SpliceInfo,
     type SyncStatus,
 } from "@mydenicek/core";
-import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useState } from "react";
 
 import { DenicekContext } from "./DenicekProvider.js";
 
 /**
- * Creates a bulk action that applies an operation to multiple nodes.
- * Reduces boilerplate for common document.change patterns.
- */
-function useBulkAction<TArgs extends unknown[]>(
-    document: DenicekDocument,
-    operation: (model: DenicekModel, id: string, ...args: TArgs) => void,
-) {
-    const operationRef = useRef(operation);
-    operationRef.current = operation;
-
-    return useCallback((nodeIds: string[], ...args: TArgs) => {
-        document.change((model: DenicekModel) => {
-            for (const id of nodeIds) {
-                operationRef.current(model, id, ...args);
-            }
-        });
-    }, [document]);
-}
-
-/**
  * Calculates the minimal splice operation needed to transform oldVal into newVal.
  */
-export function calculateSplice(oldVal: string, newVal: string): SpliceInfo {
+function calculateSplice(oldVal: string, newVal: string): SpliceInfo {
     let start = 0;
     while (start < oldVal.length && start < newVal.length && oldVal[start] === newVal[start]) {
         start++;
@@ -158,53 +136,45 @@ export function useDocumentActions() {
     const undo = useCallback(() => document.undo(), [document]);
     const redo = useCallback(() => document.redo(), [document]);
 
-    // Simple bulk actions using the factory
-    const updateAttribute = useBulkAction(document, (m, id, key: string, value: unknown | undefined) => m.updateAttribute(id, key, value));
-    const updateTag = useBulkAction(document, (m, id, newTag: string) => m.updateTag(id, newTag));
-    const deleteNodes = useBulkAction(document, (m, id) => m.deleteNode(id));
+    // Direct actions using the new Document API
+    const updateAttribute = useCallback((nodeIds: string[], key: string, value: unknown | undefined) => {
+        for (const id of nodeIds) {
+            document.updateAttribute(id, key, value);
+        }
+    }, [document]);
 
-    // Actions with special logic that don't fit the bulk pattern
+    const updateTag = useCallback((nodeIds: string[], newTag: string) => {
+        for (const id of nodeIds) {
+            document.updateTag(id, newTag);
+        }
+    }, [document]);
+
+    const deleteNodes = useCallback((nodeIds: string[]) => {
+        for (const id of nodeIds) {
+            document.deleteNode(id);
+        }
+    }, [document]);
+
     const updateValue = useCallback((nodeIds: string[], newValue: string, originalValue: string) => {
         const splice = calculateSplice(originalValue, newValue);
-        document.change((model: DenicekModel) => {
-            for (const id of nodeIds) {
-                model.spliceValue(id, splice.index, splice.deleteCount, splice.insertText);
-            }
-        });
+        for (const id of nodeIds) {
+            document.spliceValue(id, splice.index, splice.deleteCount, splice.insertText);
+        }
     }, [document]);
 
     const addChildren = useCallback((parentIds: string[], type: "element" | "value", content: string) => {
         const newIds: string[] = [];
-        document.change((model: DenicekModel) => {
-            for (const id of parentIds) {
-                const node = model.getNode(id);
-                if (node?.kind === "element") {
-                    const newId = type === "value"
-                        ? model.addChild(id, { kind: "value", value: content })
-                        : model.addChild(id, { kind: "element", tag: content, attrs: {}, children: [] });
-                    newIds.push(newId);
-                }
+        for (const id of parentIds) {
+            const node = document.getNode(id);
+            if (node?.kind === "element") {
+                const newId = type === "value"
+                    ? document.addChild(id, { kind: "value", value: content })
+                    : document.addChild(id, { kind: "element", tag: content, attrs: {}, children: [] });
+                newIds.push(newId);
             }
-        });
+        }
         return newIds;
     }, [document]);
-
-    const addSiblings = useCallback((
-        referenceIds: string[],
-        position: "before" | "after",
-        nodeInput?: Parameters<DenicekModel['addSibling']>[2]
-    ) => {
-        const newIds: string[] = [];
-        document.change((model: DenicekModel) => {
-            for (const id of referenceIds) {
-                const newId = model.addSibling(id, position, nodeInput);
-                if (newId) newIds.push(newId);
-            }
-        });
-        return newIds;
-    }, [document]);
-
-
 
     return {
         undo,
@@ -215,22 +185,7 @@ export function useDocumentActions() {
         updateTag,
         updateValue,
         addChildren,
-        addSiblings,
         deleteNodes,
     };
 }
 
-export type DenicekActions = ReturnType<typeof useDocumentActions>;
-
-/**
- * Combined hook for document + actions
- */
-export function useDenicekDocument() {
-    const state = useDocumentState();
-    const actions = useDocumentActions();
-
-    return {
-        ...state,
-        ...actions,
-    };
-}

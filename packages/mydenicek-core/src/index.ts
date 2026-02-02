@@ -6,14 +6,13 @@
  */
 
 // Main classes
-export type { DenicekDocumentOptions, SyncOptions } from "./DenicekDocument.js";
+export type { DenicekDocumentOptions, NodeInput, SyncOptions } from "./DenicekDocument.js";
 export { DenicekDocument } from "./DenicekDocument.js";
-export { DenicekModel } from "./DenicekModel.js";
 
 
 
 // Error handling
-export { DenicekError, handleModelError } from "./errors.js";
+export { DenicekError } from "./errors.js";
 
 // Types
 export type {

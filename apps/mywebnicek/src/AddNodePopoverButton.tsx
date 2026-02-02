@@ -13,15 +13,12 @@ type Props = {
     canAddChild?: boolean;
     initialValue?: string;
     onAddChild: (content: string, kind: NodeKind) => void;
-    onAddBefore: (content: string, kind: NodeKind) => void;
-    onAddAfter: (content: string, kind: NodeKind) => void;
-    onStartRefPick?: (position: "child" | "before" | "after") => void;
+    onStartRefPick?: () => void;
 };
 
-export const AddNodePopoverButton = ({ disabled, canAddChild = true, initialValue, onAddChild, onAddBefore, onAddAfter, onStartRefPick }: Props) => {
+export const AddNodePopoverButton = ({ disabled, canAddChild = true, initialValue, onAddChild, onStartRefPick }: Props) => {
     const [open, setOpen] = useState(false);
     const [value, setValue] = useState(initialValue || "");
-    const [mode, setMode] = useState<"child" | "before" | "after">(canAddChild ? "child" : "before");
     const [nodeType, setNodeType] = useState<"tag" | "value" | "action" | "formula" | "ref">("tag");
     const [operation, setOperation] = useState<string>("sum");
     const [error, setError] = useState<string | null>(null);
@@ -58,9 +55,7 @@ export const AddNodePopoverButton = ({ disabled, canAddChild = true, initialValu
         const kind: NodeKind = nodeType === "tag" ? "element" : nodeType;
 
         setError(null);
-        if (mode === "child") onAddChild(finalContent, kind);
-        else if (mode === "before") onAddBefore(finalContent, kind);
-        else if (mode === "after") onAddAfter(finalContent, kind);
+        onAddChild(finalContent, kind);
 
         setOpen(false);
     };
@@ -81,13 +76,13 @@ export const AddNodePopoverButton = ({ disabled, canAddChild = true, initialValu
             if (!data.open) setError(null);
         }} trapFocus>
             <PopoverTrigger>
-                <Tooltip content="Add element" relationship="label">
-                    <ToolbarButton icon={<AddRegular />} disabled={disabled} onClick={() => setOpen(true)} aria-label="Add element" />
+                <Tooltip content="Add child" relationship="label">
+                    <ToolbarButton icon={<AddRegular />} disabled={disabled || !canAddChild} onClick={() => setOpen(true)} aria-label="Add child" />
                 </Tooltip>
             </PopoverTrigger>
 
             <PopoverSurface style={{ padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
-                <Label>Add node</Label>
+                <Label>Add child node</Label>
 
                 <RadioGroup value={nodeType} onChange={(_, data) => {
                     setNodeType(data.value as "tag" | "value" | "action" | "formula" | "ref");
@@ -118,7 +113,7 @@ export const AddNodePopoverButton = ({ disabled, canAddChild = true, initialValu
                         appearance="primary"
                         onClick={() => {
                             if (onStartRefPick) {
-                                onStartRefPick(mode);
+                                onStartRefPick();
                                 setOpen(false);
                             }
                         }}
@@ -144,11 +139,6 @@ export const AddNodePopoverButton = ({ disabled, canAddChild = true, initialValu
                         {error}
                     </Text>
                 )}
-                <RadioGroup value={mode} onChange={(_, data) => setMode(data.value as "child" | "before" | "after")} layout="horizontal">
-                    <Radio value="child" label="Child" disabled={!canAddChild} />
-                    <Radio value="before" label="Before" />
-                    <Radio value="after" label="After" />
-                </RadioGroup>
                 <Button appearance="primary" onClick={handleSubmit}>Add</Button>
             </PopoverSurface>
         </Popover>

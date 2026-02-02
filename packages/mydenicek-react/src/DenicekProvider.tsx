@@ -7,7 +7,6 @@
 
 import {
     DenicekDocument,
-    DenicekModel,
     type SyncState,
 } from "@mydenicek/core";
 import { createContext, type ReactNode, useEffect, useMemo, useState } from "react";
@@ -43,7 +42,7 @@ export interface DenicekProviderProps {
     /** Optional initial document (for importing existing data) */
     initialDocument?: DenicekDocument;
     /** Optional initializer to set up document structure when creating a new document */
-    initializer?: (model: DenicekModel) => void;
+    initializer?: (doc: DenicekDocument) => void;
     /** Callback when document changes */
     onChange?: () => void;
     /** Optional peer ID for CRDT operations (should be persisted across sessions) */

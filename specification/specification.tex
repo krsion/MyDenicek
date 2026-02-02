@@ -81,7 +81,7 @@ The user journey through MyWebnicek consists of the following phases:
 
 \item \textbf{Document Navigation:} Users navigate the document tree using keyboard shortcuts or mouse clicks. The selected node is highlighted in both the rendered view and the JSON inspector.
 
-\item \textbf{Document Editing:} Users perform edit operations through toolbar controls. Operations include adding nodes, editing values, wrapping nodes, and deleting nodes.
+\item \textbf{Document Editing:} Users perform edit operations through toolbar controls. Operations include adding nodes, editing values, moving nodes, and deleting nodes.
 
 \item \textbf{Recording/Replay:} Users can record a sequence of edit operations and replay them on different parts of the document, enabling programming by demonstration.
 
@@ -97,7 +97,7 @@ The following functional requirements specify the capabilities of the system. Re
 
 \subsubsection{Core Library Requirements}
 
-\textbf{FR-01: Document Representation} [Core] The system shall represent documents as trees of nodes, where each node has a unique ID, a kind (element or value), and additional properties based on its kind.
+\textbf{FR-01: Document Representation} [Core] The system shall represent documents as trees of nodes, where each node has a unique ID, a kind (element, value, formula, ref, or action), and additional properties based on its kind.
 
 \textbf{FR-02: Element Nodes} [Core] Element nodes shall have a tag name, a dictionary of attributes, and an ordered list of child node IDs.
 
@@ -107,20 +107,18 @@ The following functional requirements specify the capabilities of the system. Re
 \begin{itemize}
 \setlength{\itemsep}{-5pt}
 \item \texttt{addChild}: Add a new child node (element, value, formula, ref, or action) to a parent
-\item \texttt{addSibling}: Add a new sibling node before or after an existing node
 \item \texttt{deleteNode}: Remove a node and its descendants from the document
 \item \texttt{moveNode}: Move a node to a different parent or position
 \item \texttt{copyNode}: Create a copy of a node under a target parent
 \item \texttt{updateTag}: Change the tag name of an element node
 \item \texttt{updateAttribute}: Set or modify an attribute on an element node
 \item \texttt{spliceValue}: Insert, delete, or replace text within a value node
-\item \texttt{wrapNode}: Wrap a node in a new parent element
 \end{itemize}
 
 \textbf{FR-05: Conflict Resolution} [Core] The system shall automatically resolve conflicts when concurrent operations are applied:
 \begin{itemize}
 \setlength{\itemsep}{-5pt}
-\item Concurrent wrap operations on the same node shall result in a single wrapper (using deterministic wrapper IDs)
+\item Concurrent move operations on the same node shall result in the node appearing in one location (determined by Loro's tree CRDT semantics)
 \item Concurrent attribute updates shall use Last-Writer-Wins (LWW) semantics
 \item Concurrent child additions shall preserve both children
 \item Concurrent tag updates shall use LWW semantics
@@ -132,33 +130,31 @@ The following functional requirements specify the capabilities of the system. Re
 
 \textbf{FR-08: Replay} [Core] The system shall support replaying a recorded script starting from a specified node. The generalized node IDs in the script shall be bound to actual node IDs based on the starting node.
 
-\textbf{FR-09: Transformations} [Core] The system shall support defining transformations on element nodes that are automatically applied to new children. This enables pattern-based document manipulation.
+\textbf{FR-09: Formula Nodes} [Core] Formula nodes compute values from an \texttt{operation} and child arguments (value nodes, ref nodes, or nested formulas). Evaluation detects circular references and enforces max recursion depth.
 
-\textbf{FR-10: Formula Nodes} [Core] Formula nodes compute values from an \texttt{operation} and child arguments (value nodes, ref nodes, or nested formulas). Evaluation detects circular references and enforces max recursion depth.
+\textbf{FR-10: Formula Operations} [Core] Built-in operations: string (\texttt{concat}, \texttt{uppercase}, etc.), math (\texttt{sum}, \texttt{product}, etc.), and tree (\texttt{countChildren}).
 
-\textbf{FR-11: Formula Operations} [Core] Built-in operations: string (\texttt{concat}, \texttt{uppercase}, etc.), math (\texttt{plus}, \texttt{multiply}, etc.), array (\texttt{atIndex}, \texttt{splitString}), and tree (\texttt{countChildren}).
+\textbf{FR-11: Ref Nodes} [Core] Ref nodes reference other nodes via a \texttt{target} ID. In formulas, they resolve to the target's value.
 
-\textbf{FR-12: Ref Nodes} [Core] Ref nodes reference other nodes via a \texttt{target} ID. In formulas, they resolve to the target's value.
-
-\textbf{FR-13: Action Nodes} [Core] Action nodes store recorded operations as generalized patches. They have a \texttt{label}, \texttt{target} (bound to \texttt{\$0}), and \texttt{actions} list. Triggering replays patches on the target.
+\textbf{FR-12: Action Nodes} [Core] Action nodes store recorded operations as generalized patches. They have a \texttt{label}, \texttt{target} (bound to \texttt{\$0}), and \texttt{actions} list. Triggering replays patches on the target.
 
 \subsubsection{Web Application Requirements}
 
-\textbf{FR-14: Document Rendering} [Web] The application shall render the document tree as HTML, allowing users to see the final document appearance.
+\textbf{FR-13: Document Rendering} [Web] The application shall render the document tree as HTML, allowing users to see the final document appearance.
 
-\textbf{FR-15: Node Selection} [Web] Users shall be able to select nodes by clicking on them in the rendered view or navigating with keyboard shortcuts (arrow keys, Tab).
+\textbf{FR-14: Node Selection} [Web] Users shall be able to select nodes by clicking on them in the rendered view or navigating with keyboard shortcuts (arrow keys, Tab).
 
-\textbf{FR-16: JSON Inspector} [Web] The application shall display a JSON view of the document structure, highlighting the currently selected node.
+\textbf{FR-15: JSON Inspector} [Web] The application shall display a JSON view of the document structure, highlighting the currently selected node.
 
-\textbf{FR-17: Element Details Panel} [Web] When an element node is selected, the application shall display its tag, attributes, and available operations.
+\textbf{FR-16: Element Details Panel} [Web] When an element node is selected, the application shall display its tag, attributes, and available operations.
 
-\textbf{FR-18: Add Node Interface} [Web] Users shall be able to add child nodes through a popover interface that allows specifying the tag name or text content.
+\textbf{FR-17: Add Node Interface} [Web] Users shall be able to add child nodes through a popover interface that allows specifying the tag name or text content.
 
-\textbf{FR-19: Recording Controls} [Web] The application shall provide controls to start and stop recording, and display the recorded script.
+\textbf{FR-18: Recording Controls} [Web] The application shall provide controls to start and stop recording, and display the recorded script.
 
-\textbf{FR-20: Replay Controls} [Web] The application shall provide controls to replay a recorded script on the currently selected node.
+\textbf{FR-19: Replay Controls} [Web] The application shall provide controls to replay a recorded script on the currently selected node.
 
-\textbf{FR-21: Keyboard Shortcuts} [Web] The application shall support keyboard shortcuts for common operations:
+\textbf{FR-20: Keyboard Shortcuts} [Web] The application shall support keyboard shortcuts for common operations:
 \begin{itemize}
 \setlength{\itemsep}{-5pt}
 \item Arrow keys: Navigate between nodes
@@ -167,11 +163,11 @@ The following functional requirements specify the capabilities of the system. Re
 \item Ctrl+Y / Ctrl+Shift+Z: Redo
 \end{itemize}
 
-\textbf{FR-22: WebSocket Synchronization} [Web] The application shall synchronize document changes with other clients via WebSocket connection to a sync server.
+\textbf{FR-21: WebSocket Synchronization} [Web] The application shall synchronize document changes with other clients via WebSocket connection to a sync server.
 
-\textbf{FR-23: Formula Rendering} [Web] Formula nodes display computed results or formula structure (for debugging).
+\textbf{FR-22: Formula Rendering} [Web] Formula nodes display computed results or formula structure (for debugging).
 
-\textbf{FR-24: Action Node Rendering} [Web] Action nodes render as buttons; clicking triggers replay on the target.
+\textbf{FR-23: Action Node Rendering} [Web] Action nodes render as buttons; clicking triggers replay on the target.
 
 
 \subsection{Non-functional requirements}
@@ -214,31 +210,26 @@ packages/
 
 \subsubsection{Core Library Architecture}
 
-The core library (\texttt{@mydenicek/core}) provides two main classes:
+The core library (\texttt{@mydenicek/core}) follows a ``deep module'' design where \textbf{DenicekDocument} is the single entry point, hiding all Loro CRDT complexity behind a simple API:
 
-\textbf{DenicekDocument} is the entry point. It wraps a Loro document and provides:
 \begin{itemize}
 \setlength{\itemsep}{-5pt}
-\item \texttt{change(fn)}: Execute mutations via a DenicekModel callback
-\item \texttt{undo()} / \texttt{redo()}: Undo/redo operations
-\item \texttt{replay(script, startNodeId)}: Replay a recorded script
-\item \texttt{connectToSync()} / \texttt{disconnectSync()}: WebSocket synchronization
-\item \texttt{export()} / \texttt{import()}: Serialization for sync
+\item Read: \texttt{getNode()}, \texttt{getParentId()}, \texttt{getChildIds()}, \texttt{getRootId()}
+\item Write: \texttt{addChild()}, \texttt{deleteNode()}, \texttt{moveNode()}, \texttt{copyNode()}, \texttt{updateAttribute()}, \texttt{updateTag()}, \texttt{spliceValue()}, \texttt{updateFormulaOperation()}, \texttt{updateRefTarget()}
+\item Undo/Redo: \texttt{undo()}, \texttt{redo()}, \texttt{canUndo}, \texttt{canRedo}
+\item Recording: \texttt{replay(script, startNodeId)}, \texttt{getHistory()}, \texttt{clearHistory()}
+\item Sync: \texttt{connectToSync()}, \texttt{disconnectSync()}
+\item Serialization: \texttt{export()}, \texttt{import()}
 \end{itemize}
 
-\textbf{DenicekModel} provides read/write operations within \texttt{change()} callbacks:
-\begin{itemize}
-\setlength{\itemsep}{-5pt}
-\item Read: \texttt{getNode()}, \texttt{getParentId()}, \texttt{getChildren()}
-\item Write: \texttt{updateAttribute()}, \texttt{updateTag()}, \texttt{wrapNode()}, \texttt{deleteNode()}, \texttt{moveNode()}, \texttt{spliceValue()}, \texttt{addChild()}, \texttt{addSibling()}, \texttt{copyNode()}
-\end{itemize}
+Each mutation method commits automatically, and Loro's undo manager groups rapid commits (within 1000ms) for natural undo behavior. No Loro types are exposed in the public API.
 
 \subsubsection{Data Flow}
 
 \begin{enumerate}
 \item User performs an action in the UI (e.g., clicks ``Add Child'')
-\item React component calls \texttt{document.change(model => \{ ... \})}
-\item DenicekModel applies the change to the Loro document
+\item React component calls \texttt{document.addChild(parentId, \{ ... \})}
+\item DenicekDocument applies the change to the Loro document and commits
 \item Loro generates patches; undo manager captures inverse
 \item If subscribed, patches are recorded for replay
 \item Loro synchronizes changes to connected peers via WebSocket
@@ -253,7 +244,7 @@ The formula engine enables spreadsheet-like reactive computation. Nodes derive v
 
 \subsubsection{Node Types}
 
-\textbf{Formula Nodes} compute values. They have an \texttt{operation} attribute (e.g., ``plus'') and children serving as arguments.
+\textbf{Formula Nodes} compute values. They have an \texttt{operation} attribute (e.g., ``sum'') and children serving as arguments.
 
 \textbf{Ref Nodes} reference other nodes via a \texttt{target} attribute. In formulas, they resolve to the target's value.
 
@@ -273,9 +264,7 @@ The evaluator traverses the formula tree recursively:
 
 \textbf{String:} \texttt{lowerText}, \texttt{upperText}, \texttt{capitalize}, \texttt{concat} (variadic), \texttt{trim}, \texttt{length}, \texttt{replace}
 
-\textbf{Math:} \texttt{plus}, \texttt{minus}, \texttt{multiply}, \texttt{divide}, \texttt{mod}, \texttt{round}, \texttt{floor}, \texttt{ceil}, \texttt{abs}
-
-\textbf{Array:} \texttt{atIndex}, \texttt{splitString}, \texttt{arrayLength}
+\textbf{Math:} \texttt{sum}, \texttt{product}, \texttt{mod}, \texttt{round}, \texttt{floor}, \texttt{ceil}, \texttt{abs}
 
 \textbf{Tree:} \texttt{countChildren}
 
@@ -288,7 +277,7 @@ The evaluator traverses the formula tree recursively:
 \item \texttt{\#ERR: node deleted}
 \item \texttt{\#ERR: \{op\} not found}
 \item \texttt{\#ERR: \{op\} expects \{X\} args, got \{Y\}}
-\item \texttt{\#ERR: division by zero}
+\item \texttt{\#ERR: \{op\} requires number} (type coercion failed)
 \end{itemize}
 
 \subsubsection{Example}
@@ -309,7 +298,7 @@ An action node stores: \texttt{label} (display text), \texttt{target} (node boun
 Patches use variable placeholders instead of concrete node IDs:
 \begin{verbatim}
 GeneralizedPatch {
-    action: "put" | "del" | "insert" | "splice" | "move" | "copy"
+    action: "put" | "del" | "insert" | "splice" | "inc" | "move" | "copy"
     path: (string | number)[]   // Contains $0, $1, etc.
     value?: unknown
     length?: number
@@ -320,11 +309,12 @@ Variables: \texttt{\$0} is the target node; \texttt{\$1}, \texttt{\$2}, ... are 
 
 \subsubsection{Recording}
 
+Recording is automatic---all document operations are captured in the Recorded History panel:
 \begin{enumerate}
-\item Select target node, click ``Start Recording''
-\item Perform operations (add, edit, delete nodes)
-\item Recorder captures patches, generalizing node IDs to variables
-\item Click ``Stop Recording''; patches are stored in an action node
+\item Perform operations (add, edit, delete, move nodes)
+\item Recorder captures patches in real-time
+\item Select specific actions from history (or use all)
+\item Click ``Apply'' to replay on the selected node, or ``Add to Button'' to store in an action node
 \end{enumerate}
 
 \subsubsection{Replay}
@@ -348,31 +338,17 @@ These examples from the original Denicek paper demonstrate the end-user programm
 
 Demonstrates formulas and action buttons. The document contains a value node storing the count (e.g., \texttt{"5"}), a ref node displaying it, and two action buttons targeting the value.
 
-The ``+1'' button records wrapping the target in \texttt{formula(plus)} with argument \texttt{"1"}. Clicking transforms \texttt{"5"} into a formula \texttt{plus(ref, "1")} that evaluates to \texttt{"6"}. The ``-1'' button similarly wraps with \texttt{minus}.
+The ``+1'' button records adding a \texttt{formula(sum)} node with the original value moved as a child argument along with \texttt{"1"}. Clicking transforms \texttt{"5"} into a formula \texttt{sum(ref, "1")} that evaluates to \texttt{"6"}.
 
 \subsubsection{Todo List}
 
 Demonstrates recording an ``add item'' pattern. The document contains a \texttt{ul} with existing \texttt{li} items (each with a checkbox and text), plus an ``Add'' action button targeting the list.
 
-To create the button: select the \texttt{ul}, record adding a new \texttt{li} with checkbox and text value, save to the action node. Each click replays the pattern, appending a new item.
-
-\subsubsection{Conference List (Schema Refactoring)}
-
-Demonstrates concurrent editing with CRDT conflict resolution. The document contains a list of conferences, each with name and location.
-
-\textbf{Scenario:} User A adds a ``year'' field to existing conferences (records wrapping each \texttt{li}'s content). User B concurrently adds a new conference.
-
-\textbf{Result:} Both operations succeed. A's changes apply to existing items; B's new item appears without the year field. A can replay the transformation on B's new item to add the field.
-
-\subsubsection{Hello World (Bulk Transformation)}
-
-Demonstrates applying transformations across multiple items. The document contains a \texttt{ul} with several \texttt{li} items (``Hello'', ``World'', ``Denicek'') and an ``Emphasize'' action button.
-
-Record wrapping content in \texttt{<strong>} and appending ``!''. Replay on each \texttt{li} transforms ``Hello'' to ``Hello!'' wrapped in \texttt{strong}.
+To create the button: select the \texttt{ul}, add a new \texttt{li} with checkbox and text value, then select the recorded actions and click ``Add to Button''. Each button click replays the pattern, appending a new item.
 
 \subsubsection{Price Calculator (Formulas)}
 
-Demonstrates reactive computation. The document contains value nodes for quantity (\texttt{"3"}) and price (\texttt{"25"}), plus a \texttt{formula(multiply)} node referencing both. The formula evaluates to \texttt{"75"} and updates automatically when either value changes.
+Demonstrates reactive computation. The document contains value nodes for quantity (\texttt{"3"}) and price (\texttt{"25"}), plus a \texttt{formula(product)} node referencing both. The formula evaluates to \texttt{"75"} and updates automatically when either value changes.
 
 Additional formulas like \texttt{countChildren} can count items in a list dynamically.
 
@@ -430,7 +406,7 @@ The evaluation approach focuses on demonstrating that the CRDT-based synchroniza
 \textbf{Unit Tests} The core library includes unit tests (Vitest) that verify:
 \begin{itemize}
 \setlength{\itemsep}{-5pt}
-\item Correctness of node operations (add, delete, move, copy, wrap)
+\item Correctness of node operations (add, delete, move, copy)
 \item Conflict resolution behavior for concurrent operations
 \item Undo/redo functionality
 \item Recording and replay of operation sequences
@@ -443,10 +419,9 @@ The evaluation approach focuses on demonstrating that the CRDT-based synchroniza
 \item User interface interactions (selection, navigation, editing)
 \item Recording and replay workflows
 \item Undo/redo through the UI
-\item Bulk operations on multiple nodes
 \end{itemize}
 
-\textbf{Formative Examples} Evaluation against examples from the Denicek paper (Section 2.7): counter (reactive values, action buttons), todo list (recording patterns), conference list (concurrent schema changes), hello world (bulk transformations), price calculator (formula engine).
+\textbf{Formative Examples} Evaluation against examples from the Denicek paper (Section 2.7): counter (reactive values, action buttons), todo list (recording patterns), price calculator (formula engine).
 
 \textbf{Comparison with Original Denicek} A qualitative comparison will assess:
 \begin{itemize}
@@ -519,7 +494,7 @@ Sync Server Deployment & Deploy to Azure, public collaboration & Jan 2026 & 4 & 
 \hline
 Web Application Polish & UI improvements, conflict feedback & Feb 2026 & 6 & Planned \\
 \hline
-Formative Examples & Counter, todo, conference list demos & Feb--Mar 2026 & 5 & Planned \\
+Formative Examples & Counter, todo list, price calculator demos & Feb--Mar 2026 & 5 & Planned \\
 \hline
 Testing \& Bug Fixes & E2E tests, edge cases, bug fixes & Mar 2026 & 5 & Planned \\
 \hline

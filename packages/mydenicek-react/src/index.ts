@@ -16,8 +16,7 @@ export {
 
 // Hooks
 export {
-    calculateSplice, type DenicekActions,
-useConnectivity, useDenicekDocument, useDocumentActions, useDocumentState, useRecording} from "./useDenicekDocument.js";
+useConnectivity, useDocumentActions, useDocumentState, useRecording} from "./useDenicekDocument.js";
 export { type FormulaViewMode, type FormulaViewModeState, useFormulaViewMode } from "./useFormulaViewMode.js";
 export { type SelectedNodeDetails,useSelectedNode, useSelection } from "./useSelection.js";
 

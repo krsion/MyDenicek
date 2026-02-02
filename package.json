@@ -12,7 +12,8 @@
         "clean": "tsc -b --clean",
         "test": "npm test --workspaces",
         "dev": "concurrently -k -n server,web -c blue,green \"npm run dev -w @mydenicek/sync-server\" \"npm run dev -w mywebnicek\"",
-        "lint": "eslint . --fix"
+        "lint": "eslint . --fix",
+        "spec": "cd specification && pdflatex -interaction=nonstopmode specification.tex && pdflatex -interaction=nonstopmode specification.tex"
     },
     "devDependencies": {
         "@eslint/js": "^9.39.2",
