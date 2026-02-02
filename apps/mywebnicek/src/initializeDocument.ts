@@ -5,7 +5,7 @@
  * the end-user programming model of Denicek.
  */
 
-import type { DenicekDocument, GeneralizedPatch } from "@mydenicek/core";
+import type { DenicekDocument, GeneralizedPatch, NodeInput } from "@mydenicek/core";
 
 /** Shorthand for creating element nodes */
 const el = (tag: string) => ({ kind: "element" as const, tag, attrs: {}, children: [] });
@@ -17,6 +17,13 @@ const action = (label: string, target: string, actions: GeneralizedPatch[] = [])
 const formula = (operation: string) => ({ kind: "formula" as const, operation });
 /** Shorthand for creating ref nodes */
 const ref = (target: string) => ({ kind: "ref" as const, target });
+
+/** Add a single child and return its ID (throws if creation fails) */
+const add = (doc: DenicekDocument, parentId: string, child: NodeInput): string => {
+    const [id] = doc.addChildren(parentId, [child]);
+    if (!id) throw new Error("Failed to create node");
+    return id;
+};
 
 // ============================================================================
 // Pre-programmed actions for buttons
@@ -72,70 +79,71 @@ export function initializeDocument(doc: DenicekDocument): void {
 
 function createFormativeExamples(doc: DenicekDocument, rootId: string): void {
     // Main container with grid layout
-    const mainId = doc.addChild(rootId, el("section"));
-    doc.updateAttribute(mainId, "style", { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, padding: 16 });
+    const mainId = add(doc, rootId, el("section"));
+    doc.updateAttribute([mainId], "style", { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, padding: 16 });
 
     // =========================================================================
     // Example 1: Counter
     // Demonstrates formulas and action buttons
     // =========================================================================
-    const counterArticleId = doc.addChild(mainId, el("article"));
-    doc.updateAttribute(counterArticleId, "style", { padding: 16, background: '#f8f9fa', borderRadius: 8, border: '1px solid #dee2e6' });
+    const counterArticleId = add(doc, mainId, el("article"));
+    doc.updateAttribute([counterArticleId], "style", { padding: 16, background: '#f8f9fa', borderRadius: 8, border: '1px solid #dee2e6' });
 
-    const counterTitleId = doc.addChild(counterArticleId, el("h2"));
-    doc.addChild(counterTitleId, val("Counter"));
+    const counterTitleId = add(doc, counterArticleId, el("h2"));
+    add(doc, counterTitleId, val("Counter"));
 
-    const counterDescId = doc.addChild(counterArticleId, el("p"));
-    doc.updateAttribute(counterDescId, "style", { fontSize: '0.9em', color: '#666', marginBottom: 12 });
-    doc.addChild(counterDescId, val("Click +1/-1 buttons to add values to the sum formula."));
+    const counterDescId = add(doc, counterArticleId, el("p"));
+    doc.updateAttribute([counterDescId], "style", { fontSize: '0.9em', color: '#666', marginBottom: 12 });
+    add(doc, counterDescId, val("Click +1/-1 buttons to add values to the sum formula."));
 
     // Counter display container
-    const counterDisplayId = doc.addChild(counterArticleId, el("div"));
-    doc.updateAttribute(counterDisplayId, "style", { display: 'flex', alignItems: 'center', gap: 16, marginBottom: 12 });
+    const counterDisplayId = add(doc, counterArticleId, el("div"));
+    doc.updateAttribute([counterDisplayId], "style", { display: 'flex', alignItems: 'center', gap: 16, marginBottom: 12 });
 
-    const counterLabelId = doc.addChild(counterDisplayId, el("span"));
-    doc.updateAttribute(counterLabelId, "style", { fontWeight: 'bold' });
-    doc.addChild(counterLabelId, val("Count:"));
+    const counterLabelId = add(doc, counterDisplayId, el("span"));
+    doc.updateAttribute([counterLabelId], "style", { fontWeight: 'bold' });
+    add(doc, counterLabelId, val("Count:"));
 
     // The counter is a sum formula with initial value
-    const counterFormulaId = doc.addChild(counterDisplayId, formula("sum"));
-    doc.addChild(counterFormulaId, val("5"));
+    const counterFormulaId = add(doc, counterDisplayId, formula("sum"));
+    add(doc, counterFormulaId, val("5"));
 
     // Counter buttons container
-    const counterButtonsId = doc.addChild(counterArticleId, el("div"));
-    doc.updateAttribute(counterButtonsId, "style", { display: 'flex', gap: 8 });
+    const counterButtonsId = add(doc, counterArticleId, el("div"));
+    doc.updateAttribute([counterButtonsId], "style", { display: 'flex', gap: 8 });
 
-    // +1 button - adds "1" child to sum formula
-    doc.addChild(counterButtonsId, action("+1", counterFormulaId, incrementActions));
-    // -1 button - adds "-1" child to sum formula
-    doc.addChild(counterButtonsId, action("-1", counterFormulaId, decrementActions));
+    // +1/-1 buttons - add values to sum formula
+    doc.addChildren(counterButtonsId, [
+        action("+1", counterFormulaId, incrementActions),
+        action("-1", counterFormulaId, decrementActions),
+    ]);
 
     // =========================================================================
     // Example 2: Todo List
     // Demonstrates recording an "add item" pattern
     // =========================================================================
-    const todoArticleId = doc.addChild(mainId, el("article"));
-    doc.updateAttribute(todoArticleId, "style", { padding: 16, background: '#f8f9fa', borderRadius: 8, border: '1px solid #dee2e6' });
+    const todoArticleId = add(doc, mainId, el("article"));
+    doc.updateAttribute([todoArticleId], "style", { padding: 16, background: '#f8f9fa', borderRadius: 8, border: '1px solid #dee2e6' });
 
-    const todoTitleId = doc.addChild(todoArticleId, el("h2"));
-    doc.addChild(todoTitleId, val("Todo List"));
+    const todoTitleId = add(doc, todoArticleId, el("h2"));
+    add(doc, todoTitleId, val("Todo List"));
 
-    const todoDescId = doc.addChild(todoArticleId, el("p"));
-    doc.updateAttribute(todoDescId, "style", { fontSize: '0.9em', color: '#666', marginBottom: 12 });
-    doc.addChild(todoDescId, val("Record adding an item, then replay to add more."));
+    const todoDescId = add(doc, todoArticleId, el("p"));
+    doc.updateAttribute([todoDescId], "style", { fontSize: '0.9em', color: '#666', marginBottom: 12 });
+    add(doc, todoDescId, val("Record adding an item, then replay to add more."));
 
     // Todo list
-    const todoListId = doc.addChild(todoArticleId, el("ul"));
-    doc.updateAttribute(todoListId, "style", { listStyle: 'none', padding: 0, margin: 0 });
+    const todoListId = add(doc, todoArticleId, el("ul"));
+    doc.updateAttribute([todoListId], "style", { listStyle: 'none', padding: 0, margin: 0 });
 
     // Helper to create todo items
     const createTodoItem = (text: string, checked: boolean) => {
-        const liId = doc.addChild(todoListId, el("li"));
-        doc.updateAttribute(liId, "style", { display: 'flex', alignItems: 'center', gap: 8, padding: 4 });
-        const checkboxId = doc.addChild(liId, el("input"));
-        doc.updateAttribute(checkboxId, "type", "checkbox");
-        if (checked) doc.updateAttribute(checkboxId, "checked", "checked");
-        doc.addChild(liId, val(text));
+        const liId = add(doc, todoListId, el("li"));
+        doc.updateAttribute([liId], "style", { display: 'flex', alignItems: 'center', gap: 8, padding: 4 });
+        const checkboxId = add(doc, liId, el("input"));
+        doc.updateAttribute([checkboxId], "type", "checkbox");
+        if (checked) doc.updateAttribute([checkboxId], "checked", "checked");
+        add(doc, liId, val(text));
     };
 
     createTodoItem("Learn CRDTs", true);
@@ -143,107 +151,106 @@ function createFormativeExamples(doc: DenicekDocument, rootId: string): void {
     createTodoItem("Write documentation", false);
 
     // Add button container
-    const todoButtonsId = doc.addChild(todoArticleId, el("div"));
-    doc.updateAttribute(todoButtonsId, "style", { marginTop: 12 });
-    doc.addChild(todoButtonsId, action("Add Item", todoListId, addTodoItemActions));
+    const todoButtonsId = add(doc, todoArticleId, el("div"));
+    doc.updateAttribute([todoButtonsId], "style", { marginTop: 12 });
+    add(doc, todoButtonsId, action("Add Item", todoListId, addTodoItemActions));
 
     // =========================================================================
     // Example 3: Hello World (Bulk Transformation)
     // Demonstrates applying transformations across multiple items
     // =========================================================================
-    const helloArticleId = doc.addChild(mainId, el("article"));
-    doc.updateAttribute(helloArticleId, "style", { padding: 16, background: '#f8f9fa', borderRadius: 8, border: '1px solid #dee2e6' });
+    const helloArticleId = add(doc, mainId, el("article"));
+    doc.updateAttribute([helloArticleId], "style", { padding: 16, background: '#f8f9fa', borderRadius: 8, border: '1px solid #dee2e6' });
 
-    const helloTitleId = doc.addChild(helloArticleId, el("h2"));
-    doc.addChild(helloTitleId, val("Hello World"));
+    const helloTitleId = add(doc, helloArticleId, el("h2"));
+    add(doc, helloTitleId, val("Hello World"));
 
-    const helloDescId = doc.addChild(helloArticleId, el("p"));
-    doc.updateAttribute(helloDescId, "style", { fontSize: '0.9em', color: '#666', marginBottom: 12 });
-    doc.addChild(helloDescId, val("Record wrapping in <strong>, then replay on each item."));
+    const helloDescId = add(doc, helloArticleId, el("p"));
+    doc.updateAttribute([helloDescId], "style", { fontSize: '0.9em', color: '#666', marginBottom: 12 });
+    add(doc, helloDescId, val("Record wrapping in <strong>, then replay on each item."));
 
     // Word list
-    const helloListId = doc.addChild(helloArticleId, el("ul"));
+    const helloListId = add(doc, helloArticleId, el("ul"));
 
     const words = ["Hello", "World", "Denicek"];
     for (const word of words) {
-        const liId = doc.addChild(helloListId, el("li"));
-        doc.addChild(liId, val(word));
+        const liId = add(doc, helloListId, el("li"));
+        add(doc, liId, val(word));
     }
 
     // =========================================================================
     // Example 4: Price Calculator (Formulas)
     // Demonstrates reactive computation
     // =========================================================================
-    const priceArticleId = doc.addChild(mainId, el("article"));
-    doc.updateAttribute(priceArticleId, "style", { padding: 16, background: '#f8f9fa', borderRadius: 8, border: '1px solid #dee2e6' });
+    const priceArticleId = add(doc, mainId, el("article"));
+    doc.updateAttribute([priceArticleId], "style", { padding: 16, background: '#f8f9fa', borderRadius: 8, border: '1px solid #dee2e6' });
 
-    const priceTitleId = doc.addChild(priceArticleId, el("h2"));
-    doc.addChild(priceTitleId, val("Price Calculator"));
+    const priceTitleId = add(doc, priceArticleId, el("h2"));
+    add(doc, priceTitleId, val("Price Calculator"));
 
-    const priceDescId = doc.addChild(priceArticleId, el("p"));
-    doc.updateAttribute(priceDescId, "style", { fontSize: '0.9em', color: '#666', marginBottom: 12 });
-    doc.addChild(priceDescId, val("Edit quantity or price values - the total updates automatically."));
+    const priceDescId = add(doc, priceArticleId, el("p"));
+    doc.updateAttribute([priceDescId], "style", { fontSize: '0.9em', color: '#666', marginBottom: 12 });
+    add(doc, priceDescId, val("Edit quantity or price values - the total updates automatically."));
 
     // Price inputs container
-    const priceGridId = doc.addChild(priceArticleId, el("div"));
-    doc.updateAttribute(priceGridId, "style", { display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 8, alignItems: 'center' });
+    const priceGridId = add(doc, priceArticleId, el("div"));
+    doc.updateAttribute([priceGridId], "style", { display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 8, alignItems: 'center' });
 
     // Quantity row
-    const qtyLabelId = doc.addChild(priceGridId, el("label"));
-    doc.updateAttribute(qtyLabelId, "style", { fontWeight: 'bold' });
-    doc.addChild(qtyLabelId, val("Quantity:"));
-    const qtyValueId = doc.addChild(priceGridId, val("3"));
+    const qtyLabelId = add(doc, priceGridId, el("label"));
+    doc.updateAttribute([qtyLabelId], "style", { fontWeight: 'bold' });
+    add(doc, qtyLabelId, val("Quantity:"));
+    const qtyValueId = add(doc, priceGridId, val("3"));
 
     // Price row
-    const priceLabelId = doc.addChild(priceGridId, el("label"));
-    doc.updateAttribute(priceLabelId, "style", { fontWeight: 'bold' });
-    doc.addChild(priceLabelId, val("Price:"));
-    const priceValueId = doc.addChild(priceGridId, val("25"));
+    const priceLabelId = add(doc, priceGridId, el("label"));
+    doc.updateAttribute([priceLabelId], "style", { fontWeight: 'bold' });
+    add(doc, priceLabelId, val("Price:"));
+    const priceValueId = add(doc, priceGridId, val("25"));
 
     // Total row with formula
-    const totalLabelId = doc.addChild(priceGridId, el("label"));
-    doc.updateAttribute(totalLabelId, "style", { fontWeight: 'bold' });
-    doc.addChild(totalLabelId, val("Total:"));
+    const totalLabelId = add(doc, priceGridId, el("label"));
+    doc.updateAttribute([totalLabelId], "style", { fontWeight: 'bold' });
+    add(doc, totalLabelId, val("Total:"));
 
     // product(qty, price) formula
-    const totalFormulaId = doc.addChild(priceGridId, formula("product"));
-    doc.addChild(totalFormulaId, ref(qtyValueId));
-    doc.addChild(totalFormulaId, ref(priceValueId));
+    const totalFormulaId = add(doc, priceGridId, formula("product"));
+    doc.addChildren(totalFormulaId, [ref(qtyValueId), ref(priceValueId)]);
 
     // =========================================================================
     // Example 5: Conference List (Schema Refactoring)
     // Demonstrates concurrent editing with CRDT conflict resolution
     // =========================================================================
-    const confArticleId = doc.addChild(mainId, el("article"));
-    doc.updateAttribute(confArticleId, "style", { gridColumn: 'span 2', padding: 16, background: '#f8f9fa', borderRadius: 8, border: '1px solid #dee2e6' });
+    const confArticleId = add(doc, mainId, el("article"));
+    doc.updateAttribute([confArticleId], "style", { gridColumn: 'span 2', padding: 16, background: '#f8f9fa', borderRadius: 8, border: '1px solid #dee2e6' });
 
-    const confTitleId = doc.addChild(confArticleId, el("h2"));
-    doc.addChild(confTitleId, val("Conference List"));
+    const confTitleId = add(doc, confArticleId, el("h2"));
+    add(doc, confTitleId, val("Conference List"));
 
-    const confDescId = doc.addChild(confArticleId, el("p"));
-    doc.updateAttribute(confDescId, "style", { fontSize: '0.9em', color: '#666', marginBottom: 12 });
-    doc.addChild(confDescId, val("Demonstrates schema refactoring. Record adding a 'year' field to one item, then replay on others."));
+    const confDescId = add(doc, confArticleId, el("p"));
+    doc.updateAttribute([confDescId], "style", { fontSize: '0.9em', color: '#666', marginBottom: 12 });
+    add(doc, confDescId, val("Demonstrates schema refactoring. Record adding a 'year' field to one item, then replay on others."));
 
     // Conference table
-    const confTableId = doc.addChild(confArticleId, el("table"));
-    doc.updateAttribute(confTableId, "style", { width: '100%', borderCollapse: 'collapse' });
-    doc.updateAttribute(confTableId, "border", "1");
+    const confTableId = add(doc, confArticleId, el("table"));
+    doc.updateAttribute([confTableId], "style", { width: '100%', borderCollapse: 'collapse' });
+    doc.updateAttribute([confTableId], "border", "1");
 
     // Table header
-    const theadId = doc.addChild(confTableId, el("thead"));
-    const headerRowId = doc.addChild(theadId, el("tr"));
-    doc.updateAttribute(headerRowId, "style", { background: '#e9ecef' });
+    const theadId = add(doc, confTableId, el("thead"));
+    const headerRowId = add(doc, theadId, el("tr"));
+    doc.updateAttribute([headerRowId], "style", { background: '#e9ecef' });
 
-    const thNameId = doc.addChild(headerRowId, el("th"));
-    doc.updateAttribute(thNameId, "style", { padding: 8, textAlign: 'left' });
-    doc.addChild(thNameId, val("Conference"));
+    const thNameId = add(doc, headerRowId, el("th"));
+    doc.updateAttribute([thNameId], "style", { padding: 8, textAlign: 'left' });
+    add(doc, thNameId, val("Conference"));
 
-    const thLocId = doc.addChild(headerRowId, el("th"));
-    doc.updateAttribute(thLocId, "style", { padding: 8, textAlign: 'left' });
-    doc.addChild(thLocId, val("Location"));
+    const thLocId = add(doc, headerRowId, el("th"));
+    doc.updateAttribute([thLocId], "style", { padding: 8, textAlign: 'left' });
+    add(doc, thLocId, val("Location"));
 
     // Table body
-    const tbodyId = doc.addChild(confTableId, el("tbody"));
+    const tbodyId = add(doc, confTableId, el("tbody"));
 
     const conferences = [
         { name: "UIST", location: "Pittsburgh" },
@@ -252,169 +259,154 @@ function createFormativeExamples(doc: DenicekDocument, rootId: string): void {
     ];
 
     for (const conf of conferences) {
-        const rowId = doc.addChild(tbodyId, el("tr"));
+        const rowId = add(doc, tbodyId, el("tr"));
 
-        const tdNameId = doc.addChild(rowId, el("td"));
-        doc.updateAttribute(tdNameId, "style", { padding: 8 });
-        doc.addChild(tdNameId, val(conf.name));
+        const tdNameId = add(doc, rowId, el("td"));
+        doc.updateAttribute([tdNameId], "style", { padding: 8 });
+        add(doc, tdNameId, val(conf.name));
 
-        const tdLocId = doc.addChild(rowId, el("td"));
-        doc.updateAttribute(tdLocId, "style", { padding: 8 });
-        doc.addChild(tdLocId, val(conf.location));
+        const tdLocId = add(doc, rowId, el("td"));
+        doc.updateAttribute([tdLocId], "style", { padding: 8 });
+        add(doc, tdLocId, val(conf.location));
     }
 
     // Action buttons
-    const confButtonsId = doc.addChild(confArticleId, el("div"));
-    doc.updateAttribute(confButtonsId, "style", { marginTop: 12, display: 'flex', gap: 8 });
-    doc.addChild(confButtonsId, action("Add Conference", tbodyId, addConferenceActions));
+    const confButtonsId = add(doc, confArticleId, el("div"));
+    doc.updateAttribute([confButtonsId], "style", { marginTop: 12, display: 'flex', gap: 8 });
+    add(doc, confButtonsId, action("Add Conference", tbodyId, addConferenceActions));
 
     // =========================================================================
     // Example 6: Formula Showcase
     // Demonstrates all available formula operations
     // =========================================================================
-    const formulaArticleId = doc.addChild(mainId, el("article"));
-    doc.updateAttribute(formulaArticleId, "style", { gridColumn: 'span 2', padding: 16, background: '#f8f9fa', borderRadius: 8, border: '1px solid #dee2e6' });
+    const formulaArticleId = add(doc, mainId, el("article"));
+    doc.updateAttribute([formulaArticleId], "style", { gridColumn: 'span 2', padding: 16, background: '#f8f9fa', borderRadius: 8, border: '1px solid #dee2e6' });
 
-    const formulaTitleId = doc.addChild(formulaArticleId, el("h2"));
-    doc.addChild(formulaTitleId, val("Formula Showcase"));
+    const formulaTitleId = add(doc, formulaArticleId, el("h2"));
+    add(doc, formulaTitleId, val("Formula Showcase"));
 
-    const formulaDescId = doc.addChild(formulaArticleId, el("p"));
-    doc.updateAttribute(formulaDescId, "style", { fontSize: '0.9em', color: '#666', marginBottom: 12 });
-    doc.addChild(formulaDescId, val("Toggle 'Formulas/Results' in toolbar to see formula structure vs computed values."));
+    const formulaDescId = add(doc, formulaArticleId, el("p"));
+    doc.updateAttribute([formulaDescId], "style", { fontSize: '0.9em', color: '#666', marginBottom: 12 });
+    add(doc, formulaDescId, val("Toggle 'Formulas/Results' in toolbar to see formula structure vs computed values."));
 
     // Formula grid
-    const formulaGridId = doc.addChild(formulaArticleId, el("div"));
-    doc.updateAttribute(formulaGridId, "style", { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 });
+    const formulaGridId = add(doc, formulaArticleId, el("div"));
+    doc.updateAttribute([formulaGridId], "style", { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 });
 
     // Helper to create formula boxes
     const createFormulaBox = (label: string, bgColor: string, borderColor: string) => {
-        const boxId = doc.addChild(formulaGridId, el("div"));
-        doc.updateAttribute(boxId, "style", { padding: 12, background: bgColor, borderRadius: 8, border: `1px solid ${borderColor}` });
-        const labelId = doc.addChild(boxId, el("div"));
-        doc.updateAttribute(labelId, "style", { fontWeight: 'bold', marginBottom: 8, fontSize: '0.85em' });
-        doc.addChild(labelId, val(label));
+        const boxId = add(doc, formulaGridId, el("div"));
+        doc.updateAttribute([boxId], "style", { padding: 12, background: bgColor, borderRadius: 8, border: `1px solid ${borderColor}` });
+        const labelId = add(doc, boxId, el("div"));
+        doc.updateAttribute([labelId], "style", { fontWeight: 'bold', marginBottom: 8, fontSize: '0.85em' });
+        add(doc, labelId, val(label));
         return boxId;
     };
 
     // String operations
     const upperBoxId = createFormulaBox("upperText", "#e8f5e9", "#a5d6a7");
-    const upperValId = doc.addChild(upperBoxId, val("hello"));
-    const upperFormulaId = doc.addChild(upperBoxId, formula("upperText"));
-    doc.addChild(upperFormulaId, ref(upperValId));
+    const upperValId = add(doc, upperBoxId, val("hello"));
+    const upperFormulaId = add(doc, upperBoxId, formula("upperText"));
+    add(doc, upperFormulaId, ref(upperValId));
 
     const lowerBoxId = createFormulaBox("lowerText", "#e8f5e9", "#a5d6a7");
-    const lowerValId = doc.addChild(lowerBoxId, val("WORLD"));
-    const lowerFormulaId = doc.addChild(lowerBoxId, formula("lowerText"));
-    doc.addChild(lowerFormulaId, ref(lowerValId));
+    const lowerValId = add(doc, lowerBoxId, val("WORLD"));
+    const lowerFormulaId = add(doc, lowerBoxId, formula("lowerText"));
+    add(doc, lowerFormulaId, ref(lowerValId));
 
     const capBoxId = createFormulaBox("capitalize", "#e8f5e9", "#a5d6a7");
-    const capValId = doc.addChild(capBoxId, val("denicek"));
-    const capFormulaId = doc.addChild(capBoxId, formula("capitalize"));
-    doc.addChild(capFormulaId, ref(capValId));
+    const capValId = add(doc, capBoxId, val("denicek"));
+    const capFormulaId = add(doc, capBoxId, formula("capitalize"));
+    add(doc, capFormulaId, ref(capValId));
 
     const concatBoxId = createFormulaBox("concat", "#e8f5e9", "#a5d6a7");
-    const concatFormulaId = doc.addChild(concatBoxId, formula("concat"));
-    doc.addChild(concatFormulaId, val("Hello"));
-    doc.addChild(concatFormulaId, val(", "));
-    doc.addChild(concatFormulaId, val("World!"));
+    const concatFormulaId = add(doc, concatBoxId, formula("concat"));
+    doc.addChildren(concatFormulaId, [val("Hello"), val(", "), val("World!")]);
 
     const trimBoxId = createFormulaBox("trim", "#e8f5e9", "#a5d6a7");
-    const trimValId = doc.addChild(trimBoxId, val("  spaces  "));
-    const trimFormulaId = doc.addChild(trimBoxId, formula("trim"));
-    doc.addChild(trimFormulaId, ref(trimValId));
+    const trimValId = add(doc, trimBoxId, val("  spaces  "));
+    const trimFormulaId = add(doc, trimBoxId, formula("trim"));
+    add(doc, trimFormulaId, ref(trimValId));
 
     const lengthBoxId = createFormulaBox("length", "#e8f5e9", "#a5d6a7");
-    const lengthValId = doc.addChild(lengthBoxId, val("Hello"));
-    const lengthFormulaId = doc.addChild(lengthBoxId, formula("length"));
-    doc.addChild(lengthFormulaId, ref(lengthValId));
+    const lengthValId = add(doc, lengthBoxId, val("Hello"));
+    const lengthFormulaId = add(doc, lengthBoxId, formula("length"));
+    add(doc, lengthFormulaId, ref(lengthValId));
 
     const replaceBoxId = createFormulaBox("replace", "#e8f5e9", "#a5d6a7");
-    const replaceValId = doc.addChild(replaceBoxId, val("foo bar foo"));
-    const replaceFormulaId = doc.addChild(replaceBoxId, formula("replace"));
-    doc.addChild(replaceFormulaId, ref(replaceValId));
-    doc.addChild(replaceFormulaId, val("foo"));
-    doc.addChild(replaceFormulaId, val("baz"));
+    const replaceValId = add(doc, replaceBoxId, val("foo bar foo"));
+    const replaceFormulaId = add(doc, replaceBoxId, formula("replace"));
+    doc.addChildren(replaceFormulaId, [ref(replaceValId), val("foo"), val("baz")]);
 
     // Math operations
     const sumBoxId = createFormulaBox("sum", "#e3f2fd", "#90caf9");
-    const sumFormulaId = doc.addChild(sumBoxId, formula("sum"));
-    doc.addChild(sumFormulaId, val("10"));
-    doc.addChild(sumFormulaId, val("5"));
-    doc.addChild(sumFormulaId, val("3"));
+    const sumFormulaId = add(doc, sumBoxId, formula("sum"));
+    doc.addChildren(sumFormulaId, [val("10"), val("5"), val("3")]);
 
     const productBoxId = createFormulaBox("product", "#e3f2fd", "#90caf9");
-    const productFormulaId = doc.addChild(productBoxId, formula("product"));
-    doc.addChild(productFormulaId, val("2"));
-    doc.addChild(productFormulaId, val("3"));
-    doc.addChild(productFormulaId, val("7"));
+    const productFormulaId = add(doc, productBoxId, formula("product"));
+    doc.addChildren(productFormulaId, [val("2"), val("3"), val("7")]);
 
     const modBoxId = createFormulaBox("mod", "#e3f2fd", "#90caf9");
-    const modAId = doc.addChild(modBoxId, val("17"));
-    const modBId = doc.addChild(modBoxId, val("5"));
-    const modFormulaId = doc.addChild(modBoxId, formula("mod"));
-    doc.addChild(modFormulaId, ref(modAId));
-    doc.addChild(modFormulaId, ref(modBId));
+    const [modAId, modBId] = doc.addChildren(modBoxId, [val("17"), val("5")]);
+    const modFormulaId = add(doc, modBoxId, formula("mod"));
+    doc.addChildren(modFormulaId, [ref(modAId!), ref(modBId!)]);
 
     const roundBoxId = createFormulaBox("round", "#e3f2fd", "#90caf9");
-    const roundValId = doc.addChild(roundBoxId, val("3.7"));
-    const roundFormulaId = doc.addChild(roundBoxId, formula("round"));
-    doc.addChild(roundFormulaId, ref(roundValId));
+    const roundValId = add(doc, roundBoxId, val("3.7"));
+    const roundFormulaId = add(doc, roundBoxId, formula("round"));
+    add(doc, roundFormulaId, ref(roundValId));
 
     const floorBoxId = createFormulaBox("floor", "#e3f2fd", "#90caf9");
-    const floorValId = doc.addChild(floorBoxId, val("3.9"));
-    const floorFormulaId = doc.addChild(floorBoxId, formula("floor"));
-    doc.addChild(floorFormulaId, ref(floorValId));
+    const floorValId = add(doc, floorBoxId, val("3.9"));
+    const floorFormulaId = add(doc, floorBoxId, formula("floor"));
+    add(doc, floorFormulaId, ref(floorValId));
 
     const ceilBoxId = createFormulaBox("ceil", "#e3f2fd", "#90caf9");
-    const ceilValId = doc.addChild(ceilBoxId, val("3.1"));
-    const ceilFormulaId = doc.addChild(ceilBoxId, formula("ceil"));
-    doc.addChild(ceilFormulaId, ref(ceilValId));
+    const ceilValId = add(doc, ceilBoxId, val("3.1"));
+    const ceilFormulaId = add(doc, ceilBoxId, formula("ceil"));
+    add(doc, ceilFormulaId, ref(ceilValId));
 
     const absBoxId = createFormulaBox("abs", "#e3f2fd", "#90caf9");
-    const absValId = doc.addChild(absBoxId, val("-42"));
-    const absFormulaId = doc.addChild(absBoxId, formula("abs"));
-    doc.addChild(absFormulaId, ref(absValId));
+    const absValId = add(doc, absBoxId, val("-42"));
+    const absFormulaId = add(doc, absBoxId, formula("abs"));
+    add(doc, absFormulaId, ref(absValId));
 
     // Array operations
     const splitBoxId = createFormulaBox("splitString", "#fff3e0", "#ffcc80");
-    const splitValId = doc.addChild(splitBoxId, val("a,b,c,d"));
-    const splitFormulaId = doc.addChild(splitBoxId, formula("splitString"));
-    doc.addChild(splitFormulaId, ref(splitValId));
-    doc.addChild(splitFormulaId, val(","));
+    const splitValId = add(doc, splitBoxId, val("a,b,c,d"));
+    const splitFormulaId = add(doc, splitBoxId, formula("splitString"));
+    doc.addChildren(splitFormulaId, [ref(splitValId), val(",")]);
 
     const atIndexBoxId = createFormulaBox("atIndex", "#fff3e0", "#ffcc80");
-    const atIdxValId = doc.addChild(atIndexBoxId, val("apple,banana,cherry"));
-    const atIdxSplitId = doc.addChild(atIndexBoxId, formula("splitString"));
-    doc.addChild(atIdxSplitId, ref(atIdxValId));
-    doc.addChild(atIdxSplitId, val(","));
-    const atIdxFormulaId = doc.addChild(atIndexBoxId, formula("atIndex"));
-    doc.addChild(atIdxFormulaId, ref(atIdxSplitId));
-    doc.addChild(atIdxFormulaId, val("1"));
+    const atIdxValId = add(doc, atIndexBoxId, val("apple,banana,cherry"));
+    const atIdxSplitId = add(doc, atIndexBoxId, formula("splitString"));
+    doc.addChildren(atIdxSplitId, [ref(atIdxValId), val(",")]);
+    const atIdxFormulaId = add(doc, atIndexBoxId, formula("atIndex"));
+    doc.addChildren(atIdxFormulaId, [ref(atIdxSplitId), val("1")]);
 
     const arrLenBoxId = createFormulaBox("arrayLength", "#fff3e0", "#ffcc80");
-    const arrLenValId = doc.addChild(arrLenBoxId, val("one,two,three,four"));
-    const arrLenSplitId = doc.addChild(arrLenBoxId, formula("splitString"));
-    doc.addChild(arrLenSplitId, ref(arrLenValId));
-    doc.addChild(arrLenSplitId, val(","));
-    const arrLenFormulaId = doc.addChild(arrLenBoxId, formula("arrayLength"));
-    doc.addChild(arrLenFormulaId, ref(arrLenSplitId));
+    const arrLenValId = add(doc, arrLenBoxId, val("one,two,three,four"));
+    const arrLenSplitId = add(doc, arrLenBoxId, formula("splitString"));
+    doc.addChildren(arrLenSplitId, [ref(arrLenValId), val(",")]);
+    const arrLenFormulaId = add(doc, arrLenBoxId, formula("arrayLength"));
+    add(doc, arrLenFormulaId, ref(arrLenSplitId));
 
     // Tree operation
     const countBoxId = createFormulaBox("countChildren", "#f3e5f5", "#ce93d8");
-    const countDescId = doc.addChild(countBoxId, el("div"));
-    doc.updateAttribute(countDescId, "style", { fontSize: '0.8em', color: '#666' });
-    doc.addChild(countDescId, val("(counts todo list items)"));
-    const countFormulaId = doc.addChild(countBoxId, formula("countChildren"));
-    doc.addChild(countFormulaId, val(todoListId));
+    const countDescId = add(doc, countBoxId, el("div"));
+    doc.updateAttribute([countDescId], "style", { fontSize: '0.8em', color: '#666' });
+    add(doc, countDescId, val("(counts todo list items)"));
+    const countFormulaId = add(doc, countBoxId, formula("countChildren"));
+    add(doc, countFormulaId, val(todoListId));
 
     // Nested formula example
     const nestedBoxId = createFormulaBox("nested: concat+capitalize", "#fce4ec", "#f48fb1");
-    const firstId = doc.addChild(nestedBoxId, val("john"));
-    const lastId = doc.addChild(nestedBoxId, val("doe"));
-    const nestedFormulaId = doc.addChild(nestedBoxId, formula("concat"));
-    const capFirstId = doc.addChild(nestedFormulaId, formula("capitalize"));
-    doc.addChild(capFirstId, ref(firstId));
-    doc.addChild(nestedFormulaId, val(" "));
-    const capLastId = doc.addChild(nestedFormulaId, formula("capitalize"));
-    doc.addChild(capLastId, ref(lastId));
+    const [firstId, lastId] = doc.addChildren(nestedBoxId, [val("john"), val("doe")]);
+    const nestedFormulaId = add(doc, nestedBoxId, formula("concat"));
+    const capFirstId = add(doc, nestedFormulaId, formula("capitalize"));
+    add(doc, capFirstId, ref(firstId!));
+    add(doc, nestedFormulaId, val(" "));
+    const capLastId = add(doc, nestedFormulaId, formula("capitalize"));
+    add(doc, capLastId, ref(lastId!));
 }

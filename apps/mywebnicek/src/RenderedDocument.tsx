@@ -104,7 +104,7 @@ export function RenderedDocument({ document, onActionClick, viewMode = "result",
   const handleInputKeyDown = React.useCallback((e: React.KeyboardEvent<HTMLInputElement>, nodeId: string) => {
     if (e.key !== "Enter") return;
     const value = e.currentTarget.value;
-    document.updateAttribute(nodeId, "data-copy-value", value);
+    document.updateAttribute([nodeId], "data-copy-value", value);
   }, [document]);
 
   // Handler for action button clicks

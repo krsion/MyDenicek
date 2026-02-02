@@ -136,30 +136,22 @@ export function useDocumentActions() {
     const undo = useCallback(() => document.undo(), [document]);
     const redo = useCallback(() => document.redo(), [document]);
 
-    // Direct actions using the new Document API
+    // Direct actions using the Document API (core handles arrays)
     const updateAttribute = useCallback((nodeIds: string[], key: string, value: unknown | undefined) => {
-        for (const id of nodeIds) {
-            document.updateAttribute(id, key, value);
-        }
+        document.updateAttribute(nodeIds, key, value);
     }, [document]);
 
     const updateTag = useCallback((nodeIds: string[], newTag: string) => {
-        for (const id of nodeIds) {
-            document.updateTag(id, newTag);
-        }
+        document.updateTag(nodeIds, newTag);
     }, [document]);
 
     const deleteNodes = useCallback((nodeIds: string[]) => {
-        for (const id of nodeIds) {
-            document.deleteNode(id);
-        }
+        document.deleteNodes(nodeIds);
     }, [document]);
 
     const updateValue = useCallback((nodeIds: string[], newValue: string, originalValue: string) => {
         const splice = calculateSplice(originalValue, newValue);
-        for (const id of nodeIds) {
-            document.spliceValue(id, splice.index, splice.deleteCount, splice.insertText);
-        }
+        document.spliceValue(nodeIds, splice.index, splice.deleteCount, splice.insertText);
     }, [document]);
 
     const addChildren = useCallback((parentIds: string[], type: "element" | "value", content: string) => {
@@ -167,10 +159,11 @@ export function useDocumentActions() {
         for (const id of parentIds) {
             const node = document.getNode(id);
             if (node?.kind === "element") {
-                const newId = type === "value"
-                    ? document.addChild(id, { kind: "value", value: content })
-                    : document.addChild(id, { kind: "element", tag: content, attrs: {}, children: [] });
-                newIds.push(newId);
+                const child = type === "value"
+                    ? { kind: "value" as const, value: content }
+                    : { kind: "element" as const, tag: content, attrs: {}, children: [] };
+                const [newId] = document.addChildren(id, [child]);
+                if (newId) newIds.push(newId);
             }
         }
         return newIds;

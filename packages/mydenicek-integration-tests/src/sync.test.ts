@@ -56,8 +56,8 @@ describe("Sync Integration", () => {
 
         // Initialize and make changes
         const rootId = doc1.createRootNode("section");
-        const nodeId = doc1.addChild(rootId, { kind: "element", tag: "test-element", attrs: {}, children: [] });
-        doc1.updateAttribute(nodeId, "testAttr", "fromClient1");
+        const [nodeId] = doc1.addChildren(rootId, [{ kind: "element", tag: "test-element", attrs: {}, children: [] }]);
+        doc1.updateAttribute([nodeId!], "testAttr", "fromClient1");
 
         // Wait for sync
         await waitForSync(doc1, doc2, 5000);
@@ -72,8 +72,8 @@ describe("Sync Integration", () => {
 
         // Client 2 makes changes
         const rootId2 = doc2.getRootId()!;
-        const nodeId2 = doc2.addChild(rootId2, { kind: "element", tag: "test-element-2", attrs: {}, children: [] });
-        doc2.updateAttribute(nodeId2, "testAttr", "fromClient2");
+        const [nodeId2] = doc2.addChildren(rootId2, [{ kind: "element", tag: "test-element-2", attrs: {}, children: [] }]);
+        doc2.updateAttribute([nodeId2!], "testAttr", "fromClient2");
 
         // Wait for sync
         await waitForSync(doc1, doc2, 5000);

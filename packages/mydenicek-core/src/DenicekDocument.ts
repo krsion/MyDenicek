@@ -511,87 +511,97 @@ export class DenicekDocument {
     }
 
     /**
-     * Add a child node to a parent
-     * @returns The ID of the created node
+     * Add children to a parent node
+     * @returns The IDs of the created nodes
      */
-    addChild(parentId: string, child: NodeInput, index?: number): string {
+    addChildren(parentId: string, children: NodeInput[], startIndex?: number): string[] {
         try {
-            let sanitizedChild = child;
-            if (child.kind === "element") {
-                const sanitizedTag = sanitizeTagName(child.tag);
-                if (!sanitizedTag) {
-                    handleModelError("addChild", new Error(`Invalid tag name: "${child.tag}"`));
-                    return "";
-                }
-                sanitizedChild = { ...child, tag: sanitizedTag };
-            }
-
             const parentTreeId = stringToTreeId(parentId);
             const parentNode = this.tree.getNodeByID(parentTreeId);
-            if (!parentNode) return "";
+            if (!parentNode) return [];
 
-            const newNode = parentNode.createNode(index);
-            const data = newNode.data;
+            const newIds: string[] = [];
 
-            if (sanitizedChild.kind === "element") {
-                data.set(NODE_KIND, "element");
-                data.set(NODE_TAG, sanitizedChild.tag);
-                const attrsMap = data.setContainer(NODE_ATTRS, new LoroMap()) as LoroMap;
-                for (const [key, value] of Object.entries(sanitizedChild.attrs)) {
-                    attrsMap.set(key, value);
+            for (let i = 0; i < children.length; i++) {
+                const child = children[i]!;
+                let sanitizedChild = child;
+                if (child.kind === "element") {
+                    const sanitizedTag = sanitizeTagName(child.tag);
+                    if (!sanitizedTag) {
+                        handleModelError("addChildren", new Error(`Invalid tag name: "${child.tag}"`));
+                        continue;
+                    }
+                    sanitizedChild = { ...child, tag: sanitizedTag };
                 }
-            } else if (sanitizedChild.kind === "action") {
-                data.set(NODE_KIND, "action");
-                data.set(NODE_LABEL, sanitizedChild.label);
-                data.set(NODE_TARGET, sanitizedChild.target);
-                const actionsList = data.setContainer(NODE_ACTIONS, new LoroList()) as LoroList;
-                for (const action of sanitizedChild.actions) {
-                    actionsList.push(action);
+
+                const index = startIndex !== undefined ? startIndex + i : undefined;
+                const newNode = parentNode.createNode(index);
+                const data = newNode.data;
+
+                if (sanitizedChild.kind === "element") {
+                    data.set(NODE_KIND, "element");
+                    data.set(NODE_TAG, sanitizedChild.tag);
+                    const attrsMap = data.setContainer(NODE_ATTRS, new LoroMap()) as LoroMap;
+                    for (const [key, value] of Object.entries(sanitizedChild.attrs)) {
+                        attrsMap.set(key, value);
+                    }
+                } else if (sanitizedChild.kind === "action") {
+                    data.set(NODE_KIND, "action");
+                    data.set(NODE_LABEL, sanitizedChild.label);
+                    data.set(NODE_TARGET, sanitizedChild.target);
+                    const actionsList = data.setContainer(NODE_ACTIONS, new LoroList()) as LoroList;
+                    for (const action of sanitizedChild.actions) {
+                        actionsList.push(action);
+                    }
+                } else if (sanitizedChild.kind === "formula") {
+                    data.set(NODE_KIND, "formula");
+                    data.set(NODE_OPERATION, sanitizedChild.operation);
+                } else if (sanitizedChild.kind === "ref") {
+                    data.set(NODE_KIND, "ref");
+                    data.set(NODE_REF_TARGET, sanitizedChild.target);
+                } else {
+                    data.set(NODE_KIND, "value");
+                    const textContainer = data.setContainer(NODE_TEXT, new LoroText()) as LoroText;
+                    textContainer.insert(0, sanitizedChild.value);
                 }
-            } else if (sanitizedChild.kind === "formula") {
-                data.set(NODE_KIND, "formula");
-                data.set(NODE_OPERATION, sanitizedChild.operation);
-            } else if (sanitizedChild.kind === "ref") {
-                data.set(NODE_KIND, "ref");
-                data.set(NODE_REF_TARGET, sanitizedChild.target);
-            } else {
-                data.set(NODE_KIND, "value");
-                const textContainer = data.setContainer(NODE_TEXT, new LoroText()) as LoroText;
-                textContainer.insert(0, sanitizedChild.value);
+
+                const newId = treeIdToString(newNode.id);
+                newIds.push(newId);
+
+                const nodeChildren = parentNode.children();
+                const countAfter = nodeChildren ? nodeChildren.length : 0;
+                const countBefore = countAfter - 1;
+                const actualIndex = index ?? countBefore;
+                const emitIndex = actualIndex === countBefore ? -1 : actualIndex;
+
+                this.emitPatch({
+                    action: "insert",
+                    path: ["nodes", parentId, "children", emitIndex],
+                    value: { ...sanitizedChild, id: newId }
+                });
             }
 
-            const newId = treeIdToString(newNode.id);
-            const children = parentNode.children();
-            const countAfter = children ? children.length : 0;
-            const countBefore = countAfter - 1;
-            const actualIndex = index ?? countBefore;
-            const emitIndex = actualIndex === countBefore ? -1 : actualIndex;
-
-            this.emitPatch({
-                action: "insert",
-                path: ["nodes", parentId, "children", emitIndex],
-                value: { ...sanitizedChild, id: newId }
-            });
-
             this._doc.commit();
-            return newId;
+            return newIds;
         } catch (e) {
-            handleModelError("addChild", e);
-            return "";
+            handleModelError("addChildren", e);
+            return [];
         }
     }
 
     /**
-     * Delete a node from the document
+     * Delete nodes from the document
      */
-    deleteNode(id: string): void {
+    deleteNodes(nodeIds: string[]): void {
         try {
-            const treeId = stringToTreeId(id);
-            this.tree.delete(treeId);
-            this.emitPatch({
-                action: "del",
-                path: ["nodes", id]
-            });
+            for (const id of nodeIds) {
+                const treeId = stringToTreeId(id);
+                this.tree.delete(treeId);
+                this.emitPatch({
+                    action: "del",
+                    path: ["nodes", id]
+                });
+            }
             this._doc.commit();
         } catch (e) {
             handleModelError("deleteNode", e);
@@ -599,27 +609,31 @@ export class DenicekDocument {
     }
 
     /**
-     * Move a node to a new parent
+     * Move nodes to a new parent
      */
-    moveNode(nodeId: string, newParentId: string, index?: number): void {
+    moveNodes(nodeIds: string[], newParentId: string, index?: number): void {
         try {
-            const treeId = stringToTreeId(nodeId);
             const parentTreeId = stringToTreeId(newParentId);
-            const treeNode = this.tree.getNodeByID(treeId);
             const parentNode = this.tree.getNodeByID(parentTreeId);
-            if (!treeNode || !parentNode) return;
+            if (!parentNode) return;
 
-            if (index !== undefined) {
-                treeNode.move(parentNode, index);
-            } else {
-                treeNode.move(parentNode);
+            for (const nodeId of nodeIds) {
+                const treeId = stringToTreeId(nodeId);
+                const treeNode = this.tree.getNodeByID(treeId);
+                if (!treeNode) continue;
+
+                if (index !== undefined) {
+                    treeNode.move(parentNode, index);
+                } else {
+                    treeNode.move(parentNode);
+                }
+
+                this.emitPatch({
+                    action: "move",
+                    path: ["nodes", nodeId],
+                    value: { parentId: newParentId, index }
+                });
             }
-
-            this.emitPatch({
-                action: "move",
-                path: ["nodes", nodeId],
-                value: { parentId: newParentId, index }
-            });
             this._doc.commit();
         } catch (e) {
             handleModelError("moveNode", e);
@@ -722,37 +736,39 @@ export class DenicekDocument {
     }
 
     /**
-     * Update an attribute on an element node
+     * Update an attribute on element nodes
      * Pass undefined to delete the attribute
      */
-    updateAttribute(id: string, key: string, value: unknown | undefined): void {
+    updateAttribute(nodeIds: string[], key: string, value: unknown | undefined): void {
         try {
-            const treeId = stringToTreeId(id);
-            const treeNode = this.tree.getNodeByID(treeId);
-            if (!treeNode) return;
+            for (const id of nodeIds) {
+                const treeId = stringToTreeId(id);
+                const treeNode = this.tree.getNodeByID(treeId);
+                if (!treeNode) continue;
 
-            const data = treeNode.data;
-            const kind = data.get(NODE_KIND);
-            if (kind !== "element") return;
+                const data = treeNode.data;
+                const kind = data.get(NODE_KIND);
+                if (kind !== "element") continue;
 
-            let attrsMap = data.get(NODE_ATTRS) as LoroMap | undefined;
-            if (!attrsMap) {
-                attrsMap = data.setContainer(NODE_ATTRS, new LoroMap()) as LoroMap;
-            }
+                let attrsMap = data.get(NODE_ATTRS) as LoroMap | undefined;
+                if (!attrsMap) {
+                    attrsMap = data.setContainer(NODE_ATTRS, new LoroMap()) as LoroMap;
+                }
 
-            if (value === undefined) {
-                attrsMap.delete(key);
-                this.emitPatch({
-                    action: "del",
-                    path: ["nodes", id, "attrs", key]
-                });
-            } else {
-                attrsMap.set(key, value);
-                this.emitPatch({
-                    action: "put",
-                    path: ["nodes", id, "attrs", key],
-                    value: value
-                });
+                if (value === undefined) {
+                    attrsMap.delete(key);
+                    this.emitPatch({
+                        action: "del",
+                        path: ["nodes", id, "attrs", key]
+                    });
+                } else {
+                    attrsMap.set(key, value);
+                    this.emitPatch({
+                        action: "put",
+                        path: ["nodes", id, "attrs", key],
+                        value: value
+                    });
+                }
             }
             this._doc.commit();
         } catch (e) {
@@ -761,9 +777,9 @@ export class DenicekDocument {
     }
 
     /**
-     * Update the tag name of an element node
+     * Update the tag name of element nodes
      */
-    updateTag(id: string, newTag: string): void {
+    updateTag(nodeIds: string[], newTag: string): void {
         try {
             const sanitizedTag = sanitizeTagName(newTag);
             if (!sanitizedTag) {
@@ -771,20 +787,22 @@ export class DenicekDocument {
                 return;
             }
 
-            const treeId = stringToTreeId(id);
-            const treeNode = this.tree.getNodeByID(treeId);
-            if (!treeNode) return;
+            for (const id of nodeIds) {
+                const treeId = stringToTreeId(id);
+                const treeNode = this.tree.getNodeByID(treeId);
+                if (!treeNode) continue;
 
-            const data = treeNode.data;
-            const kind = data.get(NODE_KIND);
-            if (kind !== "element") return;
+                const data = treeNode.data;
+                const kind = data.get(NODE_KIND);
+                if (kind !== "element") continue;
 
-            data.set(NODE_TAG, sanitizedTag);
-            this.emitPatch({
-                action: "put",
-                path: ["nodes", id, "tag"],
-                value: sanitizedTag
-            });
+                data.set(NODE_TAG, sanitizedTag);
+                this.emitPatch({
+                    action: "put",
+                    path: ["nodes", id, "tag"],
+                    value: sanitizedTag
+                });
+            }
             this._doc.commit();
         } catch (e) {
             handleModelError("updateTag", e);
@@ -792,29 +810,31 @@ export class DenicekDocument {
     }
 
     /**
-     * Edit text in a value node (insert, delete, or replace)
+     * Edit text in value nodes (insert, delete, or replace)
      */
-    spliceValue(id: string, index: number, deleteCount: number, insertText: string): void {
+    spliceValue(nodeIds: string[], index: number, deleteCount: number, insertText: string): void {
         try {
-            const treeId = stringToTreeId(id);
-            const treeNode = this.tree.getNodeByID(treeId);
-            if (!treeNode) return;
+            for (const id of nodeIds) {
+                const treeId = stringToTreeId(id);
+                const treeNode = this.tree.getNodeByID(treeId);
+                if (!treeNode) continue;
 
-            const data = treeNode.data;
-            const kind = data.get(NODE_KIND);
-            if (kind !== "value") return;
+                const data = treeNode.data;
+                const kind = data.get(NODE_KIND);
+                if (kind !== "value") continue;
 
-            const text = data.get(NODE_TEXT) as LoroText | undefined;
-            if (!text) return;
+                const text = data.get(NODE_TEXT) as LoroText | undefined;
+                if (!text) continue;
 
-            text.splice(index, deleteCount, insertText);
+                text.splice(index, deleteCount, insertText);
 
-            this.emitPatch({
-                action: "splice",
-                path: ["nodes", id, "value", index],
-                length: deleteCount,
-                value: insertText
-            });
+                this.emitPatch({
+                    action: "splice",
+                    path: ["nodes", id, "value", index],
+                    length: deleteCount,
+                    value: insertText
+                });
+            }
             this._doc.commit();
         } catch (e) {
             handleModelError("spliceValue", e);
@@ -1027,7 +1047,7 @@ export class DenicekDocument {
                 }
             } else if (kind === "element") {
                 if (property === "tag") {
-                    this.updateTag(id, value as string);
+                    this.updateTag([id], value as string);
                 }
             }
         } catch (e) {
@@ -1121,14 +1141,6 @@ export class DenicekDocument {
         return this._doc.subscribe(listener);
     }
 
-    /**
-     * Subscribe to local updates (useful for sync)
-     * @returns Unsubscribe function
-     */
-    subscribeLocalUpdates(listener: (bytes: Uint8Array) => void): () => void {
-        return this._doc.subscribeLocalUpdates(listener);
-    }
-
     // === Patch History (for recording/replay) ===
 
     /**
@@ -1206,7 +1218,7 @@ export class DenicekDocument {
                 const rawIndex = path[3] as number;
                 const index = rawIndex === -1 ? undefined : rawIndex;
                 const nodeDef = value as NodeInput;
-                return this.addChild(parentId, nodeDef, index);
+                return this.addChildren(parentId, [nodeDef], index)[0];
             }
 
             if (action === "copy" && path.length >= 4 && path[2] === "children") {
@@ -1222,33 +1234,33 @@ export class DenicekDocument {
             }
 
             if (path.length === 2 && action === "del") {
-                this.deleteNode(id);
+                this.deleteNodes([id]);
                 return undefined;
             }
 
             if (path.length === 2 && action === "move") {
                 const { parentId, index } = value as { parentId: string; index?: number };
-                this.moveNode(id, parentId, index);
+                this.moveNodes([id], parentId, index);
                 return undefined;
             }
 
             if (path.length >= 3) {
                 const field = path[2];
                 if (field === "tag" && action === "put") {
-                    this.updateTag(id, value as string);
+                    this.updateTag([id], value as string);
                 } else if (field === "attrs" && path.length === 4) {
                     const key = path[3] as string;
                     if (action === "put") {
-                        this.updateAttribute(id, key, value);
+                        this.updateAttribute([id], key, value);
                     } else if (action === "del") {
-                        this.updateAttribute(id, key, undefined);
+                        this.updateAttribute([id], key, undefined);
                     }
                 } else if (field === "value" && action === "splice") {
                     if (path.length === 4) {
                         const idx = path[3] as number;
                         const insertText = value as string;
                         const deleteCount = length || 0;
-                        this.spliceValue(id, idx, deleteCount, insertText);
+                        this.spliceValue([id], idx, deleteCount, insertText);
                     }
                 } else if (field === "label" && action === "put") {
                     this.updateNodeProperty(id, "label", value);

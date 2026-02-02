@@ -190,10 +190,7 @@ export const App = () => {
       if (e.ctrlKey && e.key === 'v' && cutNodeIds.length > 0 && selectedNodeIds.length === 1) {
         e.preventDefault();
         const targetId = selectedNodeIds[0]!;
-        // Move each cut node to the target
-        for (const nodeId of cutNodeIds) {
-          document.moveNode(nodeId, targetId);
-        }
+        document.moveNodes(cutNodeIds, targetId);
         setCutNodeIds([]);
       }
 
@@ -459,7 +456,7 @@ export const App = () => {
     const newIndex = currentIndex + direction;
     if (newIndex < 0 || newIndex >= siblings.length) return;
 
-    document.moveNode(nodeId, parentId, newIndex);
+    document.moveNodes([nodeId], parentId, newIndex);
 
     // Re-focus on the moved node to update the selection overlay
     clickOnSelectedNode(nodeId);
@@ -585,7 +582,7 @@ export const App = () => {
                   initialValue={selectedNodeFirstChildTag || ""}
                   onAddChild={(content, kind) => {
                     if (!selectedNodeId) return;
-                    const newId = document.addChild(selectedNodeId, createNodeData(kind, content, selectedNodeId));
+                    const [newId] = document.addChildren(selectedNodeId, [createNodeData(kind, content, selectedNodeId)]);
                     if (newId) setSelectedNodeIds([newId]);
                   }}
                   onStartRefPick={() => {
@@ -772,7 +769,7 @@ export const App = () => {
                 const targetId = ids[0];
                 if (refPickMode && targetId) {
                   const { parentId } = refPickMode;
-                  document.addChild(parentId, { kind: "ref", target: targetId });
+                  document.addChildren(parentId, [{ kind: "ref", target: targetId }]);
                   setRefPickMode(null);
                   return;
                 }

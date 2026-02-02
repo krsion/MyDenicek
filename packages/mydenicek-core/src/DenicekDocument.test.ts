@@ -5,7 +5,7 @@ import { DenicekDocument } from "./DenicekDocument.js";
 /** Simple test initializer - creates a minimal document structure */
 function testInitializer(doc: DenicekDocument): void {
     const rootId = doc.createRootNode("section");
-    doc.addChild(rootId, { kind: "element", tag: "p", attrs: {}, children: [] });
+    doc.addChildren(rootId, [{ kind: "element", tag: "p", attrs: {}, children: [] }]);
 }
 
 describe("DenicekDocument", () => {
@@ -77,10 +77,10 @@ describe("DenicekDocument", () => {
 
         it("should undo changes", () => {
             const rootId = doc.getRootId()!;
-            const nodeId = doc.addChild(rootId, { kind: "element", tag: "test", attrs: {}, children: [] });
+            const [nodeId] = doc.addChildren(rootId, [{ kind: "element", tag: "test", attrs: {}, children: [] }]);
 
             // Verify node was added
-            expect(doc.getNode(nodeId)).toBeTruthy();
+            expect(doc.getNode(nodeId!)).toBeTruthy();
 
             // Undo should be available now
             expect(doc.canUndo).toBe(true);
@@ -89,7 +89,7 @@ describe("DenicekDocument", () => {
             doc.undo();
 
             // Verify node was removed
-            expect(doc.getNode(nodeId)).toBeNull();
+            expect(doc.getNode(nodeId!)).toBeNull();
 
             // Redo should be available
             expect(doc.canRedo).toBe(true);
@@ -105,7 +105,7 @@ describe("DenicekDocument", () => {
             );
 
             const rootId = docWithCallback.getRootId()!;
-            docWithCallback.addChild(rootId, { kind: "element", tag: "test", attrs: {}, children: [] });
+            docWithCallback.addChildren(rootId, [{ kind: "element", tag: "test", attrs: {}, children: [] }]);
 
             expect(versions.length).toBeGreaterThan(0);
         });
@@ -131,10 +131,10 @@ describe("DenicekDocument mutations", () => {
 
         it("should add element child", () => {
             const rootId = doc.getRootId()!;
-            const newId = doc.addChild(rootId, { kind: "element", tag: "span", attrs: {}, children: [] });
+            const [newId] = doc.addChildren(rootId, [{ kind: "element", tag: "span", attrs: {}, children: [] }]);
             expect(newId).toBeTruthy();
 
-            const newNode = doc.getNode(newId);
+            const newNode = doc.getNode(newId!);
             expect(newNode?.kind).toBe("element");
             if (newNode?.kind === "element") {
                 expect(newNode.tag).toBe("span");
@@ -144,12 +144,12 @@ describe("DenicekDocument mutations", () => {
         it("should add value child", () => {
             const rootId = doc.getRootId()!;
             // First add an element to hold the value
-            const containerId = doc.addChild(rootId, { kind: "element", tag: "p", attrs: {}, children: [] });
+            const [containerId] = doc.addChildren(rootId, [{ kind: "element", tag: "p", attrs: {}, children: [] }]);
 
-            const valueId = doc.addChild(containerId, { kind: "value", value: "Hello World" });
+            const [valueId] = doc.addChildren(containerId!, [{ kind: "value", value: "Hello World" }]);
             expect(valueId).toBeTruthy();
 
-            const valueNode = doc.getNode(valueId);
+            const valueNode = doc.getNode(valueId!);
             expect(valueNode?.kind).toBe("value");
             if (valueNode?.kind === "value") {
                 expect(valueNode.value).toBe("Hello World");
@@ -158,10 +158,10 @@ describe("DenicekDocument mutations", () => {
 
         it("should update tag", () => {
             const rootId = doc.getRootId()!;
-            const newId = doc.addChild(rootId, { kind: "element", tag: "div", attrs: {}, children: [] });
-            doc.updateTag(newId, "span");
+            const [newId] = doc.addChildren(rootId, [{ kind: "element", tag: "div", attrs: {}, children: [] }]);
+            doc.updateTag([newId!], "span");
 
-            const node = doc.getNode(newId);
+            const node = doc.getNode(newId!);
             if (node?.kind === "element") {
                 expect(node.tag).toBe("span");
             }
@@ -169,10 +169,10 @@ describe("DenicekDocument mutations", () => {
 
         it("should update attribute", () => {
             const rootId = doc.getRootId()!;
-            const newId = doc.addChild(rootId, { kind: "element", tag: "div", attrs: {}, children: [] });
-            doc.updateAttribute(newId, "class", "container");
+            const [newId] = doc.addChildren(rootId, [{ kind: "element", tag: "div", attrs: {}, children: [] }]);
+            doc.updateAttribute([newId!], "class", "container");
 
-            const node = doc.getNode(newId);
+            const node = doc.getNode(newId!);
             if (node?.kind === "element") {
                 expect(node.attrs.class).toBe("container");
             }
@@ -180,12 +180,12 @@ describe("DenicekDocument mutations", () => {
 
         it("should splice value", () => {
             const rootId = doc.getRootId()!;
-            const containerId = doc.addChild(rootId, { kind: "element", tag: "p", attrs: {}, children: [] });
-            const valueId = doc.addChild(containerId, { kind: "value", value: "Hello" });
+            const [containerId] = doc.addChildren(rootId, [{ kind: "element", tag: "p", attrs: {}, children: [] }]);
+            const [valueId] = doc.addChildren(containerId!, [{ kind: "value", value: "Hello" }]);
 
-            doc.spliceValue(valueId, 5, 0, " World");
+            doc.spliceValue([valueId!], 5, 0, " World");
 
-            const node = doc.getNode(valueId);
+            const node = doc.getNode(valueId!);
             if (node?.kind === "value") {
                 expect(node.value).toBe("Hello World");
             }
@@ -195,10 +195,10 @@ describe("DenicekDocument mutations", () => {
     describe("tree operations", () => {
         it("should delete node", () => {
             const rootId = doc.getRootId()!;
-            const nodeId = doc.addChild(rootId, { kind: "element", tag: "div", attrs: {}, children: [] });
+            const [nodeId] = doc.addChildren(rootId, [{ kind: "element", tag: "div", attrs: {}, children: [] }]);
 
-            doc.deleteNode(nodeId);
-            const node = doc.getNode(nodeId);
+            doc.deleteNodes([nodeId!]);
+            const node = doc.getNode(nodeId!);
             expect(node).toBeNull();
         });
     });
@@ -206,14 +206,14 @@ describe("DenicekDocument mutations", () => {
     describe("copy operations", () => {
         it("should copy an element node with tag and attrs", () => {
             const rootId = doc.getRootId()!;
-            const sourceId = doc.addChild(rootId, {
+            const [sourceId] = doc.addChildren(rootId, [{
                 kind: "element",
                 tag: "div",
                 attrs: { class: "source", "data-test": 123 },
                 children: []
-            });
+            }]);
 
-            const copyId = doc.copyNode(sourceId, rootId);
+            const copyId = doc.copyNode(sourceId!, rootId);
 
             const copy = doc.getNode(copyId);
             expect(copy?.kind).toBe("element");
@@ -226,10 +226,10 @@ describe("DenicekDocument mutations", () => {
 
         it("should copy a value node with current text value", () => {
             const rootId = doc.getRootId()!;
-            const containerId = doc.addChild(rootId, { kind: "element", tag: "p", attrs: {}, children: [] });
-            const sourceId = doc.addChild(containerId, { kind: "value", value: "original text" });
+            const [containerId] = doc.addChildren(rootId, [{ kind: "element", tag: "p", attrs: {}, children: [] }]);
+            const [sourceId] = doc.addChildren(containerId!, [{ kind: "value", value: "original text" }]);
 
-            const copyId = doc.copyNode(sourceId, containerId);
+            const copyId = doc.copyNode(sourceId!, containerId!);
 
             const copy = doc.getNode(copyId);
             expect(copy?.kind).toBe("value");
@@ -240,8 +240,8 @@ describe("DenicekDocument mutations", () => {
 
         it("should store sourceId on the copied element node", () => {
             const rootId = doc.getRootId()!;
-            const sourceId = doc.addChild(rootId, { kind: "element", tag: "span", attrs: {}, children: [] });
-            const copyId = doc.copyNode(sourceId, rootId);
+            const [sourceId] = doc.addChildren(rootId, [{ kind: "element", tag: "span", attrs: {}, children: [] }]);
+            const copyId = doc.copyNode(sourceId!, rootId);
 
             const copyData = doc.getNode(copyId);
             expect(copyData?.sourceId).toBe(sourceId);
@@ -249,9 +249,9 @@ describe("DenicekDocument mutations", () => {
 
         it("should store sourceId on the copied value node", () => {
             const rootId = doc.getRootId()!;
-            const containerId = doc.addChild(rootId, { kind: "element", tag: "p", attrs: {}, children: [] });
-            const sourceId = doc.addChild(containerId, { kind: "value", value: "test" });
-            const copyId = doc.copyNode(sourceId, containerId);
+            const [containerId] = doc.addChildren(rootId, [{ kind: "element", tag: "p", attrs: {}, children: [] }]);
+            const [sourceId] = doc.addChildren(containerId!, [{ kind: "value", value: "test" }]);
+            const copyId = doc.copyNode(sourceId!, containerId!);
 
             const copyData = doc.getNode(copyId);
             expect(copyData?.sourceId).toBe(sourceId);
@@ -260,8 +260,8 @@ describe("DenicekDocument mutations", () => {
         it("should emit copy patch with sourceId", () => {
             doc.clearHistory();
             const rootId = doc.getRootId()!;
-            const sourceId = doc.addChild(rootId, { kind: "element", tag: "div", attrs: {}, children: [] });
-            doc.copyNode(sourceId, rootId);
+            const [sourceId] = doc.addChildren(rootId, [{ kind: "element", tag: "div", attrs: {}, children: [] }]);
+            doc.copyNode(sourceId!, rootId);
 
             const history = doc.getHistory();
             const copyPatch = history.find(p => p.action === "copy");
@@ -271,14 +271,14 @@ describe("DenicekDocument mutations", () => {
 
         it("should copy CURRENT value when source is modified before copy", () => {
             const rootId = doc.getRootId()!;
-            const containerId = doc.addChild(rootId, { kind: "element", tag: "p", attrs: {}, children: [] });
-            const sourceId = doc.addChild(containerId, { kind: "value", value: "initial" });
+            const [containerId] = doc.addChildren(rootId, [{ kind: "element", tag: "p", attrs: {}, children: [] }]);
+            const [sourceId] = doc.addChildren(containerId!, [{ kind: "value", value: "initial" }]);
 
             // Modify source value
-            doc.spliceValue(sourceId, 0, 7, "modified");
+            doc.spliceValue([sourceId!], 0, 7, "modified");
 
             // Copy should get "modified" value
-            const copyId = doc.copyNode(sourceId, containerId);
+            const copyId = doc.copyNode(sourceId!, containerId!);
 
             const copy = doc.getNode(copyId);
             if (copy?.kind === "value") {
@@ -292,40 +292,40 @@ describe("DenicekDocument mutations", () => {
             // from the source, not the value that existed when the copy was recorded.
 
             const rootId = doc.getRootId()!;
-            const containerId = doc.addChild(rootId, { kind: "element", tag: "p", attrs: {}, children: [] });
-            const sourceId = doc.addChild(containerId, { kind: "value", value: "original" });
+            const [containerId] = doc.addChildren(rootId, [{ kind: "element", tag: "p", attrs: {}, children: [] }]);
+            const [sourceId] = doc.addChildren(containerId!, [{ kind: "value", value: "original" }]);
 
             // Get count of children before recording
             const snapshotBefore = doc.getSnapshot();
-            const childrenBefore = snapshotBefore.childIds.get(containerId) ?? [];
+            const childrenBefore = snapshotBefore.childIds.get(containerId!) ?? [];
             const childCountBeforeRecording = childrenBefore.length;
 
             // Record a copy operation
             doc.clearHistory();
-            doc.copyNode(sourceId, containerId);
+            doc.copyNode(sourceId!, containerId!);
             const copyScript = doc.getHistory();
 
             // Get count of children after recording (includes the first copy)
             const snapshotAfterRecording = doc.getSnapshot();
-            const childrenAfterRecording = snapshotAfterRecording.childIds.get(containerId) ?? [];
+            const childrenAfterRecording = snapshotAfterRecording.childIds.get(containerId!) ?? [];
             const childCountAfterRecording = childrenAfterRecording.length;
             expect(childCountAfterRecording).toBe(childCountBeforeRecording + 1);
 
             // Now modify the source value AFTER recording
-            doc.spliceValue(sourceId, 0, 8, "updated");
+            doc.spliceValue([sourceId!], 0, 8, "updated");
 
             // Verify source is now "updated"
-            const sourceNode = doc.getNode(sourceId);
+            const sourceNode = doc.getNode(sourceId!);
             if (sourceNode?.kind === "value") {
                 expect(sourceNode.value).toBe("updated");
             }
 
             // Replay the copy script - should create another copy with "updated"
-            doc.replay(copyScript, containerId);
+            doc.replay(copyScript, containerId!);
 
             // Now we should have one more child
             const snapshotAfterReplay = doc.getSnapshot();
-            const childrenAfterReplay = snapshotAfterReplay.childIds.get(containerId) ?? [];
+            const childrenAfterReplay = snapshotAfterReplay.childIds.get(containerId!) ?? [];
             expect(childrenAfterReplay.length).toBe(childCountAfterRecording + 1);
 
             // At least one copy should have "updated" (the replayed one)
