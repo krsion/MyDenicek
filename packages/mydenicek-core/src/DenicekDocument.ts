@@ -140,10 +140,11 @@ export class DenicekDocument {
 
         try {
             // Dynamic import to keep sync dependencies optional
-            const { LoroWebsocketClient } = await import("loro-websocket/client");
-            const { createLoroAdaptorFromDoc } = await import("loro-adaptors");
+            // Import entire modules to avoid destructuring issues with bundlers
+            const loroWsModule = await import("loro-websocket/client");
+            const loroAdaptorsModule = await import("loro-adaptors");
 
-            const client = new LoroWebsocketClient({
+            const client = new loroWsModule.LoroWebsocketClient({
                 url: options.url,
                 pingIntervalMs: options.pingIntervalMs,
             });
@@ -166,8 +167,9 @@ export class DenicekDocument {
             await client.connect();
 
             // Create a wrapper adaptor that checks _syncEnabled before sending
-            // Use factory function instead of constructor for better bundler compatibility
-            const innerAdaptor = createLoroAdaptorFromDoc(this._doc);
+            // Access LoroAdaptor as a class from the module
+            const LoroAdaptorClass = loroAdaptorsModule.LoroAdaptor as new (doc: LoroDoc) => CrdtDocAdaptor;
+            const innerAdaptor = new LoroAdaptorClass(this._doc);
             const wrappedAdaptor = this.createSyncControlledAdaptor(innerAdaptor);
 
             const room = await client.join({
