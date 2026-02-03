@@ -318,6 +318,28 @@ export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSel
                                     );
                                 }
 
+                                // Move - "move TARGET to PARENT at index N"
+                                if (patch.action === "move" && value && typeof value === 'object' && 'parentId' in value) {
+                                    const moveVal = value as { parentId: string; index?: number };
+                                    const parentVarMatch = moveVal.parentId.match(/^\$(\d+)$/);
+                                    const parentVarNum = parentVarMatch ? parseInt(parentVarMatch[1]!, 10) : null;
+                                    return (
+                                        <>
+                                            <span style={{ color: '#0078d4' }}>move</span>
+                                            {renderTargetNode()}
+                                            <span>to</span>
+                                            {parentVarNum !== null ? (
+                                                <Badge appearance="outline" color="success" size="small">#{parentVarNum}</Badge>
+                                            ) : (
+                                                <NodeId id={moveVal.parentId} onClick={onNodeClick} />
+                                            )}
+                                            {moveVal.index != null && (
+                                                <span style={{ color: '#888' }}>at index {moveVal.index}</span>
+                                            )}
+                                        </>
+                                    );
+                                }
+
                                 // Insert actions to button - show nested actions
                                 if (patch.action === "insert" && pathRest[0] === "actions" && value) {
                                     const actions = Array.isArray(value) ? value : [value];
