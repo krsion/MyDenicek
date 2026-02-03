@@ -699,7 +699,6 @@ export const App = () => {
                   checked={status === "connected" || status === "connecting"}
                   onChange={handleSyncToggle}
                   label={connected ? "Sync on" : "Sync off"}
-                  disabled={status === "connecting"}
                 />
                 <Tooltip content="Copy shareable link" relationship="label">
                   <ToolbarButton
