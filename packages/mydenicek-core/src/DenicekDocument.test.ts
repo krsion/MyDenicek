@@ -330,7 +330,13 @@ describe("DenicekModel", () => {
             });
 
             const history = doc.getHistory();
-            const copyPatch = history.find(p => p.action === "copy");
+            // Copy is now represented as insert with sourceId
+            const copyPatch = history.find(p =>
+                p.action === "insert" &&
+                p.value &&
+                typeof p.value === 'object' &&
+                'sourceId' in p.value
+            );
             expect(copyPatch).toBeTruthy();
             expect(copyPatch?.value).toHaveProperty("sourceId", sourceId!);
         });
@@ -429,12 +435,12 @@ describe("DenicekModel", () => {
                 sourceId = model.addChild(containerId, { kind: "value", value: "test value" });
             });
 
-            // Apply a copy patch directly
+            // Apply a copy patch directly (now as insert with sourceId)
             doc.change((model) => {
                 const result = model.applyPatch({
-                    action: "copy",
+                    action: "insert",
                     path: ["nodes", containerId!, "children", 1],
-                    value: { sourceId: sourceId! }
+                    value: { sourceId: sourceId!, kind: "value" }
                 });
                 expect(typeof result).toBe("string");
             });

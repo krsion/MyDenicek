@@ -1,7 +1,7 @@
 /**
  * Hook for clipboard operations between nodes.
  *
- * Copies create a "copy" action in history that references the source node.
+ * Copies create an "insert" action with sourceId in history that references the source node.
  * On replay, the copy reads the CURRENT value from the source.
  */
 

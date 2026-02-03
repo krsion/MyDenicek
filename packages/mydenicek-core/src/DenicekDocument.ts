@@ -13,6 +13,7 @@ import {
     buildDocumentIndex,
     type DocumentIndex,
 } from "./loroHelpers.js";
+import { calculateHistoryFromDiff } from "./loroHistory.js";
 import type { GeneralizedPatch, NodeData, Snapshot, SyncState, SyncStatus, Version } from "./types.js";
 
 /**
@@ -66,8 +67,9 @@ export class DenicekDocument {
     private _version: number = 0;
     private onVersionChange?: (version: number) => void;
 
-    // History log
-    private history: GeneralizedPatch[] = [];
+    // History: track initial frontiers for computing history from loro diff
+    // History is calculated as diff(initialFrontiers, currentFrontiers)
+    private _historyStartFrontiers: ReturnType<LoroDoc["frontiers"]> = [];
 
     // Sync state
     private syncClient: LoroWebsocketClient | null = null;
@@ -562,17 +564,24 @@ export class DenicekDocument {
     // === Patch History (for recording/replay) ===
 
     /**
-     * Get all recorded patches
+     * Get history patches calculated from loro diff
+     * This returns all changes from the history start point to current state.
+     * History is reactive to undo/redo - undone operations will not appear.
      */
     getHistory(): GeneralizedPatch[] {
-        return [...this.history];
+        return calculateHistoryFromDiff(
+            this._doc,
+            this._historyStartFrontiers,
+            this._doc.frontiers()
+        );
     }
 
     /**
-     * Clear recorded patches
+     * Clear history by resetting the start point to current state
+     * After this, getHistory() will return an empty array until new changes are made.
      */
     clearHistory(): void {
-        this.history = [];
+        this._historyStartFrontiers = this._doc.frontiers();
     }
 
     /**
@@ -607,9 +616,9 @@ export class DenicekDocument {
                 // Apply
                 const result = model.applyPatch(concretePatch);
 
-                // If inserted or copied a node, map the ID
+                // If inserted a node (including copies with sourceId), map the ID
                 // Handles both children inserts and sibling inserts
-                if ((patch.action === "insert" || patch.action === "copy") && patch.path.length >= 3 && (patch.path[2] === "children" || patch.path[2] === "sibling")) {
+                if (patch.action === "insert" && patch.path.length >= 3 && (patch.path[2] === "children" || patch.path[2] === "sibling")) {
                     const val = patch.value as Record<string, unknown>;
                     if (val && val.id && typeof val.id === "string" && val.id.startsWith("$")) {
                         if (typeof result === "string") {
@@ -648,7 +657,8 @@ export class DenicekDocument {
     }
 
     private _recordPatch(patch: GeneralizedPatch): void {
-        this.history.push(patch);
+        // Emit to listeners for immediate feedback during recording
+        // History is now calculated from loro diff, not stored locally
         this.patchListeners.forEach(listener => listener(patch));
     }
 

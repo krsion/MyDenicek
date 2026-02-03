@@ -171,14 +171,38 @@ export type Version = OpId[];
 
 /**
  * Generalized patch for recording/replay
+ * Note: "copy" is no longer a separate action - copies are represented as "insert"
+ * with a sourceId field in the value object to indicate the source node
  */
-export type PatchAction = "put" | "del" | "insert" | "splice" | "inc" | "move" | "copy";
+export type PatchAction = "put" | "del" | "insert" | "splice" | "inc" | "move";
 
 export interface GeneralizedPatch {
     action: PatchAction;
     path: (string | number)[];
     value?: unknown;
     length?: number;
+}
+
+/**
+ * Value for insert actions that create nodes
+ * If sourceId is present, this insert was a copy from that source node
+ */
+export interface InsertNodeValue {
+    id: string;
+    kind: "element" | "value" | "action" | "formula" | "ref";
+    sourceId?: string;  // Present if this was copied from another node
+    sourceAttr?: string;  // Present if copied from a specific attribute
+    // Element-specific
+    tag?: string;
+    attrs?: Record<string, unknown>;
+    // Value-specific
+    value?: string;
+    // Action-specific
+    label?: string;
+    target?: string;
+    actions?: GeneralizedPatch[];
+    // Formula-specific
+    operation?: string;
 }
 
 /**
