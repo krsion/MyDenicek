@@ -172,7 +172,7 @@ export type Version = OpId[];
 /**
  * Generalized patch for recording/replay
  */
-export type PatchAction = "put" | "del" | "insert" | "splice" | "inc" | "move" | "copy";
+export type PatchAction = "put" | "del" | "insert" | "splice" | "move" | "copy";
 
 export interface GeneralizedPatch {
     action: PatchAction;

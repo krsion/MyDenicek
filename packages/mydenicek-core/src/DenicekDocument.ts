@@ -191,7 +191,7 @@ export class DenicekDocument {
         try {
             // Dynamic import to keep sync dependencies optional
             const { LoroWebsocketClient } = await import("loro-websocket/client");
-            const { LoroAdaptor } = await import("loro-adaptors");
+            const { LoroAdaptor } = await import("loro-adaptors/loro");
 
             const client = new LoroWebsocketClient({
                 url: options.url,
@@ -270,8 +270,7 @@ export class DenicekDocument {
             cmpVersion: (v: Uint8Array) => innerAdaptor.cmpVersion(v),
             getVersion: () => innerAdaptor.getVersion(),
             getAlternativeVersion: innerAdaptor.getAlternativeVersion?.bind(innerAdaptor),
-            handleUpdateError: innerAdaptor.handleUpdateError?.bind(innerAdaptor),
-            handleJoinErr: innerAdaptor.handleJoinErr?.bind(innerAdaptor),
+            onUpdateError: innerAdaptor.onUpdateError?.bind(innerAdaptor),
             destroy: () => innerAdaptor.destroy(),
         };
     }
