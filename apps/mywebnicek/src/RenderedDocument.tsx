@@ -4,6 +4,7 @@ import { DENICEK_NODE_ID_ATTR, type FormulaViewMode } from "@mydenicek/react";
 import React from "react";
 
 import { defaultOperationsMap } from "./formula";
+import { useDebouncedCallback } from "./hooks/useDebounce";
 
 const useStyles = makeStyles({
   article: {
@@ -99,12 +100,17 @@ export function RenderedDocument({ document, onActionClick, viewMode = "result",
     },
   }), [opsMap, document]);
 
-  // Sync input value to CRDT on Enter key (so copy can read the current value)
-  const handleInputKeyDown = React.useCallback((e: React.KeyboardEvent<HTMLInputElement>, nodeId: string) => {
-    if (e.key !== "Enter") return;
-    const value = e.currentTarget.value;
+  // Sync input value to CRDT (debounced to avoid lag while typing)
+  const updateCopyValue = React.useCallback((nodeId: string, value: string) => {
     document.updateAttribute([nodeId], "data-copy-value", value);
   }, [document]);
+
+  const debouncedUpdateCopyValue = useDebouncedCallback(updateCopyValue, 150);
+
+  const handleInputChange = React.useCallback((e: React.ChangeEvent<HTMLInputElement>, nodeId: string) => {
+    const value = e.currentTarget.value;
+    debouncedUpdateCopyValue(nodeId, value);
+  }, [debouncedUpdateCopyValue]);
 
   // Handler for action button clicks
   const handleActionClick = React.useCallback((nodeId: string) => {
@@ -298,9 +304,9 @@ export function RenderedDocument({ document, onActionClick, viewMode = "result",
       };
     }
 
-    // Add keydown handler for input elements to sync value to CRDT on Enter
+    // Add change handler for input elements to sync value to CRDT
     if (node.tag === "input") {
-      attrs["onKeyDown"] = (e: React.KeyboardEvent<HTMLInputElement>) => handleInputKeyDown(e, id);
+      attrs["onChange"] = (e: React.ChangeEvent<HTMLInputElement>) => handleInputChange(e, id);
     }
 
     const childIds = document.getChildIds(id);

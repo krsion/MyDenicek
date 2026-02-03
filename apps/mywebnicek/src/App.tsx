@@ -1,5 +1,5 @@
 import { Badge, Button, Card, CardHeader, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogTrigger, Spinner, Switch, Tag, TagGroup, Text, Toast, Toaster, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, Tooltip, useId, useToastController } from "@fluentui/react-components";
-import { AddRegular, ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, CalculatorRegular, CameraRegular, ClipboardPasteRegular, CodeRegular, CopyRegular, DeleteRegular, EditRegular, InfoRegular, LinkRegular, PersonRegular, PlayRegular, RecordRegular, RenameRegular, StopRegular } from "@fluentui/react-icons";
+import { AddRegular, ArrowDownRegular, ArrowLeftRegular, ArrowRedoRegular, ArrowRightRegular, ArrowUndoRegular, ArrowUpRegular, CalculatorRegular, CameraRegular, ClipboardPasteRegular, CodeRegular, CopyRegular, DeleteRegular, DismissRegular, EditRegular, InfoRegular, LinkRegular, PersonRegular, PlayRegular, RecordRegular, RenameRegular, StopRegular } from "@fluentui/react-icons";
 import type { GeneralizedPatch, Snapshot } from "@mydenicek/core";
 import {
   useConnectivity,
@@ -43,7 +43,7 @@ function getRoomIdFromHash(): string {
 const PEER_NAME_STORAGE_KEY = "mydenicek-peer-name";
 
 export const App = () => {
-  const { document } = useDocumentState();
+  const { document, version } = useDocumentState();
   const recordingObj = useRecording();
   const { history: recordingHistory, clearHistory, replay } = recordingObj;
   const [showHistory, setShowHistory] = useState(true);
@@ -64,6 +64,7 @@ export const App = () => {
   // Derive connected from status
   const connected = status === "connected";
   const navigatorRef = useRef<DomNavigatorHandle>(null);
+  const historyScrollRef = useRef<HTMLDivElement>(null);
   const [selectedActionIndices, setSelectedActionIndices] = useState<Set<number>>(new Set());
   const [targetOverrides, setTargetOverrides] = useState<Map<number, string>>(new Map());
   const [sourceOverrides, setSourceOverrides] = useState<Map<number, string>>(new Map());
@@ -73,6 +74,8 @@ export const App = () => {
   const [selectedActionNodeId, setSelectedActionNodeId] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [cutNodeIds, setCutNodeIds] = useState<string[]>([]);
+  // Pinned button ID for viewing actions (stays visible even when navigating to other nodes)
+  const [pinnedButtonId, setPinnedButtonId] = useState<string | null>(null);
 
   // Peer name state
   const [peerName, setPeerName] = useState<string>(() =>
@@ -146,7 +149,8 @@ export const App = () => {
     const rootId = document.getRootId();
     if (rootId) traverse(rootId);
     return nodes;
-  }, [document]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- version triggers recalculation when document changes
+  }, [document, version]);
 
   // Toast for share notification
   const toasterId = useId("share-toaster");
@@ -290,6 +294,29 @@ export const App = () => {
     if (!recordingHistory || recordingHistory.length === 0) return null;
     return analyzeScript(recordingHistory);
   }, [recordingHistory]);
+
+  // Scroll history to bottom when new actions are recorded
+  useEffect(() => {
+    if (historyScrollRef.current) {
+      historyScrollRef.current.scrollTop = historyScrollRef.current.scrollHeight;
+    }
+  }, [recordingHistory]);
+
+  // Auto-pin when a button is selected
+  useEffect(() => {
+    if (node?.kind === "action" && selectedNodeId) {
+      setPinnedButtonId(selectedNodeId);
+    }
+  }, [node?.kind, selectedNodeId]);
+
+  // Get the pinned button's node data (may be different from currently selected node)
+  const pinnedButtonNode = useMemo(() => {
+    if (!pinnedButtonId) return null;
+    const node = document.getNode(pinnedButtonId);
+    if (!node || node.kind !== "action") return null;
+    return node;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- version triggers recalculation when document changes
+  }, [pinnedButtonId, document, version]);
 
   const handleReplay = () => {
     if (!recordingHistory || !selectedNodeId) return;
@@ -798,20 +825,32 @@ export const App = () => {
         </div>
         <ResizablePanel open={showHistory} defaultWidth={700} minWidth={200} maxWidth={1200}>
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-            {/* Show action node details when one is selected */}
-            {node?.kind === "action" && (
+            {/* Show action node details when one is pinned */}
+            {pinnedButtonNode && (
               <div style={{ borderBottom: '2px solid #0078d4', background: '#f0f6ff' }}>
                 <div style={{ padding: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <Text weight="semibold" style={{ color: '#0078d4' }}>Button: {node.label}</Text>
-                    <Text size={200} style={{ display: 'block', marginTop: 4 }}>Target: {node.target}</Text>
+                  <div
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => pinnedButtonId && setSelectedNodeIds([pinnedButtonId])}
+                    title="Click to select this button"
+                  >
+                    <Text weight="semibold" style={{ color: '#0078d4' }}>Button: {pinnedButtonNode.label}</Text>
                   </div>
-                  <Badge appearance="filled" color="brand">{node.actions.length} action{node.actions.length !== 1 ? 's' : ''}</Badge>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Badge appearance="filled" color="brand">{pinnedButtonNode.actions.length} action{pinnedButtonNode.actions.length !== 1 ? 's' : ''}</Badge>
+                    <Tooltip content="Close" relationship="label">
+                      <ToolbarButton
+                        icon={<DismissRegular />}
+                        appearance="subtle"
+                        onClick={() => setPinnedButtonId(null)}
+                      />
+                    </Tooltip>
+                  </div>
                 </div>
-                {node.actions.length > 0 && (
+                {pinnedButtonNode.actions.length > 0 && (
                   <div style={{ maxHeight: 200, overflow: 'auto', padding: '0 8px 8px' }}>
                     <RecordedScriptView
-                      script={node.actions}
+                      script={pinnedButtonNode.actions}
                       onNodeClick={(id) => setSelectedNodeIds([id])}
                       selectedIndices={new Set()}
                       onSelectionChange={() => { }}
@@ -822,9 +861,10 @@ export const App = () => {
                       currentNodeId={selectedNodeId ?? null}
                       analysis={null}
                       mode="view"
+                      actionTarget={pinnedButtonNode.target}
                       onDeleteAction={(index) => {
-                        if (selectedNodeId) {
-                          document.deleteAction(selectedNodeId, index);
+                        if (pinnedButtonId) {
+                          document.deleteAction(pinnedButtonId, index);
                         }
                       }}
                     />
@@ -842,7 +882,7 @@ export const App = () => {
                 aria-label="Clear Actions"
               />
             </div>
-            <div style={{ flex: 1, overflow: 'auto', padding: '8px', minHeight: 0 }}>
+            <div ref={historyScrollRef} style={{ flex: 1, overflow: 'auto', padding: '8px', minHeight: 0 }}>
               <RecordedScriptView
                 script={recordingHistory || []}
                 onNodeClick={(id) => setSelectedNodeIds([id])}

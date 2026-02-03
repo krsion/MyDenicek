@@ -29,20 +29,6 @@ const add = (doc: DenicekDocument, parentId: string, child: NodeInput): string =
 // Pre-programmed actions for buttons
 // ============================================================================
 
-/** Actions for "Add Item" button in Todo List */
-const addTodoItemActions: GeneralizedPatch[] = [
-    // Insert new li element as child of the list ($0)
-    { action: "insert", path: ["nodes", "$0", "children", -1], value: { id: "$1", kind: "element", tag: "li" } },
-    // Style the li
-    { action: "put", path: ["nodes", "$1", "attrs", "style"], value: { display: 'flex', alignItems: 'center', gap: 8, padding: 4 } },
-    // Insert checkbox input as child of li
-    { action: "insert", path: ["nodes", "$1", "children", -1], value: { id: "$2", kind: "element", tag: "input" } },
-    // Set checkbox type
-    { action: "put", path: ["nodes", "$2", "attrs", "type"], value: "checkbox" },
-    // Insert text value as child of li
-    { action: "insert", path: ["nodes", "$1", "children", -1], value: { kind: "value", value: "New item" } },
-];
-
 /** Actions for "Add Conference" button */
 const addConferenceActions: GeneralizedPatch[] = [
     // Insert new tr element as child of tbody ($0)
@@ -134,26 +120,34 @@ function createFormativeExamples(doc: DenicekDocument, rootId: string): void {
 
     // Todo list
     const todoListId = add(doc, todoArticleId, el("ul"));
-    doc.updateAttribute([todoListId], "style", { listStyle: 'none', padding: 0, margin: 0 });
 
     // Helper to create todo items
-    const createTodoItem = (text: string, checked: boolean) => {
+    const createTodoItem = (text: string) => {
         const liId = add(doc, todoListId, el("li"));
-        doc.updateAttribute([liId], "style", { display: 'flex', alignItems: 'center', gap: 8, padding: 4 });
-        const checkboxId = add(doc, liId, el("input"));
-        doc.updateAttribute([checkboxId], "type", "checkbox");
-        if (checked) doc.updateAttribute([checkboxId], "checked", "checked");
         add(doc, liId, val(text));
     };
 
-    createTodoItem("Learn CRDTs", true);
-    createTodoItem("Build MyDenicek", false);
-    createTodoItem("Write documentation", false);
+    createTodoItem("Learn CRDTs");
+    createTodoItem("Build MyDenicek");
+    createTodoItem("Write documentation");
 
-    // Add button container
+    // Add input and button container
     const todoButtonsId = add(doc, todoArticleId, el("div"));
-    doc.updateAttribute([todoButtonsId], "style", { marginTop: 12 });
-    add(doc, todoButtonsId, action("Add Item", todoListId, addTodoItemActions));
+    doc.updateAttribute([todoButtonsId], "style", { marginTop: 12, display: 'flex', gap: 8, alignItems: 'center' });
+
+    // Input for new item text
+    const todoInputId = add(doc, todoButtonsId, el("input"));
+    doc.updateAttribute([todoInputId], "type", "text");
+    doc.updateAttribute([todoInputId], "placeholder", "New item...");
+    doc.updateAttribute([todoInputId], "style", { padding: '4px 8px', flex: 1 });
+
+    // Actions that copy the input value into a new list item
+    const addTodoWithInputActions: GeneralizedPatch[] = [
+        { action: "insert", path: ["nodes", "$0", "children", -1], value: { id: "$1", kind: "element", tag: "li", attrs: {}, children: [] } },
+        { action: "copy", path: ["nodes", "$1", "children", 0], value: { id: "$2", sourceId: todoInputId, sourceAttr: "data-copy-value" } },
+    ];
+
+    add(doc, todoButtonsId, action("Add Item", todoListId, addTodoWithInputActions));
 
     // =========================================================================
     // Example 3: Hello World (Bulk Transformation)

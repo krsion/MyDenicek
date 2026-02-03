@@ -11,11 +11,17 @@ function isNodeId(segment: string): boolean {
     return /^\d+@\d+$/.test(segment);
 }
 
+// Check if a path segment is a variable placeholder ($0, $1, etc.)
+function isVariablePlaceholder(segment: string): boolean {
+    return /^\$\d+$/.test(segment);
+}
+
 // Extract the node ID from a path (e.g., ["nodes", "321@18100", "tag"] -> "321@18100")
+// Also recognizes variable placeholders like $0, $1
 function extractNodeId(path: (string | number)[]): string | null {
     for (const segment of path) {
         const str = String(segment);
-        if (isNodeId(str)) {
+        if (isNodeId(str) || isVariablePlaceholder(str)) {
             return str;
         }
     }
@@ -37,9 +43,11 @@ interface RecordedScriptViewProps {
     mode?: "history" | "view";
     /** Callback when delete button is clicked in view mode */
     onDeleteAction?: (index: number) => void;
+    /** The target node ID for $0 placeholder (used when viewing button actions) */
+    actionTarget?: string;
 }
 
-export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSelectionChange, targetOverrides, sourceOverrides, onRetarget, onRetargetSource, currentNodeId, analysis, mode = "history", onDeleteAction }: RecordedScriptViewProps) {
+export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSelectionChange, targetOverrides, sourceOverrides, onRetarget, onRetargetSource, currentNodeId, analysis, mode = "history", onDeleteAction, actionTarget }: RecordedScriptViewProps) {
     const { formatValue } = usePeerAlias();
     const hasSelection = selectedIndices !== undefined && onSelectionChange !== undefined;
     const allSelected = hasSelection && script.length > 0 && selectedIndices.size === script.length;
@@ -102,7 +110,7 @@ export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSel
                     ) : null}
                 />
             )}
-            <div style={{ overflowX: 'auto' }}>
+            <div style={{ overflowX: 'auto', overflowY: 'auto' }}>
                 <Table size="small">
                     <TableHeader>
                         <TableRow>
@@ -121,9 +129,7 @@ export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSel
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {[...script].reverse().map((patch, reversedIndex) => {
-                            // Calculate original index (newest first, so reverse the index)
-                            const i = script.length - 1 - reversedIndex;
+                        {script.map((patch, i) => {
                             const originalNodeId = extractNodeId(patch.path);
                             const overriddenNodeId = targetOverrides?.get(i);
                             const displayNodeId = overriddenNodeId ?? originalNodeId;
@@ -146,6 +152,18 @@ export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSel
                             // Render node reference with override styling and target button
                             const renderTargetNode = () => {
                                 if (!displayNodeId) return null;
+                                // Check if it's a variable placeholder ($0, $1, etc.)
+                                const varMatch = displayNodeId.match(/^\$(\d+)$/);
+                                if (varMatch) {
+                                    const num = parseInt(varMatch[1]!, 10);
+                                    // $0 with actionTarget = show actual target node
+                                    if (num === 0 && actionTarget) {
+                                        return <NodeId id={actionTarget} onClick={onNodeClick} />;
+                                    }
+                                    // $0 without actionTarget = show #0 (target placeholder)
+                                    // $1, $2, etc. = show #1, #2, etc. (created nodes)
+                                    return <Badge appearance="outline" color="success" size="small">#{num}</Badge>;
+                                }
                                 return (
                                     <>
                                         <span style={isOverridden ? { backgroundColor: 'rgba(34, 197, 94, 0.2)', borderRadius: '3px' } : undefined}>
@@ -171,7 +189,7 @@ export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSel
                             const renderActionSentence = () => {
                                 // Insert on children - "insert <node> #N to TARGET's path"
                                 if (patch.action === "insert" && pathRest[0] === "children" && value && typeof value === 'object') {
-                                    const node = value as { kind?: string; tag?: string; value?: string; label?: string; attrs?: Record<string, unknown>; target?: string };
+                                    const node = value as { kind?: string; tag?: string; value?: string; label?: string; attrs?: Record<string, unknown>; target?: string; id?: string };
                                     const kind = node.kind || 'element';
                                     let nodeDisplay = '';
                                     if (kind === 'element') {
@@ -189,6 +207,10 @@ export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSel
                                         nodeDisplay = `<button>${node.label || 'Action'}</button>`;
                                     }
 
+                                    // Check if value.id is a variable placeholder (for generalized actions)
+                                    const varIdMatch = node.id?.match(/^\$(\d+)$/);
+                                    const varCreatedNum = varIdMatch ? parseInt(varIdMatch[1]!, 10) : null;
+
                                     return (
                                         <>
                                             <span style={{ color: '#0078d4' }}>insert</span>
@@ -197,6 +219,9 @@ export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSel
                                                 <Tooltip content={`Creates node #${creationInfo.number}`} relationship="description">
                                                     <Badge appearance="filled" color="success" size="small">#{creationInfo.number}</Badge>
                                                 </Tooltip>
+                                            )}
+                                            {!creationInfo && varCreatedNum !== null && (
+                                                <Badge appearance="filled" color="success" size="small">#{varCreatedNum}</Badge>
                                             )}
                                             <span>to</span>
                                             {renderTargetNode()}
@@ -302,7 +327,7 @@ export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSel
                                         if (!id) return null;
                                         const varMatch = id.match(/^\$(\d+)$/);
                                         if (varMatch) {
-                                            const num = parseInt(varMatch[1]!, 10) + 1;
+                                            const num = parseInt(varMatch[1]!, 10);
                                             return <Badge appearance="outline" color="success" size="small">#{num}</Badge>;
                                         }
                                         return <NodeId id={id} onClick={onNodeClick} />;
@@ -311,7 +336,7 @@ export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSel
                                     const isVar = (id: string | null) => id && /^\$\d+$/.test(id);
                                     const getVarNum = (id: string) => {
                                         const match = id.match(/^\$(\d+)$/);
-                                        return match ? parseInt(match[1]!, 10) + 1 : null;
+                                        return match ? parseInt(match[1]!, 10) : null;
                                     };
 
                                     const formatNestedNode = (act: { action?: string; path?: (string | number)[]; value?: unknown }) => {
