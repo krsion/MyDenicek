@@ -833,12 +833,55 @@ export class DenicekModel {
 
         const newId = treeIdToString(newNode.id);
         const children = parentNode.children();
-        const actualIndex = index ?? (children ? children.length - 1 : 0);
+        const countAfter = children ? children.length : 0;
+        const countBefore = countAfter - 1;
+        const actualIndex = index ?? countBefore;
+        // Use -1 for "end" position to make replays append correctly
+        const emitIndex = actualIndex === countBefore ? -1 : actualIndex;
 
+        // Get the kind and relevant data for the insert value
+        const sourceKind = sourceData.get(NODE_KIND) as "element" | "value" | "action" | "formula" | "ref" | undefined;
+        const insertValue: Record<string, unknown> = {
+            id: newId,
+            kind: sourceKind || "value",
+            sourceId,
+            ...(sourceAttr && { sourceAttr })
+        };
+
+        // Include relevant node data based on kind
+        if (sourceAttr) {
+            // Created a value node from attribute
+            insertValue.kind = "value";
+            const sourceAttrs = sourceData.get(NODE_ATTRS);
+            if (sourceAttrs && sourceAttrs instanceof LoroMap) {
+                const val = sourceAttrs.get(sourceAttr);
+                insertValue.value = val != null ? String(val) : "";
+            }
+        } else if (sourceKind === "element") {
+            insertValue.tag = sourceData.get(NODE_TAG) as string;
+            const sourceAttrs = sourceData.get(NODE_ATTRS);
+            if (sourceAttrs && sourceAttrs instanceof LoroMap) {
+                insertValue.attrs = sourceAttrs.toJSON() as Record<string, unknown>;
+            }
+        } else if (sourceKind === "value") {
+            const sourceText = sourceData.get(NODE_TEXT) as LoroText | undefined;
+            insertValue.value = sourceText ? sourceText.toString() : "";
+        } else if (sourceKind === "action") {
+            insertValue.label = sourceData.get(NODE_LABEL) as string;
+            insertValue.target = sourceData.get(NODE_TARGET) as string;
+            const sourceActions = sourceData.get(NODE_ACTIONS) as LoroList | undefined;
+            insertValue.actions = sourceActions ? sourceActions.toJSON() as GeneralizedPatch[] : [];
+        } else if (sourceKind === "formula") {
+            insertValue.operation = sourceData.get(NODE_OPERATION) as string;
+        } else if (sourceKind === "ref") {
+            insertValue.target = sourceData.get(NODE_REF_TARGET) as string;
+        }
+
+        // Emit as insert with sourceId (not copy)
         this.emitPatch({
-            action: "copy",
-            path: ["nodes", parentId, "children", actualIndex],
-            value: { id: newId, sourceId, ...(sourceAttr && { sourceAttr }) }
+            action: "insert",
+            path: ["nodes", parentId, "children", emitIndex],
+            value: insertValue
         });
 
         return newId;
@@ -859,23 +902,14 @@ export class DenicekModel {
                 const rawIndex = path[3] as number;
                 // -1 means "append to end"
                 const index = rawIndex === -1 ? undefined : rawIndex;
-                const nodeDef = value as NodeInput;
-                return this.addChild(parentId, nodeDef, index);
-            }
+                const nodeDef = value as NodeInput & { sourceId?: string; sourceAttr?: string };
 
-            // Handle copy action - reads CURRENT value from source
-            if (action === "copy" && path.length >= 4 && path[2] === "children") {
-                const parentId = id;
-                const rawIndex = path[3] as number;
-                // -1 means "append to end"
-                const index = rawIndex === -1 ? undefined : rawIndex;
-                const copyDef = value as { sourceId: string; sourceAttr?: string };
-
-                if (!copyDef.sourceId) {
-                    throw new DenicekError("Copy patch missing sourceId", "applyPatch", { patch });
+                // If sourceId is present, this is a copy operation - read CURRENT value from source
+                if (nodeDef.sourceId) {
+                    return this.copyNode(nodeDef.sourceId, parentId, { index, sourceAttr: nodeDef.sourceAttr });
                 }
 
-                return this.copyNode(copyDef.sourceId, parentId, { index, sourceAttr: copyDef.sourceAttr });
+                return this.addChild(parentId, nodeDef, index);
             }
 
             // Handle sibling insert - insert relative to a node without knowing parent

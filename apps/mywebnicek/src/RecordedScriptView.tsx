@@ -205,8 +205,8 @@ export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSel
                                     );
                                 }
 
-                                // Copy - "copy SOURCE's .attr to TARGET's path"
-                                if (patch.action === "copy" && value && typeof value === 'object' && 'sourceId' in value) {
+                                // Copy (insert with sourceId) - "copy SOURCE's .attr to TARGET's path"
+                                if (patch.action === "insert" && value && typeof value === 'object' && 'sourceId' in value) {
                                     const copyVal = value as { sourceId: string; sourceAttr?: string };
                                     const origSourceId = copyVal.sourceId;
                                     const overriddenSourceId = sourceOverrides?.get(i);
@@ -361,7 +361,7 @@ export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSel
                                                     );
                                                 }
 
-                                                if (act.action === "copy" && actValue && typeof actValue === 'object' && 'sourceId' in actValue) {
+                                                if (act.action === "insert" && actValue && typeof actValue === 'object' && 'sourceId' in actValue) {
                                                     const copyVal = actValue as { sourceId: string; sourceAttr?: string };
                                                     return (
                                                         <div key={idx} style={{ marginLeft: 12, display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>

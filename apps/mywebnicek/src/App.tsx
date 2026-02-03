@@ -366,7 +366,7 @@ export const App = () => {
       }
 
       // Apply source override for copy actions
-      if (sourceOverride && action.action === "copy" && action.value && typeof action.value === 'object' && 'sourceId' in action.value) {
+      if (sourceOverride && action.action === "insert" && action.value && typeof action.value === 'object' && 'sourceId' in action.value) {
         result = {
           ...result,
           value: { ...action.value, sourceId: sourceOverride }
@@ -441,7 +441,7 @@ export const App = () => {
         result = { ...result, path: newPath };
       }
 
-      if (sourceOverride && action.action === "copy" && action.value && typeof action.value === 'object' && 'sourceId' in action.value) {
+      if (sourceOverride && action.action === "insert" && action.value && typeof action.value === 'object' && 'sourceId' in action.value) {
         result = {
           ...result,
           value: { ...action.value, sourceId: sourceOverride }
@@ -516,7 +516,7 @@ export const App = () => {
     updateAttribute(selectedNodeIds, key, value);
   };
 
-  // Clipboard: copy creates a "copy" action referencing the source node
+  // Clipboard: copy creates an "insert" action with sourceId referencing the source node
   const { canPaste, isInputSelected, isValueSelected, handleCopy, handlePaste } = useClipboard({
     selectedNodeId: selectedNodeId ?? null,
     node,
