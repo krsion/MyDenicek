@@ -1123,8 +1123,6 @@ export class DenicekDocument {
 
     private diffToPatches(eventDiffs: [ContainerID, Diff][][]): GeneralizedPatch[] {
         const patches: GeneralizedPatch[] = [];
-        const idMap = new Map<string, string>(); // actualId -> $n (shared across events)
-        let varCounter = 1;
 
         // Build container ID → node ID lookup for existing nodes
         const containerToNode = this.buildContainerIdMap();
@@ -1136,15 +1134,12 @@ export class DenicekDocument {
             // Collect map diff values for created nodes (survives undo since it's from the diffs)
             const nodeDataInEvent = new Map<string, Record<string, unknown>>();
 
-            // First pass: collect tree creates, assign $n IDs, and extract map data from diffs
+            // First pass: collect tree creates and extract map data from diffs
             for (const [containerId, diff] of diffs) {
                 if (diff.type === "tree") {
                     for (const item of (diff as { type: "tree"; diff: TreeDiffItem[] }).diff) {
                         if (item.action === "create") {
                             const actualId = treeIdToString(item.target);
-                            if (!idMap.has(actualId)) {
-                                idMap.set(actualId, `$${varCounter++}`);
-                            }
                             createdInEvent.add(actualId);
                         }
                     }
@@ -1175,27 +1170,25 @@ export class DenicekDocument {
             for (const [containerId, diff] of diffs) {
                 if (diff.type === "tree") {
                     for (const item of (diff as { type: "tree"; diff: TreeDiffItem[] }).diff) {
-                        const patch = this.treeDiffToPatch(item, idMap, nodeDataInEvent);
+                        const patch = this.treeDiffToPatch(item, nodeDataInEvent);
                         if (patch) patches.push(patch);
                     }
                 } else if (diff.type === "map") {
                     const nodeId = DenicekDocument.nodeIdFromContainerId(String(containerId))
                         ?? containerToNode.get(String(containerId));
                     if (nodeId && !createdInEvent.has(nodeId)) {
-                        const target = idMap.get(nodeId) ?? nodeId;
                         const updated = (diff as { type: "map"; updated: Record<string, unknown> }).updated;
                         for (const [key, value] of Object.entries(updated)) {
                             if (value !== undefined) {
-                                patches.push({ type: "map", target, key, value });
+                                patches.push({ type: "map", target: nodeId, key, value });
                             }
                         }
                     }
                 } else if (diff.type === "text") {
                     const nodeId = containerToNode.get(String(containerId));
                     if (nodeId && !createdInEvent.has(nodeId)) {
-                        const target = idMap.get(nodeId) ?? nodeId;
                         const deltas = (diff as { type: "text"; diff: Delta<string>[] }).diff;
-                        patches.push(...this.textDeltaToPatches(deltas, target));
+                        patches.push(...this.textDeltaToPatches(deltas, nodeId));
                     }
                 }
             }
@@ -1206,20 +1199,17 @@ export class DenicekDocument {
 
     private treeDiffToPatch(
         item: TreeDiffItem,
-        idMap: Map<string, string>,
         nodeDataInEvent: Map<string, Record<string, unknown>>,
     ): GeneralizedPatch | null {
-        const actualTarget = treeIdToString(item.target);
-        const target = idMap.get(actualTarget) ?? actualTarget;
+        const target = treeIdToString(item.target);
 
         if (item.action === "create") {
-            const actualParent = item.parent ? treeIdToString(item.parent) : "root";
-            const parent = idMap.get(actualParent) ?? actualParent;
+            const parent = item.parent ? treeIdToString(item.parent) : "root";
 
             // Build node data from same-event map diffs (survives undo) or fall back to live node
-            const diffData = nodeDataInEvent.get(actualTarget);
+            const diffData = nodeDataInEvent.get(target);
             const sourceId = diffData?.sourceId as string | undefined
-                ?? this.getNode(actualTarget)?.sourceId;
+                ?? this.getNode(target)?.sourceId;
 
             // Copy creates: emit sourceId so replay uses copyNode
             if (sourceId) {
@@ -1236,7 +1226,7 @@ export class DenicekDocument {
             // Direct creates: build PatchNodeData from diff data
             const data = diffData
                 ? this.diffDataToNodeData(diffData)
-                : this.nodeToData(this.getNode(actualTarget));
+                : this.nodeToData(this.getNode(target));
             return {
                 type: "tree",
                 action: "create",
@@ -1252,8 +1242,7 @@ export class DenicekDocument {
         }
 
         if (item.action === "move") {
-            const actualParent = item.parent ? treeIdToString(item.parent) : "root";
-            const parent = idMap.get(actualParent) ?? actualParent;
+            const parent = item.parent ? treeIdToString(item.parent) : "root";
             return { type: "tree", action: "move", target, parent, index: item.index };
         }
 

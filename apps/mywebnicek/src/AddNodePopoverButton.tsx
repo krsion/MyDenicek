@@ -29,7 +29,8 @@ export const AddNodePopoverButton = ({ disabled, canAddChild = true, initialValu
     }, [initialValue]);
 
     const handleSubmit = () => {
-        const content = value.trim();
+        // Don't trim value nodes — whitespace can be meaningful (e.g. space separator for splitString)
+        const content = nodeType === "value" ? value : value.trim();
 
         // Require content for tag and action nodes, but allow empty value nodes
         if (!content && nodeType !== "value" && nodeType !== "formula") return;

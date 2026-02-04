@@ -165,12 +165,12 @@ function createFormativeExamples(doc: DenicekDocument, rootId: string): void {
 
     const helloDescId = add(doc, helloArticleId, el("p"));
     doc.updateAttribute([helloDescId], "style", { fontSize: '0.9em', color: '#666', marginBottom: 12 });
-    add(doc, helloDescId, val("Record wrapping in <strong>, then replay on each item."));
+    add(doc, helloDescId, val("Record wrapping in formula \"Capitalize\", then replay on each item."));
 
     // Word list
     const helloListId = add(doc, helloArticleId, el("ul"));
 
-    const words = ["Hello", "World", "Denicek"];
+    const words = ["hELLo", "wORlD", "dEnIcEk"];
     for (const word of words) {
         const liId = add(doc, helloListId, el("li"));
         add(doc, liId, val(word));

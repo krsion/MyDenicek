@@ -13,6 +13,8 @@ type Props = {
     text: string;
     /** Optional validation function. Returns error message or null if valid. */
     validate?: (value: string) => string | null;
+    /** Skip trimming input — useful for value nodes where whitespace is meaningful. */
+    preserveWhitespace?: boolean;
 };
 
 /**
@@ -43,7 +45,7 @@ export function validateTagName(value: string): string | null {
     return error;
 }
 
-export const ToolbarPopoverButton = ({ icon, disabled, placeholder, ariaLabel, children, onSubmit, initialValue, text, validate }: Props) => {
+export const ToolbarPopoverButton = ({ icon, disabled, placeholder, ariaLabel, children, onSubmit, initialValue, text, validate, preserveWhitespace }: Props) => {
     const [open, setOpen] = useState(false);
     const [value, setValue] = useState(initialValue);
     const [error, setError] = useState<string | null>(null);
@@ -54,7 +56,7 @@ export const ToolbarPopoverButton = ({ icon, disabled, placeholder, ariaLabel, c
     }, [initialValue]);
 
     const handleSubmit = (inputValue: string) => {
-        const trimmed = inputValue.trim();
+        const trimmed = preserveWhitespace ? inputValue : inputValue.trim();
         if (validate) {
             const validationError = validate(trimmed);
             if (validationError) {

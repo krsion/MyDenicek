@@ -4,7 +4,7 @@ import { type GeneralizedPatch } from "@mydenicek/core";
 
 import { NodeId } from "./components/NodeId";
 import { usePeerAlias } from "./context/PeerAliasContext";
-import { getCreationInfo, type ScriptAnalysis } from "./utils/scriptAnalysis";
+import type { CreatedNodeInfo } from "./utils/scriptAnalysis";
 
 // Check if a string is a variable placeholder ($0, $1, etc.)
 function isVariablePlaceholder(id: string): boolean {
@@ -21,12 +21,13 @@ interface RecordedScriptViewProps {
     onNodeClick?: (id: string) => void;
     selectedIndices?: Set<number>;
     onSelectionChange?: (indices: Set<number>) => void;
-    targetOverrides?: Map<number, string>;
-    sourceOverrides?: Map<number, string>;
-    onRetarget?: (index: number, newNodeId: string) => void;
-    onRetargetSource?: (index: number, newSourceId: string) => void;
+    /** Global ID overrides: originalId → newId */
+    idOverrides?: Map<string, string>;
+    /** Retarget a concrete ID globally (all references update) */
+    onRetarget?: (originalId: string, newNodeId: string) => void;
     currentNodeId?: string | null;
-    analysis?: ScriptAnalysis | null;
+    /** Dynamic creation analysis based on current selection */
+    createdNodes?: Map<string, CreatedNodeInfo>;
     /** Mode: "history" shows selection checkboxes, "view" shows delete buttons */
     mode?: "history" | "view";
     /** Callback when delete button is clicked in view mode */
@@ -35,7 +36,7 @@ interface RecordedScriptViewProps {
     actionTarget?: string;
 }
 
-export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSelectionChange, targetOverrides, sourceOverrides, onRetarget, onRetargetSource, currentNodeId, analysis, mode = "history", onDeleteAction, actionTarget }: RecordedScriptViewProps) {
+export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSelectionChange, idOverrides, onRetarget, currentNodeId, createdNodes, mode = "history", onDeleteAction, actionTarget }: RecordedScriptViewProps) {
     const { formatValue } = usePeerAlias();
     const hasSelection = selectedIndices !== undefined && onSelectionChange !== undefined;
     const allSelected = hasSelection && script.length > 0 && selectedIndices.size === script.length;
@@ -119,38 +120,40 @@ export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSel
                     <TableBody>
                         {script.map((patch, i) => {
                             const isSelected = hasSelection && selectedIndices.has(i);
-                            const creationInfo = analysis ? getCreationInfo(i, analysis) : null;
 
-                            // Render a node reference, resolving variable placeholders and overrides
-                            function renderNodeRef(nodeId: string, options?: {
-                                overrideId?: string;
-                                showRetargetButton?: boolean;
-                                onRetargetClick?: (index: number, newId: string) => void;
-                            }): React.ReactNode {
-                                const displayId = options?.overrideId ?? nodeId;
-                                const isOverridden = options?.overrideId !== undefined;
-
-                                const varNum = getVariableNumber(displayId);
-                                if (varNum !== null) {
-                                    // $0 with actionTarget: show the actual target node
-                                    if (varNum === 0 && actionTarget) {
-                                        return <NodeId id={actionTarget} onClick={onNodeClick} />;
+                            // Render a node reference — either a concrete ID or a variable placeholder
+                            function renderNodeRef(nodeId: string): React.ReactNode {
+                                // In view mode, handle variable placeholders from stored button actions
+                                if (isViewMode) {
+                                    const varNum = getVariableNumber(nodeId);
+                                    if (varNum !== null) {
+                                        if (varNum === 0 && actionTarget) {
+                                            return <NodeId id={actionTarget} onClick={onNodeClick} />;
+                                        }
+                                        return <Badge appearance="outline" color="success" size="small">#{varNum}</Badge>;
                                     }
-                                    return <Badge appearance="outline" color="success" size="small">#{varNum}</Badge>;
                                 }
+
+                                // History mode: show concrete IDs with optional override + retarget
+                                const displayId = idOverrides?.get(nodeId) ?? nodeId;
+                                const isOverridden = idOverrides?.has(nodeId) ?? false;
+                                const creation = createdNodes?.get(displayId);
 
                                 return (
                                     <>
                                         <span style={isOverridden ? { backgroundColor: 'rgba(34, 197, 94, 0.2)', borderRadius: '3px' } : undefined}>
                                             <NodeId id={displayId} onClick={onNodeClick} />
                                         </span>
-                                        {options?.showRetargetButton && !isViewMode && options.onRetargetClick && currentNodeId && (
+                                        {creation && (
+                                            <Badge appearance="outline" color="success" size="small" style={{ marginLeft: 2 }}>#{creation.number}</Badge>
+                                        )}
+                                        {onRetarget && !isViewMode && currentNodeId && !isVariablePlaceholder(nodeId) && (
                                             <Tooltip content="Use selected node as target" relationship="label">
                                                 <Button
                                                     size="small"
                                                     appearance="subtle"
                                                     icon={<TargetRegular />}
-                                                    onClick={() => options.onRetargetClick!(i, currentNodeId)}
+                                                    onClick={() => onRetarget(nodeId, currentNodeId)}
                                                     disabled={displayId === currentNodeId}
                                                     style={{ minWidth: 'auto', padding: '2px' }}
                                                 />
@@ -158,24 +161,6 @@ export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSel
                                         )}
                                     </>
                                 );
-                            }
-
-                            // Render the target node with override and retarget support
-                            function renderTarget(nodeId: string): React.ReactNode {
-                                return renderNodeRef(nodeId, {
-                                    overrideId: targetOverrides?.get(i),
-                                    showRetargetButton: !!onRetarget && !isVariablePlaceholder(nodeId),
-                                    onRetargetClick: onRetarget,
-                                });
-                            }
-
-                            // Render a source node with source override and retarget support
-                            function renderSource(sourceId: string): React.ReactNode {
-                                return renderNodeRef(sourceId, {
-                                    overrideId: sourceOverrides?.get(i),
-                                    showRetargetButton: !!onRetargetSource,
-                                    onRetargetClick: onRetargetSource,
-                                });
                             }
 
                             function renderActionSentence(): React.ReactNode {
@@ -186,19 +171,14 @@ export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSel
                                             return (
                                                 <>
                                                     <span style={{ color: '#0078d4' }}>copy</span>
-                                                    {renderSource(patch.sourceId)}
+                                                    {renderNodeRef(patch.sourceId)}
                                                     <span>to</span>
-                                                    {renderTarget(patch.parent)}
-                                                    {creationInfo && (
-                                                        <Tooltip content={`Creates node #${creationInfo.number}`} relationship="description">
-                                                            <Badge appearance="filled" color="success" size="small">#{creationInfo.number}</Badge>
-                                                        </Tooltip>
-                                                    )}
+                                                    {renderNodeRef(patch.parent)}
                                                 </>
                                             );
                                         }
 
-                                        // Create with inline data: "create <tag> in PARENT" or "create "text" in PARENT"
+                                        // Create with inline data: "create <tag> in PARENT"
                                         if (patch.data) {
                                             let nodeDisplay = '';
                                             if (patch.data.kind === 'element') {
@@ -222,13 +202,8 @@ export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSel
                                                 <>
                                                     <span style={{ color: '#0078d4' }}>create</span>
                                                     <span style={{ color: '#666' }}>{nodeDisplay}</span>
-                                                    {creationInfo && (
-                                                        <Tooltip content={`Creates node #${creationInfo.number}`} relationship="description">
-                                                            <Badge appearance="filled" color="success" size="small">#{creationInfo.number}</Badge>
-                                                        </Tooltip>
-                                                    )}
                                                     <span>in</span>
-                                                    {renderTarget(patch.parent)}
+                                                    {renderNodeRef(patch.parent)}
                                                 </>
                                             );
                                         }
@@ -237,13 +212,8 @@ export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSel
                                         return (
                                             <>
                                                 <span style={{ color: '#0078d4' }}>create</span>
-                                                {creationInfo && (
-                                                    <Tooltip content={`Creates node #${creationInfo.number}`} relationship="description">
-                                                        <Badge appearance="filled" color="success" size="small">#{creationInfo.number}</Badge>
-                                                    </Tooltip>
-                                                )}
                                                 <span>in</span>
-                                                {renderTarget(patch.parent)}
+                                                {renderNodeRef(patch.parent)}
                                             </>
                                         );
                                     }
@@ -252,23 +222,18 @@ export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSel
                                         return (
                                             <>
                                                 <span style={{ color: '#0078d4' }}>delete</span>
-                                                {renderTarget(patch.target)}
+                                                {renderNodeRef(patch.target)}
                                             </>
                                         );
                                     }
 
                                     if (patch.action === "move") {
-                                        const parentVarNum = getVariableNumber(patch.parent);
                                         return (
                                             <>
                                                 <span style={{ color: '#0078d4' }}>move</span>
-                                                {renderTarget(patch.target)}
+                                                {renderNodeRef(patch.target)}
                                                 <span>to</span>
-                                                {parentVarNum !== null ? (
-                                                    <Badge appearance="outline" color="success" size="small">#{parentVarNum}</Badge>
-                                                ) : (
-                                                    <NodeId id={patch.parent} onClick={onNodeClick} />
-                                                )}
+                                                {renderNodeRef(patch.parent)}
                                                 <span style={{ color: '#888' }}>at index {patch.index}</span>
                                             </>
                                         );
@@ -281,7 +246,7 @@ export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSel
                                             <span style={{ color: '#0078d4' }}>set</span>
                                             <span style={{ color: '#666' }}>{patch.key} = {JSON.stringify(formatValue(patch.value)).slice(0, 30)}</span>
                                             <span>on</span>
-                                            {renderTarget(patch.target)}
+                                            {renderNodeRef(patch.target)}
                                         </>
                                     );
                                 }
@@ -297,7 +262,7 @@ export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSel
                                             <span style={{ color: '#888' }}>del:{patch.delete}</span>
                                             <span style={{ color: '#666' }}>{insertDisplay}</span>
                                             <span>on</span>
-                                            {renderTarget(patch.target)}
+                                            {renderNodeRef(patch.target)}
                                         </>
                                     );
                                 }

@@ -25,7 +25,7 @@ import { JsonView } from "./JsonView.tsx";
 import { RecordedScriptView } from "./RecordedScriptView";
 import { RenderedDocument } from "./RenderedDocument.tsx";
 import { sanitizeTagName, ToolbarPopoverButton, validateTagName } from "./ToolbarPopoverButton";
-import { analyzeScript, type ScriptAnalysis } from "./utils/scriptAnalysis";
+import { analyzeSelection, applyIdOverrides, generalizeScript } from "./utils/scriptAnalysis";
 import { generalizeSelection } from "./utils/selectionUtils";
 
 // Generate a random room ID
@@ -41,39 +41,6 @@ function getRoomIdFromHash(): string {
 
 // LocalStorage key for peer name
 const PEER_NAME_STORAGE_KEY = "mydenicek-peer-name";
-
-function applyPatchOverrides(patch: GeneralizedPatch, targetOverride?: string, sourceOverride?: string): GeneralizedPatch {
-  const resolve = (id: string) => {
-    // Only replace concrete Loro OpIds, not variable placeholders ($0, $1, etc.)
-    if (targetOverride && /^\d+@\d+$/.test(id)) {
-      return targetOverride;
-    }
-    return id;
-  };
-
-  if (patch.type === "tree") {
-    if (patch.action === "create") {
-      return {
-        ...patch,
-        parent: resolve(patch.parent),
-        ...(sourceOverride && patch.sourceId ? { sourceId: sourceOverride } : {}),
-      };
-    }
-    if (patch.action === "delete") {
-      return { ...patch, target: resolve(patch.target) };
-    }
-    if (patch.action === "move") {
-      return { ...patch, target: resolve(patch.target), parent: resolve(patch.parent) };
-    }
-  }
-  if (patch.type === "map") {
-    return { ...patch, target: resolve(patch.target) };
-  }
-  if (patch.type === "text") {
-    return { ...patch, target: resolve(patch.target) };
-  }
-  return patch;
-}
 
 export const App = () => {
   const { document, version } = useDocumentState();
@@ -99,8 +66,7 @@ export const App = () => {
   const navigatorRef = useRef<DomNavigatorHandle>(null);
   const historyScrollRef = useRef<HTMLDivElement>(null);
   const [selectedActionIndices, setSelectedActionIndices] = useState<Set<number>>(new Set());
-  const [targetOverrides, setTargetOverrides] = useState<Map<number, string>>(new Map());
-  const [sourceOverrides, setSourceOverrides] = useState<Map<number, string>>(new Map());
+  const [idOverrides, setIdOverrides] = useState<Map<string, string>>(new Map());
 
   // Add to Button dialog state
   const [showAddToButtonDialog, setShowAddToButtonDialog] = useState(false);
@@ -329,11 +295,13 @@ export const App = () => {
     return generalizeSelection(document, ids);
   }, [document]);
 
-  // Analyze recording history for created node dependencies
-  const scriptAnalysis: ScriptAnalysis | null = useMemo(() => {
-    if (!recordingHistory || recordingHistory.length === 0) return null;
-    return analyzeScript(recordingHistory);
-  }, [recordingHistory]);
+  // Dynamic creation analysis based on current selection
+  const createdNodes = useMemo(() => {
+    if (!recordingHistory || recordingHistory.length === 0 || selectedActionIndices.size === 0) {
+      return new Map();
+    }
+    return analyzeSelection(recordingHistory, selectedActionIndices);
+  }, [recordingHistory, selectedActionIndices]);
 
   // Scroll history to bottom when new actions are recorded
   useEffect(() => {
@@ -375,13 +343,11 @@ export const App = () => {
 
     if (actionsToReplay.length === 0) return;
 
-    // Apply target/source overrides (manual retargeting by user)
-    const finalActions = actionsToReplay.map((action, newIdx) => {
-      const origIdx = indicesToReplay[newIdx]!;
-      return applyPatchOverrides(action, targetOverrides.get(origIdx), sourceOverrides.get(origIdx));
-    });
-
-    replay(finalActions, selectedNodeId);
+    // Apply global ID overrides (user retargeting)
+    const overridden = applyIdOverrides(actionsToReplay, idOverrides);
+    // Generalize: created nodes → $1, $2, etc.
+    const generalized = generalizeScript(overridden);
+    replay(generalized, selectedNodeId);
   };
 
   const handleActionSelectionChange = useCallback((indices: Set<number>) => {
@@ -391,22 +357,13 @@ export const App = () => {
   const handleClearHistory = useCallback(() => {
     clearHistory();
     setSelectedActionIndices(new Set());
-    setTargetOverrides(new Map());
-    setSourceOverrides(new Map());
+    setIdOverrides(new Map());
   }, [clearHistory]);
 
-  const handleRetarget = useCallback((index: number, newNodeId: string) => {
-    setTargetOverrides(prev => {
+  const handleRetarget = useCallback((originalId: string, newNodeId: string) => {
+    setIdOverrides(prev => {
       const newMap = new Map(prev);
-      newMap.set(index, newNodeId);
-      return newMap;
-    });
-  }, []);
-
-  const handleRetargetSource = useCallback((index: number, newSourceId: string) => {
-    setSourceOverrides(prev => {
-      const newMap = new Map(prev);
-      newMap.set(index, newSourceId);
+      newMap.set(originalId, newNodeId);
       return newMap;
     });
   }, []);
@@ -423,18 +380,22 @@ export const App = () => {
 
     if (actionsToUse.length === 0) return;
 
-    // Apply target/source overrides
-    const finalActions = actionsToUse.map((action, newIdx) => {
-      const origIdx = indicesToUse[newIdx]!;
-      return applyPatchOverrides(action, targetOverrides.get(origIdx), sourceOverrides.get(origIdx));
-    });
+    // Apply global ID overrides
+    const overridden = applyIdOverrides(actionsToUse, idOverrides);
+
+    // Get the button's target to map as $0 for reusability
+    const buttonNode = document.getNode(selectedActionNodeId);
+    const startNodeId = buttonNode?.kind === "action" ? buttonNode.target : undefined;
+
+    // Generalize: created nodes → $1, $2, etc.; button target → $0
+    const generalized = generalizeScript(overridden, startNodeId);
 
     // Append actions to the existing action node
-    document.appendActions(selectedActionNodeId, finalActions);
+    document.appendActions(selectedActionNodeId, generalized);
 
     setShowAddToButtonDialog(false);
     setSelectedActionNodeId(null);
-  }, [recordingHistory, selectedActionIndices, targetOverrides, sourceOverrides, document, selectedActionNodeId]);
+  }, [recordingHistory, selectedActionIndices, idOverrides, document, selectedActionNodeId]);
 
   // Handler for action button clicks
   const handleActionClick = useCallback((actions: GeneralizedPatch[], target: string) => {
@@ -592,6 +553,7 @@ export const App = () => {
                     ariaLabel="Edit"
                     placeholder="Value content"
                     initialValue={String(details?.value ?? "")}
+                    preserveWhitespace
                     onSubmit={(value) => {
                       const originalValue = String(details?.value ?? "");
                       document.updateValue(selectedNodeIds, originalValue, value);
@@ -825,12 +787,7 @@ export const App = () => {
                       onNodeClick={(id) => setSelectedNodeIds([id])}
                       selectedIndices={new Set()}
                       onSelectionChange={() => { }}
-                      targetOverrides={new Map()}
-                      sourceOverrides={new Map()}
-                      onRetarget={() => { }}
-                      onRetargetSource={() => { }}
                       currentNodeId={selectedNodeId ?? null}
-                      analysis={null}
                       mode="view"
                       actionTarget={pinnedButtonNode.target}
                       onDeleteAction={(index) => {
@@ -859,12 +816,10 @@ export const App = () => {
                 onNodeClick={(id) => setSelectedNodeIds([id])}
                 selectedIndices={selectedActionIndices}
                 onSelectionChange={handleActionSelectionChange}
-                targetOverrides={targetOverrides}
-                sourceOverrides={sourceOverrides}
+                idOverrides={idOverrides}
                 onRetarget={handleRetarget}
-                onRetargetSource={handleRetargetSource}
                 currentNodeId={selectedNodeId ?? null}
-                analysis={scriptAnalysis}
+                createdNodes={createdNodes}
               />
             </div>
             <div style={{ padding: '12px', borderTop: '1px solid #e0e0e0', display: 'flex', gap: '8px' }}>

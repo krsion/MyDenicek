@@ -126,7 +126,7 @@ The following functional requirements specify the capabilities of the system. Re
 
 \textbf{FR-06: Undo/Redo} [Core] The system shall maintain an undo stack and redo stack for each local session. Undo shall reverse the most recent local operation, and redo shall reapply the most recently undone operation.
 
-\textbf{FR-07: Recording} [Core] The system shall automatically record all local document mutations by subscribing to Loro's event system. Each local event carries diffs that are accumulated and converted to generalized patches using variable node IDs (\texttt{\$0}, \texttt{\$1}, etc.) that can be bound to different nodes during replay.
+\textbf{FR-07: Recording} [Core] The system shall automatically record all local document mutations by subscribing to Loro's event system. Each local event carries diffs that are accumulated and converted to generalized patches with concrete node IDs. Variable placeholders (\texttt{\$0}, \texttt{\$1}, etc.) are assigned only when storing actions in a button or at replay time, not in the recorded history.
 
 \textbf{FR-08: Replay} [Core] The system shall support replaying a recorded script starting from a specified node. The generalized node IDs in the script shall be bound to actual node IDs based on the starting node.
 
@@ -295,7 +295,9 @@ An action node stores: \texttt{label} (display text), \texttt{target} (node boun
 
 \subsubsection{Generalized Patches}
 
-Raw Loro diffs reference concrete container and tree IDs, tying them to a specific document state. Generalized patches introduce two abstractions on top of Loro diffs that make them portable and replayable: (1)~variable placeholders (\texttt{\$0}, \texttt{\$1}, ...) replace concrete node IDs so the same script can be replayed on different target nodes, and (2)~create patches distinguish copies (\texttt{sourceId}) from direct creates (\texttt{data}) so replay knows whether to call \texttt{copyNode} or \texttt{addChildren}. There are three patch types:
+Raw Loro diffs reference concrete container and tree IDs, tying them to a specific document state. Generalized patches introduce two abstractions on top of Loro diffs that make them portable and replayable: (1)~variable placeholders (\texttt{\$0}, \texttt{\$1}, ...) can replace concrete node IDs so the same script can be replayed on different target nodes, and (2)~create patches distinguish copies (\texttt{sourceId}) from direct creates (\texttt{data}) so replay knows whether to call \texttt{copyNode} or \texttt{addChildren}.
+
+The recording history stores patches with concrete node IDs, which are displayed as clickable references in the UI. Variable placeholders are only used in stored button scripts (action nodes) and are assigned automatically when the user saves recorded actions to a button or triggers replay. There are three patch types:
 
 \begin{verbatim}
 TreePatch {
@@ -324,7 +326,7 @@ TextPatch {
 }
 \end{verbatim}
 
-Variables: \texttt{\$0} is the target node; \texttt{\$1}, \texttt{\$2}, ... are nodes created during replay.
+Variables (used in button scripts and replay only): \texttt{\$0} is the target node; \texttt{\$1}, \texttt{\$2}, ... are nodes created during replay.
 
 \subsubsection{Recording}
 
@@ -332,9 +334,9 @@ Recording is automatic---the \texttt{DenicekDocument} subscribes to Loro's event
 \begin{enumerate}
 \item Perform operations (add, edit, delete, move nodes)
 \item Loro fires events; the subscriber captures the diffs carried by each event
-\item \texttt{getHistory()} converts accumulated diffs to generalized patches, assigning variable IDs (\texttt{\$1}, \texttt{\$2}, ...) to created nodes and suppressing redundant map/text patches for same-event node creates
-\item Select specific actions from history (or use all)
-\item Click ``Apply'' to replay on the selected node, or ``Add to Button'' to store in an action node
+\item \texttt{getHistory()} converts accumulated diffs to generalized patches with concrete node IDs, suppressing redundant map/text patches for same-event node creates
+\item The UI displays patches with clickable node IDs; users can retarget any ID to a different node and select a subset of actions
+\item Click ``Apply'' to replay on the selected node, or ``Add to Button'' to store in an action node---at this point, concrete IDs are generalized to variable placeholders (\texttt{\$0}, \texttt{\$1}, ...) automatically
 \end{enumerate}
 
 \subsubsection{Replay}
@@ -356,15 +358,17 @@ These examples from the original Denicek paper demonstrate the end-user programm
 
 \subsubsection{Counter}
 
-Demonstrates formulas and action buttons. The document contains a value node storing the count (e.g., \texttt{"5"}), a ref node displaying it, and two action buttons targeting the value.
+Demonstrates formulas and action buttons. The document contains a \texttt{formula(sum)} node displaying the current count and two action buttons (``Increment'' and ``Decrement'').
 
-The ``+1'' button records adding a \texttt{formula(sum)} node with the original value moved as a child argument along with \texttt{"1"}. Clicking transforms \texttt{"5"} into a formula \texttt{sum(ref, "1")} that evaluates to \texttt{"6"}.
+To create the increment button: the user adds a value node \texttt{"1"} as a child of the sum formula and records this step. The recorded action is programmed to the ``Increment'' action button. To create the decrement button: the user adds a value node \texttt{"-1"} as a child and programs the step to the ``Decrement'' button.
+
+Since \texttt{sum} is variadic, each button click appends another argument to the same formula. After several clicks the formula looks like \texttt{sum(1, -1, 1, 1, 1, -1)} and evaluates to the running total.
 
 \subsubsection{Todo List}
 
-Demonstrates recording an ``add item'' pattern. The document contains a \texttt{ul} with existing \texttt{li} items (each with a checkbox and text), plus an ``Add'' action button targeting the list.
+Demonstrates recording a multi-step ``add item'' pattern. The document contains a \texttt{ul} with existing \texttt{li} items, a text input for the new item name, and an ``Add'' action button targeting the list.
 
-To create the button: select the \texttt{ul}, add a new \texttt{li} with checkbox and text value, then select the recorded actions and click ``Add to Button''. Each button click replays the pattern, appending a new item.
+To create the button: the user selects the \texttt{ul}, adds a new empty \texttt{li}, then copies the input value into the new item's text. The user records both steps and programs them to the ``Add'' action button. Each button click replays the pattern, appending a new item with the current input text. Finished todo items can be removed by selecting and deleting them.
 
 \subsubsection{Price Calculator (Formulas)}
 
