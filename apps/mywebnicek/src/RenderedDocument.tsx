@@ -72,6 +72,40 @@ const useStyles = makeStyles({
 });
 
 
+/**
+ * Determines which child indices are "consumed" by childless RPN formulas.
+ * In result mode, consumed children are hidden — only the formula result is shown.
+ */
+function getConsumedChildIndices(
+  childIds: string[],
+  doc: DenicekDocument,
+  opsMap: Map<string, Operation>
+): Set<number> {
+  const consumed = new Set<number>();
+  const stack: number[] = []; // stack of child indices
+
+  for (let i = 0; i < childIds.length; i++) {
+    const childId = childIds[i]!;
+    const node = doc.getNode(childId);
+    if (!node) continue;
+
+    if (node.kind === "formula" && doc.getChildIds(childId).length === 0) {
+      const op = opsMap.get(node.operation);
+      if (op) {
+        const popCount = op.arity === -1 ? stack.length : op.arity;
+        for (let j = 0; j < popCount && stack.length > 0; j++) {
+          consumed.add(stack.pop()!);
+        }
+      }
+      stack.push(i);
+    } else {
+      stack.push(i);
+    }
+  }
+
+  return consumed;
+}
+
 interface RenderedDocumentProps {
   document: DenicekDocument;
   onActionClick?: (actions: GeneralizedPatch[], target: string) => void;
@@ -97,6 +131,7 @@ export function RenderedDocument({ document, onActionClick, viewMode = "result",
     document: {
       getNode: (id: string) => document.getNode(id) ?? undefined,
       getChildIds: (id: string) => document.getChildIds(id),
+      getParentId: (id: string) => document.getParentId(id),
     },
   }), [opsMap, document]);
 
@@ -207,10 +242,23 @@ export function RenderedDocument({ document, onActionClick, viewMode = "result",
 
     // Handle formula nodes
     if (node.kind === "formula") {
+      const formulaChildIds = document.getChildIds(id);
+
       if (viewMode === "formula") {
-        // Show the formula structure: operation(arg1, arg2, ...)
-        const childIds = document.getChildIds(id);
-        const childElements = childIds.map((childId, idx) => {
+        if (formulaChildIds.length === 0) {
+          // RPN formula (childless): show as operation badge
+          return React.createElement(
+            'x-formula',
+            {
+              [DENICEK_NODE_ID_ATTR]: id,
+              className: mergeClasses(styles.formula, styles.formulaStructure),
+            },
+            node.operation
+          );
+        }
+
+        // Child-based formula: show operation(arg1, arg2, ...)
+        const childElements = formulaChildIds.map((childId, idx) => {
           const rendered = renderById(childId);
           return React.createElement(
             'span',
@@ -231,7 +279,7 @@ export function RenderedDocument({ document, onActionClick, viewMode = "result",
           ")"
         );
       } else {
-        // Show the computed result
+        // Result mode: evaluateFormula handles both child-based and RPN
         const result = evaluateFormula(id, formulaContext);
         const displayValue = isFormulaError(result) ? result : String(result ?? "");
         return React.createElement(
@@ -324,7 +372,12 @@ export function RenderedDocument({ document, onActionClick, viewMode = "result",
     const isVoidElement = node.tag === "input" || node.tag === "img" || node.tag === "br" || node.tag === "hr";
     const renderedChildren: React.ReactNode[] = [];
     if (!isVoidElement) {
-      for (const childId of childIds) {
+      // In result mode, hide children consumed by RPN formulas
+      const consumed = viewMode === "result" ? getConsumedChildIndices(childIds, document, opsMap) : new Set<number>();
+
+      for (let childIdx = 0; childIdx < childIds.length; childIdx++) {
+        if (consumed.has(childIdx)) continue;
+        const childId = childIds[childIdx]!;
         const rendered = renderById(childId);
         if (React.isValidElement(rendered)) {
           renderedChildren.push(React.cloneElement(rendered as React.ReactElement<unknown>, { key: childId }));

@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { DenicekDocument } from "./DenicekDocument.js";
+import { evaluateFormula, isFormulaError } from "./formula/index.js";
+import type { FormulaContext, FormulaDocumentAccessor, NodeData, Operation } from "./types.js";
 
 /** Simple test initializer - creates a minimal document structure */
 function testInitializer(doc: DenicekDocument): void {
@@ -424,5 +426,216 @@ describe("DenicekDocument mutations", () => {
                 expect(create.data.value).toBe("hello");
             }
         });
+    });
+});
+
+// =============================================================================
+// RPN Sibling Stack Evaluation Tests
+// =============================================================================
+
+/** Helper to build a mock document for formula evaluation tests */
+function buildMockContext(
+    nodes: Map<string, NodeData>,
+    children: Map<string, string[]>,
+    parents: Map<string, string | null>,
+    ops: Operation[],
+): FormulaContext {
+    const document: FormulaDocumentAccessor = {
+        getNode: (id) => nodes.get(id),
+        getChildIds: (id) => children.get(id) ?? [],
+        getParentId: (id) => parents.get(id) ?? null,
+    };
+    return {
+        document,
+        operations: new Map(ops.map(op => [op.name, op])),
+    };
+}
+
+const capitalize: Operation = {
+    name: "capitalize",
+    arity: 1,
+    execute: ([s]) => {
+        const str = String(s);
+        return str.charAt(0).toUpperCase() + str.slice(1);
+    },
+};
+
+const lowerText: Operation = {
+    name: "lowerText",
+    arity: 1,
+    execute: ([s]) => String(s).toLowerCase(),
+};
+
+const addOp: Operation = {
+    name: "add",
+    arity: 2,
+    execute: ([a, b]) => Number(a) + Number(b),
+};
+
+const divideOp: Operation = {
+    name: "divide",
+    arity: 2,
+    execute: ([a, b]) => Number(a) / Number(b),
+};
+
+const concatOp: Operation = {
+    name: "concat",
+    arity: -1,
+    execute: (args) => args.map(String).join(""),
+};
+
+describe("RPN Sibling Stack Evaluation", () => {
+    it("unary: val, capitalize", () => {
+        const nodes = new Map<string, NodeData>([
+            ["parent", { id: "parent", kind: "element", tag: "li", attrs: {} }],
+            ["v1", { id: "v1", kind: "value", value: "hello" }],
+            ["f1", { id: "f1", kind: "formula", operation: "capitalize" }],
+        ]);
+        const children = new Map([["parent", ["v1", "f1"]], ["f1", []]]);
+        const parents = new Map([["v1", "parent"], ["f1", "parent"]]);
+        const ctx = buildMockContext(nodes, children, parents, [capitalize]);
+
+        expect(evaluateFormula("f1", ctx)).toBe("Hello");
+    });
+
+    it("chained: val, lowerText, capitalize", () => {
+        const nodes = new Map<string, NodeData>([
+            ["parent", { id: "parent", kind: "element", tag: "li", attrs: {} }],
+            ["v1", { id: "v1", kind: "value", value: "hELLo" }],
+            ["f1", { id: "f1", kind: "formula", operation: "lowerText" }],
+            ["f2", { id: "f2", kind: "formula", operation: "capitalize" }],
+        ]);
+        const children = new Map([["parent", ["v1", "f1", "f2"]], ["f1", []], ["f2", []]]);
+        const parents = new Map([["v1", "parent"], ["f1", "parent"], ["f2", "parent"]]);
+        const ctx = buildMockContext(nodes, children, parents, [lowerText, capitalize]);
+
+        expect(evaluateFormula("f1", ctx)).toBe("hello");
+        expect(evaluateFormula("f2", ctx)).toBe("Hello");
+    });
+
+    it("binary: val, val, add", () => {
+        const nodes = new Map<string, NodeData>([
+            ["parent", { id: "parent", kind: "element", tag: "div", attrs: {} }],
+            ["v1", { id: "v1", kind: "value", value: "10" }],
+            ["v2", { id: "v2", kind: "value", value: "5" }],
+            ["f1", { id: "f1", kind: "formula", operation: "add" }],
+        ]);
+        const children = new Map([["parent", ["v1", "v2", "f1"]], ["f1", []]]);
+        const parents = new Map([["v1", "parent"], ["v2", "parent"], ["f1", "parent"]]);
+        const ctx = buildMockContext(nodes, children, parents, [addOp]);
+
+        expect(evaluateFormula("f1", ctx)).toBe(15);
+    });
+
+    it("complex RPN: (1/2) + (1/3)", () => {
+        // 1 2 divide 1 3 divide add
+        const nodes = new Map<string, NodeData>([
+            ["parent", { id: "parent", kind: "element", tag: "div", attrs: {} }],
+            ["v1", { id: "v1", kind: "value", value: "1" }],
+            ["v2", { id: "v2", kind: "value", value: "2" }],
+            ["f1", { id: "f1", kind: "formula", operation: "divide" }],
+            ["v3", { id: "v3", kind: "value", value: "1" }],
+            ["v4", { id: "v4", kind: "value", value: "3" }],
+            ["f2", { id: "f2", kind: "formula", operation: "divide" }],
+            ["f3", { id: "f3", kind: "formula", operation: "add" }],
+        ]);
+        const children = new Map([
+            ["parent", ["v1", "v2", "f1", "v3", "v4", "f2", "f3"]],
+            ["f1", []], ["f2", []], ["f3", []],
+        ]);
+        const parents = new Map([
+            ["v1", "parent"], ["v2", "parent"], ["f1", "parent"],
+            ["v3", "parent"], ["v4", "parent"], ["f2", "parent"], ["f3", "parent"],
+        ]);
+        const ctx = buildMockContext(nodes, children, parents, [divideOp, addOp]);
+
+        const result = evaluateFormula("f3", ctx);
+        expect(result).toBeCloseTo(1/2 + 1/3);
+    });
+
+    it("chained adds: val, val, add, val, add", () => {
+        // 5 + 1 + 1 = 7
+        const nodes = new Map<string, NodeData>([
+            ["parent", { id: "parent", kind: "element", tag: "div", attrs: {} }],
+            ["v1", { id: "v1", kind: "value", value: "5" }],
+            ["v2", { id: "v2", kind: "value", value: "1" }],
+            ["f1", { id: "f1", kind: "formula", operation: "add" }],
+            ["v3", { id: "v3", kind: "value", value: "1" }],
+            ["f2", { id: "f2", kind: "formula", operation: "add" }],
+        ]);
+        const children = new Map([
+            ["parent", ["v1", "v2", "f1", "v3", "f2"]],
+            ["f1", []], ["f2", []],
+        ]);
+        const parents = new Map([
+            ["v1", "parent"], ["v2", "parent"], ["f1", "parent"],
+            ["v3", "parent"], ["f2", "parent"],
+        ]);
+        const ctx = buildMockContext(nodes, children, parents, [addOp]);
+
+        expect(evaluateFormula("f2", ctx)).toBe(7);
+    });
+
+    it("variadic consumes entire stack: val, val, val, concat", () => {
+        const nodes = new Map<string, NodeData>([
+            ["parent", { id: "parent", kind: "element", tag: "div", attrs: {} }],
+            ["v1", { id: "v1", kind: "value", value: "a" }],
+            ["v2", { id: "v2", kind: "value", value: "b" }],
+            ["v3", { id: "v3", kind: "value", value: "c" }],
+            ["f1", { id: "f1", kind: "formula", operation: "concat" }],
+        ]);
+        const children = new Map([["parent", ["v1", "v2", "v3", "f1"]], ["f1", []]]);
+        const parents = new Map([
+            ["v1", "parent"], ["v2", "parent"], ["v3", "parent"], ["f1", "parent"],
+        ]);
+        const ctx = buildMockContext(nodes, children, parents, [concatOp]);
+
+        expect(evaluateFormula("f1", ctx)).toBe("abc");
+    });
+
+    it("error: not enough operands on stack", () => {
+        const nodes = new Map<string, NodeData>([
+            ["parent", { id: "parent", kind: "element", tag: "div", attrs: {} }],
+            ["v1", { id: "v1", kind: "value", value: "5" }],
+            ["f1", { id: "f1", kind: "formula", operation: "add" }],
+        ]);
+        const children = new Map([["parent", ["v1", "f1"]], ["f1", []]]);
+        const parents = new Map([["v1", "parent"], ["f1", "parent"]]);
+        const ctx = buildMockContext(nodes, children, parents, [addOp]);
+
+        const result = evaluateFormula("f1", ctx);
+        expect(isFormulaError(result)).toBe(true);
+    });
+
+    it("hybrid: formula with children uses child-based evaluation", () => {
+        const nodes = new Map<string, NodeData>([
+            ["parent", { id: "parent", kind: "element", tag: "div", attrs: {} }],
+            ["f1", { id: "f1", kind: "formula", operation: "add" }],
+            ["c1", { id: "c1", kind: "value", value: "10" }],
+            ["c2", { id: "c2", kind: "value", value: "20" }],
+        ]);
+        const children = new Map([["parent", ["f1"]], ["f1", ["c1", "c2"]]]);
+        const parents = new Map([["f1", "parent"], ["c1", "f1"], ["c2", "f1"]]);
+        const ctx = buildMockContext(nodes, children, parents, [addOp]);
+
+        expect(evaluateFormula("f1", ctx)).toBe(30);
+    });
+
+    it("element siblings are skipped in stack evaluation", () => {
+        // span("label"), val(5), val(1), add => only val nodes participate
+        const nodes = new Map<string, NodeData>([
+            ["parent", { id: "parent", kind: "element", tag: "div", attrs: {} }],
+            ["span", { id: "span", kind: "element", tag: "span", attrs: {} }],
+            ["v1", { id: "v1", kind: "value", value: "5" }],
+            ["v2", { id: "v2", kind: "value", value: "1" }],
+            ["f1", { id: "f1", kind: "formula", operation: "add" }],
+        ]);
+        const children = new Map([["parent", ["span", "v1", "v2", "f1"]], ["f1", []], ["span", []]]);
+        const parents = new Map([
+            ["span", "parent"], ["v1", "parent"], ["v2", "parent"], ["f1", "parent"],
+        ]);
+        const ctx = buildMockContext(nodes, children, parents, [addOp]);
+
+        expect(evaluateFormula("f1", ctx)).toBe(6);
     });
 });

@@ -234,17 +234,40 @@ const abs: Operation = {
     },
 };
 
-const sum: Operation = {
-    name: "sum",
-    arity: -1, // Variadic - sums all children
-    execute: (args) => {
-        let total = 0;
-        for (const arg of args) {
-            const n = requireNumber(arg, "sum");
-            if (typeof n === "string") return n; // Error
-            total += n;
-        }
-        return total;
+const add: Operation = {
+    name: "add",
+    arity: 2,
+    execute: ([a, b]) => {
+        const na = requireNumber(a, "add");
+        if (typeof na === "string") return na;
+        const nb = requireNumber(b, "add");
+        if (typeof nb === "string") return nb;
+        return na + nb;
+    },
+};
+
+const subtract: Operation = {
+    name: "subtract",
+    arity: 2,
+    execute: ([a, b]) => {
+        const na = requireNumber(a, "subtract");
+        if (typeof na === "string") return na;
+        const nb = requireNumber(b, "subtract");
+        if (typeof nb === "string") return nb;
+        return na - nb;
+    },
+};
+
+const divide: Operation = {
+    name: "divide",
+    arity: 2,
+    execute: ([a, b]) => {
+        const na = requireNumber(a, "divide");
+        if (typeof na === "string") return na;
+        const nb = requireNumber(b, "divide");
+        if (typeof nb === "string") return nb;
+        if (nb === 0) return `#ERR: division by zero`;
+        return na / nb;
     },
 };
 
@@ -280,13 +303,15 @@ export const builtinOperations: Operation[] = [
     splitString,
     arrayLength,
     // Math
+    add,
+    subtract,
+    divide,
     product,
     mod,
     round,
     floor,
     ceil,
     abs,
-    sum,
     // Tree
     countChildren,
 ];

@@ -20,7 +20,7 @@ export const AddNodePopoverButton = ({ disabled, canAddChild = true, initialValu
     const [open, setOpen] = useState(false);
     const [value, setValue] = useState(initialValue || "");
     const [nodeType, setNodeType] = useState<"tag" | "value" | "action" | "formula" | "ref">("tag");
-    const [operation, setOperation] = useState<string>("sum");
+    const [operation, setOperation] = useState<string>("add");
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {

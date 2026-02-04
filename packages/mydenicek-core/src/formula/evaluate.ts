@@ -1,6 +1,10 @@
 /**
  * Formula evaluation engine
- * Evaluates formula nodes recursively with safeguards
+ * Evaluates formula nodes recursively with safeguards.
+ *
+ * Supports two evaluation modes:
+ * - Child-based: formula has children that serve as operands (original model)
+ * - RPN sibling stack: childless formula reads operands from preceding siblings
  */
 
 import type { FormulaContext } from '../types';
@@ -8,13 +12,9 @@ import type { FormulaContext } from '../types';
 const MAX_DEPTH = 100;
 
 /**
- * Evaluates a formula node and returns its computed value
- *
- * @param nodeId - The ID of the formula node to evaluate
- * @param context - The formula context containing operations and document accessor
- * @param visited - Set of visited node IDs for cycle detection (internal)
- * @param depth - Current recursion depth for stack overflow protection (internal)
- * @returns The computed value, or an error string starting with #ERR:
+ * Evaluates a formula node and returns its computed value.
+ * Childless formulas use RPN sibling stack evaluation.
+ * Formulas with children use child-based evaluation.
  */
 export function evaluateFormula(
     nodeId: string,
@@ -24,24 +24,28 @@ export function evaluateFormula(
 ): unknown {
     const { document, operations } = context;
 
-    // 1. Max depth protection
     if (depth > MAX_DEPTH) {
         return `#ERR: max depth exceeded`;
     }
 
-    // 2. Circular reference detection
     if (visited.has(nodeId)) {
         return `#ERR: circular reference`;
     }
     visited.add(nodeId);
 
-    // 3. Deleted node handling
     const node = document.getNode(nodeId);
     if (!node) return `#ERR: node deleted`;
     if (node.kind !== 'formula') return null;
 
-    // 4. Evaluate all children as arguments
-    const args = document.getChildIds(nodeId).map(childId => {
+    const childIds = document.getChildIds(nodeId);
+
+    // Childless formula: evaluate using RPN sibling stack
+    if (childIds.length === 0) {
+        return evaluateSiblingStack(nodeId, context, visited, depth);
+    }
+
+    // Child-based evaluation (original model)
+    const args = childIds.map(childId => {
         const child = document.getNode(childId);
         if (!child) return `#ERR: child deleted`;
         if (child.kind === 'ref') return getNodeValue(child.target, context, visited, depth + 1);
@@ -50,28 +54,72 @@ export function evaluateFormula(
         return null;
     });
 
-    // 5. Operation lookup
     const op = operations.get(node.operation);
     if (!op) return `#ERR: ${node.operation} not found`;
 
-    // 6. Arity validation
     if (op.arity !== -1 && args.length !== op.arity) {
         return `#ERR: ${node.operation} expects ${op.arity} args, got ${args.length}`;
     }
 
-    // 7. Execute operation
     return op.execute(args, context);
 }
 
 /**
- * Gets the value of a node for formula evaluation
- * Handles value nodes, formula nodes, and ref nodes
- *
- * @param nodeId - The ID of the node to get value from
- * @param context - The formula context
- * @param visited - Set of visited node IDs for cycle detection (internal)
- * @param depth - Current recursion depth (internal)
- * @returns The node's value, or an error string
+ * Evaluates a childless formula by processing preceding siblings as an RPN stack.
+ * Values push onto the stack; childless formulas pop N args and push the result.
+ * Element and action nodes are skipped (they don't participate in the stack).
+ */
+function evaluateSiblingStack(
+    nodeId: string,
+    context: FormulaContext,
+    visited: Set<string>,
+    depth: number
+): unknown {
+    const { document, operations } = context;
+    const parentId = document.getParentId(nodeId);
+    if (!parentId) return `#ERR: no parent for stack eval`;
+
+    const siblings = document.getChildIds(parentId);
+    const myIndex = siblings.indexOf(nodeId);
+    if (myIndex === -1) return `#ERR: node not in parent`;
+
+    const stack: unknown[] = [];
+    for (let i = 0; i <= myIndex; i++) {
+        const siblingId = siblings[i]!;
+        const sibling = document.getNode(siblingId);
+        if (!sibling) continue;
+
+        if (sibling.kind === 'value') {
+            stack.push(sibling.value);
+        } else if (sibling.kind === 'ref') {
+            stack.push(getNodeValue(sibling.target, context, new Set(visited), depth + 1));
+        } else if (sibling.kind === 'formula') {
+            const childIds = document.getChildIds(siblingId);
+            if (childIds.length > 0) {
+                // Formula with children: evaluate normally and push result
+                stack.push(evaluateFormula(siblingId, context, new Set(visited), depth + 1));
+            } else {
+                // Childless formula: pop from stack, execute, push result
+                const op = operations.get(sibling.operation);
+                if (!op) { stack.push(`#ERR: ${sibling.operation} not found`); continue; }
+                const popCount = op.arity === -1 ? stack.length : op.arity;
+                if (stack.length < popCount) {
+                    stack.push(`#ERR: ${sibling.operation} needs ${popCount} args, stack has ${stack.length}`);
+                    continue;
+                }
+                const args = stack.splice(-popCount);
+                stack.push(op.execute(args, context));
+            }
+        }
+        // Element and action nodes are skipped
+    }
+
+    return stack.length > 0 ? stack[stack.length - 1] : `#ERR: empty stack`;
+}
+
+/**
+ * Gets the value of a node for formula evaluation.
+ * Handles value nodes, formula nodes, and ref nodes.
  */
 export function getNodeValue(
     nodeId: string,
@@ -79,7 +127,6 @@ export function getNodeValue(
     visited: Set<string> = new Set(),
     depth: number = 0
 ): unknown {
-    // Deleted node handling
     const node = context.document.getNode(nodeId);
     if (!node) return `#ERR: ref target deleted`;
 

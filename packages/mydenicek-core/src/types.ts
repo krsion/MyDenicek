@@ -248,6 +248,7 @@ export interface SyncState {
 export interface FormulaDocumentAccessor {
     getNode(id: string): NodeData | undefined;
     getChildIds(id: string): string[];
+    getParentId(id: string): string | null;
 }
 
 /**

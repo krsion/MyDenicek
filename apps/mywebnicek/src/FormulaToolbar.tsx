@@ -57,8 +57,13 @@ function FormulaOperationEditor({ document, selectedNodeId, operation }: {
 }) {
     const { expectedArity } = getOperationInfo(operation);
     const actualArity = document.getChildIds(selectedNodeId).length;
-    const isValidArity = expectedArity === -1 || actualArity === expectedArity;
-    const arityDisplay = expectedArity === -1 ? `${actualArity}/∞` : `${actualArity}/${expectedArity}`;
+    const isRpn = actualArity === 0;
+
+    // For RPN (childless) formulas, show "RPN" instead of child arity
+    const arityDisplay = isRpn
+        ? (expectedArity === -1 ? "RPN variadic" : `RPN (${expectedArity} args)`)
+        : (expectedArity === -1 ? `${actualArity}/∞` : `${actualArity}/${expectedArity}`);
+    const isValidArity = isRpn || expectedArity === -1 || actualArity === expectedArity;
 
     return (
         <>
@@ -84,7 +89,7 @@ function FormulaOperationEditor({ document, selectedNodeId, operation }: {
                     marginLeft: 4
                 }}
             >
-                {arityDisplay} args
+                {arityDisplay}
             </Text>
         </>
     );

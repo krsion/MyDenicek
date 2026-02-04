@@ -43,16 +43,16 @@ const addConferenceActions: GeneralizedPatch[] = [
     { type: "tree", action: "create", target: "$5", parent: "$4", index: -1, data: { kind: "value", value: "Location" } },
 ];
 
-/** Actions for "+1" button - add "1" child to sum formula */
+/** Actions for "+1" button - add value and RPN add formula as siblings in counter display */
 const incrementActions: GeneralizedPatch[] = [
-    // Add "1" as child of the sum formula ($0)
     { type: "tree", action: "create", target: "$1", parent: "$0", index: -1, data: { kind: "value", value: "1" } },
+    { type: "tree", action: "create", target: "$2", parent: "$0", index: -1, data: { kind: "formula", operation: "add" } },
 ];
 
-/** Actions for "-1" button - add "-1" child to sum formula */
+/** Actions for "-1" button - add value "-1" and RPN add formula as siblings in counter display */
 const decrementActions: GeneralizedPatch[] = [
-    // Add "-1" as child of the sum formula ($0)
     { type: "tree", action: "create", target: "$1", parent: "$0", index: -1, data: { kind: "value", value: "-1" } },
+    { type: "tree", action: "create", target: "$2", parent: "$0", index: -1, data: { kind: "formula", operation: "add" } },
 ];
 
 /**
@@ -83,9 +83,9 @@ function createFormativeExamples(doc: DenicekDocument, rootId: string): void {
 
     const counterDescId = add(doc, counterArticleId, el("p"));
     doc.updateAttribute([counterDescId], "style", { fontSize: '0.9em', color: '#666', marginBottom: 12 });
-    add(doc, counterDescId, val("Click +1/-1 buttons to add values to the sum formula."));
+    add(doc, counterDescId, val("Click +1/-1 buttons. Each click adds a value and an RPN add formula."));
 
-    // Counter display container
+    // Counter display container — RPN formulas operate on siblings within this container
     const counterDisplayId = add(doc, counterArticleId, el("div"));
     doc.updateAttribute([counterDisplayId], "style", { display: 'flex', alignItems: 'center', gap: 16, marginBottom: 12 });
 
@@ -93,18 +93,17 @@ function createFormativeExamples(doc: DenicekDocument, rootId: string): void {
     doc.updateAttribute([counterLabelId], "style", { fontWeight: 'bold' });
     add(doc, counterLabelId, val("Count:"));
 
-    // The counter is a sum formula with initial value
-    const counterFormulaId = add(doc, counterDisplayId, formula("sum"));
-    add(doc, counterFormulaId, val("5"));
+    // Initial counter value (plain value node, no formula wrapping)
+    add(doc, counterDisplayId, val("5"));
 
     // Counter buttons container
     const counterButtonsId = add(doc, counterArticleId, el("div"));
     doc.updateAttribute([counterButtonsId], "style", { display: 'flex', gap: 8 });
 
-    // +1/-1 buttons - add values to sum formula
+    // +1/-1 buttons target the counter display container (not a formula node)
     doc.addChildren(counterButtonsId, [
-        action("+1", counterFormulaId, incrementActions),
-        action("-1", counterFormulaId, decrementActions),
+        action("+1", counterDisplayId, incrementActions),
+        action("-1", counterDisplayId, decrementActions),
     ]);
 
     // =========================================================================
@@ -165,7 +164,7 @@ function createFormativeExamples(doc: DenicekDocument, rootId: string): void {
 
     const helloDescId = add(doc, helloArticleId, el("p"));
     doc.updateAttribute([helloDescId], "style", { fontSize: '0.9em', color: '#666', marginBottom: 12 });
-    add(doc, helloDescId, val("Record wrapping in formula \"Capitalize\", then replay on each item."));
+    add(doc, helloDescId, val("Record adding lowerText + capitalize formulas after a value, then replay on each item."));
 
     // Word list
     const helloListId = add(doc, helloArticleId, el("ul"));
@@ -337,9 +336,9 @@ function createFormativeExamples(doc: DenicekDocument, rootId: string): void {
     doc.addChildren(replaceFormulaId, [ref(replaceValId), val("foo"), val("baz")]);
 
     // Math operations
-    const sumBoxId = createFormulaBox("sum", "#e3f2fd", "#90caf9");
-    const sumFormulaId = add(doc, sumBoxId, formula("sum"));
-    doc.addChildren(sumFormulaId, [val("10"), val("5"), val("3")]);
+    const addBoxId = createFormulaBox("add", "#e3f2fd", "#90caf9");
+    const addFormulaId = add(doc, addBoxId, formula("add"));
+    doc.addChildren(addFormulaId, [val("10"), val("5")]);
 
     const productBoxId = createFormulaBox("product", "#e3f2fd", "#90caf9");
     const productFormulaId = add(doc, productBoxId, formula("product"));
