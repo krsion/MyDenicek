@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AddNodePopoverButton, type NodeKind } from "./AddNodePopoverButton";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { NodeId } from "./components/NodeId";
 import { ResizablePanel } from "./components/ResizablePanel";
 import { config } from "./config";
 import { PeerAliasProvider } from "./context/PeerAliasContext";
@@ -398,9 +399,24 @@ export const App = () => {
   }, [recordingHistory, selectedActionIndices, idOverrides, document, selectedActionNodeId]);
 
   // Handler for action button clicks
-  const handleActionClick = useCallback((actions: GeneralizedPatch[], target: string) => {
-    replay(actions, target);
-  }, [replay]);
+  const handleActionClick = useCallback((actions: GeneralizedPatch[], target: string, replayMode: "fixed" | "selected") => {
+    if (replayMode === "selected") {
+      if (!selectedNodeId) return;
+      // Find the actual context node from the actions (first concrete parent in a create patch)
+      // This handles cases where the button's target differs from the node referenced in actions
+      let contextId = target;
+      for (const a of actions) {
+        if (a.type === "tree" && a.action === "create" && !a.parent.startsWith("$")) {
+          contextId = a.parent;
+          break;
+        }
+      }
+      const generalized = generalizeScript(actions, contextId || undefined);
+      replay(generalized, selectedNodeId);
+    } else {
+      replay(actions, target);
+    }
+  }, [replay, selectedNodeId]);
 
   // Handler for move up/down buttons
   const handleMoveInSiblings = useCallback((direction: -1 | 1) => {
@@ -762,15 +778,32 @@ export const App = () => {
             {pinnedButtonNode && (
               <div style={{ borderBottom: '2px solid #0078d4', background: '#f0f6ff' }}>
                 <div style={{ padding: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => pinnedButtonId && setSelectedNodeIds([pinnedButtonId])}
-                    title="Click to select this button"
-                  >
-                    <Text weight="semibold" style={{ color: '#0078d4' }}>Button: {pinnedButtonNode.label}</Text>
+                  <div>
+                    <div
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => pinnedButtonId && setSelectedNodeIds([pinnedButtonId])}
+                      title="Click to select this button"
+                    >
+                      <Text weight="semibold" style={{ color: '#0078d4' }}>Button: {pinnedButtonNode.label}</Text>
+                    </div>
+                    {pinnedButtonNode.target && (
+                      <div style={{ fontSize: '12px', color: '#666' }}>
+                        Target: <NodeId id={pinnedButtonNode.target} onClick={(id) => setSelectedNodeIds([id])} />
+                      </div>
+                    )}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Badge appearance="filled" color="brand">{pinnedButtonNode.actions.length} action{pinnedButtonNode.actions.length !== 1 ? 's' : ''}</Badge>
+                    <Switch
+                      checked={pinnedButtonNode.replayMode === "selected"}
+                      onChange={(_, data) => {
+                        if (pinnedButtonId) {
+                          document.updateNodeProperty(pinnedButtonId, "replayMode", data.checked ? "selected" : "fixed");
+                        }
+                      }}
+                      label={pinnedButtonNode.replayMode === "selected" ? "On selected" : "Fixed target"}
+                      style={{ margin: 0 }}
+                    />
                     <Tooltip content="Close" relationship="label">
                       <ToolbarButton
                         icon={<DismissRegular />}

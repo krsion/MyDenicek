@@ -19,6 +19,7 @@ import {
     NODE_LABEL,
     NODE_OPERATION,
     NODE_REF_TARGET,
+    NODE_REPLAY_MODE,
     NODE_SOURCE_ID,
     NODE_TAG,
     NODE_TARGET,
@@ -33,7 +34,7 @@ import type { ElementNode, GeneralizedPatch, GroupedPatch, NodeData, PatchNodeDa
 export type NodeInput =
     | ElementNode
     | { kind: "value"; value: string }
-    | { kind: "action"; label: string; actions: GeneralizedPatch[]; target: string }
+    | { kind: "action"; label: string; actions: GeneralizedPatch[]; target: string; replayMode?: "fixed" | "selected" }
     | { kind: "formula"; operation: string }
     | { kind: "ref"; target: string };
 
@@ -550,6 +551,9 @@ export class DenicekDocument {
                     data.set(NODE_KIND, "action");
                     data.set(NODE_LABEL, sanitizedChild.label);
                     data.set(NODE_TARGET, sanitizedChild.target);
+                    if (sanitizedChild.replayMode) {
+                        data.set(NODE_REPLAY_MODE, sanitizedChild.replayMode);
+                    }
                     const actionsList = data.setContainer(NODE_ACTIONS, new LoroList()) as LoroList;
                     for (const action of sanitizedChild.actions) {
                         actionsList.push(action);
@@ -660,6 +664,10 @@ export class DenicekDocument {
                 data.set(NODE_KIND, "action");
                 data.set(NODE_LABEL, (sourceData.get(NODE_LABEL) as string) || "Action");
                 data.set(NODE_TARGET, (sourceData.get(NODE_TARGET) as string) || "");
+                const sourceReplayMode = sourceData.get(NODE_REPLAY_MODE) as string | undefined;
+                if (sourceReplayMode) {
+                    data.set(NODE_REPLAY_MODE, sourceReplayMode);
+                }
                 const actionsList = data.setContainer(NODE_ACTIONS, new LoroList()) as LoroList;
                 const sourceActions = sourceData.get(NODE_ACTIONS) as LoroList | undefined;
                 if (sourceActions) {
@@ -951,6 +959,9 @@ export class DenicekDocument {
                     this._doc.commit();
                 } else if (property === "target") {
                     data.set(NODE_TARGET, value as string);
+                    this._doc.commit();
+                } else if (property === "replayMode") {
+                    data.set(NODE_REPLAY_MODE, value as string);
                     this._doc.commit();
                 } else if (property === "actions") {
                     const actionsContainer = data.get(NODE_ACTIONS) as LoroList | undefined;

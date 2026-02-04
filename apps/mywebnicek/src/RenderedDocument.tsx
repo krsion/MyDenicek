@@ -108,7 +108,7 @@ function getConsumedChildIndices(
 
 interface RenderedDocumentProps {
   document: DenicekDocument;
-  onActionClick?: (actions: GeneralizedPatch[], target: string) => void;
+  onActionClick?: (actions: GeneralizedPatch[], target: string, replayMode: "fixed" | "selected") => void;
   /** View mode for formulas: "result" shows computed values, "formula" shows structure */
   viewMode?: FormulaViewMode;
   /** Custom operations map. If not provided, uses defaultOperationsMap */
@@ -157,15 +157,15 @@ export function RenderedDocument({ document, onActionClick, viewMode = "result",
     const node = document.getNode(nodeId);
     if (!node || node.kind !== "action") return;
 
-    // Get the action node's script and target
-    const { actions, target } = node;
-    if (!actions.length || !target) return;
+    const { actions, target, replayMode } = node;
+    if (!actions.length) return;
+    // For fixed mode, require target; for selected mode, target is optional
+    if (replayMode !== "selected" && !target) return;
 
-    // Call the handler or replay directly
     if (onActionClick) {
-      onActionClick(actions, target);
+      onActionClick(actions, target, replayMode ?? "fixed");
     } else {
-      // Fallback: replay directly on the document
+      // Fallback: replay directly on the document (only works for fixed mode)
       document.replay(actions, target);
     }
   }, [document, onActionClick]);
@@ -296,11 +296,13 @@ export function RenderedDocument({ document, onActionClick, viewMode = "result",
 
     // Handle action nodes - render as buttons
     if (node.kind === "action") {
+      const isSelectedMode = node.replayMode === "selected";
       return React.createElement(
         'button',
         {
           [DENICEK_NODE_ID_ATTR]: id,
           className: styles.button,
+          style: isSelectedMode ? { borderLeft: '3px solid #0078d4' } : undefined,
           onClick: (e: React.MouseEvent) => {
             // Allow Ctrl+click/Shift+click for selection (don't execute)
             if (e.ctrlKey || e.metaKey || e.shiftKey) {
@@ -309,8 +311,9 @@ export function RenderedDocument({ document, onActionClick, viewMode = "result",
             e.stopPropagation();  // Don't trigger selection on regular click
             handleActionClick(id);
           },
-          title: `Target: ${node.target}`,
+          title: isSelectedMode ? "Replays on selected node" : `Target: ${node.target}`,
         },
+        isSelectedMode ? "\u25B6 " : "",
         node.label
       );
     }

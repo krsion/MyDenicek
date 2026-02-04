@@ -12,7 +12,8 @@ const el = (tag: string) => ({ kind: "element" as const, tag, attrs: {}, childre
 /** Shorthand for creating value nodes */
 const val = (value: string) => ({ kind: "value" as const, value });
 /** Shorthand for creating action nodes (programmable buttons) */
-const action = (label: string, target: string, actions: GeneralizedPatch[] = []) => ({ kind: "action" as const, label, actions, target });
+const action = (label: string, target: string, actions: GeneralizedPatch[] = [], replayMode?: "fixed" | "selected") =>
+    ({ kind: "action" as const, label, actions, target, ...(replayMode && { replayMode }) });
 /** Shorthand for creating formula nodes */
 const formula = (operation: string) => ({ kind: "formula" as const, operation });
 /** Shorthand for creating ref nodes */

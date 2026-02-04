@@ -27,6 +27,7 @@ export const NODE_SOURCE_ID = "sourceId";
 export const NODE_LABEL = "label";
 export const NODE_ACTIONS = "actions";
 export const NODE_TARGET = "target";
+export const NODE_REPLAY_MODE = "replayMode";
 
 /**
  * Formula node data keys
@@ -109,7 +110,8 @@ export function buildDocumentIndex(doc: LoroDoc): DocumentIndex {
             // Convert LoroList to array for public API (no Loro types exposed)
             const actions = actionsContainer.toJSON() as GeneralizedPatch[];
             const target = (data.get(NODE_TARGET) as string) || "";
-            nodes.set(id, { id, kind: "action", label, actions, target, ...(sourceId && { sourceId }) });
+            const replayMode = data.get(NODE_REPLAY_MODE) as "fixed" | "selected" | undefined;
+            nodes.set(id, { id, kind: "action", label, actions, target, ...(replayMode && { replayMode }), ...(sourceId && { sourceId }) });
             childIds.set(id, []);  // Action nodes have no children
         } else if (kind === "ref") {
             const target = (data.get(NODE_REF_TARGET) as string) || "";
