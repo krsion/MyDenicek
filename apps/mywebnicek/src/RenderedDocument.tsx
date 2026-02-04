@@ -100,17 +100,22 @@ export function RenderedDocument({ document, onActionClick, viewMode = "result",
     },
   }), [opsMap, document]);
 
-  // Sync input value to CRDT (debounced to avoid lag while typing)
-  const updateCopyValue = React.useCallback((nodeId: string, value: string) => {
-    document.updateAttribute([nodeId], "data-copy-value", value);
+  // Sync input value to child value node's LoroText (debounced to avoid lag while typing)
+  const updateInputValue = React.useCallback((inputNodeId: string, newValue: string) => {
+    const childIds = document.getChildIds(inputNodeId);
+    const valueChildId = childIds.find(cid => document.getNode(cid)?.kind === "value");
+    if (!valueChildId) return;
+    const valueNode = document.getNode(valueChildId);
+    const currentValue = valueNode?.kind === "value" ? String(valueNode.value) : "";
+    document.updateValue([valueChildId], currentValue, newValue);
   }, [document]);
 
-  const debouncedUpdateCopyValue = useDebouncedCallback(updateCopyValue, 150);
+  const debouncedUpdateInputValue = useDebouncedCallback(updateInputValue, 150);
 
   const handleInputChange = React.useCallback((e: React.ChangeEvent<HTMLInputElement>, nodeId: string) => {
     const value = e.currentTarget.value;
-    debouncedUpdateCopyValue(nodeId, value);
-  }, [debouncedUpdateCopyValue]);
+    debouncedUpdateInputValue(nodeId, value);
+  }, [debouncedUpdateInputValue]);
 
   // Handler for action button clicks
   const handleActionClick = React.useCallback((nodeId: string) => {
@@ -304,19 +309,28 @@ export function RenderedDocument({ document, onActionClick, viewMode = "result",
       };
     }
 
-    // Add change handler for input elements to sync value to CRDT
+    const childIds = document.getChildIds(id);
+
+    // Input elements: expose child value node's ID for auto-redirect selection,
+    // and sync DOM input value to the child LoroText on change
     if (node.tag === "input") {
+      const valueChildId = childIds.find(cid => document.getNode(cid)?.kind === "value");
+      if (valueChildId) {
+        attrs[DENICEK_NODE_ID_ATTR] = valueChildId;
+      }
       attrs["onChange"] = (e: React.ChangeEvent<HTMLInputElement>) => handleInputChange(e, id);
     }
-
-    const childIds = document.getChildIds(id);
+    // Void elements (input, img, etc.) can't have DOM children
+    const isVoidElement = node.tag === "input" || node.tag === "img" || node.tag === "br" || node.tag === "hr";
     const renderedChildren: React.ReactNode[] = [];
-    for (const childId of childIds) {
-      const rendered = renderById(childId);
-      if (React.isValidElement(rendered)) {
-        renderedChildren.push(React.cloneElement(rendered as React.ReactElement<unknown>, { key: childId }));
-      } else {
-        renderedChildren.push(rendered);
+    if (!isVoidElement) {
+      for (const childId of childIds) {
+        const rendered = renderById(childId);
+        if (React.isValidElement(rendered)) {
+          renderedChildren.push(React.cloneElement(rendered as React.ReactElement<unknown>, { key: childId }));
+        } else {
+          renderedChildren.push(rendered);
+        }
       }
     }
 

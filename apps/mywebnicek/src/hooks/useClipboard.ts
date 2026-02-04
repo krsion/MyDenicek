@@ -3,6 +3,10 @@
  *
  * Copies create a "copy" action in history that references the source node.
  * On replay, the copy reads the CURRENT value from the source.
+ *
+ * Input elements expose their child value node's ID via data-node-guid,
+ * so selecting an input auto-redirects to the value child. No special
+ * input handling needed here — value nodes are copied directly.
  */
 
 import type { DenicekDocument, NodeData } from "@mydenicek/core";
@@ -10,8 +14,6 @@ import { useCallback, useEffect, useState } from "react";
 
 interface ClipboardData {
     sourceNodeId: string;
-    /** If set, copy from this attribute (for input elements) */
-    sourceAttr?: string;
     /** For display only */
     textValue: string;
 }
@@ -25,24 +27,16 @@ interface UseClipboardProps {
 export function useClipboard({ selectedNodeId, node, document: doc }: UseClipboardProps) {
     const [clipboard, setClipboard] = useState<ClipboardData | null>(null);
 
-    const isInputSelected = node?.kind === "element" && node.tag === "input";
     const isValueSelected = node?.kind === "value";
 
     const handleCopy = useCallback(() => {
-        if (!selectedNodeId) return;
+        if (!selectedNodeId || !isValueSelected) return;
 
-        if (isValueSelected) {
-            const valueNode = doc.getNode(selectedNodeId);
-            if (valueNode?.kind === "value") {
-                setClipboard({ sourceNodeId: selectedNodeId, textValue: String(valueNode.value) });
-            }
-        } else if (isInputSelected) {
-            const inputEl = document.querySelector(`[data-node-guid="${selectedNodeId}"]`) as HTMLInputElement | null;
-            if (inputEl) {
-                setClipboard({ sourceNodeId: selectedNodeId, sourceAttr: "data-copy-value", textValue: inputEl.value });
-            }
+        const valueNode = doc.getNode(selectedNodeId);
+        if (valueNode?.kind === "value") {
+            setClipboard({ sourceNodeId: selectedNodeId, textValue: String(valueNode.value) });
         }
-    }, [selectedNodeId, isValueSelected, isInputSelected, doc]);
+    }, [selectedNodeId, isValueSelected, doc]);
 
     const isElementSelected = node?.kind === "element";
 
@@ -50,13 +44,11 @@ export function useClipboard({ selectedNodeId, node, document: doc }: UseClipboa
         if (!selectedNodeId || !clipboard) return;
 
         if (isValueSelected) {
-            // Paste as sibling of value node
             const parentId = doc.getParentId(selectedNodeId);
             if (!parentId) return;
-            doc.copyNode(clipboard.sourceNodeId, parentId, { sourceAttr: clipboard.sourceAttr });
+            doc.copyNode(clipboard.sourceNodeId, parentId);
         } else if (isElementSelected) {
-            // Paste as child of element node (create value node and copy to it)
-            doc.copyNode(clipboard.sourceNodeId, selectedNodeId, { sourceAttr: clipboard.sourceAttr });
+            doc.copyNode(clipboard.sourceNodeId, selectedNodeId);
         }
     }, [selectedNodeId, isValueSelected, isElementSelected, clipboard, doc]);
 
@@ -65,7 +57,7 @@ export function useClipboard({ selectedNodeId, node, document: doc }: UseClipboa
     // Keyboard shortcuts
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            if ((e.ctrlKey || e.metaKey) && e.key === "c" && (isValueSelected || isInputSelected)) {
+            if ((e.ctrlKey || e.metaKey) && e.key === "c" && isValueSelected) {
                 e.preventDefault();
                 handleCopy();
             }
@@ -76,10 +68,9 @@ export function useClipboard({ selectedNodeId, node, document: doc }: UseClipboa
         };
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [isInputSelected, isValueSelected, canPaste, handleCopy, handlePaste]);
+    }, [isValueSelected, canPaste, handleCopy, handlePaste]);
 
     return {
-        isInputSelected,
         isValueSelected,
         isElementSelected,
         handleCopy,

@@ -75,24 +75,14 @@ export function useRecording() {
     if (!context) {
         throw new Error("useRecording must be used within a DenicekProvider");
     }
-    const { document } = context;
+    const { document, version } = context;
 
-    // Use state to store history data and trigger re-renders when it changes
+    // Derive history from Loro diffs - refreshes on every version change
     const [historyData, setHistoryData] = useState<GeneralizedPatch[]>(() => document.getHistory());
 
-    // Subscribe to document patches to update history state
     useEffect(() => {
-        // Subscribe to patches from the document
-        const unsubscribe = document.subscribePatches(() => {
-            // When a patch is received, get fresh history from document
-            setHistoryData(document.getHistory());
-        });
-
-        // Also get initial history
         setHistoryData(document.getHistory());
-
-        return unsubscribe;
-    }, [document]);
+    }, [document, version]);
 
     return {
         replay: (script: GeneralizedPatch[], startNodeId: string) => document.replay(script, startNodeId),

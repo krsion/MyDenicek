@@ -101,7 +101,7 @@ The following functional requirements specify the capabilities of the system. Re
 
 \textbf{FR-02: Element Nodes} [Core] Element nodes shall have a tag name, a dictionary of attributes, and an ordered list of child node IDs.
 
-\textbf{FR-03: Value Nodes} [Core] Value nodes shall contain a text string that can be modified through splice operations.
+\textbf{FR-03: Value Nodes} [Core] Value nodes shall contain a text string stored internally as a \texttt{LoroText} CRDT container, enabling character-level collaborative editing through splice operations.
 
 \textbf{FR-04: Node Operations} [Core] The system shall support the following operations on nodes:
 \begin{itemize}
@@ -126,7 +126,7 @@ The following functional requirements specify the capabilities of the system. Re
 
 \textbf{FR-06: Undo/Redo} [Core] The system shall maintain an undo stack and redo stack for each local session. Undo shall reverse the most recent local operation, and redo shall reapply the most recently undone operation.
 
-\textbf{FR-07: Recording} [Core] The system shall support recording a sequence of operations starting from a specified node. Recorded operations shall use generalized node IDs (\texttt{\$0}, \texttt{\$1}, etc.) that can be bound to different nodes during replay.
+\textbf{FR-07: Recording} [Core] The system shall automatically record all local document mutations by subscribing to Loro's event system. Each local event carries diffs that are accumulated and converted to generalized patches using variable node IDs (\texttt{\$0}, \texttt{\$1}, etc.) that can be bound to different nodes during replay.
 
 \textbf{FR-08: Replay} [Core] The system shall support replaying a recorded script starting from a specified node. The generalized node IDs in the script shall be bound to actual node IDs based on the starting node.
 
@@ -231,7 +231,7 @@ Each mutation method commits automatically, and Loro's undo manager groups rapid
 \item React component calls \texttt{document.addChild(parentId, \{ ... \})}
 \item DenicekDocument applies the change to the Loro document and commits
 \item Loro generates patches; undo manager captures inverse
-\item If subscribed, patches are recorded for replay
+\item The document's event subscription captures per-event diffs for the history view
 \item Loro synchronizes changes to connected peers via WebSocket
 \item Remote peers receive patches and update their local document
 \item React re-renders based on the updated document state
@@ -295,13 +295,32 @@ An action node stores: \texttt{label} (display text), \texttt{target} (node boun
 
 \subsubsection{Generalized Patches}
 
-Patches use variable placeholders instead of concrete node IDs:
+Raw Loro diffs reference concrete container and tree IDs, tying them to a specific document state. Generalized patches introduce two abstractions on top of Loro diffs that make them portable and replayable: (1)~variable placeholders (\texttt{\$0}, \texttt{\$1}, ...) replace concrete node IDs so the same script can be replayed on different target nodes, and (2)~create patches distinguish copies (\texttt{sourceId}) from direct creates (\texttt{data}) so replay knows whether to call \texttt{copyNode} or \texttt{addChildren}. There are three patch types:
+
 \begin{verbatim}
-GeneralizedPatch {
-    action: "put" | "del" | "insert" | "splice" | "inc" | "move" | "copy"
-    path: (string | number)[]   // Contains $0, $1, etc.
-    value?: unknown
-    length?: number
+TreePatch {
+    type: "tree"
+    action: "create" | "delete" | "move"
+    target: string          // $0, $1, ... or node ID
+    parent?: string         // parent node variable/ID
+    index?: number          // position among siblings
+    sourceId?: string       // source node for copies
+    data?: PatchNodeData    // inline node template for creates
+}
+
+MapPatch {
+    type: "map"
+    target: string          // node variable/ID
+    key: string             // "tag", "attrs", etc.
+    value: unknown
+}
+
+TextPatch {
+    type: "text"
+    target: string          // node variable/ID
+    index: number
+    delete: number
+    insert: string
 }
 \end{verbatim}
 
@@ -309,10 +328,11 @@ Variables: \texttt{\$0} is the target node; \texttt{\$1}, \texttt{\$2}, ... are 
 
 \subsubsection{Recording}
 
-Recording is automatic---all document operations are captured in the Recorded History panel:
+Recording is automatic---the \texttt{DenicekDocument} subscribes to Loro's event system and accumulates per-event diffs for all local mutations. These diffs are converted to generalized patches on demand:
 \begin{enumerate}
 \item Perform operations (add, edit, delete, move nodes)
-\item Recorder captures patches in real-time
+\item Loro fires events; the subscriber captures the diffs carried by each event
+\item \texttt{getHistory()} converts accumulated diffs to generalized patches, assigning variable IDs (\texttt{\$1}, \texttt{\$2}, ...) to created nodes and suppressing redundant map/text patches for same-event node creates
 \item Select specific actions from history (or use all)
 \item Click ``Apply'' to replay on the selected node, or ``Add to Button'' to store in an action node
 \end{enumerate}

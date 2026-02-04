@@ -5,6 +5,7 @@
  */
 
 import type { CrdtDocAdaptor } from "loro-adaptors";
+import type { ContainerID, Delta, Diff, TreeDiffItem } from "loro-crdt";
 import { type Frontiers, LoroDoc, LoroList, LoroMap, LoroText, LoroTree, UndoManager } from "loro-crdt";
 import type { LoroWebsocketClient, LoroWebsocketClientRoom } from "loro-websocket/client";
 
@@ -26,7 +27,7 @@ import {
     TREE_CONTAINER,
     treeIdToString,
 } from "./loroHelpers.js";
-import type { ElementNode, GeneralizedPatch, NodeData, Snapshot, SyncState, SyncStatus, Version } from "./types.js";
+import type { ElementNode, GeneralizedPatch, GroupedPatch, NodeData, PatchNodeData, Snapshot, SyncState, SyncStatus, Version } from "./types.js";
 
 /** Input type for creating nodes - string values converted to LoroText internally */
 export type NodeInput =
@@ -99,7 +100,6 @@ export interface DenicekDocumentOptions {
 export class DenicekDocument {
     private _doc: LoroDoc;
     private localUpdateUnsubscribe?: () => void;
-    private patchListeners: Set<(patch: GeneralizedPatch) => void> = new Set();
 
     // Undo/redo
     private undoManager: UndoManager;
@@ -108,8 +108,8 @@ export class DenicekDocument {
     private _version: number = 0;
     private onVersionChange?: (version: number) => void;
 
-    // History log
-    private history: GeneralizedPatch[] = [];
+    // Accumulated per-event diffs for history tracking
+    private recordedDiffs: [ContainerID, Diff][][] = [];
 
     // Sync state
     private syncClient: LoroWebsocketClient | null = null;
@@ -133,11 +133,6 @@ export class DenicekDocument {
         return this._doc.getTree(TREE_CONTAINER);
     }
 
-    /** Emit a patch for history recording */
-    private emitPatch(patch: GeneralizedPatch): void {
-        this._recordPatch(patch);
-    }
-
     constructor(options?: DenicekDocumentOptions) {
         this._doc = new LoroDoc();
         if (options?.peerId !== undefined) {
@@ -156,11 +151,18 @@ export class DenicekDocument {
             mergeInterval: options?.mergeInterval ?? 1000,
         });
 
-        // Subscribe to document changes to track version and invalidate cache
-        this._doc.subscribe(() => {
+        // Subscribe to document changes to track version, invalidate cache, and accumulate history diffs
+        this._doc.subscribe((event) => {
             this._cachedIndex = null;
             this._version++;
             this.onVersionChange?.(this._version);
+
+            // Accumulate per-event diffs for history (local changes only)
+            if (event.by === "local" && event.events.length > 0) {
+                this.recordedDiffs.push(
+                    event.events.map(e => [e.target, e.diff] as [ContainerID, Diff]),
+                );
+            }
         });
     }
 
@@ -566,18 +568,6 @@ export class DenicekDocument {
 
                 const newId = treeIdToString(newNode.id);
                 newIds.push(newId);
-
-                const nodeChildren = parentNode.children();
-                const countAfter = nodeChildren ? nodeChildren.length : 0;
-                const countBefore = countAfter - 1;
-                const actualIndex = index ?? countBefore;
-                const emitIndex = actualIndex === countBefore ? -1 : actualIndex;
-
-                this.emitPatch({
-                    action: "insert",
-                    path: ["nodes", parentId, "children", emitIndex],
-                    value: { ...sanitizedChild, id: newId }
-                });
             }
 
             this._doc.commit();
@@ -596,10 +586,6 @@ export class DenicekDocument {
             for (const id of nodeIds) {
                 const treeId = stringToTreeId(id);
                 this.tree.delete(treeId);
-                this.emitPatch({
-                    action: "del",
-                    path: ["nodes", id]
-                });
             }
             this._doc.commit();
         } catch (e) {
@@ -626,12 +612,6 @@ export class DenicekDocument {
                 } else {
                     treeNode.move(parentNode);
                 }
-
-                this.emitPatch({
-                    action: "move",
-                    path: ["nodes", nodeId],
-                    value: { parentId: newParentId, index }
-                });
             }
             this._doc.commit();
         } catch (e) {
@@ -643,9 +623,9 @@ export class DenicekDocument {
      * Copy a node as a child of the specified parent
      * @returns The ID of the newly created copy
      */
-    copyNode(sourceId: string, parentId: string, options?: { index?: number; sourceAttr?: string }): string {
+    copyNode(sourceId: string, parentId: string, options?: { index?: number }): string {
         try {
-            const { index, sourceAttr } = options ?? {};
+            const { index } = options ?? {};
 
             const sourceTreeId = stringToTreeId(sourceId);
             const sourceTreeNode = this.tree.getNodeByID(sourceTreeId);
@@ -665,66 +645,46 @@ export class DenicekDocument {
             const newNode = parentNode.createNode(index);
             const data = newNode.data;
 
-            if (sourceAttr) {
+            const sourceKind = sourceData.get(NODE_KIND) as "element" | "value" | "action" | "formula" | "ref" | undefined;
+            if (sourceKind === "element") {
+                data.set(NODE_KIND, "element");
+                data.set(NODE_TAG, (sourceData.get(NODE_TAG) as string) || "div");
+                const attrsMap = data.setContainer(NODE_ATTRS, new LoroMap()) as LoroMap;
                 const sourceAttrs = sourceData.get(NODE_ATTRS);
-                let attrValue = "";
                 if (sourceAttrs && sourceAttrs instanceof LoroMap) {
-                    const val = sourceAttrs.get(sourceAttr);
-                    attrValue = val != null ? String(val) : "";
+                    for (const [key, value] of Object.entries(sourceAttrs.toJSON() as Record<string, unknown>)) {
+                        attrsMap.set(key, value);
+                    }
                 }
+            } else if (sourceKind === "action") {
+                data.set(NODE_KIND, "action");
+                data.set(NODE_LABEL, (sourceData.get(NODE_LABEL) as string) || "Action");
+                data.set(NODE_TARGET, (sourceData.get(NODE_TARGET) as string) || "");
+                const actionsList = data.setContainer(NODE_ACTIONS, new LoroList()) as LoroList;
+                const sourceActions = sourceData.get(NODE_ACTIONS) as LoroList | undefined;
+                if (sourceActions) {
+                    for (const action of sourceActions.toJSON() as GeneralizedPatch[]) {
+                        actionsList.push(action);
+                    }
+                }
+            } else if (sourceKind === "formula") {
+                data.set(NODE_KIND, "formula");
+                data.set(NODE_OPERATION, (sourceData.get(NODE_OPERATION) as string) || "");
+            } else if (sourceKind === "ref") {
+                data.set(NODE_KIND, "ref");
+                data.set(NODE_REF_TARGET, (sourceData.get(NODE_REF_TARGET) as string) || "");
+            } else {
                 data.set(NODE_KIND, "value");
                 const textContainer = data.setContainer(NODE_TEXT, new LoroText()) as LoroText;
-                textContainer.insert(0, attrValue);
-            } else {
-                const sourceKind = sourceData.get(NODE_KIND) as "element" | "value" | "action" | "formula" | "ref" | undefined;
-                if (sourceKind === "element") {
-                    data.set(NODE_KIND, "element");
-                    data.set(NODE_TAG, (sourceData.get(NODE_TAG) as string) || "div");
-                    const attrsMap = data.setContainer(NODE_ATTRS, new LoroMap()) as LoroMap;
-                    const sourceAttrs = sourceData.get(NODE_ATTRS);
-                    if (sourceAttrs && sourceAttrs instanceof LoroMap) {
-                        for (const [key, value] of Object.entries(sourceAttrs.toJSON() as Record<string, unknown>)) {
-                            attrsMap.set(key, value);
-                        }
-                    }
-                } else if (sourceKind === "action") {
-                    data.set(NODE_KIND, "action");
-                    data.set(NODE_LABEL, (sourceData.get(NODE_LABEL) as string) || "Action");
-                    data.set(NODE_TARGET, (sourceData.get(NODE_TARGET) as string) || "");
-                    const actionsList = data.setContainer(NODE_ACTIONS, new LoroList()) as LoroList;
-                    const sourceActions = sourceData.get(NODE_ACTIONS) as LoroList | undefined;
-                    if (sourceActions) {
-                        for (const action of sourceActions.toJSON() as GeneralizedPatch[]) {
-                            actionsList.push(action);
-                        }
-                    }
-                } else if (sourceKind === "formula") {
-                    data.set(NODE_KIND, "formula");
-                    data.set(NODE_OPERATION, (sourceData.get(NODE_OPERATION) as string) || "");
-                } else if (sourceKind === "ref") {
-                    data.set(NODE_KIND, "ref");
-                    data.set(NODE_REF_TARGET, (sourceData.get(NODE_REF_TARGET) as string) || "");
-                } else {
-                    data.set(NODE_KIND, "value");
-                    const textContainer = data.setContainer(NODE_TEXT, new LoroText()) as LoroText;
-                    const sourceText = sourceData.get(NODE_TEXT) as LoroText | undefined;
-                    if (sourceText) {
-                        textContainer.insert(0, sourceText.toString());
-                    }
+                const sourceText = sourceData.get(NODE_TEXT) as LoroText | undefined;
+                if (sourceText) {
+                    textContainer.insert(0, sourceText.toString());
                 }
             }
 
             data.set(NODE_SOURCE_ID, sourceId);
 
             const newId = treeIdToString(newNode.id);
-            const children = parentNode.children();
-            const actualIndex = index ?? (children ? children.length - 1 : 0);
-
-            this.emitPatch({
-                action: "copy",
-                path: ["nodes", parentId, "children", actualIndex],
-                value: { id: newId, sourceId, ...(sourceAttr && { sourceAttr }) }
-            });
 
             this._doc.commit();
             return newId;
@@ -756,17 +716,8 @@ export class DenicekDocument {
 
                 if (value === undefined) {
                     attrsMap.delete(key);
-                    this.emitPatch({
-                        action: "del",
-                        path: ["nodes", id, "attrs", key]
-                    });
                 } else {
                     attrsMap.set(key, value);
-                    this.emitPatch({
-                        action: "put",
-                        path: ["nodes", id, "attrs", key],
-                        value: value
-                    });
                 }
             }
             this._doc.commit();
@@ -796,11 +747,6 @@ export class DenicekDocument {
                 if (kind !== "element") continue;
 
                 data.set(NODE_TAG, sanitizedTag);
-                this.emitPatch({
-                    action: "put",
-                    path: ["nodes", id, "tag"],
-                    value: sanitizedTag
-                });
             }
             this._doc.commit();
         } catch (e) {
@@ -826,13 +772,6 @@ export class DenicekDocument {
                 if (!text) continue;
 
                 text.splice(index, deleteCount, insertText);
-
-                this.emitPatch({
-                    action: "splice",
-                    path: ["nodes", id, "value", index],
-                    length: deleteCount,
-                    value: insertText
-                });
             }
             this._doc.commit();
         } catch (e) {
@@ -878,11 +817,6 @@ export class DenicekDocument {
             if (kind !== "formula") return;
 
             data.set(NODE_OPERATION, operation);
-            this.emitPatch({
-                action: "put",
-                path: ["nodes", id, "operation"],
-                value: operation
-            });
             this._doc.commit();
         } catch (e) {
             handleModelError("updateFormulaOperation", e);
@@ -903,11 +837,6 @@ export class DenicekDocument {
             if (kind !== "ref") return;
 
             data.set(NODE_REF_TARGET, target);
-            this.emitPatch({
-                action: "put",
-                path: ["nodes", id, "refTarget"],
-                value: target
-            });
             this._doc.commit();
         } catch (e) {
             handleModelError("updateRefTarget", e);
@@ -933,12 +862,6 @@ export class DenicekDocument {
             for (const action of actions) {
                 actionsList.push(action);
             }
-
-            this.emitPatch({
-                action: "insert",
-                path: ["nodes", id, "actions", actionsList.length - actions.length],
-                value: actions
-            });
             this._doc.commit();
         } catch (e) {
             handleModelError("appendActions", e);
@@ -962,11 +885,6 @@ export class DenicekDocument {
             if (!actionsList) return;
 
             actionsList.delete(index, 1);
-
-            this.emitPatch({
-                action: "del",
-                path: ["nodes", id, "actions", index]
-            });
             this._doc.commit();
         } catch (e) {
             handleModelError("deleteAction", e);
@@ -995,12 +913,6 @@ export class DenicekDocument {
             actionsList.delete(fromIndex, 1);
             const adjustedToIndex = fromIndex < toIndex ? toIndex - 1 : toIndex;
             actionsList.insert(adjustedToIndex, item);
-
-            this.emitPatch({
-                action: "move",
-                path: ["nodes", id, "actions", fromIndex],
-                value: { toIndex }
-            });
             this._doc.commit();
         } catch (e) {
             handleModelError("moveAction", e);
@@ -1036,19 +948,9 @@ export class DenicekDocument {
             if (kind === "action") {
                 if (property === "label") {
                     data.set(NODE_LABEL, value as string);
-                    this.emitPatch({
-                        action: "put",
-                        path: ["nodes", id, "label"],
-                        value: value
-                    });
                     this._doc.commit();
                 } else if (property === "target") {
                     data.set(NODE_TARGET, value as string);
-                    this.emitPatch({
-                        action: "put",
-                        path: ["nodes", id, "target"],
-                        value: value
-                    });
                     this._doc.commit();
                 } else if (property === "actions") {
                     const actionsContainer = data.get(NODE_ACTIONS) as LoroList | undefined;
@@ -1060,11 +962,6 @@ export class DenicekDocument {
                         for (const action of value as GeneralizedPatch[]) {
                             actionsContainer.push(action);
                         }
-                        this.emitPatch({
-                            action: "put",
-                            path: ["nodes", id, "actions"],
-                            value: value
-                        });
                         this._doc.commit();
                     }
                 }
@@ -1102,7 +999,9 @@ export class DenicekDocument {
      * Redo the last undone change
      */
     redo(): boolean {
-        return this.undoManager.redo();
+        const result = this.undoManager.redo();
+        this._doc.commit();
+        return result;
     }
 
     /**
@@ -1110,6 +1009,13 @@ export class DenicekDocument {
      */
     get canUndo(): boolean {
         return this.undoManager.canUndo();
+    }
+
+    /**
+     * Clear undo/redo history (e.g., after document initialization)
+     */
+    clearUndoHistory(): void {
+        this.undoManager.clear();
     }
 
     /**
@@ -1164,20 +1070,284 @@ export class DenicekDocument {
         return this._doc.subscribe(listener);
     }
 
-    // === Patch History (for recording/replay) ===
+    // === Patch History (derived from Loro diff) ===
 
     /**
-     * Get all recorded patches
+     * Get all patches since recording started, derived from Loro's native diff.
+     * Patches use generalized IDs ($1, $2, etc.) for newly created nodes.
      */
     getHistory(): GeneralizedPatch[] {
-        return [...this.history];
+        return this.diffToPatches(this.recordedDiffs);
     }
 
     /**
-     * Clear recorded patches
+     * Get patches grouped by target node for cleaner UI display
+     */
+    getGroupedHistory(): GroupedPatch[] {
+        const patches = this.getHistory();
+        const groups = new Map<string, GeneralizedPatch[]>();
+
+        for (const patch of patches) {
+            const target = this.getPatchTarget(patch);
+            if (!groups.has(target)) groups.set(target, []);
+            groups.get(target)!.push(patch);
+        }
+
+        return Array.from(groups.entries()).map(([target, operations]) => ({ target, operations }));
+    }
+
+    /**
+     * Clear recorded patches (resets recording start to current frontier)
      */
     clearHistory(): void {
-        this.history = [];
+        this.recordedDiffs = [];
+    }
+
+    private getPatchTarget(patch: GeneralizedPatch): string {
+        return patch.target;
+    }
+
+    /**
+     * Extract tree node ID from a Loro container ID.
+     * Container IDs for tree node data follow the pattern "cid:<treeId>:Map".
+     */
+    private static nodeIdFromContainerId(containerId: string): string | null {
+        const str = String(containerId);
+        if (str.startsWith("cid:") && str.endsWith(":Map")) {
+            const inner = str.slice(4, -4);
+            // Tree IDs contain "@", sub-containers don't match this pattern directly
+            if (inner.includes("@")) return inner;
+        }
+        return null;
+    }
+
+    private diffToPatches(eventDiffs: [ContainerID, Diff][][]): GeneralizedPatch[] {
+        const patches: GeneralizedPatch[] = [];
+        const idMap = new Map<string, string>(); // actualId -> $n (shared across events)
+        let varCounter = 1;
+
+        // Build container ID → node ID lookup for existing nodes
+        const containerToNode = this.buildContainerIdMap();
+
+        for (const diffs of eventDiffs) {
+            // Track nodes created in this event — their map/text patches are
+            // redundant because the create patch captures full state via nodeDataInEvent
+            const createdInEvent = new Set<string>();
+            // Collect map diff values for created nodes (survives undo since it's from the diffs)
+            const nodeDataInEvent = new Map<string, Record<string, unknown>>();
+
+            // First pass: collect tree creates, assign $n IDs, and extract map data from diffs
+            for (const [containerId, diff] of diffs) {
+                if (diff.type === "tree") {
+                    for (const item of (diff as { type: "tree"; diff: TreeDiffItem[] }).diff) {
+                        if (item.action === "create") {
+                            const actualId = treeIdToString(item.target);
+                            if (!idMap.has(actualId)) {
+                                idMap.set(actualId, `$${varCounter++}`);
+                            }
+                            createdInEvent.add(actualId);
+                        }
+                    }
+                } else if (diff.type === "map") {
+                    // Try to extract node ID from container ID (works even for deleted nodes)
+                    const nodeId = DenicekDocument.nodeIdFromContainerId(String(containerId))
+                        ?? containerToNode.get(String(containerId));
+                    if (nodeId) {
+                        const updated = (diff as { type: "map"; updated: Record<string, unknown> }).updated;
+                        const existing = nodeDataInEvent.get(nodeId);
+                        if (existing) {
+                            Object.assign(existing, updated);
+                        } else {
+                            nodeDataInEvent.set(nodeId, { ...updated });
+                        }
+                    }
+                }
+            }
+
+            // Resolve LoroText containers in map diffs to their string content
+            for (const data of nodeDataInEvent.values()) {
+                if (data.kind === "value" && data.text != null && typeof data.text !== "string") {
+                    data.text = String(data.text);
+                }
+            }
+
+            // Second pass: convert to patches, suppressing map/text for same-event creates
+            for (const [containerId, diff] of diffs) {
+                if (diff.type === "tree") {
+                    for (const item of (diff as { type: "tree"; diff: TreeDiffItem[] }).diff) {
+                        const patch = this.treeDiffToPatch(item, idMap, nodeDataInEvent);
+                        if (patch) patches.push(patch);
+                    }
+                } else if (diff.type === "map") {
+                    const nodeId = DenicekDocument.nodeIdFromContainerId(String(containerId))
+                        ?? containerToNode.get(String(containerId));
+                    if (nodeId && !createdInEvent.has(nodeId)) {
+                        const target = idMap.get(nodeId) ?? nodeId;
+                        const updated = (diff as { type: "map"; updated: Record<string, unknown> }).updated;
+                        for (const [key, value] of Object.entries(updated)) {
+                            if (value !== undefined) {
+                                patches.push({ type: "map", target, key, value });
+                            }
+                        }
+                    }
+                } else if (diff.type === "text") {
+                    const nodeId = containerToNode.get(String(containerId));
+                    if (nodeId && !createdInEvent.has(nodeId)) {
+                        const target = idMap.get(nodeId) ?? nodeId;
+                        const deltas = (diff as { type: "text"; diff: Delta<string>[] }).diff;
+                        patches.push(...this.textDeltaToPatches(deltas, target));
+                    }
+                }
+            }
+        }
+
+        return patches;
+    }
+
+    private treeDiffToPatch(
+        item: TreeDiffItem,
+        idMap: Map<string, string>,
+        nodeDataInEvent: Map<string, Record<string, unknown>>,
+    ): GeneralizedPatch | null {
+        const actualTarget = treeIdToString(item.target);
+        const target = idMap.get(actualTarget) ?? actualTarget;
+
+        if (item.action === "create") {
+            const actualParent = item.parent ? treeIdToString(item.parent) : "root";
+            const parent = idMap.get(actualParent) ?? actualParent;
+
+            // Build node data from same-event map diffs (survives undo) or fall back to live node
+            const diffData = nodeDataInEvent.get(actualTarget);
+            const sourceId = diffData?.sourceId as string | undefined
+                ?? this.getNode(actualTarget)?.sourceId;
+
+            // Copy creates: emit sourceId so replay uses copyNode
+            if (sourceId) {
+                return {
+                    type: "tree",
+                    action: "create",
+                    target,
+                    parent,
+                    index: item.index,
+                    sourceId,
+                };
+            }
+
+            // Direct creates: build PatchNodeData from diff data
+            const data = diffData
+                ? this.diffDataToNodeData(diffData)
+                : this.nodeToData(this.getNode(actualTarget));
+            return {
+                type: "tree",
+                action: "create",
+                target,
+                parent,
+                index: item.index,
+                data,
+            };
+        }
+
+        if (item.action === "delete") {
+            return { type: "tree", action: "delete", target };
+        }
+
+        if (item.action === "move") {
+            const actualParent = item.parent ? treeIdToString(item.parent) : "root";
+            const parent = idMap.get(actualParent) ?? actualParent;
+            return { type: "tree", action: "move", target, parent, index: item.index };
+        }
+
+        return null;
+    }
+
+    /** Convert raw map diff values to PatchNodeData */
+    private diffDataToNodeData(data: Record<string, unknown>): PatchNodeData {
+        const kind = data.kind as string | undefined;
+        if (kind === "element") {
+            return { kind: "element", tag: (data.tag as string) || "div", attrs: {} };
+        }
+        if (kind === "value") {
+            return { kind: "value", value: String(data.text ?? "") };
+        }
+        if (kind === "ref") {
+            return { kind: "ref", target: (data.refTarget as string) ?? "" };
+        }
+        if (kind === "formula") {
+            return { kind: "formula", operation: (data.operation as string) ?? "" };
+        }
+        return { kind: "element", tag: "div" };
+    }
+
+    /** Convert a NodeData to PatchNodeData for inline create patches */
+    private nodeToData(node: NodeData | null): PatchNodeData {
+        if (node?.kind === "element") {
+            return { kind: "element", tag: node.tag, attrs: { ...node.attrs } };
+        }
+        if (node?.kind === "value") {
+            return { kind: "value", value: String(node.value) };
+        }
+        if (node?.kind === "ref") {
+            return { kind: "ref", target: node.target };
+        }
+        if (node?.kind === "formula") {
+            return { kind: "formula", operation: node.operation };
+        }
+        // Fallback for null/unknown — create a placeholder element
+        return { kind: "element", tag: "div" };
+    }
+
+    /**
+     * Build a mapping from Loro container IDs to tree node IDs.
+     * Each tree node has a data map (and possibly sub-containers for attrs, text, actions).
+     * This walks all tree nodes and records all their container IDs.
+     */
+    private buildContainerIdMap(): Map<string, string> {
+        const map = new Map<string, string>();
+        for (const treeNode of this.tree.nodes()) {
+            const nodeId = treeIdToString(treeNode.id);
+            const data = treeNode.data;
+            map.set(String(data.id), nodeId);
+
+            // Map sub-containers (attrs, text, actions) to the same node
+            for (const key of [NODE_ATTRS, NODE_TEXT, NODE_ACTIONS]) {
+                const sub = data.get(key);
+                if (sub && typeof sub === "object" && "id" in sub) {
+                    map.set(String((sub as { id: string }).id), nodeId);
+                }
+            }
+        }
+        return map;
+    }
+
+    private textDeltaToPatches(deltas: Delta<string>[], target: string): GeneralizedPatch[] {
+        const patches: GeneralizedPatch[] = [];
+        let index = 0;
+
+        for (const delta of deltas) {
+            if ('retain' in delta && delta.retain !== undefined) {
+                index += delta.retain;
+            } else if ('delete' in delta && delta.delete !== undefined) {
+                patches.push({
+                    type: "text",
+                    target,
+                    index,
+                    delete: delta.delete,
+                    insert: ""
+                });
+            } else if ('insert' in delta && delta.insert !== undefined) {
+                const insertText = Array.isArray(delta.insert) ? delta.insert.join("") : delta.insert;
+                patches.push({
+                    type: "text",
+                    target,
+                    index,
+                    delete: 0,
+                    insert: insertText
+                });
+                index += insertText.length;
+            }
+        }
+
+        return patches;
     }
 
     /**
@@ -1189,39 +1359,76 @@ export class DenicekDocument {
         const vars = new Map<string, string>();
         vars.set("$0", startNodeId);
 
+        // Track nodes created via copyNode — their map/text patches are redundant
+        // because copyNode already captures the full current state
+        const createdNodes = new Set<string>();
+
         for (const patch of script) {
-            // Degeneralize path
-            const concretePath = patch.path.map(p => {
-                if (typeof p === "string" && p.startsWith("$")) {
-                    return vars.get(p) || p;
-                }
-                return p;
-            });
+            const concretePatch = this.degeneralizePatch(patch, vars);
 
-            // Degeneralize value
-            const concreteValue = this.degeneralizeValue(patch.value, vars);
+            // Skip map/text patches for nodes just created in this replay.
+            // copyNode copies the current state, so these patches would duplicate
+            // (maps: harmless junk, text: corrupting insertion on top of existing text)
+            if ((concretePatch.type === "map" || concretePatch.type === "text")
+                && createdNodes.has(concretePatch.target)) {
+                continue;
+            }
 
-            // Construct concrete patch
-            const concretePatch: GeneralizedPatch = {
-                ...patch,
-                path: concretePath,
-                value: concreteValue
-            };
-
-            // Apply (without auto-commit)
             const result = this.applyPatchInternal(concretePatch);
 
-            // If inserted or copied a node, map the ID
-            if ((patch.action === "insert" || patch.action === "copy") && patch.path.length >= 3 && (patch.path[2] === "children" || patch.path[2] === "sibling")) {
-                const val = patch.value as Record<string, unknown>;
-                if (val && val.id && typeof val.id === "string" && val.id.startsWith("$")) {
-                    if (typeof result === "string") {
-                        vars.set(val.id, result);
-                    }
+            if (patch.type === "tree" && patch.action === "create") {
+                if (patch.target.startsWith("$") && typeof result === "string") {
+                    vars.set(patch.target, result);
+                }
+                if (typeof result === "string") {
+                    createdNodes.add(result);
                 }
             }
         }
-        // Each operation auto-commits; Loro's merge interval groups them for undo
+    }
+
+    private degeneralizePatch(patch: GeneralizedPatch, vars: Map<string, string>): GeneralizedPatch {
+        const resolve = (id: string): string => {
+            if (id.startsWith("$")) {
+                return vars.get(id) ?? id;
+            }
+            return id;
+        };
+
+        if (patch.type === "tree") {
+            if (patch.action === "create") {
+                return {
+                    ...patch,
+                    target: resolve(patch.target),
+                    parent: resolve(patch.parent),
+                    ...(patch.sourceId && { sourceId: resolve(patch.sourceId) })
+                };
+            }
+            if (patch.action === "delete") {
+                return { ...patch, target: resolve(patch.target) };
+            }
+            if (patch.action === "move") {
+                return {
+                    ...patch,
+                    target: resolve(patch.target),
+                    parent: resolve(patch.parent)
+                };
+            }
+        }
+
+        if (patch.type === "map") {
+            return {
+                ...patch,
+                target: resolve(patch.target),
+                value: this.degeneralizeValue(patch.value, vars)
+            };
+        }
+
+        if (patch.type === "text") {
+            return { ...patch, target: resolve(patch.target) };
+        }
+
+        return patch;
     }
 
     /**
@@ -1230,85 +1437,41 @@ export class DenicekDocument {
      */
     private applyPatchInternal(patch: GeneralizedPatch): unknown {
         try {
-            const { action, path, value, length } = patch;
-            const targetType = path[0];
-            if (targetType !== "nodes") return;
-
-            const id = path[1] as string;
-
-            if (action === "insert" && path.length >= 4 && path[2] === "children") {
-                const parentId = id;
-                const rawIndex = path[3] as number;
-                const index = rawIndex === -1 ? undefined : rawIndex;
-                const nodeDef = value as NodeInput;
-                return this.addChildren(parentId, [nodeDef], index)[0];
-            }
-
-            if (action === "copy" && path.length >= 4 && path[2] === "children") {
-                const parentId = id;
-                const rawIndex = path[3] as number;
-                const index = rawIndex === -1 ? undefined : rawIndex;
-                const copyDef = value as { sourceId: string; sourceAttr?: string };
-                if (!copyDef.sourceId) {
-                    handleModelError("applyPatch", new Error("Copy patch missing sourceId"));
+            if (patch.type === "tree") {
+                if (patch.action === "create") {
+                    // Inline data: create a new node from template (pre-programmed actions)
+                    if (patch.data) {
+                        const nodeInput = patch.data.kind === "element"
+                            ? { kind: "element" as const, tag: patch.data.tag, attrs: patch.data.attrs ?? {}, children: [] }
+                            : patch.data;
+                        const idx = patch.index === -1 ? undefined : patch.index;
+                        const [id] = this.addChildren(patch.parent, [nodeInput], idx);
+                        return id;
+                    }
+                    // Copy from sourceId or original target (recorded history replay)
+                    const copyFrom = patch.sourceId ?? patch.target;
+                    return this.copyNode(copyFrom, patch.parent, { index: patch.index });
+                }
+                if (patch.action === "delete") {
+                    this.deleteNodes([patch.target]);
                     return undefined;
                 }
-                return this.copyNode(copyDef.sourceId, parentId, { index, sourceAttr: copyDef.sourceAttr });
-            }
-
-            if (path.length === 2 && action === "del") {
-                this.deleteNodes([id]);
-                return undefined;
-            }
-
-            if (path.length === 2 && action === "move") {
-                const { parentId, index } = value as { parentId: string; index?: number };
-                this.moveNodes([id], parentId, index);
-                return undefined;
-            }
-
-            if (path.length >= 3) {
-                const field = path[2];
-                if (field === "tag" && action === "put") {
-                    this.updateTag([id], value as string);
-                } else if (field === "attrs" && path.length === 4) {
-                    const key = path[3] as string;
-                    if (action === "put") {
-                        this.updateAttribute([id], key, value);
-                    } else if (action === "del") {
-                        this.updateAttribute([id], key, undefined);
-                    }
-                } else if (field === "value" && action === "splice") {
-                    if (path.length === 4) {
-                        const idx = path[3] as number;
-                        const insertText = value as string;
-                        const deleteCount = length || 0;
-                        this.spliceValue([id], idx, deleteCount, insertText);
-                    }
-                } else if (field === "label" && action === "put") {
-                    this.updateNodeProperty(id, "label", value);
-                } else if (field === "target" && action === "put") {
-                    this.updateNodeProperty(id, "target", value);
-                } else if (field === "operation" && action === "put") {
-                    this.updateFormulaOperation(id, value as string);
-                } else if (field === "refTarget" && action === "put") {
-                    this.updateRefTarget(id, value as string);
-                } else if (field === "actions") {
-                    if (action === "put") {
-                        this.updateNodeProperty(id, "actions", value);
-                    } else if (action === "insert" && path.length === 4) {
-                        const actions = value as GeneralizedPatch[];
-                        this.appendActions(id, actions);
-                    } else if (action === "del" && path.length === 4) {
-                        const idx = path[3] as number;
-                        this.deleteAction(id, idx);
-                    } else if (action === "move" && path.length === 4) {
-                        const fromIndex = path[3] as number;
-                        const { toIndex } = value as { toIndex: number };
-                        this.moveAction(id, fromIndex, toIndex);
-                    }
+                if (patch.action === "move") {
+                    this.moveNodes([patch.target], patch.parent, patch.index);
+                    return undefined;
                 }
             }
+
+            if (patch.type === "map") {
+                this.updateAttribute([patch.target], patch.key, patch.value);
+                return undefined;
+            }
+
+            if (patch.type === "text") {
+                this.spliceValue([patch.target], patch.index, patch.delete, patch.insert);
+                return undefined;
+            }
+
             return undefined;
         } catch (e) {
             handleModelError("applyPatch", e);
@@ -1333,20 +1496,6 @@ export class DenicekDocument {
         return value;
     }
 
-    // === Patch Recording ===
-
-    subscribePatches(listener: (patch: GeneralizedPatch) => void): () => void {
-        this.patchListeners.add(listener);
-        return () => {
-            this.patchListeners.delete(listener);
-        };
-    }
-
-    private _recordPatch(patch: GeneralizedPatch): void {
-        this.history.push(patch);
-        this.patchListeners.forEach(listener => listener(patch));
-    }
-
     // === Static Factory Methods ===
 
     /**
@@ -1362,6 +1511,8 @@ export class DenicekDocument {
         if (initializer) {
             initializer(doc);
         }
+        // Discard diffs accumulated during initialization so they don't pollute history
+        doc.recordedDiffs = [];
         return doc;
     }
 

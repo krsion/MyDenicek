@@ -44,8 +44,8 @@ test('history sidebar shows actions', async ({ page }) => {
 
   // Check that the history table shows the action
   // The new design shows actions as sentences in a single "Details" column
-  // Look for 'put' action text and the new tag name
-  await expect(page.locator('span', { hasText: 'put' }).first()).toBeVisible();
+  // Look for 'set' action text and the new tag name
+  await expect(page.locator('span', { hasText: 'set' }).first()).toBeVisible();
   // The value is JSON stringified, so it appears with quotes
   await expect(page.getByText('"section-test"')).toBeVisible();
 });

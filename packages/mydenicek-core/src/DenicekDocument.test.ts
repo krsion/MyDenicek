@@ -264,9 +264,8 @@ describe("DenicekDocument mutations", () => {
             doc.copyNode(sourceId!, rootId);
 
             const history = doc.getHistory();
-            const copyPatch = history.find(p => p.action === "copy");
+            const copyPatch = history.find(p => p.type === "tree" && p.action === "create" && "sourceId" in p && p.sourceId === sourceId);
             expect(copyPatch).toBeTruthy();
-            expect(copyPatch?.value).toHaveProperty("sourceId", sourceId);
         });
 
         it("should copy CURRENT value when source is modified before copy", () => {
@@ -335,6 +334,95 @@ describe("DenicekDocument mutations", () => {
                 .filter(node => node?.kind === "value" && node.value === "updated");
 
             expect(allCopiesWithUpdated.length).toBeGreaterThanOrEqual(1);
+        });
+    });
+
+    describe("history: map patches", () => {
+        it("should include map patches for tag rename after clearHistory", () => {
+            doc = DenicekDocument.create({}, testInitializer);
+            doc.clearHistory();
+
+            const rootId = doc.getRootId()!;
+            doc.updateTag([rootId], "section-test");
+
+            const history = doc.getHistory();
+            const mapPatches = history.filter(p => p.type === "map");
+            expect(mapPatches.length).toBeGreaterThan(0);
+            const tagPatch = mapPatches.find(p => p.type === "map" && p.key === "tag");
+            expect(tagPatch).toBeTruthy();
+        });
+
+        it("should have empty history after create() (initialization discarded)", () => {
+            doc = DenicekDocument.create({}, testInitializer);
+            const history = doc.getHistory();
+            expect(history.length).toBe(0);
+        });
+
+        it("should preserve intermediate changes (two renames produce two patches)", () => {
+            doc = DenicekDocument.create({}, testInitializer);
+            doc.clearHistory();
+
+            const rootId = doc.getRootId()!;
+            doc.updateTag([rootId], "h3");
+            doc.updateTag([rootId], "h4");
+
+            const history = doc.getHistory();
+            const tagPatches = history.filter(p => p.type === "map" && p.key === "tag");
+            expect(tagPatches.length).toBe(2);
+            expect(tagPatches[0]!.type === "map" && tagPatches[0]!.value).toBe("h3");
+            expect(tagPatches[1]!.type === "map" && tagPatches[1]!.value).toBe("h4");
+        });
+
+        it("should suppress initialization map patches for newly created nodes", () => {
+            doc = DenicekDocument.create({}, testInitializer);
+            doc.clearHistory();
+
+            const rootId = doc.getRootId()!;
+            doc.addChildren(rootId, [{ kind: "element", tag: "li", attrs: {}, children: [] }]);
+
+            const history = doc.getHistory();
+            // Should only have a tree create patch, no map patches (kind, tag, attrs are suppressed)
+            expect(history.filter(p => p.type === "tree").length).toBe(1);
+            expect(history.filter(p => p.type === "map").length).toBe(0);
+        });
+
+        it("should preserve node data in history after undo deletes the node", () => {
+            doc = DenicekDocument.create({}, testInitializer);
+            doc.clearHistory();
+
+            const rootId = doc.getRootId()!;
+            doc.addChildren(rootId, [{ kind: "element", tag: "li", attrs: {}, children: [] }]);
+
+            // Undo deletes the node from the tree
+            doc.undo();
+
+            const history = doc.getHistory();
+            // Should have a create and a delete
+            const creates = history.filter(p => p.type === "tree" && p.action === "create");
+            expect(creates.length).toBe(1);
+            // The create should still have the correct tag, not fallback "div"
+            const create = creates[0]!;
+            expect(create.type === "tree" && create.action === "create" && create.data?.kind).toBe("element");
+            if (create.type === "tree" && create.action === "create" && create.data?.kind === "element") {
+                expect(create.data.tag).toBe("li");
+            }
+        });
+
+        it("should show actual text value for value node creates, not container reference", () => {
+            doc = DenicekDocument.create({}, testInitializer);
+            doc.clearHistory();
+
+            const rootId = doc.getRootId()!;
+            doc.addChildren(rootId, [{ kind: "value", value: "hello" }]);
+
+            const history = doc.getHistory();
+            const creates = history.filter(p => p.type === "tree" && p.action === "create");
+            expect(creates.length).toBe(1);
+            const create = creates[0]!;
+            expect(create.type === "tree" && create.action === "create" && create.data?.kind).toBe("value");
+            if (create.type === "tree" && create.action === "create" && create.data?.kind === "value") {
+                expect(create.data.value).toBe("hello");
+            }
         });
     });
 });

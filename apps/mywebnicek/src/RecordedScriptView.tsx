@@ -6,26 +6,14 @@ import { NodeId } from "./components/NodeId";
 import { usePeerAlias } from "./context/PeerAliasContext";
 import { getCreationInfo, type ScriptAnalysis } from "./utils/scriptAnalysis";
 
-// Check if a path segment looks like a Loro OpId (peer@counter format)
-function isNodeId(segment: string): boolean {
-    return /^\d+@\d+$/.test(segment);
+// Check if a string is a variable placeholder ($0, $1, etc.)
+function isVariablePlaceholder(id: string): boolean {
+    return /^\$\d+$/.test(id);
 }
 
-// Check if a path segment is a variable placeholder ($0, $1, etc.)
-function isVariablePlaceholder(segment: string): boolean {
-    return /^\$\d+$/.test(segment);
-}
-
-// Extract the node ID from a path (e.g., ["nodes", "321@18100", "tag"] -> "321@18100")
-// Also recognizes variable placeholders like $0, $1
-function extractNodeId(path: (string | number)[]): string | null {
-    for (const segment of path) {
-        const str = String(segment);
-        if (isNodeId(str) || isVariablePlaceholder(str)) {
-            return str;
-        }
-    }
-    return null;
+function getVariableNumber(id: string): number | null {
+    const match = id.match(/^\$(\d+)$/);
+    return match?.[1] ? parseInt(match[1], 10) : null;
 }
 
 interface RecordedScriptViewProps {
@@ -130,362 +118,193 @@ export function RecordedScriptView({ script, onNodeClick, selectedIndices, onSel
                     </TableHeader>
                     <TableBody>
                         {script.map((patch, i) => {
-                            const originalNodeId = extractNodeId(patch.path);
-                            const overriddenNodeId = targetOverrides?.get(i);
-                            const displayNodeId = overriddenNodeId ?? originalNodeId;
-                            const isOverridden = overriddenNodeId !== undefined;
-                            const value = (patch as unknown as { value?: unknown; values?: unknown }).value ??
-                                (patch as unknown as { value?: unknown; values?: unknown }).values;
                             const isSelected = hasSelection && selectedIndices.has(i);
-
-                            // Get creation/dependency info from analysis
                             const creationInfo = analysis ? getCreationInfo(i, analysis) : null;
 
-                            // Path rest (after node ID)
-                            const pathRest = patch.path.slice(2);
-                            const pathStr = pathRest.map((seg, idx) => {
-                                if (typeof seg === 'number') return seg === -1 ? '[end]' : `[${seg}]`;
-                                if (idx === 0) return String(seg);
-                                return `.${seg}`;
-                            }).join('');
+                            // Render a node reference, resolving variable placeholders and overrides
+                            function renderNodeRef(nodeId: string, options?: {
+                                overrideId?: string;
+                                showRetargetButton?: boolean;
+                                onRetargetClick?: (index: number, newId: string) => void;
+                            }): React.ReactNode {
+                                const displayId = options?.overrideId ?? nodeId;
+                                const isOverridden = options?.overrideId !== undefined;
 
-                            // Render node reference with override styling and target button
-                            const renderTargetNode = () => {
-                                if (!displayNodeId) return null;
-                                // Check if it's a variable placeholder ($0, $1, etc.)
-                                const varMatch = displayNodeId.match(/^\$(\d+)$/);
-                                if (varMatch) {
-                                    const num = parseInt(varMatch[1]!, 10);
-                                    // $0 with actionTarget = show actual target node
-                                    if (num === 0 && actionTarget) {
+                                const varNum = getVariableNumber(displayId);
+                                if (varNum !== null) {
+                                    // $0 with actionTarget: show the actual target node
+                                    if (varNum === 0 && actionTarget) {
                                         return <NodeId id={actionTarget} onClick={onNodeClick} />;
                                     }
-                                    // $0 without actionTarget = show #0 (target placeholder)
-                                    // $1, $2, etc. = show #1, #2, etc. (created nodes)
-                                    return <Badge appearance="outline" color="success" size="small">#{num}</Badge>;
+                                    return <Badge appearance="outline" color="success" size="small">#{varNum}</Badge>;
                                 }
+
                                 return (
                                     <>
                                         <span style={isOverridden ? { backgroundColor: 'rgba(34, 197, 94, 0.2)', borderRadius: '3px' } : undefined}>
-                                            <NodeId id={displayNodeId} onClick={onNodeClick} />
+                                            <NodeId id={displayId} onClick={onNodeClick} />
                                         </span>
-                                        {!isViewMode && onRetarget && currentNodeId && originalNodeId && (
+                                        {options?.showRetargetButton && !isViewMode && options.onRetargetClick && currentNodeId && (
                                             <Tooltip content="Use selected node as target" relationship="label">
                                                 <Button
                                                     size="small"
                                                     appearance="subtle"
                                                     icon={<TargetRegular />}
-                                                    onClick={() => onRetarget(i, currentNodeId)}
-                                                    disabled={displayNodeId === currentNodeId}
+                                                    onClick={() => options.onRetargetClick!(i, currentNodeId)}
+                                                    disabled={displayId === currentNodeId}
                                                     style={{ minWidth: 'auto', padding: '2px' }}
                                                 />
                                             </Tooltip>
                                         )}
                                     </>
                                 );
-                            };
+                            }
 
-                            // Format the action as a sentence
-                            const renderActionSentence = () => {
-                                // Insert on children - "insert <node> #N to TARGET's path"
-                                if (patch.action === "insert" && pathRest[0] === "children" && value && typeof value === 'object') {
-                                    const node = value as { kind?: string; tag?: string; value?: string; label?: string; attrs?: Record<string, unknown>; target?: string; id?: string };
-                                    const kind = node.kind || 'element';
-                                    let nodeDisplay = '';
-                                    if (kind === 'element') {
-                                        const tag = node.tag || 'div';
-                                        const attrs = node.attrs || {};
-                                        const attrStr = Object.entries(attrs)
-                                            .slice(0, 2)
-                                            .map(([k, v]) => `${k}="${String(v).slice(0, 10)}"`)
-                                            .join(' ');
-                                        nodeDisplay = `<${tag}${attrStr ? ' ' + attrStr : ''}></${tag}>`;
-                                    } else if (kind === 'value') {
-                                        const text = node.value || '';
-                                        nodeDisplay = `"${text.slice(0, 20)}${text.length > 20 ? '...' : ''}"`;
-                                    } else if (kind === 'action') {
-                                        nodeDisplay = `<button>${node.label || 'Action'}</button>`;
+                            // Render the target node with override and retarget support
+                            function renderTarget(nodeId: string): React.ReactNode {
+                                return renderNodeRef(nodeId, {
+                                    overrideId: targetOverrides?.get(i),
+                                    showRetargetButton: !!onRetarget && !isVariablePlaceholder(nodeId),
+                                    onRetargetClick: onRetarget,
+                                });
+                            }
+
+                            // Render a source node with source override and retarget support
+                            function renderSource(sourceId: string): React.ReactNode {
+                                return renderNodeRef(sourceId, {
+                                    overrideId: sourceOverrides?.get(i),
+                                    showRetargetButton: !!onRetargetSource,
+                                    onRetargetClick: onRetargetSource,
+                                });
+                            }
+
+                            function renderActionSentence(): React.ReactNode {
+                                if (patch.type === "tree") {
+                                    if (patch.action === "create") {
+                                        // Create with sourceId: "copy SOURCE to PARENT"
+                                        if (patch.sourceId) {
+                                            return (
+                                                <>
+                                                    <span style={{ color: '#0078d4' }}>copy</span>
+                                                    {renderSource(patch.sourceId)}
+                                                    <span>to</span>
+                                                    {renderTarget(patch.parent)}
+                                                    {creationInfo && (
+                                                        <Tooltip content={`Creates node #${creationInfo.number}`} relationship="description">
+                                                            <Badge appearance="filled" color="success" size="small">#{creationInfo.number}</Badge>
+                                                        </Tooltip>
+                                                    )}
+                                                </>
+                                            );
+                                        }
+
+                                        // Create with inline data: "create <tag> in PARENT" or "create "text" in PARENT"
+                                        if (patch.data) {
+                                            let nodeDisplay = '';
+                                            if (patch.data.kind === 'element') {
+                                                const tag = patch.data.tag;
+                                                const attrs = patch.data.attrs ?? {};
+                                                const attrStr = Object.entries(attrs)
+                                                    .slice(0, 2)
+                                                    .map(([k, v]) => `${k}="${String(v).slice(0, 10)}"`)
+                                                    .join(' ');
+                                                nodeDisplay = `<${tag}${attrStr ? ' ' + attrStr : ''}></${tag}>`;
+                                            } else if (patch.data.kind === 'value') {
+                                                const text = patch.data.value;
+                                                nodeDisplay = `"${text.slice(0, 20)}${text.length > 20 ? '...' : ''}"`;
+                                            } else if (patch.data.kind === 'ref') {
+                                                nodeDisplay = `ref(${patch.data.target})`;
+                                            } else if (patch.data.kind === 'formula') {
+                                                nodeDisplay = `formula(${patch.data.operation})`;
+                                            }
+
+                                            return (
+                                                <>
+                                                    <span style={{ color: '#0078d4' }}>create</span>
+                                                    <span style={{ color: '#666' }}>{nodeDisplay}</span>
+                                                    {creationInfo && (
+                                                        <Tooltip content={`Creates node #${creationInfo.number}`} relationship="description">
+                                                            <Badge appearance="filled" color="success" size="small">#{creationInfo.number}</Badge>
+                                                        </Tooltip>
+                                                    )}
+                                                    <span>in</span>
+                                                    {renderTarget(patch.parent)}
+                                                </>
+                                            );
+                                        }
+
+                                        // Create without sourceId or data: plain create in parent
+                                        return (
+                                            <>
+                                                <span style={{ color: '#0078d4' }}>create</span>
+                                                {creationInfo && (
+                                                    <Tooltip content={`Creates node #${creationInfo.number}`} relationship="description">
+                                                        <Badge appearance="filled" color="success" size="small">#{creationInfo.number}</Badge>
+                                                    </Tooltip>
+                                                )}
+                                                <span>in</span>
+                                                {renderTarget(patch.parent)}
+                                            </>
+                                        );
                                     }
 
-                                    // Check if value.id is a variable placeholder (for generalized actions)
-                                    const varIdMatch = node.id?.match(/^\$(\d+)$/);
-                                    const varCreatedNum = varIdMatch ? parseInt(varIdMatch[1]!, 10) : null;
+                                    if (patch.action === "delete") {
+                                        return (
+                                            <>
+                                                <span style={{ color: '#0078d4' }}>delete</span>
+                                                {renderTarget(patch.target)}
+                                            </>
+                                        );
+                                    }
 
+                                    if (patch.action === "move") {
+                                        const parentVarNum = getVariableNumber(patch.parent);
+                                        return (
+                                            <>
+                                                <span style={{ color: '#0078d4' }}>move</span>
+                                                {renderTarget(patch.target)}
+                                                <span>to</span>
+                                                {parentVarNum !== null ? (
+                                                    <Badge appearance="outline" color="success" size="small">#{parentVarNum}</Badge>
+                                                ) : (
+                                                    <NodeId id={patch.parent} onClick={onNodeClick} />
+                                                )}
+                                                <span style={{ color: '#888' }}>at index {patch.index}</span>
+                                            </>
+                                        );
+                                    }
+                                }
+
+                                if (patch.type === "map") {
                                     return (
                                         <>
-                                            <span style={{ color: '#0078d4' }}>insert</span>
-                                            <span style={{ color: '#666' }}>{nodeDisplay}</span>
-                                            {creationInfo && (
-                                                <Tooltip content={`Creates node #${creationInfo.number}`} relationship="description">
-                                                    <Badge appearance="filled" color="success" size="small">#{creationInfo.number}</Badge>
-                                                </Tooltip>
-                                            )}
-                                            {!creationInfo && varCreatedNum !== null && (
-                                                <Badge appearance="filled" color="success" size="small">#{varCreatedNum}</Badge>
-                                            )}
-                                            <span>to</span>
-                                            {renderTargetNode()}
-                                            {pathStr && <span>'s {pathStr}</span>}
+                                            <span style={{ color: '#0078d4' }}>set</span>
+                                            <span style={{ color: '#666' }}>{patch.key} = {JSON.stringify(formatValue(patch.value)).slice(0, 30)}</span>
+                                            <span>on</span>
+                                            {renderTarget(patch.target)}
                                         </>
                                     );
                                 }
 
-                                // Copy - "copy SOURCE's .attr to TARGET's path"
-                                if (patch.action === "copy" && value && typeof value === 'object' && 'sourceId' in value) {
-                                    const copyVal = value as { sourceId: string; sourceAttr?: string };
-                                    const origSourceId = copyVal.sourceId;
-                                    const overriddenSourceId = sourceOverrides?.get(i);
-                                    const dispSourceId = overriddenSourceId ?? origSourceId;
-                                    const isSourceOverridden = overriddenSourceId !== undefined;
-
-                                    return (
-                                        <>
-                                            <span style={{ color: '#0078d4' }}>copy</span>
-                                            <span style={isSourceOverridden ? { backgroundColor: 'rgba(34, 197, 94, 0.2)', borderRadius: '3px' } : undefined}>
-                                                <NodeId id={dispSourceId} onClick={onNodeClick} />
-                                            </span>
-                                            {!isViewMode && onRetargetSource && currentNodeId && (
-                                                <Tooltip content="Use selected node as source" relationship="label">
-                                                    <Button
-                                                        size="small"
-                                                        appearance="subtle"
-                                                        icon={<TargetRegular />}
-                                                        onClick={() => onRetargetSource(i, currentNodeId)}
-                                                        disabled={dispSourceId === currentNodeId}
-                                                        style={{ minWidth: 'auto', padding: '2px' }}
-                                                    />
-                                                </Tooltip>
-                                            )}
-                                            {copyVal.sourceAttr && <span>'s .{copyVal.sourceAttr}</span>}
-                                            <span>to</span>
-                                            {renderTargetNode()}
-                                            {pathStr && <span>'s {pathStr}</span>}
-                                        </>
-                                    );
-                                }
-
-                                // Splice - "splice pos:N del:N "text" to TARGET's value"
-                                if (patch.action === "splice") {
-                                    // Extract position from path (last element is the index)
-                                    const position = pathRest.length > 0 && typeof pathRest[pathRest.length - 1] === 'number'
-                                        ? pathRest[pathRest.length - 1] as number
-                                        : 0;
-                                    // Path without the index for display
-                                    const fieldPath = pathRest.slice(0, -1).map((seg, idx) => {
-                                        if (typeof seg === 'number') return seg === -1 ? '[end]' : `[${seg}]`;
-                                        if (idx === 0) return String(seg);
-                                        return `.${seg}`;
-                                    }).join('') || 'value';
-
+                                if (patch.type === "text") {
+                                    const insertDisplay = patch.insert
+                                        ? `"${patch.insert.slice(0, 20)}${patch.insert.length > 20 ? '...' : ''}"`
+                                        : '""';
                                     return (
                                         <>
                                             <span style={{ color: '#0078d4' }}>splice</span>
-                                            <span style={{ color: '#888' }}>pos:{position}</span>
-                                            <span style={{ color: '#888' }}>del:{patch.length ?? 0}</span>
-                                            <span style={{ color: '#666' }}>
-                                                {value !== undefined ? JSON.stringify(formatValue(value)).slice(0, 20) : '""'}
-                                            </span>
-                                            <span>to</span>
-                                            {renderTargetNode()}
-                                            <span>'s {fieldPath}</span>
+                                            <span style={{ color: '#888' }}>pos:{patch.index}</span>
+                                            <span style={{ color: '#888' }}>del:{patch.delete}</span>
+                                            <span style={{ color: '#666' }}>{insertDisplay}</span>
+                                            <span>on</span>
+                                            {renderTarget(patch.target)}
                                         </>
                                     );
                                 }
 
-                                // Put - "put VALUE to TARGET's .property"
-                                if (patch.action === "put") {
-                                    return (
-                                        <>
-                                            <span style={{ color: '#0078d4' }}>put</span>
-                                            <span style={{ color: '#666' }}>
-                                                {value !== undefined ? JSON.stringify(formatValue(value)).slice(0, 30) : ''}
-                                            </span>
-                                            <span>to</span>
-                                            {renderTargetNode()}
-                                            {pathStr && <span>'s {pathStr}</span>}
-                                        </>
-                                    );
-                                }
-
-                                // Del - "del TARGET's path"
-                                if (patch.action === "del") {
-                                    return (
-                                        <>
-                                            <span style={{ color: '#0078d4' }}>del</span>
-                                            {renderTargetNode()}
-                                            {pathStr && <span>'s {pathStr}</span>}
-                                        </>
-                                    );
-                                }
-
-                                // Move - "move TARGET to PARENT at index N"
-                                if (patch.action === "move" && value && typeof value === 'object' && 'parentId' in value) {
-                                    const moveVal = value as { parentId: string; index?: number };
-                                    const parentVarMatch = moveVal.parentId.match(/^\$(\d+)$/);
-                                    const parentVarNum = parentVarMatch ? parseInt(parentVarMatch[1]!, 10) : null;
-                                    return (
-                                        <>
-                                            <span style={{ color: '#0078d4' }}>move</span>
-                                            {renderTargetNode()}
-                                            <span>to</span>
-                                            {parentVarNum !== null ? (
-                                                <Badge appearance="outline" color="success" size="small">#{parentVarNum}</Badge>
-                                            ) : (
-                                                <NodeId id={moveVal.parentId} onClick={onNodeClick} />
-                                            )}
-                                            {moveVal.index != null && (
-                                                <span style={{ color: '#888' }}>at index {moveVal.index}</span>
-                                            )}
-                                        </>
-                                    );
-                                }
-
-                                // Insert actions to button - show nested actions
-                                if (patch.action === "insert" && pathRest[0] === "actions" && value) {
-                                    const actions = Array.isArray(value) ? value : [value];
-
-                                    // Helper to render node ref with variable support
-                                    const renderNestedNodeRef = (id: string | null) => {
-                                        if (!id) return null;
-                                        const varMatch = id.match(/^\$(\d+)$/);
-                                        if (varMatch) {
-                                            const num = parseInt(varMatch[1]!, 10);
-                                            return <Badge appearance="outline" color="success" size="small">#{num}</Badge>;
-                                        }
-                                        return <NodeId id={id} onClick={onNodeClick} />;
-                                    };
-
-                                    const isVar = (id: string | null) => id && /^\$\d+$/.test(id);
-                                    const getVarNum = (id: string) => {
-                                        const match = id.match(/^\$(\d+)$/);
-                                        return match ? parseInt(match[1]!, 10) : null;
-                                    };
-
-                                    const formatNestedNode = (act: { action?: string; path?: (string | number)[]; value?: unknown }) => {
-                                        const actPath = Array.isArray(act.path) ? act.path.slice(2) : [];
-                                        const actValue = act.value;
-                                        if (act.action === "insert" && actPath[0] === "children" && actValue && typeof actValue === 'object') {
-                                            const node = actValue as { kind?: string; tag?: string; value?: string; label?: string };
-                                            const kind = node.kind || 'element';
-                                            if (kind === 'element') return `<${node.tag || 'div'}></${node.tag || 'div'}>`;
-                                            if (kind === 'value') return `"${(node.value || '').slice(0, 15)}"`;
-                                            if (kind === 'action') return `<button>${node.label || 'Action'}</button>`;
-                                        }
-                                        return '';
-                                    };
-
-                                    return (
-                                        <div>
-                                            <span>{pathStr} +{actions.length} action{actions.length !== 1 ? 's' : ''}:</span>
-                                            {actions.map((act, idx) => {
-                                                const actPath = Array.isArray(act.path) ? act.path.slice(2) : [];
-                                                const actPathStr = actPath.map((seg: string | number, ai: number) => {
-                                                    if (typeof seg === 'number') return seg === -1 ? '[end]' : `[${seg}]`;
-                                                    if (ai === 0) return String(seg);
-                                                    return `.${seg}`;
-                                                }).join('');
-                                                const actNodeId = (() => {
-                                                    for (const seg of (act.path || [])) {
-                                                        const str = String(seg);
-                                                        if (/^\d+@\d+$/.test(str) || /^\$\d+$/.test(str)) return str;
-                                                    }
-                                                    return null;
-                                                })();
-                                                const actValue = act.value;
-
-                                                if (act.action === "insert" && actPath[0] === "children" && actValue && typeof actValue === 'object') {
-                                                    const node = actValue as { id?: string };
-                                                    const createdVarNum = node.id && isVar(node.id) ? getVarNum(node.id) : null;
-                                                    return (
-                                                        <div key={idx} style={{ marginLeft: 12, display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-                                                            <span style={{ color: '#0078d4' }}>insert</span>
-                                                            <span style={{ color: '#666' }}>{formatNestedNode(act)}</span>
-                                                            {createdVarNum && <Badge appearance="filled" color="success" size="small">#{createdVarNum}</Badge>}
-                                                            <span>to</span>
-                                                            {renderNestedNodeRef(actNodeId)}
-                                                            {actPathStr && <span>'s {actPathStr}</span>}
-                                                        </div>
-                                                    );
-                                                }
-
-                                                if (act.action === "copy" && actValue && typeof actValue === 'object' && 'sourceId' in actValue) {
-                                                    const copyVal = actValue as { sourceId: string; sourceAttr?: string };
-                                                    return (
-                                                        <div key={idx} style={{ marginLeft: 12, display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-                                                            <span style={{ color: '#0078d4' }}>copy</span>
-                                                            {renderNestedNodeRef(copyVal.sourceId)}
-                                                            {copyVal.sourceAttr && <span>'s .{copyVal.sourceAttr}</span>}
-                                                            <span>to</span>
-                                                            {renderNestedNodeRef(actNodeId)}
-                                                            {actPathStr && <span>'s {actPathStr}</span>}
-                                                        </div>
-                                                    );
-                                                }
-
-                                                if (act.action === "splice") {
-                                                    // Extract position from path (last element is the index)
-                                                    const splicePos = actPath.length > 0 && typeof actPath[actPath.length - 1] === 'number'
-                                                        ? actPath[actPath.length - 1] as number
-                                                        : 0;
-                                                    // Field path without the index
-                                                    const spliceFieldPath = actPath.slice(0, -1).map((seg: string | number, ai: number) => {
-                                                        if (typeof seg === 'number') return seg === -1 ? '[end]' : `[${seg}]`;
-                                                        if (ai === 0) return String(seg);
-                                                        return `.${seg}`;
-                                                    }).join('') || 'value';
-
-                                                    return (
-                                                        <div key={idx} style={{ marginLeft: 12, display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-                                                            <span style={{ color: '#0078d4' }}>splice</span>
-                                                            <span style={{ color: '#888' }}>pos:{splicePos}</span>
-                                                            <span style={{ color: '#888' }}>del:{act.length ?? 0}</span>
-                                                            <span style={{ color: '#666' }}>{actValue !== undefined ? JSON.stringify(actValue).slice(0, 15) : '""'}</span>
-                                                            <span>to</span>
-                                                            {renderNestedNodeRef(actNodeId)}
-                                                            <span>'s {spliceFieldPath}</span>
-                                                        </div>
-                                                    );
-                                                }
-
-                                                if (act.action === "put") {
-                                                    return (
-                                                        <div key={idx} style={{ marginLeft: 12, display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-                                                            <span style={{ color: '#0078d4' }}>put</span>
-                                                            <span style={{ color: '#666' }}>{actValue !== undefined ? JSON.stringify(formatValue(actValue)).slice(0, 20) : ''}</span>
-                                                            <span>to</span>
-                                                            {renderNestedNodeRef(actNodeId)}
-                                                            {actPathStr && <span>'s {actPathStr}</span>}
-                                                        </div>
-                                                    );
-                                                }
-
-                                                return (
-                                                    <div key={idx} style={{ marginLeft: 12, display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-                                                        <span style={{ color: '#0078d4' }}>{act.action}</span>
-                                                        {renderNestedNodeRef(actNodeId)}
-                                                        {actPathStr && <span>{actPathStr}</span>}
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    );
-                                }
-
-                                // Default fallback
-                                return (
-                                    <>
-                                        <span style={{ color: '#0078d4' }}>{patch.action}</span>
-                                        {creationInfo && (
-                                            <Badge appearance="filled" color="success" size="small">#{creationInfo.number}</Badge>
-                                        )}
-                                        {renderTargetNode()}
-                                        {pathStr && <span>{pathStr}</span>}
-                                        {value !== undefined && (
-                                            <span style={{ color: '#666' }}>{JSON.stringify(formatValue(value)).slice(0, 40)}</span>
-                                        )}
-                                    </>
-                                );
-                            };
+                                // Exhaustive check - should never reach here
+                                return <span style={{ color: '#888' }}>unknown patch</span>;
+                            }
 
                             return (
                                 <TableRow

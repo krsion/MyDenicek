@@ -25,7 +25,7 @@ import { JsonView } from "./JsonView.tsx";
 import { RecordedScriptView } from "./RecordedScriptView";
 import { RenderedDocument } from "./RenderedDocument.tsx";
 import { sanitizeTagName, ToolbarPopoverButton, validateTagName } from "./ToolbarPopoverButton";
-import { analyzeScript, generalizeScript, type ScriptAnalysis } from "./utils/scriptAnalysis";
+import { analyzeScript, type ScriptAnalysis } from "./utils/scriptAnalysis";
 import { generalizeSelection } from "./utils/selectionUtils";
 
 // Generate a random room ID
@@ -41,6 +41,39 @@ function getRoomIdFromHash(): string {
 
 // LocalStorage key for peer name
 const PEER_NAME_STORAGE_KEY = "mydenicek-peer-name";
+
+function applyPatchOverrides(patch: GeneralizedPatch, targetOverride?: string, sourceOverride?: string): GeneralizedPatch {
+  const resolve = (id: string) => {
+    // Only replace concrete Loro OpIds, not variable placeholders ($0, $1, etc.)
+    if (targetOverride && /^\d+@\d+$/.test(id)) {
+      return targetOverride;
+    }
+    return id;
+  };
+
+  if (patch.type === "tree") {
+    if (patch.action === "create") {
+      return {
+        ...patch,
+        parent: resolve(patch.parent),
+        ...(sourceOverride && patch.sourceId ? { sourceId: sourceOverride } : {}),
+      };
+    }
+    if (patch.action === "delete") {
+      return { ...patch, target: resolve(patch.target) };
+    }
+    if (patch.action === "move") {
+      return { ...patch, target: resolve(patch.target), parent: resolve(patch.parent) };
+    }
+  }
+  if (patch.type === "map") {
+    return { ...patch, target: resolve(patch.target) };
+  }
+  if (patch.type === "text") {
+    return { ...patch, target: resolve(patch.target) };
+  }
+  return patch;
+}
 
 export const App = () => {
   const { document, version } = useDocumentState();
@@ -209,26 +242,33 @@ export const App = () => {
 
   // Track if we've already initialized
   const hasInitialized = useRef(false);
+  // Whether the room ID came from the URL hash (existing session to sync)
+  const hadHashRoomId = useRef(!!window.location.hash.slice(1));
 
-  // Initialize document AFTER sync data has a chance to arrive
-  // We watch for document changes - if we get a root via sync, we don't need to initialize
+  // Initialize document — immediately if no room in URL, otherwise wait for sync
   useEffect(() => {
     if (hasInitialized.current) return undefined;
 
-    // Check immediately if document already has content (from sync or previous session)
+    // Check immediately if document already has content
     const existingRoot = document.getRootId();
     if (existingRoot) {
       hasInitialized.current = true;
       return undefined;
     }
 
-    // Subscribe to document changes to detect if sync brings data
+    // No room ID in URL → fresh session, initialize immediately
+    if (!hadHashRoomId.current) {
+      hasInitialized.current = true;
+      initializeDocument(document);
+      return undefined;
+    }
+
+    // Room ID from URL → wait for sync to bring data
     const checkAndMaybeInit = () => {
       if (hasInitialized.current) return;
 
       const rootId = document.getRootId();
       if (rootId) {
-        // Sync brought us data, no need to initialize
         hasInitialized.current = true;
         unsubscribe();
         clearTimeout(initTimeout);
@@ -239,7 +279,7 @@ export const App = () => {
       checkAndMaybeInit();
     });
 
-    // Fallback: if no root appears after 2 seconds, initialize
+    // Fallback: if sync doesn't bring data within 1 second, initialize
     const initTimeout = setTimeout(() => {
       if (hasInitialized.current) return;
 
@@ -251,7 +291,7 @@ export const App = () => {
         hasInitialized.current = true;
       }
       unsubscribe();
-    }, 2000);
+    }, 1000);
 
     return () => {
       unsubscribe();
@@ -335,41 +375,10 @@ export const App = () => {
 
     if (actionsToReplay.length === 0) return;
 
-    // Analyze and generalize the script (replace created node IDs with variables)
-    // This allows replay() to map $1, $2, etc. to newly created nodes
-    const analysis = analyzeScript(actionsToReplay);
-    const generalizedActions = generalizeScript(actionsToReplay, analysis);
-
-    // Apply target overrides (manual retargeting by user)
-    const finalActions = generalizedActions.map((action, newIdx) => {
+    // Apply target/source overrides (manual retargeting by user)
+    const finalActions = actionsToReplay.map((action, newIdx) => {
       const origIdx = indicesToReplay[newIdx]!;
-      const targetOverride = targetOverrides.get(origIdx);
-      const sourceOverride = sourceOverrides.get(origIdx);
-
-      let result = action;
-
-      // Apply target override to path
-      if (targetOverride) {
-        const newPath = action.path.map(segment => {
-          const str = String(segment);
-          // Replace node ID (peer@counter format) - but not variables
-          if (/^\d+@\d+$/.test(str)) {
-            return targetOverride;
-          }
-          return segment;
-        });
-        result = { ...result, path: newPath };
-      }
-
-      // Apply source override for copy actions
-      if (sourceOverride && action.action === "copy" && action.value && typeof action.value === 'object' && 'sourceId' in action.value) {
-        result = {
-          ...result,
-          value: { ...action.value, sourceId: sourceOverride }
-        };
-      }
-
-      return result;
+      return applyPatchOverrides(action, targetOverrides.get(origIdx), sourceOverrides.get(origIdx));
     });
 
     replay(finalActions, selectedNodeId);
@@ -414,37 +423,10 @@ export const App = () => {
 
     if (actionsToUse.length === 0) return;
 
-    // Analyze and generalize the script
-    const analysis = analyzeScript(actionsToUse);
-    const generalizedActions = generalizeScript(actionsToUse, analysis);
-
     // Apply target/source overrides
-    const finalActions = generalizedActions.map((action, newIdx) => {
+    const finalActions = actionsToUse.map((action, newIdx) => {
       const origIdx = indicesToUse[newIdx]!;
-      const targetOverride = targetOverrides.get(origIdx);
-      const sourceOverride = sourceOverrides.get(origIdx);
-
-      let result = action;
-
-      if (targetOverride) {
-        const newPath = action.path.map(segment => {
-          const str = String(segment);
-          if (/^\d+@\d+$/.test(str)) {
-            return targetOverride;
-          }
-          return segment;
-        });
-        result = { ...result, path: newPath };
-      }
-
-      if (sourceOverride && action.action === "copy" && action.value && typeof action.value === 'object' && 'sourceId' in action.value) {
-        result = {
-          ...result,
-          value: { ...action.value, sourceId: sourceOverride }
-        };
-      }
-
-      return result;
+      return applyPatchOverrides(action, targetOverrides.get(origIdx), sourceOverrides.get(origIdx));
     });
 
     // Append actions to the existing action node
@@ -509,7 +491,7 @@ export const App = () => {
   };
 
   // Clipboard: copy creates a "copy" action referencing the source node
-  const { canPaste, isInputSelected, isValueSelected, handleCopy, handlePaste } = useClipboard({
+  const { canPaste, isValueSelected, handleCopy, handlePaste } = useClipboard({
     selectedNodeId: selectedNodeId ?? null,
     node,
     document,
@@ -529,30 +511,20 @@ export const App = () => {
   const knownPeerIds = useMemo(() => {
     const peerIds = new Set<string>();
 
+    const extractPeerId = (id: string) => {
+      const match = id.match(/^\d+@(\d+)$/);
+      if (match?.[1]) peerIds.add(match[1]);
+    };
+
     // Extract peer IDs from recording history
     if (recordingHistory) {
-      for (const action of recordingHistory) {
-        for (const segment of action.path) {
-          const str = String(segment);
-          const match = str.match(/^\d+@(\d+)$/);
-          if (match?.[1]) {
-            peerIds.add(match[1]);
-          }
+      for (const patch of recordingHistory) {
+        extractPeerId(patch.target);
+        if (patch.type === "tree" && (patch.action === "create" || patch.action === "move")) {
+          extractPeerId(patch.parent);
         }
-        // Also check values for node IDs
-        const value = (action as { value?: unknown }).value;
-        if (typeof value === 'object' && value !== null) {
-          const checkValue = (v: unknown): void => {
-            if (typeof v === 'string') {
-              const match = v.match(/^\d+@(\d+)$/);
-              if (match?.[1]) peerIds.add(match[1]);
-            } else if (Array.isArray(v)) {
-              v.forEach(checkValue);
-            } else if (typeof v === 'object' && v !== null) {
-              Object.values(v).forEach(checkValue);
-            }
-          };
-          checkValue(value);
+        if (patch.type === "tree" && patch.action === "create" && patch.sourceId) {
+          extractPeerId(patch.sourceId);
         }
       }
     }
@@ -648,7 +620,7 @@ export const App = () => {
                 <Tooltip content="Copy (Ctrl+C)" relationship="label">
                   <ToolbarButton
                     icon={<CopyRegular />}
-                    disabled={!isInputSelected && !isValueSelected}
+                    disabled={!isValueSelected}
                     onClick={handleCopy}
                   />
                 </Tooltip>

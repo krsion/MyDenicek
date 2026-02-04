@@ -170,15 +170,46 @@ export interface OpId {
 export type Version = OpId[];
 
 /**
- * Generalized patch for recording/replay
+ * Generalized patch types for recording/replay - aligned with Loro diff format
  */
-export type PatchAction = "put" | "del" | "insert" | "splice" | "move" | "copy";
 
-export interface GeneralizedPatch {
-    action: PatchAction;
-    path: (string | number)[];
-    value?: unknown;
-    length?: number;
+/** Inline node template for pre-programmed create patches (no existing node to copy from) */
+export type PatchNodeData =
+    | { kind: "element"; tag: string; attrs?: Record<string, unknown> }
+    | { kind: "value"; value: string }
+    | { kind: "ref"; target: string }
+    | { kind: "formula"; operation: string };
+
+/** Tree structure patches - create, delete, move nodes */
+export type TreePatch =
+    | { type: "tree"; action: "create"; target: string; parent: string; index: number; sourceId?: string; data?: PatchNodeData }
+    | { type: "tree"; action: "delete"; target: string }
+    | { type: "tree"; action: "move"; target: string; parent: string; index: number };
+
+/** Map patches - attribute/property updates */
+export interface MapPatch {
+    type: "map";
+    target: string;
+    key: string;
+    value: unknown;
+}
+
+/** Text patches - splice operations on value nodes */
+export interface TextPatch {
+    type: "text";
+    target: string;
+    index: number;
+    delete: number;
+    insert: string;
+}
+
+/** Union type for all patch types */
+export type GeneralizedPatch = TreePatch | MapPatch | TextPatch;
+
+/** Grouped patches for UI display - groups operations by target node */
+export interface GroupedPatch {
+    target: string;
+    operations: GeneralizedPatch[];
 }
 
 

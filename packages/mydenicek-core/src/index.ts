@@ -24,13 +24,16 @@ export type {
     FormulaDocumentAccessor,
     FormulaNode,
     FormulaNodeData,
-    // Other types
+    // Patch types
     GeneralizedPatch,
+    GroupedPatch,
+    MapPatch,
     Node,
     NodeData,
     // Formula types
     Operation,
     OpId,
+    PatchNodeData,
     RefNode,
     RefNodeData,
     // Snapshot for temporal comparisons
@@ -39,6 +42,8 @@ export type {
     // Sync types
     SyncState,
     SyncStatus,
+    TextPatch,
+    TreePatch,
     ValueNode,
     ValueNodeData,
     Version

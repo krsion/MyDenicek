@@ -32,27 +32,27 @@ const add = (doc: DenicekDocument, parentId: string, child: NodeInput): string =
 /** Actions for "Add Conference" button */
 const addConferenceActions: GeneralizedPatch[] = [
     // Insert new tr element as child of tbody ($0)
-    { action: "insert", path: ["nodes", "$0", "children", -1], value: { id: "$1", kind: "element", tag: "tr" } },
+    { type: "tree", action: "create", target: "$1", parent: "$0", index: -1, data: { kind: "element", tag: "tr" } },
     // Insert first td (name)
-    { action: "insert", path: ["nodes", "$1", "children", -1], value: { id: "$2", kind: "element", tag: "td" } },
-    { action: "put", path: ["nodes", "$2", "attrs", "style"], value: { padding: 8 } },
-    { action: "insert", path: ["nodes", "$2", "children", -1], value: { kind: "value", value: "New Conference" } },
+    { type: "tree", action: "create", target: "$2", parent: "$1", index: -1, data: { kind: "element", tag: "td" } },
+    { type: "map", target: "$2", key: "style", value: { padding: 8 } },
+    { type: "tree", action: "create", target: "$3", parent: "$2", index: -1, data: { kind: "value", value: "New Conference" } },
     // Insert second td (location)
-    { action: "insert", path: ["nodes", "$1", "children", -1], value: { id: "$3", kind: "element", tag: "td" } },
-    { action: "put", path: ["nodes", "$3", "attrs", "style"], value: { padding: 8 } },
-    { action: "insert", path: ["nodes", "$3", "children", -1], value: { kind: "value", value: "Location" } },
+    { type: "tree", action: "create", target: "$4", parent: "$1", index: -1, data: { kind: "element", tag: "td" } },
+    { type: "map", target: "$4", key: "style", value: { padding: 8 } },
+    { type: "tree", action: "create", target: "$5", parent: "$4", index: -1, data: { kind: "value", value: "Location" } },
 ];
 
 /** Actions for "+1" button - add "1" child to sum formula */
 const incrementActions: GeneralizedPatch[] = [
     // Add "1" as child of the sum formula ($0)
-    { action: "insert", path: ["nodes", "$0", "children", -1], value: { kind: "value", value: "1" } },
+    { type: "tree", action: "create", target: "$1", parent: "$0", index: -1, data: { kind: "value", value: "1" } },
 ];
 
 /** Actions for "-1" button - add "-1" child to sum formula */
 const decrementActions: GeneralizedPatch[] = [
     // Add "-1" as child of the sum formula ($0)
-    { action: "insert", path: ["nodes", "$0", "children", -1], value: { kind: "value", value: "-1" } },
+    { type: "tree", action: "create", target: "$1", parent: "$0", index: -1, data: { kind: "value", value: "-1" } },
 ];
 
 /**
@@ -61,6 +61,9 @@ const decrementActions: GeneralizedPatch[] = [
 export function initializeDocument(doc: DenicekDocument): void {
     const rootId = doc.createRootNode("section");
     createFormativeExamples(doc, rootId);
+    // Discard initialization state so the document appears fresh
+    doc.clearHistory();
+    doc.clearUndoHistory();
 }
 
 function createFormativeExamples(doc: DenicekDocument, rootId: string): void {
@@ -135,16 +138,17 @@ function createFormativeExamples(doc: DenicekDocument, rootId: string): void {
     const todoButtonsId = add(doc, todoArticleId, el("div"));
     doc.updateAttribute([todoButtonsId], "style", { marginTop: 12, display: 'flex', gap: 8, alignItems: 'center' });
 
-    // Input for new item text
+    // Input for new item text (with child value node for LoroText storage)
     const todoInputId = add(doc, todoButtonsId, el("input"));
     doc.updateAttribute([todoInputId], "type", "text");
     doc.updateAttribute([todoInputId], "placeholder", "New item...");
     doc.updateAttribute([todoInputId], "style", { padding: '4px 8px', flex: 1 });
+    const todoInputValueId = add(doc, todoInputId, val(""));
 
-    // Actions that copy the input value into a new list item
+    // Actions that copy the input's child value node into a new list item
     const addTodoWithInputActions: GeneralizedPatch[] = [
-        { action: "insert", path: ["nodes", "$0", "children", -1], value: { id: "$1", kind: "element", tag: "li", attrs: {}, children: [] } },
-        { action: "copy", path: ["nodes", "$1", "children", 0], value: { id: "$2", sourceId: todoInputId, sourceAttr: "data-copy-value" } },
+        { type: "tree", action: "create", target: "$1", parent: "$0", index: -1, data: { kind: "element", tag: "li" } },
+        { type: "tree", action: "create", target: "$2", parent: "$1", index: 0, sourceId: todoInputValueId },
     ];
 
     add(doc, todoButtonsId, action("Add Item", todoListId, addTodoWithInputActions));
