@@ -1,62 +1,42 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import {
-  applyRemoteEvent,
-  commitLocal,
+  Denicek,
   type EventGraph,
-  init,
-  list,
   materialize,
-  merge,
-  nodeToPlainObject,
   primitive,
   record,
-  reference,
 } from "./core.ts";
 
-const toPlain = (eg: EventGraph) => nodeToPlainObject(materialize(eg));
+/** Exchange events between two peers so both converge. */
+function sync(a: Denicek, b: Denicek): void {
+  for (const e of a.drain()) b.applyRemote(e);
+  for (const e of b.drain()) a.applyRemote(e);
+}
 
 Deno.test("Concurrent add of record -> convergent LWW", () => {
-  let alice = init(record("root", {}));
-  let bob = init(record("root", {}));
+  const alice = new Denicek("alice");
+  const bob = new Denicek("bob");
 
-  [alice] = commitLocal(alice, "alice", {
-    kind: "record-add",
-    target: "",
-    field: "title",
-    node: primitive("From Alice"),
-  });
-  [bob] = commitLocal(bob, "bob", {
-    kind: "record-add",
-    target: "",
-    field: "title",
-    node: primitive("From Bob"),
-  });
+  alice.add("", "title", "From Alice");
+  bob.add("", "title", "From Bob");
 
-  const mergedAB = merge(alice, bob);
-  const mergedBA = merge(bob, alice);
+  sync(alice, bob);
 
-  assertEquals(toPlain(mergedAB), toPlain(mergedBA));
-  assertEquals(toPlain(mergedAB), {
-    $tag: "root",
-    title: "From Bob",
-  });
+  const expected = { $tag: "root", title: "From Bob" };
+  assertEquals(alice.toPlain(), expected);
+  assertEquals(bob.toPlain(), expected);
 });
 
 Deno.test("updates absolute references on structural rename", () => {
-  const initial = record("root", {
-    person: record("person", { name: primitive("Ada Lovelace") }),
-    focus: reference("/person/name"),
-  });
-  let core = init(initial);
-
-  [core] = commitLocal(core, "alice", {
-    kind: "record-rename-field",
-    target: "person",
-    from: "name",
-    to: "fullName",
+  const core = new Denicek("alice", {
+    $tag: "root",
+    person: { $tag: "person", name: "Ada Lovelace" },
+    focus: { $ref: "/person/name" },
   });
 
-  assertEquals(toPlain(core), {
+  core.rename("person", "name", "fullName");
+
+  assertEquals(core.toPlain(), {
     $tag: "root",
     person: { $tag: "person", fullName: "Ada Lovelace" },
     focus: "/person/fullName",
@@ -64,93 +44,73 @@ Deno.test("updates absolute references on structural rename", () => {
 });
 
 Deno.test("applies deletes even when references target the deleted field", () => {
-  const initial = record("root", {
-    person: record("person", { name: primitive("Ada Lovelace") }),
-    focus: reference("/person/name"),
-  });
-  let core = init(initial);
-
-  [core] = commitLocal(core, "alice", {
-    kind: "record-delete",
-    target: "person",
-    field: "name",
+  const core = new Denicek("alice", {
+    $tag: "root",
+    person: { $tag: "person", name: "Ada Lovelace" },
+    focus: { $ref: "/person/name" },
   });
 
-  const plain = toPlain(core) as Record<string, unknown>;
+  core.delete("person", "name");
+
+  const plain = core.toPlain() as Record<string, unknown>;
   assertEquals(plain.person, { $tag: "person" });
 });
 
 Deno.test("keeps concurrent list push-backs from both peers", () => {
-  const initial = record("root", { items: list("ul", []) });
-  let alice = init(initial);
-  let bob = init(initial);
+  const doc = { $tag: "root", items: { $tag: "ul", $items: [] as string[] } };
+  const alice = new Denicek("alice", doc);
+  const bob = new Denicek("bob", doc);
 
-  [alice] = commitLocal(alice, "alice", {
-    kind: "list-push-back",
-    target: "items",
-    node: primitive("A"),
-  });
-  [bob] = commitLocal(bob, "bob", {
-    kind: "list-push-back",
-    target: "items",
-    node: primitive("B"),
-  });
+  alice.pushBack("items", "A");
+  bob.pushBack("items", "B");
+
+  sync(alice, bob);
 
   const expected = {
     $tag: "root",
     items: { $tag: "ul", $items: ["A", "B"] },
   };
-  assertEquals(toPlain(merge(alice, bob)), expected);
-  assertEquals(toPlain(merge(bob, alice)), expected);
+  assertEquals(alice.toPlain(), expected);
+  assertEquals(bob.toPlain(), expected);
 });
 
 Deno.test("list-pop-front removes first item", () => {
-  const initial = record("root", {
-    items: list("ul", [primitive("a"), primitive("b"), primitive("c")]),
-  });
-  let core = init(initial);
-
-  [core] = commitLocal(core, "alice", {
-    kind: "list-pop-front",
-    target: "items",
+  const core = new Denicek("alice", {
+    $tag: "root",
+    items: { $tag: "ul", $items: ["a", "b", "c"] },
   });
 
-  assertEquals(toPlain(core), {
+  core.popFront("items");
+
+  assertEquals(core.toPlain(), {
     $tag: "root",
     items: { $tag: "ul", $items: ["b", "c"] },
   });
 });
 
 Deno.test("list-pop-back removes last item", () => {
-  const initial = record("root", {
-    items: list("ul", [primitive("a"), primitive("b"), primitive("c")]),
-  });
-  let core = init(initial);
-
-  [core] = commitLocal(core, "alice", {
-    kind: "list-pop-back",
-    target: "items",
+  const core = new Denicek("alice", {
+    $tag: "root",
+    items: { $tag: "ul", $items: ["a", "b", "c"] },
   });
 
-  assertEquals(toPlain(core), {
+  core.popBack("items");
+
+  assertEquals(core.toPlain(), {
     $tag: "root",
     items: { $tag: "ul", $items: ["a", "b"] },
   });
 });
 
 Deno.test("list-push-front inserts at start", () => {
-  const initial = record("root", {
-    items: list("ul", [primitive("a"), primitive("b"), primitive("c")]),
-  });
-  let core = init(initial);
-
-  [core] = commitLocal(core, "alice", {
-    kind: "list-push-front",
-    target: "items",
-    node: primitive("z"),
+  const core = new Denicek("alice", {
+    $tag: "root",
+    items: { $tag: "ul", $items: ["a", "b", "c"] },
   });
 
-  assertEquals(toPlain(core), {
+  core.pushFront("items", "z");
+
+  assertEquals(core.toPlain(), {
     $tag: "root",
     items: { $tag: "ul", $items: ["z", "a", "b", "c"] },
   });
@@ -159,107 +119,81 @@ Deno.test("list-push-front inserts at start", () => {
 // ── Selector transform tests ────────────────────────────────────────
 
 Deno.test("transforms selector after concurrent rename", () => {
-  const initial = record("root", {
-    person: record("person", { name: primitive("Ada") }),
-  });
-  let alice = init(initial);
-  let bob = init(initial);
+  const doc = { $tag: "root", person: { $tag: "person", name: "Ada" } };
+  const alice = new Denicek("alice", doc);
+  const bob = new Denicek("bob", doc);
 
-  [alice] = commitLocal(alice, "alice", {
-    kind: "record-rename-field",
-    target: "person",
-    from: "name",
-    to: "fullName",
-  });
-  [bob] = commitLocal(bob, "bob", {
-    kind: "primitive-edit",
-    target: "person/name",
-    op: "upper",
-  });
+  alice.rename("person", "name", "fullName");
+  bob.edit("person/name", "upper");
+
+  sync(alice, bob);
 
   const expected = {
     $tag: "root",
     person: { $tag: "person", fullName: "ADA" },
   };
-  assertEquals(toPlain(merge(alice, bob)), expected);
-  assertEquals(toPlain(merge(bob, alice)), expected);
+  assertEquals(alice.toPlain(), expected);
+  assertEquals(bob.toPlain(), expected);
 });
 
 Deno.test("transforms selector after concurrent wrap-record", () => {
-  const initial = record("root", {
-    person: record("person", { name: primitive("Ada") }),
-    focus: reference("/person/name"),
-  });
-  let alice = init(initial);
-  let bob = init(initial);
+  const doc = {
+    $tag: "root",
+    person: { $tag: "person", name: "Ada" },
+    focus: { $ref: "/person/name" },
+  };
+  const alice = new Denicek("alice", doc);
+  const bob = new Denicek("bob", doc);
 
-  [alice] = commitLocal(alice, "alice", {
-    kind: "wrap-record",
-    target: "person",
-    field: "inner",
-    tag: "wrapper",
-  });
-  [bob] = commitLocal(bob, "bob", {
-    kind: "primitive-edit",
-    target: "person/name",
-    op: "upper",
-  });
+  alice.wrapRecord("person", "inner", "wrapper");
+  bob.edit("person/name", "upper");
+
+  sync(alice, bob);
 
   const expected = {
     $tag: "root",
     person: { $tag: "wrapper", inner: { $tag: "person", name: "ADA" } },
     focus: "/person/inner/name",
   };
-  assertEquals(toPlain(merge(alice, bob)), expected);
-  assertEquals(toPlain(merge(bob, alice)), expected);
+  assertEquals(alice.toPlain(), expected);
+  assertEquals(bob.toPlain(), expected);
 });
 
 Deno.test("transforms selector after concurrent wrap-list", () => {
-  const initial = record("root", {
-    person: record("person", { name: primitive("Ada") }),
-    focus: reference("/person/name"),
-  });
-  let alice = init(initial);
-  let bob = init(initial);
+  const doc = {
+    $tag: "root",
+    person: { $tag: "person", name: "Ada" },
+    focus: { $ref: "/person/name" },
+  };
+  const alice = new Denicek("alice", doc);
+  const bob = new Denicek("bob", doc);
 
-  [alice] = commitLocal(alice, "alice", {
-    kind: "wrap-list",
-    target: "person",
-    tag: "people",
-  });
-  [bob] = commitLocal(bob, "bob", {
-    kind: "primitive-edit",
-    target: "person/name",
-    op: "upper",
-  });
+  alice.wrapList("person", "people");
+  bob.edit("person/name", "upper");
+
+  sync(alice, bob);
 
   const expected = {
     $tag: "root",
     person: { $tag: "people", $items: [{ $tag: "person", name: "ADA" }] },
     focus: "/person/*/name",
   };
-  assertEquals(toPlain(merge(alice, bob)), expected);
-  assertEquals(toPlain(merge(bob, alice)), expected);
+  assertEquals(alice.toPlain(), expected);
+  assertEquals(bob.toPlain(), expected);
 });
 
 Deno.test("wildcard edit affects concurrently inserted item", () => {
-  const initial = record("root", {
-    items: list("ul", [record("task", { status: primitive("todo") })]),
-  });
-  let alice = init(initial);
-  let bob = init(initial);
+  const doc = {
+    $tag: "root",
+    items: { $tag: "ul", $items: [{ $tag: "task", status: "todo" }] },
+  };
+  const alice = new Denicek("alice", doc);
+  const bob = new Denicek("bob", doc);
 
-  [alice] = commitLocal(alice, "alice", {
-    kind: "primitive-edit",
-    target: "items/*/status",
-    op: "replace",
-    args: "todo/done",
-  });
-  [bob] = commitLocal(bob, "bob", {
-    kind: "list-push-back",
-    target: "items",
-    node: record("task", { status: primitive("todo") }),
-  });
+  alice.edit("items/*/status", "replace", "todo/done");
+  bob.pushBack("items", { $tag: "task", status: "todo" });
+
+  sync(alice, bob);
 
   const expected = {
     $tag: "root",
@@ -271,104 +205,61 @@ Deno.test("wildcard edit affects concurrently inserted item", () => {
       ],
     },
   };
-  assertEquals(toPlain(merge(alice, bob)), expected);
-  assertEquals(toPlain(merge(bob, alice)), expected);
+  assertEquals(alice.toPlain(), expected);
+  assertEquals(bob.toPlain(), expected);
 });
 
 Deno.test("Conference list", () => {
-  const initial = record("div", {
-    items: list("ul", [
-      record("li", { name: primitive("John Doe") }),
-      record("li", { name: primitive("Jane Smith") }),
-    ]),
-  });
-  let alice = init(initial);
-  let bob = init(initial);
+  const doc = {
+    $tag: "div",
+    items: {
+      $tag: "ul",
+      $items: [
+        { $tag: "li", name: "John Doe" },
+        { $tag: "li", name: "Jane Smith" },
+      ],
+    },
+  };
+  const alice = new Denicek("alice", doc);
+  const bob = new Denicek("bob", doc);
 
-  [alice] = commitLocal(alice, "alice", {
-    kind: "list-push-back",
-    target: "items",
-    node: record("li", { name: primitive("Alice Johnson") }),
-  });
+  alice.pushBack("items", { $tag: "li", name: "Alice Johnson" });
 
-  [bob] = commitLocal(bob, "bob", {
-    kind: "update-tag",
-    target: "items",
-    tag: "table",
-  });
-  [bob] = commitLocal(bob, "bob", {
-    kind: "update-tag",
-    target: "items/*",
-    tag: "td",
-  });
-  [bob] = commitLocal(bob, "bob", {
-    kind: "wrap-record",
-    target: "items/*",
-    field: "cell",
-    tag: "tr",
-  });
+  bob.updateTag("items", "table");
+  bob.updateTag("items/*", "td");
+  bob.wrapList("items/*", "tr");
+
+  sync(alice, bob);
 
   const expected = {
     $tag: "div",
     items: {
       $tag: "table",
       $items: [
-        { $tag: "tr", cell: { $tag: "td", name: "John Doe" } },
-        { $tag: "tr", cell: { $tag: "td", name: "Jane Smith" } },
-        { $tag: "tr", cell: { $tag: "td", name: "Alice Johnson" } },
+        { $tag: "tr", $items: [{ $tag: "td", name: "John Doe" }] },
+        { $tag: "tr", $items: [{ $tag: "td", name: "Jane Smith" }] },
+        { $tag: "tr", $items: [{ $tag: "td", name: "Alice Johnson" }] },
       ],
     },
   };
 
-  assertEquals(toPlain(merge(alice, bob)), expected);
-  assertEquals(toPlain(merge(bob, alice)), expected);
+  assertEquals(alice.toPlain(), expected);
+  assertEquals(bob.toPlain(), expected);
 
-  // Same result when peer IDs are swapped (tiebreaker order reversed)
-  let xena = init(initial);
-  let adam = init(initial);
-
-  [xena] = commitLocal(xena, "xena", {
-    kind: "list-push-back",
-    target: "items",
-    node: record("li", { name: primitive("Alice Johnson") }),
-  });
-  [adam] = commitLocal(adam, "adam", {
-    kind: "update-tag",
-    target: "items",
-    tag: "table",
-  });
-  [adam] = commitLocal(adam, "adam", {
-    kind: "update-tag",
-    target: "items/*",
-    tag: "td",
-  });
-  [adam] = commitLocal(adam, "adam", {
-    kind: "wrap-record",
-    target: "items/*",
-    field: "cell",
-    tag: "tr",
-  });
-
-  assertEquals(toPlain(merge(xena, adam)), expected);
-  assertEquals(toPlain(merge(adam, xena)), expected);
 });
 
 // ── Edit coverage tests ─────────────────────────────────────────────
 
 Deno.test("copy replaces target with source", () => {
-  const initial = record("root", {
-    source: primitive("hello"),
-    target: primitive("world"),
-  });
-  let core = init(initial);
-
-  [core] = commitLocal(core, "alice", {
-    kind: "copy",
-    target: "target",
-    source: "source",
+  const core = new Denicek("alice", {
+    $tag: "root",
+    source: "hello",
+    target: "world",
   });
 
-  assertEquals(toPlain(core), {
+  core.copy("target", "source");
+
+  assertEquals(core.toPlain(), {
     $tag: "root",
     source: "hello",
     target: "hello",
@@ -376,36 +267,28 @@ Deno.test("copy replaces target with source", () => {
 });
 
 Deno.test("update-tag changes tag on record", () => {
-  const initial = record("root", {
-    item: record("div", { name: primitive("test") }),
-  });
-  let core = init(initial);
-
-  [core] = commitLocal(core, "alice", {
-    kind: "update-tag",
-    target: "item",
-    tag: "span",
+  const core = new Denicek("alice", {
+    $tag: "root",
+    item: { $tag: "div", name: "test" },
   });
 
-  assertEquals(toPlain(core), {
+  core.updateTag("item", "span");
+
+  assertEquals(core.toPlain(), {
     $tag: "root",
     item: { $tag: "span", name: "test" },
   });
 });
 
 Deno.test("update-tag changes tag on list", () => {
-  const initial = record("root", {
-    items: list("ul", [primitive("a")]),
-  });
-  let core = init(initial);
-
-  [core] = commitLocal(core, "alice", {
-    kind: "update-tag",
-    target: "items",
-    tag: "ol",
+  const core = new Denicek("alice", {
+    $tag: "root",
+    items: { $tag: "ul", $items: ["a"] },
   });
 
-  assertEquals(toPlain(core), {
+  core.updateTag("items", "ol");
+
+  assertEquals(core.toPlain(), {
     $tag: "root",
     items: { $tag: "ol", $items: ["a"] },
   });
@@ -414,44 +297,38 @@ Deno.test("update-tag changes tag on list", () => {
 // ── Error path tests────────────────────────────────────────────────
 
 Deno.test("merge rejects different initial documents", () => {
-  const a = init(record("root", {}));
-  const b = init(record("other", {}));
+  const a = new Denicek("alice", { $tag: "root" });
+  const b = new Denicek("bob", { $tag: "other" });
   assertThrows(
-    () => merge(a, b),
+    () => a.merge(b),
     Error,
     "Cannot merge cores with different initial documents.",
   );
 });
 
-Deno.test("applyRemoteEvent rejects conflicting payload", () => {
-  const core = init(record("root", {}));
-  const [updated, event] = commitLocal(core, "alice", {
-    kind: "record-add",
-    target: "",
-    field: "x",
-    node: primitive("a"),
-  });
+Deno.test("applyRemote rejects conflicting payload", () => {
+  const alice = new Denicek("alice");
+  alice.add("", "x", "a");
+  const [event] = alice.drain();
   const conflicting = {
     ...event,
     edit: {
-      kind: "record-add" as const,
-      target: [] as string[],
-      field: "x",
+      ...event.edit,
       node: primitive("b"),
     },
   };
   assertThrows(
-    () => applyRemoteEvent(updated, conflicting),
+    () => alice.applyRemote(conflicting),
     Error,
     "Conflicting payload",
   );
 });
 
-Deno.test("applyRemoteEvent rejects missing parent", () => {
-  const core = init(record("root", {}));
+Deno.test("applyRemote rejects missing parent", () => {
+  const core = new Denicek("alice");
   const event = {
-    id: { peer: "alice", seq: 0 },
-    parents: [{ peer: "bob", seq: 99 }],
+    id: { peer: "bob", seq: 0 },
+    parents: [{ peer: "charlie", seq: 99 }],
     edit: {
       kind: "record-add" as const,
       target: [] as string[],
@@ -460,33 +337,25 @@ Deno.test("applyRemoteEvent rejects missing parent", () => {
     },
   };
   assertThrows(
-    () => applyRemoteEvent(core, event),
+    () => core.applyRemote(event),
     Error,
     "Unknown parent",
   );
 });
 
 Deno.test("materialize throws on edit targeting non-existent path", () => {
-  let core = init(record("root", {}));
-  [core] = commitLocal(core, "alice", {
-    kind: "record-add",
-    target: "nonexistent",
-    field: "x",
-    node: primitive("a"),
-  });
-  assertThrows(() => materialize(core), Error, "No nodes match selector");
+  const core = new Denicek("alice");
+  core.add("nonexistent", "x", "a");
+  assertThrows(() => core.materialize(), Error, "No nodes match selector");
 });
 
 Deno.test("materialize throws on kind mismatch", () => {
-  const initial = record("root", { items: list("ul", []) });
-  let core = init(initial);
-  [core] = commitLocal(core, "alice", {
-    kind: "record-add",
-    target: "items",
-    field: "x",
-    node: primitive("a"),
+  const core = new Denicek("alice", {
+    $tag: "root",
+    items: { $tag: "ul", $items: [] as string[] },
   });
-  assertThrows(() => materialize(core), Error, "expected record, found 'list'");
+  core.add("items", "x", "a");
+  assertThrows(() => core.materialize(), Error, "expected record, found 'list'");
 });
 
 Deno.test("materialize throws on cycle", () => {
@@ -523,21 +392,19 @@ Deno.test("materialize throws on cycle", () => {
 });
 
 Deno.test("list-pop-back throws on empty list", () => {
-  const initial = record("root", { items: list("ul", []) });
-  let core = init(initial);
-  [core] = commitLocal(core, "alice", {
-    kind: "list-pop-back",
-    target: "items",
+  const core = new Denicek("alice", {
+    $tag: "root",
+    items: { $tag: "ul", $items: [] as string[] },
   });
-  assertThrows(() => materialize(core), Error, "list is empty");
+  core.popBack("items");
+  assertThrows(() => core.materialize(), Error, "list is empty");
 });
 
 Deno.test("list-pop-front throws on empty list", () => {
-  const initial = record("root", { items: list("ul", []) });
-  let core = init(initial);
-  [core] = commitLocal(core, "alice", {
-    kind: "list-pop-front",
-    target: "items",
+  const core = new Denicek("alice", {
+    $tag: "root",
+    items: { $tag: "ul", $items: [] as string[] },
   });
-  assertThrows(() => materialize(core), Error, "list is empty");
+  core.popFront("items");
+  assertThrows(() => core.materialize(), Error, "list is empty");
 });

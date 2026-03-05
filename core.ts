@@ -161,6 +161,37 @@ export const reference = (path: string): Node => ({
   selector: selector(path),
 });
 
+// ── Plain-object ↔ Node conversion ─────────────────────────────────
+
+/**
+ * User-facing plain JS representation of a document node.
+ * - Primitives (`string`, `number`, `boolean`, `null`) → primitive nodes
+ * - `{ $ref: "/path" }` → reference nodes
+ * - `{ $tag: "t", $items: [...] }` → list nodes
+ * - `{ $tag: "t", field: ... }` → record nodes
+ */
+export type PlainNode = PrimitiveValue | PlainRef | PlainRecord | PlainList;
+export interface PlainRef { $ref: string }
+export interface PlainList { $tag: string; $items: PlainNode[] }
+export interface PlainRecord { $tag: string; [key: string]: PlainNode }
+
+/** Converts a {@link PlainNode} into the internal {@link Node} representation. */
+export const plainObjectToNode = (plain: PlainNode): Node => {
+  if (plain === null || typeof plain !== "object") return primitive(plain);
+  if ("$ref" in plain) return reference((plain as PlainRef).$ref);
+  if ("$items" in plain && Array.isArray((plain as PlainList).$items)) {
+    const l = plain as PlainList;
+    return list(l.$tag, l.$items.map(plainObjectToNode));
+  }
+  const r = plain as PlainRecord;
+  const fields: Record<string, Node> = {};
+  for (const [k, v] of Object.entries(r)) {
+    if (k === "$tag") continue;
+    fields[k] = plainObjectToNode(v as PlainNode);
+  }
+  return record(r.$tag, fields);
+};
+
 // ── Selector matching ───────────────────────────────────────────────
 
 const segmentsCompatible = (a: SelectorSegment, b: SelectorSegment): boolean =>
@@ -266,7 +297,7 @@ const traceNodes = (node: Node, target: Selector): TracedNode[] => {
 };
 
 /** Returns all nodes in the document tree that match the given selector. */
-export const selectNodes = (node: Node, target: Selector): Node[] =>
+const selectNodes = (node: Node, target: Selector): Node[] =>
   traceNodes(node, target).map((e) => e.node);
 
 const selectorKey = (sel: Selector): string =>
@@ -709,14 +740,14 @@ const validateEvent = (known: Record<string, Event>, event: Event): Event => {
 // ── Public API ──────────────────────────────────────────────────────
 
 /** Creates a new empty event graph with the given initial document (defaults to an empty record). */
-export const init = (initial: Node = record("root", {})): EventGraph => ({
+const init = (initial: Node = record("root", {})): EventGraph => ({
   initial,
   events: {},
   frontiers: [],
 });
 
 /** Ingests an event produced by another peer. Idempotent — duplicate events are ignored. */
-export const applyRemoteEvent = (
+const applyRemoteEvent = (
   core: EventGraph,
   event: Event,
 ): EventGraph => {
@@ -743,7 +774,7 @@ export const applyRemoteEvent = (
  * Appends a local edit to the event graph. Returns `[updatedGraph, newEvent]`.
  * Destructure with a leading semicolon for ASI safety: `;[core, event] = commitLocal(core, peer, edit)`.
  */
-export const commitLocal = (
+const commitLocal = (
   eventGraph: EventGraph,
   peer: string,
   input: EditInput,
@@ -761,7 +792,7 @@ export const commitLocal = (
 };
 
 /** Merges two event graphs (set-union of events). Both must share the same initial document. */
-export const merge = (left: EventGraph, right: EventGraph): EventGraph => {
+const mergeGraphs = (left: EventGraph, right: EventGraph): EventGraph => {
   if (!deepEqual(left.initial, right.initial)) {
     throw new Error("Cannot merge cores with different initial documents.");
   }
@@ -1010,3 +1041,103 @@ export const nodeToPlainObject = (node: Node): unknown => {
 /** Serializes a document node to a pretty-printed JSON string. */
 export const formatNode = (node: Node): string =>
   JSON.stringify(nodeToPlainObject(node), null, 2);
+
+// ── OO wrapper ──────────────────────────────────────────────────────
+
+/**
+ * A collaborative document scoped to a single peer.
+ *
+ * Hides the internal {@link EventGraph}, {@link Node} tree, and edit machinery
+ * behind a plain-object interface: construct with a plain JS literal, mutate
+ * with named methods, and read back via {@link toPlain}.
+ */
+export class Denicek {
+  #graph: EventGraph;
+  #pending: Event[] = [];
+  readonly peer: string;
+
+  constructor(peer: string, initial: PlainNode = { $tag: "root" }) {
+    this.peer = peer;
+    this.#graph = init(plainObjectToNode(initial));
+  }
+
+  private commit(input: EditInput): void {
+    const [graph, event] = commitLocal(this.#graph, this.peer, input);
+    this.#graph = graph;
+    this.#pending.push(event);
+  }
+
+  /** Returns and clears events produced by local edits since the last drain. */
+  drain(): Event[] {
+    const events = this.#pending;
+    this.#pending = [];
+    return events;
+  }
+
+  /** Ingests an event produced by another peer. */
+  applyRemote(event: Event): void {
+    this.#graph = applyRemoteEvent(this.#graph, event);
+  }
+
+  add(target: string, field: string, value: PlainNode): void {
+    this.commit({ kind: "record-add", target, field, node: plainObjectToNode(value) });
+  }
+
+  delete(target: string, field: string): void {
+    this.commit({ kind: "record-delete", target, field });
+  }
+
+  rename(target: string, from: string, to: string): void {
+    this.commit({ kind: "record-rename-field", target, from, to });
+  }
+
+  edit(target: string, op: string, args?: string): void {
+    this.commit({ kind: "primitive-edit", target, op, args });
+  }
+
+  pushBack(target: string, value: PlainNode): void {
+    this.commit({ kind: "list-push-back", target, node: plainObjectToNode(value) });
+  }
+
+  pushFront(target: string, value: PlainNode): void {
+    this.commit({ kind: "list-push-front", target, node: plainObjectToNode(value) });
+  }
+
+  popBack(target: string): void {
+    this.commit({ kind: "list-pop-back", target });
+  }
+
+  popFront(target: string): void {
+    this.commit({ kind: "list-pop-front", target });
+  }
+
+  updateTag(target: string, tag: string): void {
+    this.commit({ kind: "update-tag", target, tag });
+  }
+
+  wrapRecord(target: string, field: string, tag: string): void {
+    this.commit({ kind: "wrap-record", target, field, tag });
+  }
+
+  wrapList(target: string, tag: string): void {
+    this.commit({ kind: "wrap-list", target, tag });
+  }
+
+  copy(target: string, source: string): void {
+    this.commit({ kind: "copy", target, source });
+  }
+
+  merge(other: Denicek): Denicek {
+    const result = new Denicek(this.peer);
+    result.#graph = mergeGraphs(this.#graph, other.#graph);
+    return result;
+  }
+
+  materialize(): Node {
+    return materialize(this.#graph);
+  }
+
+  toPlain(): unknown {
+    return nodeToPlainObject(this.materialize());
+  }
+}
