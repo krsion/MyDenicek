@@ -6,7 +6,7 @@ import {
   materialize,
   primitive,
   record,
-  selector,
+  parseSelector,
 } from "./core.ts";
 
 /** Exchange events between two peers so both converge (frontier-based). */
@@ -310,7 +310,7 @@ Deno.test("applyRemote rejects conflicting payload", () => {
     parents: event.parents,
     edit: {
       kind: "record-add",
-      target: selector("y"),
+      target: parseSelector("y"),
       node: primitive("b"),
     },
     clock: event.clock,
@@ -362,7 +362,7 @@ Deno.test("materialize throws on cycle", () => {
         parents: [{ peer: "b", seq: 0 }],
         edit: {
           kind: "record-add",
-          target: selector("x"),
+          target: parseSelector("x"),
           node: primitive("a"),
         },
         clock: { a: 0 },
@@ -372,7 +372,7 @@ Deno.test("materialize throws on cycle", () => {
         parents: [{ peer: "a", seq: 0 }],
         edit: {
           kind: "record-add",
-          target: selector("y"),
+          target: parseSelector("y"),
           node: primitive("b"),
         },
         clock: { b: 0 },

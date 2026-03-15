@@ -93,7 +93,7 @@ export const formatSelector = (sel: Selector): string => {
 };
 
 /** Parses a path string into a {@link Selector}. Absolute paths start with `"/"`. */
-export const selector = (path: string): Selector => {
+export const parseSelector = (path: string): Selector => {
   const trimmed = path.trim();
   if (trimmed === "" || trimmed === "/") return [];
   const isAbs = trimmed.startsWith("/");
@@ -134,7 +134,7 @@ export const list = (tag: string, items: Node[]): Node => ({
 /** Creates a reference node pointing at the given selector path. */
 export const reference = (path: string): Node => ({
   kind: "reference",
-  selector: selector(path),
+  selector: parseSelector(path),
 });
 
 // ── Plain-object ↔ Node conversion ─────────────────────────────────
@@ -170,12 +170,12 @@ export const plainObjectToNode = (plain: PlainNode): Node => {
 
 // ── Selector matching ───────────────────────────────────────────────
 
-const segmentsCompatible = (a: SelectorSegment, b: SelectorSegment): boolean =>
+const areSegmentsCompatible = (a: SelectorSegment, b: SelectorSegment): boolean =>
   a === b || (isAll(a) && typeof b === "number") || (typeof a === "number" && isAll(b));
 
 const selectorsMatch = (path: Selector, target: Selector): boolean =>
   path.length === target.length &&
-  path.every((seg, i) => segmentsCompatible(seg, target[i] as SelectorSegment));
+  path.every((seg, i) => areSegmentsCompatible(seg, target[i] as SelectorSegment));
 
 /**
  * Result of matching a prefix selector against a full selector via {@link matchPrefix}.
@@ -275,9 +275,9 @@ const traceNodes = (node: Node, target: Selector): TracedNode[] => {
 /** Returns all nodes in the document tree that match the given selector. */
 const selectNodes = (node: Node, target: Selector): Node[] => traceNodes(node, target).map((e) => e.node);
 
-const selectorKey = (sel: Selector): string => sel.length === 0 ? "<root>" : sel.map(seg => String(seg)).join("/");
+const formatSelectorKey = (sel: Selector): string => sel.length === 0 ? "<root>" : sel.map(seg => String(seg)).join("/");
 
-const replaceAtPaths = (node: Node, replacements: Record<string, Node>): Node => mapTree(node, (path) => replacements[selectorKey(path)]);
+const replaceAtPaths = (node: Node, replacements: Record<string, Node>): Node => mapTree(node, (path) => replacements[formatSelectorKey(path)]);
 
 const mapMatchedNodes = (node: Node, target: Selector, transform: (current: Node) => Node): Node => {
   let matched = 0;
@@ -353,7 +353,7 @@ const makeRelative = (basePath: Selector, absolutePath: Selector): Selector => {
   while (common < basePath.length && common < absolutePath.length) {
     const baseSeg = basePath[common] as SelectorSegment;
     const absSeg = absolutePath[common] as SelectorSegment;
-    if (!segmentsCompatible(baseSeg, absSeg)) break;
+    if (!areSegmentsCompatible(baseSeg, absSeg)) break;
     common++;
   }
   const ups: SelectorSegment[] = basePath.slice(common).map(() => "..");
@@ -393,17 +393,17 @@ const mapReferences = (node: Node, transform: (abs: Selector) => Selector): Node
 
 // ── Structural selector transforms ─────────────────────────────────
 
-const wrapRecordSelector = (wrappedField: string, wrapTarget: Selector, other: Selector): Selector => {
+const transformSelectorForRecordWrap = (wrappedField: string, wrapTarget: Selector, other: Selector): Selector => {
   const m = matchPrefix(wrapTarget, other);
   return m == null ? other : [...m.specificPrefix, wrappedField, ...m.rest];
 };
 
-const wrapListSelector = (wrapTarget: Selector, other: Selector): Selector => {
+const transformSelectorForListWrap = (wrapTarget: Selector, other: Selector): Selector => {
   const m = matchPrefix(wrapTarget, other);
   return m == null ? other : [...m.specificPrefix, "*", ...m.rest];
 };
 
-const renameFieldSelector = (renameTarget: Selector, to: string, other: Selector): Selector => {
+const transformSelectorForRename = (renameTarget: Selector, to: string, other: Selector): Selector => {
   const m = matchPrefix(renameTarget, other);
   if (m == null) return other;
   return [...m.specificPrefix.slice(0, -1), to, ...m.rest];
@@ -463,7 +463,7 @@ const applyEdit = (doc: Node, edit: Edit): Node => {
         return record(r.tag, renameField(r.fields, from, edit.to));
       });
       return mapReferences(renamed, (abs) =>
-        renameFieldSelector(edit.target, edit.to, abs),
+        transformSelectorForRename(edit.target, edit.to, abs),
       );
     }
 
@@ -511,7 +511,7 @@ const applyEdit = (doc: Node, edit: Edit): Node => {
         record(edit.tag, { [edit.field]: n }),
       );
       return mapReferences(wrapped, (abs) =>
-        wrapRecordSelector(edit.field, edit.target, abs),
+        transformSelectorForRecordWrap(edit.field, edit.target, abs),
       );
     }
 
@@ -520,7 +520,7 @@ const applyEdit = (doc: Node, edit: Edit): Node => {
         list(edit.tag, [n]),
       );
       return mapReferences(wrapped, (abs) =>
-        wrapListSelector(edit.target, abs),
+        transformSelectorForListWrap(edit.target, abs),
       );
     }
 
@@ -545,14 +545,14 @@ const applyEdit = (doc: Node, edit: Edit): Node => {
       const replacements: Record<string, Node> = {};
       if (sourceNodes.length === targetNodes.length) {
         for (let i = 0; i < sourceNodes.length; i++) {
-          replacements[selectorKey((targetNodes[i] as TracedNode).path)] =
+          replacements[formatSelectorKey((targetNodes[i] as TracedNode).path)] =
             sourceNodes[i] as Node;
         }
       } else if (
         targetNodes.length === 1 &&
         targetNodes[0]?.node.kind === "list"
       ) {
-        replacements[selectorKey(targetNodes[0]?.path)] = list(
+        replacements[formatSelectorKey(targetNodes[0]?.path)] = list(
           targetNodes[0]?.node.tag,
           sourceNodes,
         );
@@ -568,9 +568,9 @@ const applyEdit = (doc: Node, edit: Edit): Node => {
 
 // ── Event graph internals ───────────────────────────────────────────
 
-const eventKey = (id: EventId): string => `${id.peer}:${id.seq}`;
+const formatEventKey = (id: EventId): string => `${id.peer}:${id.seq}`;
 
-const stableEventOrder = (a: EventId, b: EventId): number => {
+const compareByStableOrder = (a: EventId, b: EventId): number => {
   if (a.peer < b.peer) return -1;
   if (a.peer > b.peer) return 1;
   return a.seq - b.seq;
@@ -578,7 +578,7 @@ const stableEventOrder = (a: EventId, b: EventId): number => {
 
 
 
-const eventsEqual = (a: Event, b: Event): boolean => {
+const areEventsEqual = (a: Event, b: Event): boolean => {
   if (a === b) return true;
   if (a.id.peer !== b.id.peer || a.id.seq !== b.id.seq) return false;
   if (a.parents.length !== b.parents.length) return false;
@@ -591,20 +591,72 @@ const eventsEqual = (a: Event, b: Event): boolean => {
   for (const k of aKeys) {
     if (a.clock[k] !== b.clock[k]) return false;
   }
-  return JSON.stringify(a.edit) === JSON.stringify(b.edit);
+  return areEditsEqual(a.edit, b.edit);
+};
+
+const areSelectorsEqual = (a: Selector, b: Selector): boolean =>
+  a.length === b.length && a.every((seg, i) => seg === b[i]);
+
+const areNodesEqual = (a: Node, b: Node): boolean => {
+  if (a.kind !== b.kind) return false;
+  switch (a.kind) {
+    case "primitive":
+      return a.value === (b as typeof a).value;
+    case "reference":
+      return areSelectorsEqual(a.selector, (b as typeof a).selector);
+    case "record": {
+      const br = b as typeof a;
+      if (a.tag !== br.tag) return false;
+      const aKeys = Object.keys(a.fields);
+      if (aKeys.length !== Object.keys(br.fields).length) return false;
+      return aKeys.every((k) => k in br.fields && areNodesEqual(a.fields[k]!, br.fields[k]!));
+    }
+    case "list": {
+      const bl = b as typeof a;
+      if (a.tag !== bl.tag || a.items.length !== bl.items.length) return false;
+      return a.items.every((item, i) => areNodesEqual(item, bl.items[i]!));
+    }
+  }
+};
+
+const areEditsEqual = (a: Edit, b: Edit): boolean => {
+  if (a.kind !== b.kind) return false;
+  if (!areSelectorsEqual(a.target, b.target)) return false;
+  switch (a.kind) {
+    case "set-value":
+      return a.value === (b as typeof a).value;
+    case "record-add":
+    case "list-push-back":
+    case "list-push-front":
+      return areNodesEqual(a.node, (b as typeof a).node);
+    case "record-delete":
+    case "list-pop-back":
+    case "list-pop-front":
+      return true;
+    case "update-tag":
+      return a.tag === (b as typeof a).tag;
+    case "record-rename-field":
+      return a.to === (b as typeof a).to;
+    case "copy":
+      return areSelectorsEqual(a.source, (b as typeof a).source);
+    case "wrap-record":
+      return a.field === (b as typeof a).field && a.tag === (b as typeof a).tag;
+    case "wrap-list":
+      return a.tag === (b as typeof a).tag;
+  }
 };
 
 const validateEvent = (known: Record<string, Event>, event: Event): Event => {
-  const key = eventKey(event.id);
+  const key = formatEventKey(event.id);
   if (!Number.isInteger(event.id.seq) || event.id.seq < 0) {
     throw new Error(`Invalid seq for '${key}'.`);
   }
-  if (event.parents.some((p) => eventKey(p) === key)) {
+  if (event.parents.some((p) => formatEventKey(p) === key)) {
     throw new Error(`Event '${key}' is its own parent.`);
   }
   for (const p of event.parents) {
-    if (known[eventKey(p)] == null) {
-      throw new Error(`Unknown parent '${eventKey(p)}' for event '${key}'.`);
+    if (known[formatEventKey(p)] == null) {
+      throw new Error(`Unknown parent '${formatEventKey(p)}' for event '${key}'.`);
     }
   }
   return event;
@@ -613,29 +665,29 @@ const validateEvent = (known: Record<string, Event>, event: Event): Event => {
 // ── Public API ──────────────────────────────────────────────────────
 
 /** Creates a new empty event graph with the given initial document (defaults to an empty record). */
-const init = (initial: Node = record("root", {})): EventGraph => ( { initial, events: {}, frontiers: [] });
+const createEventGraph = (initial: Node = record("root", {})): EventGraph => ( { initial, events: {}, frontiers: [] });
 
 /** Computes new frontiers after adding an event: removes its parents, adds itself. */
 const updateFrontiers = (current: EventId[], event: Event): EventId[] => {
-  const parentKeys = new Set(event.parents.map(eventKey));
+  const parentKeys = new Set(event.parents.map(formatEventKey));
   return [
-    ...current.filter((h) => !parentKeys.has(eventKey(h))),
+    ...current.filter((h) => !parentKeys.has(formatEventKey(h))),
     event.id,
-  ].sort(stableEventOrder);
+  ].sort(compareByStableOrder);
 };
 
 /** Ingests an event produced by another peer. Idempotent — duplicate events are ignored. */
 const applyRemoteEvent = (core: EventGraph, event: Event): EventGraph => {
-  const key = eventKey(event.id);
+  const key = formatEventKey(event.id);
   const existing = core.events[key];
   if (existing != null) {
-    if (!eventsEqual(existing, event)) {
+    if (!areEventsEqual(existing, event)) {
       throw new Error(`Conflicting payload for event '${key}'.`);
     }
     return core;
   }
   const validated = validateEvent(core.events, event);
-  const events = { ...core.events, [eventKey(validated.id)]: validated };
+  const events = { ...core.events, [formatEventKey(validated.id)]: validated };
   return { initial: core.initial, events, frontiers: updateFrontiers(core.frontiers, validated) };
 };
 
@@ -643,7 +695,7 @@ const commitLocalEdit = (eventGraph: EventGraph, peer: string, edit: Edit): [Eve
   const parents = [...eventGraph.frontiers];
   const clock: VectorClock = {};
   for (const p of parents) {
-    for (const [k, v] of Object.entries(eventGraph.events[eventKey(p)]?.clock ?? {})) {
+    for (const [k, v] of Object.entries(eventGraph.events[formatEventKey(p)]?.clock ?? {})) {
       clock[k] = Math.max(clock[k] ?? -1, v);
     }
   }
@@ -663,12 +715,12 @@ const isConcurrent = (a: Event, b: Event): boolean => a !== b && !clockDominates
 const transformSelector = (sel: Selector, priorEdit: Edit): Selector | null => {
   switch (priorEdit.kind) {
     case "record-rename-field": {
-      return renameFieldSelector(priorEdit.target, priorEdit.to, sel);
+      return transformSelectorForRename(priorEdit.target, priorEdit.to, sel);
     }
     case "wrap-record":
-      return wrapRecordSelector(priorEdit.field, priorEdit.target, sel);
+      return transformSelectorForRecordWrap(priorEdit.field, priorEdit.target, sel);
     case "wrap-list":
-      return wrapListSelector(priorEdit.target, sel);
+      return transformSelectorForListWrap(priorEdit.target, sel);
     case "record-delete": {
       // target includes the field as last segment — drop edits traversing it
       const m = matchPrefix(priorEdit.target, sel);
@@ -713,11 +765,11 @@ const STRUCTURAL_EDITS: ReadonlySet<Edit["kind"]> = new Set([
 const isStructuralEdit = (edit: Edit): boolean =>
   STRUCTURAL_EDITS.has(edit.kind);
 
-const editSelectors = (edit: Edit): Selector[] =>
+const getEditSelectors = (edit: Edit): Selector[] =>
   edit.kind === "copy" ? [edit.target, edit.source] : [edit.target];
 
 /** Checks whether an edit can be applied to the current document state. */
-const editApplies = (doc: Node, edit: Edit): boolean => {
+const canApplyEdit = (doc: Node, edit: Edit): boolean => {
   if (edit.kind === "copy") {
     const sourceNodes = selectNodes(doc, edit.source);
     const targetNodes = selectNodes(doc, edit.target);
@@ -728,7 +780,7 @@ const editApplies = (doc: Node, edit: Edit): boolean => {
     return true;
   }
 
-  const targets = editSelectors(edit);
+  const targets = getEditSelectors(edit);
   for (const target of targets) {
     const effective =
       edit.kind === "record-add" ||
@@ -779,9 +831,9 @@ const editApplies = (doc: Node, edit: Edit): boolean => {
  * If `strict` is true, throws on missing events; if false, silently skips them
  * (necessary for remote frontiers that may reference events not yet received).
  */
-const closureFrom = (events: Record<string, Event>, frontier: EventId[], strict = true): Set<string> => {
+const computeClosure = (events: Record<string, Event>, frontier: EventId[], strict = true): Set<string> => {
   const closure = new Set<string>();
-  const stack = frontier.map(eventKey);
+  const stack = frontier.map(formatEventKey);
   while (stack.length > 0) {
     const key = stack.pop() as string;
     if (closure.has(key)) continue;
@@ -791,13 +843,13 @@ const closureFrom = (events: Record<string, Event>, frontier: EventId[], strict 
       continue;
     }
     closure.add(key);
-    for (const p of ev.parents) stack.push(eventKey(p));
+    for (const p of ev.parents) stack.push(formatEventKey(p));
   }
   return closure;
 };
 
-const topologicalOrder = (events: Record<string, Event>, frontier: EventId[]): string[] => {
-  const closure = closureFrom(events, frontier);
+const computeTopologicalOrder = (events: Record<string, Event>, frontier: EventId[]): string[] => {
+  const closure = computeClosure(events, frontier);
   const indegree: Record<string, number> = {};
   const children: Record<string, string[]> = {};
   for (const key of closure) {
@@ -807,14 +859,14 @@ const topologicalOrder = (events: Record<string, Event>, frontier: EventId[]): s
   for (const key of closure) {
     const ev = events[key] as Event;
     for (const p of ev.parents) {
-      const pk = eventKey(p);
+      const pk = formatEventKey(p);
       if (!closure.has(pk)) continue;
       indegree[key] = (indegree[key] ?? 0) + 1;
       children[pk]?.push(key);
     }
   }
-  // Sort concurrent events: non-wildcard first, then wildcard by genericness
-  // (more generic wildcards before more specific), then by event ID.
+  // Sort concurrent events: more generic (wildcard) before more specific,
+  // then by event ID for stability.
   // Returns negative when left should be processed before right.
   const compareEvents = (leftKey: string, rightKey: string) => {
     const leftEvent = events[leftKey] as Event, rightEvent = events[rightKey] as Event;
@@ -827,7 +879,7 @@ const topologicalOrder = (events: Record<string, Event>, frontier: EventId[]): s
       if (!leftIsAll && rightIsAll) return 1;
     }
     if (leftTarget.length !== rightTarget.length) return leftTarget.length - rightTarget.length;
-    return stableEventOrder(leftEvent.id, rightEvent.id);
+    return compareByStableOrder(leftEvent.id, rightEvent.id);
   };
 
   const queue = new BinaryHeap<string>(compareEvents);
@@ -862,27 +914,37 @@ const topologicalOrder = (events: Record<string, Event>, frontier: EventId[]): s
  * @param eventGraph - The event graph to materialize.
  * @param frontiers - Optional frontier to materialize up to (defaults to the graph's current frontiers).
  */
+/**
+ * Transforms an edit against all concurrent prior structural edits.
+ * Returns the transformed edit (or null if invalidated) and whether
+ * any concurrent events were encountered.
+ */
+const resolveEdit = (ev: Event, applied: { ev: Event; edit: Edit }[]): { edit: Edit | null; hasConcurrent: boolean } => {
+  let edit: Edit | null = ev.edit;
+  let hasConcurrent = false;
+  for (const prior of applied) {
+    if (clockDominates(ev.clock, prior.ev.clock)) continue;
+    if (isConcurrent(ev, prior.ev)) {
+      hasConcurrent = true;
+      if (edit !== null && isStructuralEdit(prior.edit)) {
+        edit = transformEdit(edit, prior.edit);
+      }
+    }
+  }
+  return { edit, hasConcurrent };
+};
+
 export const materialize = (eventGraph: EventGraph, frontiers?: EventId[]): Node => {
   const frontier = frontiers ?? eventGraph.frontiers;
-  const ordered = topologicalOrder(eventGraph.events, frontier);
+  const ordered = computeTopologicalOrder(eventGraph.events, frontier);
 
   let doc = eventGraph.initial;
   const applied: { ev: Event; edit: Edit }[] = [];
   for (const key of ordered) {
     const ev = eventGraph.events[key] as Event;
-    let edit: Edit | null = ev.edit;
-    let hasConcurrent = false;
-    for (const prior of applied) {
-      if (clockDominates(ev.clock, prior.ev.clock)) continue;
-      if (isConcurrent(ev, prior.ev)) {
-        hasConcurrent = true;
-        if (edit !== null && isStructuralEdit(prior.edit)) {
-          edit = transformEdit(edit, prior.edit);
-        }
-      }
-    }
+    const { edit, hasConcurrent } = resolveEdit(ev, applied);
     if (edit !== null) {
-      if (hasConcurrent && !editApplies(doc, edit)) {
+      if (hasConcurrent && !canApplyEdit(doc, edit)) {
         continue;
       }
       doc = applyEdit(doc, edit);
@@ -937,12 +999,16 @@ export class Denicek {
     if (arg && typeof arg === "object" && "events" in arg) {
       this.graph = arg as EventGraph;
     } else {
-      this.graph = init(plainObjectToNode((arg as PlainNode) ?? { $tag: "root" }));
+      this.graph = createEventGraph(plainObjectToNode((arg as PlainNode) ?? { $tag: "root" }));
     }
   }
 
-  private commit(edit: Edit): void {
+  private assertEditApplies(edit: Edit): void {
     applyEdit(this.materialize(), edit);
+  }
+
+  private commit(edit: Edit): void {
+    this.assertEditApplies(edit);
     const [graph, event] = commitLocalEdit(this.graph, this.peer, edit);
     this.graph = graph;
     this.pending.push(event);
@@ -962,11 +1028,13 @@ export class Denicek {
   }
 
   /** Returns all events that the holder of `remoteFrontiers` hasn't seen.
-   *  Idempotent — safe to call repeatedly or after network failures. */
+   *  Idempotent — safe to call repeatedly or after network failures.
+   *  Events are returned in arbitrary order; the consumer must handle
+   *  out-of-order delivery (e.g. via {@link applyRemote}'s buffering). */
   eventsSince(remoteFrontiers: EventId[]): Event[] {
-    const remoteKnown = closureFrom(this.graph.events, remoteFrontiers, false);
+    const remoteKnown = computeClosure(this.graph.events, remoteFrontiers, false);
     return Object.values(this.graph.events).filter(
-      (ev) => !remoteKnown.has(eventKey(ev.id)),
+      (ev) => !remoteKnown.has(formatEventKey(ev.id)),
     );
   }
 
@@ -977,13 +1045,17 @@ export class Denicek {
   }
 
   private flushBuffered(): void {
+    // NOTE: Intentionally mutates this.graph.events and this.graph.frontiers
+    // in place for O(1) per-event insertion. The functional applyRemoteEvent
+    // creates a new events object each time (O(n) per event, O(n²) for a batch).
+    // This is the only place where EventGraph is mutated rather than replaced.
     // Index buffered events, filtering out duplicates already in the graph
     const pending = new Map<string, Event>();
     for (const event of this.buffered) {
-      const key = eventKey(event.id);
+      const key = formatEventKey(event.id);
       const existing = this.graph.events[key];
       if (existing != null) {
-        if (!eventsEqual(existing, event)) {
+        if (!areEventsEqual(existing, event)) {
           throw new Error(`Conflicting payload for event '${key}'.`);
         }
         continue;
@@ -1003,7 +1075,7 @@ export class Denicek {
     for (const [key, event] of pending) {
       let count = 0;
       for (const p of event.parents) {
-        const pk = eventKey(p);
+        const pk = formatEventKey(p);
         if (this.graph.events[pk] == null) {
           count++;
           let deps = dependents.get(pk);
@@ -1030,7 +1102,7 @@ export class Denicek {
       pending.delete(key);
 
       const validated = validateEvent(this.graph.events, event);
-      this.graph.events[eventKey(validated.id)] = validated;
+      this.graph.events[formatEventKey(validated.id)] = validated;
       this.graph.frontiers = updateFrontiers(this.graph.frontiers, validated);
 
       const deps = dependents.get(key);
@@ -1051,53 +1123,53 @@ export class Denicek {
 
   add(target: string, field: string, value: PlainNode): void {
     const path = target === "" ? field : `${target}/${field}`;
-    this.commit({ kind: "record-add", target: selector(path), node: plainObjectToNode(value) });
+    this.commit({ kind: "record-add", target: parseSelector(path), node: plainObjectToNode(value) });
   }
 
   delete(target: string, field: string): void {
     const path = target === "" ? field : `${target}/${field}`;
-    this.commit({ kind: "record-delete", target: selector(path) });
+    this.commit({ kind: "record-delete", target: parseSelector(path) });
   }
 
   rename(target: string, from: string, to: string): void {
     const path = target === "" ? from : `${target}/${from}`;
-    this.commit({ kind: "record-rename-field", target: selector(path), to });
+    this.commit({ kind: "record-rename-field", target: parseSelector(path), to });
   }
 
   set(target: string, value: PrimitiveValue): void {
-    this.commit({ kind: "set-value", target: selector(target), value });
+    this.commit({ kind: "set-value", target: parseSelector(target), value });
   }
 
   pushBack(target: string, value: PlainNode): void {
-    this.commit({ kind: "list-push-back", target: selector(target), node: plainObjectToNode(value) });
+    this.commit({ kind: "list-push-back", target: parseSelector(target), node: plainObjectToNode(value) });
   }
 
   pushFront(target: string, value: PlainNode): void {
-    this.commit({ kind: "list-push-front", target: selector(target), node: plainObjectToNode(value) });
+    this.commit({ kind: "list-push-front", target: parseSelector(target), node: plainObjectToNode(value) });
   }
 
   popBack(target: string): void {
-    this.commit({ kind: "list-pop-back", target: selector(target) });
+    this.commit({ kind: "list-pop-back", target: parseSelector(target) });
   }
 
   popFront(target: string): void {
-    this.commit({ kind: "list-pop-front", target: selector(target) });
+    this.commit({ kind: "list-pop-front", target: parseSelector(target) });
   }
 
   updateTag(target: string, tag: string): void {
-    this.commit({ kind: "update-tag", target: selector(target), tag });
+    this.commit({ kind: "update-tag", target: parseSelector(target), tag });
   }
 
   wrapRecord(target: string, field: string, tag: string): void {
-    this.commit({ kind: "wrap-record", target: selector(target), field, tag });
+    this.commit({ kind: "wrap-record", target: parseSelector(target), field, tag });
   }
 
   wrapList(target: string, tag: string): void {
-    this.commit({ kind: "wrap-list", target: selector(target), tag });
+    this.commit({ kind: "wrap-list", target: parseSelector(target), tag });
   }
 
   copy(target: string, source: string): void {
-    this.commit({ kind: "copy", target: selector(target), source: selector(source) });
+    this.commit({ kind: "copy", target: parseSelector(target), source: parseSelector(source) });
   }
 
   materialize(): Node {

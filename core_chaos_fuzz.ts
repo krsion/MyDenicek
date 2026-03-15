@@ -12,7 +12,7 @@
 
 import {
   Denicek,
-  selector,
+  parseSelector,
   formatSelector,
   plainObjectToNode,
   nodeToPlainObject,
@@ -179,7 +179,7 @@ class ChaosFuzzer {
   testChaosSelector(): boolean {
     const name = "chaos-selector";
     try {
-      const sel = selector(this.chaosSelector());
+      const sel = parseSelector(this.chaosSelector());
       formatSelector(sel);
       this.passes++;
       return true;

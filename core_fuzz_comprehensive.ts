@@ -17,7 +17,7 @@ import fc from "npm:fast-check";
 import { assertEquals, assertThrows, assert } from "@std/assert";
 import {
   Denicek,
-  selector,
+  parseSelector,
   formatSelector,
   materialize,
   primitive,
@@ -435,9 +435,9 @@ Deno.test("Selector: roundtrip parse and format", () => {
       ),
       (parts) => {
         const path = "/" + parts.join("/");
-        const sel = selector(path);
+        const sel = parseSelector(path);
         const formatted = formatSelector(sel);
-        const reparsed = selector(formatted);
+        const reparsed = parseSelector(formatted);
 
         // Selector should be stable after roundtrip
         return JSON.stringify(sel) === JSON.stringify(reparsed);
@@ -464,7 +464,7 @@ Deno.test("Selector: handles edge cases without crashing", () => {
       ),
       (path) => {
         // Should not throw
-        const sel = selector(path);
+        const sel = parseSelector(path);
         formatSelector(sel);
         return true;
       }
