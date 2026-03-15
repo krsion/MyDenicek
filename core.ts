@@ -173,10 +173,6 @@ export const plainObjectToNode = (plain: PlainNode): Node => {
 const areSegmentsCompatible = (a: SelectorSegment, b: SelectorSegment): boolean =>
   a === b || (isAll(a) && typeof b === "number") || (typeof a === "number" && isAll(b));
 
-const selectorsMatch = (path: Selector, target: Selector): boolean =>
-  path.length === target.length &&
-  path.every((seg, i) => areSegmentsCompatible(seg, target[i] as SelectorSegment));
-
 /**
  * Result of matching a prefix selector against a full selector via {@link matchPrefix}.
  * - `specificPrefix` — the matched prefix with wildcards resolved to concrete indices
@@ -210,9 +206,9 @@ const matchPrefix = (prefix: Selector, full: Selector): PrefixMatch | null => {
 const forEachNode = (node: Node, visitor: (path: Selector, current: Node) => void, path: SelectorSegment[] = []): void => {
   visitor(path, node);
   if (node.kind === "record") {
-    for (const [k, v] of Object.entries(node.fields)) {
+    for (const k in node.fields) {
       path.push(k);
-      forEachNode(v, visitor, path);
+      forEachNode(node.fields[k]!, visitor, path);
       path.pop();
     }
   } else if (node.kind === "list") {
@@ -234,28 +230,33 @@ const mapTree = (node: Node, visitor: (path: Selector, current: Node) => Node | 
   if (replacement !== undefined) return replacement;
 
   if (node.kind === "record") {
-    let changed = false;
-    const fields: Record<string, Node> = {};
-    for (const [k, v] of Object.entries(node.fields)) {
+    let fields: Record<string, Node> | undefined;
+    for (const k in node.fields) {
+      const v = node.fields[k]!;
       path.push(k);
       const next = mapTree(v, visitor, path);
       path.pop();
-      changed ||= next !== v;
-      fields[k] = next;
+      if (next !== v && fields === undefined) {
+        fields = { ...node.fields };
+      }
+      if (fields !== undefined) fields[k] = next;
     }
-    return changed ? { kind: "record", tag: node.tag, fields } : node;
+    return fields !== undefined ? { kind: "record", tag: node.tag, fields } : node;
   }
 
   if (node.kind === "list") {
-    let changed = false;
-    const items = node.items.map((item, i) => {
+    let items: Node[] | undefined;
+    for (let i = 0; i < node.items.length; i++) {
+      const v = node.items[i]!;
       path.push(i);
-      const next = mapTree(item, visitor, path);
+      const next = mapTree(v, visitor, path);
       path.pop();
-      changed ||= next !== item;
-      return next;
-    });
-    return changed ? { kind: "list", tag: node.tag, items } : node;
+      if (next !== v && items === undefined) {
+        items = node.items.slice();
+      }
+      if (items !== undefined) items[i] = next;
+    }
+    return items !== undefined ? { kind: "list", tag: node.tag, items } : node;
   }
 
   return node;
@@ -263,29 +264,117 @@ const mapTree = (node: Node, visitor: (path: Selector, current: Node) => Node | 
 
 type TracedNode = { path: Selector; node: Node };
 
-/** Finds all nodes matching `target`, returning each with its concrete path. */
-const traceNodes = (node: Node, target: Selector): TracedNode[] => {
-  const found: TracedNode[] = [];
-  forEachNode(node, (path, current) => {
-    if (selectorsMatch(path, target)) found.push({ path: [...path], node: current });
-  });
-  return found;
+
+
+// ── Targeted navigation ─────────────────────────────────────────────
+
+/**
+ * Follows selector segments directly into the tree to find and transform
+ * matched nodes. O(depth + wildcard fan-out) instead of O(total_nodes).
+ * Returns the (possibly new) node and the number of matches found.
+ */
+const navigateAndTransform = (
+  node: Node, target: Selector, depth: number,
+  transform: (current: Node) => Node,
+): { node: Node; matched: number } => {
+  if (depth === target.length) {
+    return { node: transform(node), matched: 1 };
+  }
+  const seg = target[depth]!;
+
+  if (isAll(seg) && node.kind === "list") {
+    let items: Node[] | undefined;
+    let matched = 0;
+    for (let i = 0; i < node.items.length; i++) {
+      const r = navigateAndTransform(node.items[i]!, target, depth + 1, transform);
+      matched += r.matched;
+      if (r.node !== node.items[i]) {
+        if (items === undefined) items = node.items.slice();
+        items[i] = r.node;
+      }
+    }
+    return {
+      node: items !== undefined ? { kind: "list", tag: node.tag, items } : node,
+      matched,
+    };
+  }
+
+  if (typeof seg === "string" && node.kind === "record" && seg in node.fields) {
+    const child = node.fields[seg]!;
+    const r = navigateAndTransform(child, target, depth + 1, transform);
+    if (r.node === child) return { node, matched: r.matched };
+    return {
+      node: { kind: "record", tag: node.tag, fields: { ...node.fields, [seg]: r.node } },
+      matched: r.matched,
+    };
+  }
+
+  if (typeof seg === "number" && node.kind === "list" && seg >= 0 && seg < node.items.length) {
+    const child = node.items[seg]!;
+    const r = navigateAndTransform(child, target, depth + 1, transform);
+    if (r.node === child) return { node, matched: r.matched };
+    const items = node.items.slice();
+    items[seg] = r.node;
+    return { node: { kind: "list", tag: node.tag, items }, matched: r.matched };
+  }
+
+  return { node, matched: 0 };
 };
 
-/** Returns all nodes in the document tree that match the given selector. */
-const selectNodes = (node: Node, target: Selector): Node[] => traceNodes(node, target).map((e) => e.node);
+/** Follows selector segments to collect matched nodes. O(depth + wildcard fan-out). */
+const navigateAndCollect = (node: Node, target: Selector, depth: number): Node[] => {
+  if (depth === target.length) return [node];
+  const seg = target[depth]!;
 
-const formatSelectorKey = (sel: Selector): string => sel.length === 0 ? "<root>" : sel.map(seg => String(seg)).join("/");
+  if (isAll(seg) && node.kind === "list") {
+    const result: Node[] = [];
+    for (const item of node.items) {
+      result.push(...navigateAndCollect(item, target, depth + 1));
+    }
+    return result;
+  }
+  if (typeof seg === "string" && node.kind === "record" && seg in node.fields) {
+    return navigateAndCollect(node.fields[seg]!, target, depth + 1);
+  }
+  if (typeof seg === "number" && node.kind === "list" && seg >= 0 && seg < node.items.length) {
+    return navigateAndCollect(node.items[seg]!, target, depth + 1);
+  }
+  return [];
+};
 
-const replaceAtPaths = (node: Node, replacements: Record<string, Node>): Node => mapTree(node, (path) => replacements[formatSelectorKey(path)]);
+/** Follows selector segments to collect matched nodes with their concrete paths. */
+const navigateAndTrace = (
+  node: Node, target: Selector, depth: number, path: SelectorSegment[] = [],
+): TracedNode[] => {
+  if (depth === target.length) return [{ path: [...path], node }];
+  const seg = target[depth]!;
+
+  if (isAll(seg) && node.kind === "list") {
+    const result: TracedNode[] = [];
+    for (let i = 0; i < node.items.length; i++) {
+      path.push(i);
+      result.push(...navigateAndTrace(node.items[i]!, target, depth + 1, path));
+      path.pop();
+    }
+    return result;
+  }
+  if (typeof seg === "string" && node.kind === "record" && seg in node.fields) {
+    path.push(seg);
+    const result = navigateAndTrace(node.fields[seg]!, target, depth + 1, path);
+    path.pop();
+    return result;
+  }
+  if (typeof seg === "number" && node.kind === "list" && seg >= 0 && seg < node.items.length) {
+    path.push(seg);
+    const result = navigateAndTrace(node.items[seg]!, target, depth + 1, path);
+    path.pop();
+    return result;
+  }
+  return [];
+};
 
 const mapMatchedNodes = (node: Node, target: Selector, transform: (current: Node) => Node): Node => {
-  let matched = 0;
-  const result = mapTree(node, (path, current) => {
-    if (!selectorsMatch(path, target)) return undefined;
-    matched++;
-    return transform(current);
-  });
+  const { node: result, matched } = navigateAndTransform(node, target, 0, transform);
   if (matched === 0) {
     throw new Error(`No nodes match selector '${formatSelector(target)}'.`);
   }
@@ -299,16 +388,21 @@ const setField = (fields: Record<string, Node>, key: string, value: Node): Recor
   [key]: value,
 });
 
-const deleteField = (fields: Record<string, Node>, key: string): Record<string, Node> =>
-  Object.fromEntries(Object.entries(fields).filter(([k]) => k !== key));
+const deleteField = (fields: Record<string, Node>, key: string): Record<string, Node> => {
+  const result: Record<string, Node> = {};
+  for (const k in fields) {
+    if (k !== key) result[k] = fields[k]!;
+  }
+  return result;
+};
 
 const renameField = (fields: Record<string, Node>, from: string, to: string): Record<string, Node> => {
   if (from === to || !(from in fields)) return fields;
   const result: Record<string, Node> = {};
-  for (const [k, v] of Object.entries(fields)) {
-    if (k === from) result[to] = v;
+  for (const k in fields) {
+    if (k === from) result[to] = fields[k]!;
     else if (k === to) continue;
-    else result[k] = v;
+    else result[k] = fields[k]!;
   }
   return result;
 };
@@ -525,8 +619,8 @@ const applyEdit = (doc: Node, edit: Edit): Node => {
     }
 
     case "copy": {
-      const sourceNodes = selectNodes(doc, edit.source);
-      const targetNodes = traceNodes(doc, edit.target);
+      const sourceNodes = navigateAndCollect(doc, edit.source, 0);
+      const targetNodes = navigateAndTrace(doc, edit.target, 0);
       if (sourceNodes.length === 0) {
         throw new Error(
           `copy: no nodes match source selector '${
@@ -542,26 +636,26 @@ const applyEdit = (doc: Node, edit: Edit): Node => {
         );
       }
 
-      const replacements: Record<string, Node> = {};
+      let result = doc;
       if (sourceNodes.length === targetNodes.length) {
         for (let i = 0; i < sourceNodes.length; i++) {
-          replacements[formatSelectorKey((targetNodes[i] as TracedNode).path)] =
-            sourceNodes[i] as Node;
+          const replacementNode = sourceNodes[i] as Node;
+          const { node } = navigateAndTransform(result, (targetNodes[i] as TracedNode).path, 0, () => replacementNode);
+          result = node;
         }
       } else if (
         targetNodes.length === 1 &&
         targetNodes[0]?.node.kind === "list"
       ) {
-        replacements[formatSelectorKey(targetNodes[0]?.path)] = list(
-          targetNodes[0]?.node.tag,
-          sourceNodes,
-        );
+        const newList = list(targetNodes[0]?.node.tag, sourceNodes);
+        const { node } = navigateAndTransform(result, targetNodes[0]?.path, 0, () => newList);
+        result = node;
       } else {
         throw new Error(
           `copy: source/target arity mismatch (source=${sourceNodes.length}, target=${targetNodes.length}). Need equal counts or one list target.`,
         );
       }
-      return replaceAtPaths(doc, replacements);
+      return result;
     }
   }
 };
@@ -664,46 +758,6 @@ const validateEvent = (known: Record<string, Event>, event: Event): Event => {
 
 // ── Public API ──────────────────────────────────────────────────────
 
-/** Creates a new empty event graph with the given initial document (defaults to an empty record). */
-const createEventGraph = (initial: Node = record("root", {})): EventGraph => ( { initial, events: {}, frontiers: [] });
-
-/** Computes new frontiers after adding an event: removes its parents, adds itself. */
-const updateFrontiers = (current: EventId[], event: Event): EventId[] => {
-  const parentKeys = new Set(event.parents.map(formatEventKey));
-  return [
-    ...current.filter((h) => !parentKeys.has(formatEventKey(h))),
-    event.id,
-  ].sort(compareByStableOrder);
-};
-
-/** Ingests an event produced by another peer. Idempotent — duplicate events are ignored. */
-const applyRemoteEvent = (core: EventGraph, event: Event): EventGraph => {
-  const key = formatEventKey(event.id);
-  const existing = core.events[key];
-  if (existing != null) {
-    if (!areEventsEqual(existing, event)) {
-      throw new Error(`Conflicting payload for event '${key}'.`);
-    }
-    return core;
-  }
-  const validated = validateEvent(core.events, event);
-  const events = { ...core.events, [formatEventKey(validated.id)]: validated };
-  return { initial: core.initial, events, frontiers: updateFrontiers(core.frontiers, validated) };
-};
-
-const commitLocalEdit = (eventGraph: EventGraph, peer: string, edit: Edit): [EventGraph, Event] => {
-  const parents = [...eventGraph.frontiers];
-  const clock: VectorClock = {};
-  for (const p of parents) {
-    for (const [k, v] of Object.entries(eventGraph.events[formatEventKey(p)]?.clock ?? {})) {
-      clock[k] = Math.max(clock[k] ?? -1, v);
-    }
-  }
-  clock[peer] = (clock[peer] ?? -1) + 1;
-  const event: Event = { id: { peer, seq: clock[peer] }, parents, edit, clock };
-  return [applyRemoteEvent(eventGraph, event), event];
-};
-
 // ── Concurrency detection ───────────────────────────────────────────
 
 const clockDominates = (a: VectorClock, b: VectorClock): boolean => Object.entries(b).every(([peer, seq]) => (a[peer] ?? -1) >= seq);
@@ -771,8 +825,8 @@ const getEditSelectors = (edit: Edit): Selector[] =>
 /** Checks whether an edit can be applied to the current document state. */
 const canApplyEdit = (doc: Node, edit: Edit): boolean => {
   if (edit.kind === "copy") {
-    const sourceNodes = selectNodes(doc, edit.source);
-    const targetNodes = selectNodes(doc, edit.target);
+    const sourceNodes = navigateAndCollect(doc, edit.source, 0);
+    const targetNodes = navigateAndCollect(doc, edit.target, 0);
     if (sourceNodes.length === 0 || targetNodes.length === 0) return false;
     if (sourceNodes.length !== targetNodes.length) {
       if (targetNodes.length !== 1 || targetNodes[0]?.kind !== "list") return false;
@@ -788,7 +842,7 @@ const canApplyEdit = (doc: Node, edit: Edit): boolean => {
       edit.kind === "record-rename-field"
         ? target.slice(0, -1)
         : target;
-    const nodes = selectNodes(doc, effective);
+    const nodes = navigateAndCollect(doc, effective, 0);
     if (nodes.length === 0) return false;
     for (const node of nodes) {
       switch (edit.kind) {
@@ -965,7 +1019,7 @@ export const nodeToPlainObject = (node: Node): unknown => {
       return formatSelector(node.selector);
     case "record": {
       const out: Record<string, unknown> = { $tag: node.tag };
-      for (const [k, v] of Object.entries(node.fields)) out[k] = nodeToPlainObject(v);
+      for (const k in node.fields) out[k] = nodeToPlainObject(node.fields[k]!);
       return out;
     }
     case "list":
@@ -982,49 +1036,75 @@ export const formatNode = (node: Node): string =>
 /**
  * A collaborative document scoped to a single peer.
  *
- * Hides the internal {@link EventGraph}, {@link Node} tree, and edit machinery
- * behind a plain-object interface: construct with a plain JS literal, mutate
- * with named methods, and read back via {@link toPlain}.
+ * Manages its own event DAG internally: local edits produce events
+ * (retrievable via {@link drain}), remote events are ingested via
+ * {@link applyRemote}, and the document is reconstructed via {@link materialize}.
  */
 export class Denicek {
-  private graph: EventGraph;
-  private pending: Event[] = [];
-  private buffered: Event[] = [];
   readonly peer: string;
+  private initialDoc: Node;
+  private events: Record<string, Event> = {};
+  private currentFrontiers: EventId[] = [];
+  private pendingEvents: Event[] = [];
+  private bufferedEvents: Event[] = [];
+  private cachedDoc: Node | null = null;
 
   constructor(peer: string, initial?: PlainNode);
   constructor(peer: string, graph: EventGraph);
   constructor(peer: string, arg?: PlainNode | EventGraph) {
     this.peer = peer;
     if (arg && typeof arg === "object" && "events" in arg) {
-      this.graph = arg as EventGraph;
+      const g = arg as EventGraph;
+      this.initialDoc = g.initial;
+      this.events = g.events;
+      this.currentFrontiers = g.frontiers;
     } else {
-      this.graph = createEventGraph(plainObjectToNode((arg as PlainNode) ?? { $tag: "root" }));
+      this.initialDoc = plainObjectToNode((arg as PlainNode) ?? { $tag: "root" });
     }
   }
 
-  private assertEditApplies(edit: Edit): void {
-    applyEdit(this.materialize(), edit);
+  private updateFrontiers(event: Event): void {
+    const parentKeys = new Set(event.parents.map(formatEventKey));
+    this.currentFrontiers = [
+      ...this.currentFrontiers.filter((h) => !parentKeys.has(formatEventKey(h))),
+      event.id,
+    ].sort(compareByStableOrder);
+  }
+
+  private insertEvent(event: Event): void {
+    const validated = validateEvent(this.events, event);
+    this.events[formatEventKey(validated.id)] = validated;
+    this.updateFrontiers(validated);
   }
 
   private commit(edit: Edit): void {
-    this.assertEditApplies(edit);
-    const [graph, event] = commitLocalEdit(this.graph, this.peer, edit);
-    this.graph = graph;
-    this.pending.push(event);
+    const doc = this.cachedDoc ?? this.rematerialize();
+    const newDoc = applyEdit(doc, edit);
+    const parents = [...this.currentFrontiers];
+    const clock: VectorClock = {};
+    for (const p of parents) {
+      for (const [k, v] of Object.entries(this.events[formatEventKey(p)]?.clock ?? {})) {
+        clock[k] = Math.max(clock[k] ?? -1, v);
+      }
+    }
+    clock[this.peer] = (clock[this.peer] ?? -1) + 1;
+    const event: Event = { id: { peer: this.peer, seq: clock[this.peer] }, parents, edit, clock };
+    this.insertEvent(event);
+    this.pendingEvents.push(event);
+    this.cachedDoc = newDoc;
   }
 
   /** Returns and clears events produced by local edits since the last drain. */
   drain(): Event[] {
-    const events = this.pending;
-    this.pending = [];
+    const events = this.pendingEvents;
+    this.pendingEvents = [];
     return events;
   }
 
   /** Returns the current frontier (tip event IDs). Exchange with another peer
    *  to compute which events need to be sent via {@link eventsSince}. */
   get frontiers(): EventId[] {
-    return [...this.graph.frontiers];
+    return [...this.currentFrontiers];
   }
 
   /** Returns all events that the holder of `remoteFrontiers` hasn't seen.
@@ -1032,28 +1112,24 @@ export class Denicek {
    *  Events are returned in arbitrary order; the consumer must handle
    *  out-of-order delivery (e.g. via {@link applyRemote}'s buffering). */
   eventsSince(remoteFrontiers: EventId[]): Event[] {
-    const remoteKnown = computeClosure(this.graph.events, remoteFrontiers, false);
-    return Object.values(this.graph.events).filter(
+    const remoteKnown = computeClosure(this.events, remoteFrontiers, false);
+    return Object.values(this.events).filter(
       (ev) => !remoteKnown.has(formatEventKey(ev.id)),
     );
   }
 
   /** Ingests an event produced by another peer. Buffers out-of-order events. */
   applyRemote(event: Event): void {
-    this.buffered.push(event);
+    this.bufferedEvents.push(event);
+    this.cachedDoc = null;
     this.flushBuffered();
   }
 
   private flushBuffered(): void {
-    // NOTE: Intentionally mutates this.graph.events and this.graph.frontiers
-    // in place for O(1) per-event insertion. The functional applyRemoteEvent
-    // creates a new events object each time (O(n) per event, O(n²) for a batch).
-    // This is the only place where EventGraph is mutated rather than replaced.
-    // Index buffered events, filtering out duplicates already in the graph
     const pending = new Map<string, Event>();
-    for (const event of this.buffered) {
+    for (const event of this.bufferedEvents) {
       const key = formatEventKey(event.id);
-      const existing = this.graph.events[key];
+      const existing = this.events[key];
       if (existing != null) {
         if (!areEventsEqual(existing, event)) {
           throw new Error(`Conflicting payload for event '${key}'.`);
@@ -1064,11 +1140,10 @@ export class Denicek {
     }
 
     if (pending.size === 0) {
-      this.buffered = [];
+      this.bufferedEvents = [];
       return;
     }
 
-    // Compute wait counts and reverse dependency index
     const waitCount = new Map<string, number>();
     const dependents = new Map<string, string[]>();
 
@@ -1076,7 +1151,7 @@ export class Denicek {
       let count = 0;
       for (const p of event.parents) {
         const pk = formatEventKey(p);
-        if (this.graph.events[pk] == null) {
+        if (this.events[pk] == null) {
           count++;
           let deps = dependents.get(pk);
           if (deps == null) {
@@ -1089,21 +1164,17 @@ export class Denicek {
       waitCount.set(key, count);
     }
 
-    // Seed the ready queue with events whose parents are all satisfied
     const ready: string[] = [];
     for (const [key, count] of waitCount) {
       if (count === 0) ready.push(key);
     }
 
-    // Process ready events, decrementing dependents as we go
     while (ready.length > 0) {
       const key = ready.pop()!;
       const event = pending.get(key)!;
       pending.delete(key);
 
-      const validated = validateEvent(this.graph.events, event);
-      this.graph.events[formatEventKey(validated.id)] = validated;
-      this.graph.frontiers = updateFrontiers(this.graph.frontiers, validated);
+      this.insertEvent(event);
 
       const deps = dependents.get(key);
       if (deps != null) {
@@ -1117,8 +1188,7 @@ export class Denicek {
       }
     }
 
-    // Events with unmet dependencies remain buffered
-    this.buffered = [...pending.values()];
+    this.bufferedEvents = [...pending.values()];
   }
 
   add(target: string, field: string, value: PlainNode): void {
@@ -1173,7 +1243,14 @@ export class Denicek {
   }
 
   materialize(): Node {
-    return materialize(this.graph);
+    if (this.cachedDoc !== null) return this.cachedDoc;
+    const doc = this.rematerialize();
+    this.cachedDoc = doc;
+    return doc;
+  }
+
+  private rematerialize(): Node {
+    return materialize({ initial: this.initialDoc, events: this.events, frontiers: this.currentFrontiers });
   }
 
   toPlain(): unknown {

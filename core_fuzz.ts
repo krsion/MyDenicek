@@ -4,7 +4,7 @@
 // 3 peers, N seeds, 100 iterations per seed.
 // Each iteration: random edit on random peer, sync 2 random peers, assert convergence.
 
-import { Denicek } from "./core.ts";
+import { Denicek, type PlainNode } from "./core.ts";
 import { randomIntegerBetween, randomSeeded, sample } from "@std/random";
 
 // ── Constants ───────────────────────────────────────────────────────
@@ -95,9 +95,9 @@ function applyRandomEdit(peer: Denicek, r: R, pushW: [number, number, number]): 
   const { path, node } = randomPath(doc, r);
   const wild = path.includes("*");
 
-  const newItem = () => weighted(r,
-    [{ $tag: pick(r, TAGS), name: pick(r, VALS), val: pick(r, VALS) },
-     { $tag: pick(r, TAGS), $items: [{ $tag: pick(r, TAGS), name: pick(r, VALS) }, pick(r, VALS)] },
+  const newItem = (): PlainNode => weighted<PlainNode>(r,
+    [{ $tag: pick(r, TAGS), name: pick(r, VALS), val: pick(r, VALS) } as PlainNode,
+     { $tag: pick(r, TAGS), $items: [{ $tag: pick(r, TAGS), name: pick(r, VALS) }, pick(r, VALS)] } as PlainNode,
      pick(r, VALS)],
     pushW,
   );

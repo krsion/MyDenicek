@@ -2,12 +2,7 @@
   "tasks": {
     "dev": "deno run --watch main.ts",
     "test": "deno test --allow-all",
-    "fuzz": "deno run core_fuzz.ts",
-    "fuzz:property": "deno test core_fuzz_comprehensive.ts --allow-all",
-    "fuzz:chaos": "deno run --allow-all core_chaos_fuzz.ts",
-    "fuzz:wildcard": "deno test core_wildcard_fuzz.ts --allow-all",
-    "fuzz:advanced": "deno test core_fuzz_advanced.ts --allow-all",
-    "fuzz:all": "deno task fuzz && deno task fuzz:property && deno task fuzz:chaos && deno task fuzz:wildcard && deno task fuzz:advanced"
+    "fuzz": "deno run core_fuzz.ts"
   },
   "imports": {
     "@std/assert": "jsr:@std/assert@1",
