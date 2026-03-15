@@ -1,12 +1,17 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import {
   Denicek,
-  type Event,
-  type EventGraph,
+  Event,
+  EventGraph,
+  EventId,
+  VectorClock,
+  RecordAddEdit,
   materialize,
   primitive,
   record,
   parseSelector,
+  Selector,
+  PrimitiveNode,
 } from "./core.ts";
 
 /** Exchange events between two peers so both converge (frontier-based). */
@@ -305,16 +310,12 @@ Deno.test("applyRemote rejects conflicting payload", () => {
   alice.add("", "x", "a");
   const [event] = alice.drain();
   // Same id but different edit content
-  const conflicting: Event = {
-    id: event.id,
-    parents: event.parents,
-    edit: {
-      kind: "record-add",
-      target: parseSelector("y"),
-      node: primitive("b"),
-    },
-    clock: event.clock,
-  };
+  const conflicting = new Event(
+    event.id,
+    event.parents,
+    new RecordAddEdit(Selector.parse("y"), new PrimitiveNode("b")),
+    event.clock,
+  );
   assertThrows(
     () => alice.applyRemote(conflicting),
     Error,
@@ -354,36 +355,25 @@ Deno.test("commit throws on kind mismatch", () => {
 });
 
 Deno.test("materialize throws on cycle", () => {
-  const graph: EventGraph = {
-    initial: record("root", {}),
-    events: {
-      "a:0": {
-        id: { peer: "a", seq: 0 },
-        parents: [{ peer: "b", seq: 0 }],
-        edit: {
-          kind: "record-add",
-          target: parseSelector("x"),
-          node: primitive("a"),
-        },
-        clock: { a: 0 },
-      },
-      "b:0": {
-        id: { peer: "b", seq: 0 },
-        parents: [{ peer: "a", seq: 0 }],
-        edit: {
-          kind: "record-add",
-          target: parseSelector("y"),
-          node: primitive("b"),
-        },
-        clock: { b: 0 },
-      },
-    },
-    frontiers: [
-      { peer: "a", seq: 0 },
-      { peer: "b", seq: 0 },
-    ],
-  };
-  assertThrows(() => materialize(graph), Error, "cycle");
+  const events = new Map<string, Event>();
+  events.set("a:0", new Event(
+    new EventId("a", 0),
+    [new EventId("b", 0)],
+    new RecordAddEdit(Selector.parse("x"), new PrimitiveNode("a")),
+    new VectorClock({ a: 0 }),
+  ));
+  events.set("b:0", new Event(
+    new EventId("b", 0),
+    [new EventId("a", 0)],
+    new RecordAddEdit(Selector.parse("y"), new PrimitiveNode("b")),
+    new VectorClock({ b: 0 }),
+  ));
+  const graph = new EventGraph(
+    record("root", {}),
+    events,
+    [new EventId("a", 0), new EventId("b", 0)],
+  );
+  assertThrows(() => graph.materialize(), Error, "cycle");
 });
 
 Deno.test("commit throws on pop-back from empty list", () => {

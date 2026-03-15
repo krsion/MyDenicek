@@ -1,6 +1,6 @@
 import { BinaryHeap } from "@std/data-structures/binary-heap";
 
-// ── Primitives & selectors ──────────────────────────────────────────
+// ── Primitives ──────────────────────────────────────────────────────
 
 /** Scalar values that can appear as leaf nodes in the document tree. */
 export type PrimitiveValue = string | number | boolean | null;
@@ -12,1026 +12,1169 @@ export type PrimitiveValue = string | number | boolean | null;
  */
 export type SelectorSegment = string | number;
 
+// ── Selector ────────────────────────────────────────────────────────
+
+type PrefixMatch = { specificPrefix: Selector; rest: Selector };
+
 /** An ordered path of segments addressing a node (or set of nodes) in the document tree. */
-export type Selector = SelectorSegment[];
+export class Selector {
+  readonly segments: SelectorSegment[];
 
-const isAll = (s: SelectorSegment): boolean => s === "*";
-const isUp = (s: SelectorSegment): boolean => s === "..";
+  constructor(segments: SelectorSegment[]) {
+    this.segments = segments;
+  }
 
-// ── Document nodes ──────────────────────────────────────────────────
+  static parse(path: string): Selector {
+    const trimmed = path.trim();
+    if (trimmed === "" || trimmed === "/") return new Selector([]);
+    const isAbs = trimmed.startsWith("/");
+    const parts = trimmed
+      .replace(/^\//, "")
+      .split("/")
+      .filter((p) => p.length > 0)
+      .map((part): SelectorSegment => {
+        if (part === "*" || part === "..") return part;
+        const n = Number(part);
+        return Number.isFinite(n) && String(n) === part ? n : part;
+      });
+    return new Selector(isAbs ? ["/", ...parts] : parts);
+  }
 
-/**
- * Immutable document tree node. Discriminated on `kind`:
- * - `record` — named fields (like a JSON object), with a structural `tag`
- * - `list` — ordered items (like a JSON array), with a structural `tag`
- * - `primitive` — leaf scalar value
- * - `reference` — a selector pointing to another node in the tree
- */
-export type Node =
-  | { kind: "record"; tag: string; fields: Record<string, Node> }
-  | { kind: "list"; tag: string; items: Node[] }
-  | { kind: "primitive"; value: PrimitiveValue }
-  | { kind: "reference"; selector: Selector };
+  format(): string {
+    if (this.segments.length === 0) return "/";
+    if (this.segments[0] === "/") return `/${this.segments.slice(1).map(String).join("/")}`;
+    return this.segments.map(String).join("/");
+  }
 
-// ── Edit types ──────────────────────────────────────────────────────
+  get isAbsolute(): boolean {
+    return this.segments.length > 0 && this.segments[0] === "/";
+  }
 
-/**
- * A single edit operation on the document tree. Discriminated on `kind`.
- * Every variant has a `target` selector addressing the node(s) to modify.
- * Structural edits automatically update all references affected by the change.
- */
-export type Edit =
-  | { kind: "set-value"; target: Selector; value: PrimitiveValue }
-  | { kind: "record-add"; target: Selector; node: Node }
-  | { kind: "record-delete"; target: Selector }
-  | { kind: "list-push-back"; target: Selector; node: Node }
-  | { kind: "list-push-front"; target: Selector; node: Node }
-  | { kind: "list-pop-back"; target: Selector }
-  | { kind: "list-pop-front"; target: Selector }
-  | { kind: "update-tag"; target: Selector; tag: string }
-  | { kind: "record-rename-field"; target: Selector; to: string }
-  | { kind: "copy"; target: Selector; source: Selector }
-  | { kind: "wrap-record"; target: Selector; field: string; tag: string;}
-  | { kind: "wrap-list"; target: Selector; tag: string; };
+  get parent(): Selector {
+    return new Selector(this.segments.slice(0, -1));
+  }
 
-// ── Event graph ─────────────────────────────────────────────────────
+  get lastSegment(): SelectorSegment {
+    return this.segments[this.segments.length - 1]!;
+  }
 
-/** Unique identifier for an event, scoped to a peer. */
-export interface EventId {
-  peer: string;
-  seq: number;
+  get length(): number {
+    return this.segments.length;
+  }
+
+  at(index: number): SelectorSegment | undefined {
+    return this.segments.at(index);
+  }
+
+  slice(start: number, end?: number): Selector {
+    return new Selector(this.segments.slice(start, end));
+  }
+
+  append(...extra: SelectorSegment[]): Selector {
+    return new Selector([...this.segments, ...extra]);
+  }
+
+  equals(other: Selector): boolean {
+    return this.segments.length === other.segments.length &&
+      this.segments.every((seg, i) => seg === other.segments[i]);
+  }
+
+  matchPrefix(full: Selector): PrefixMatch | null {
+    if (this.segments.length > full.segments.length) return null;
+    const specificPrefix: SelectorSegment[] = [];
+    for (let i = 0; i < this.segments.length; i++) {
+      const prefixSeg = this.segments[i]!;
+      const fullSeg = full.segments[i]!;
+      if (prefixSeg === fullSeg) {
+        specificPrefix.push(prefixSeg);
+      } else if (prefixSeg === "*" && typeof fullSeg === "number") {
+        specificPrefix.push(fullSeg);
+      } else {
+        return null;
+      }
+    }
+    return { specificPrefix: new Selector(specificPrefix), rest: full.slice(this.segments.length) };
+  }
 }
 
-/** Vector clock mapping peer → latest seq seen. */
-export type VectorClock = Record<string, number>;
+// Backward-compatible export
+export const parseSelector = Selector.parse;
 
-/** An immutable edit event in the causal DAG, with parent links for ordering. */
-export interface Event {
-  id: EventId;
-  parents: EventId[];
-  edit: Edit;
-  clock: VectorClock;
+// ── EventId ─────────────────────────────────────────────────────────
+
+export class EventId {
+  constructor(readonly peer: string, readonly seq: number) {}
+
+  format(): string {
+    return `${this.peer}:${this.seq}`;
+  }
+
+  compareTo(other: EventId): number {
+    if (this.peer < other.peer) return -1;
+    if (this.peer > other.peer) return 1;
+    return this.seq - other.seq;
+  }
+
+  equals(other: EventId): boolean {
+    return this.peer === other.peer && this.seq === other.seq;
+  }
 }
 
-/**
- * The core data structure: an initial document plus a causal DAG of edit events.
- * Peers produce events independently; graphs are merged by set-union via {@link merge}.
- */
-export interface EventGraph {
-  initial: Node;
-  events: Record<string, Event>;
-  frontiers: EventId[];
+// ── VectorClock ─────────────────────────────────────────────────────
+
+export class VectorClock {
+  private entries: Record<string, number>;
+
+  constructor(entries?: Record<string, number>) {
+    this.entries = entries ? { ...entries } : {};
+  }
+
+  get(peer: string): number {
+    return this.entries[peer] ?? -1;
+  }
+
+  set(peer: string, seq: number): void {
+    this.entries[peer] = seq;
+  }
+
+  tick(peer: string): number {
+    const next = this.get(peer) + 1;
+    this.entries[peer] = next;
+    return next;
+  }
+
+  dominates(other: VectorClock): boolean {
+    return Object.entries(other.entries).every(([peer, seq]) => this.get(peer) >= seq);
+  }
+
+  merge(other: VectorClock): void {
+    for (const [peer, seq] of Object.entries(other.entries)) {
+      this.entries[peer] = Math.max(this.get(peer), seq);
+    }
+  }
+
+  toRecord(): Record<string, number> {
+    return { ...this.entries };
+  }
+
+  clone(): VectorClock {
+    return new VectorClock(this.entries);
+  }
 }
 
-// ── Selector formatting ─────────────────────────────────────────────
+// ── PlainNode types ─────────────────────────────────────────────────
 
-/** Renders a selector as a human-readable path string (e.g. `"/person/name"`). */
-export const formatSelector = (sel: Selector): string => {
-  if (sel.length === 0) return "/";
-  if (sel[0] === "/") return `/${sel.slice(1).map(String).join("/")}`;
-  return sel.map(String).join("/");
-};
-
-/** Parses a path string into a {@link Selector}. Absolute paths start with `"/"`. */
-export const parseSelector = (path: string): Selector => {
-  const trimmed = path.trim();
-  if (trimmed === "" || trimmed === "/") return [];
-  const isAbs = trimmed.startsWith("/");
-  const parts = trimmed
-    .replace(/^\//, "")
-    .split("/")
-    .filter((p) => p.length > 0)
-    .map((part) => {
-      if (part === "*" || part === "..") return part;
-      const n = Number(part);
-      return Number.isFinite(n) && String(n) === part ? n : part;
-    });
-  return isAbs ? ["/", ...parts] : parts;
-};
-
-// ── Node constructors ───────────────────────────────────────────────
-
-/** Creates a primitive leaf node. */
-export const primitive = (value: PrimitiveValue): Node => ({
-  kind: "primitive",
-  value,
-});
-
-/** Creates a record node with the given tag and named fields. */
-export const record = (tag: string, fields: Record<string, Node>): Node => ({
-  kind: "record",
-  tag,
-  fields,
-});
-
-/** Creates a list node with the given tag and ordered items. */
-export const list = (tag: string, items: Node[]): Node => ({
-  kind: "list",
-  tag,
-  items,
-});
-
-/** Creates a reference node pointing at the given selector path. */
-export const reference = (path: string): Node => ({
-  kind: "reference",
-  selector: parseSelector(path),
-});
-
-// ── Plain-object ↔ Node conversion ─────────────────────────────────
-
-/**
- * User-facing plain JS representation of a document node.
- * - Primitives (`string`, `number`, `boolean`, `null`) → primitive nodes
- * - `{ $ref: "/path" }` → reference nodes
- * - `{ $tag: "t", $items: [...] }` → list nodes
- * - `{ $tag: "t", field: ... }` → record nodes
- */
 export type PlainNode = PrimitiveValue | PlainRef | PlainRecord | PlainList;
 export interface PlainRef { $ref: string }
 export interface PlainList { $tag: string; $items: PlainNode[] }
 export interface PlainRecord { $tag: string; [key: string]: PlainNode }
 
-/** Converts a {@link PlainNode} into the internal {@link Node} representation. */
-export const plainObjectToNode = (plain: PlainNode): Node => {
-  if (plain === null || typeof plain !== "object") return primitive(plain);
-  if ("$ref" in plain) return reference((plain as PlainRef).$ref);
-  if ("$items" in plain && Array.isArray((plain as PlainList).$items)) {
-    const l = plain as PlainList;
-    return list(l.$tag, l.$items.map(plainObjectToNode));
-  }
-  const r = plain as PlainRecord;
-  const fields = Object.fromEntries(
-    Object.entries(r)
-      .filter(([k]) => k !== "$tag")
-      .map(([k, v]) => [k, plainObjectToNode(v as PlainNode)]),
-  );
-  return record(r.$tag, fields);
-};
-
-// ── Selector matching ───────────────────────────────────────────────
-
-const areSegmentsCompatible = (a: SelectorSegment, b: SelectorSegment): boolean =>
-  a === b || (isAll(a) && typeof b === "number") || (typeof a === "number" && isAll(b));
+// ── Node hierarchy ──────────────────────────────────────────────────
 
 /**
- * Result of matching a prefix selector against a full selector via {@link matchPrefix}.
- * - `specificPrefix` — the matched prefix with wildcards resolved to concrete indices
- *    (e.g. prefix `["items","*"]` matched against `["items",2,"name"]` yields `["items",2]`)
- * - `rest` — the unmatched tail segments (e.g. `["name"]`)
+ * Mutable document tree node. Subclassed as:
+ * - {@link RecordNode} — named fields (like a JSON object), with a structural `tag`
+ * - {@link ListNode} — ordered items (like a JSON array), with a structural `tag`
+ * - {@link PrimitiveNode} — leaf scalar value
+ * - {@link ReferenceNode} — a selector pointing to another node in the tree
  */
-type PrefixMatch = { specificPrefix: Selector; rest: Selector };
+export abstract class Node {
+  abstract readonly kind: string;
+  abstract clone(): Node;
+  abstract toPlain(): unknown;
+  abstract equals(other: Node): boolean;
 
-// Wildcard in prefix matches concrete index in full (but not vice versa),
-// so structural edit targets with "*" can transform concrete selectors.
-const matchPrefix = (prefix: Selector, full: Selector): PrefixMatch | null => {
-  if (prefix.length > full.length) return null;
-  const specificPrefix: SelectorSegment[] = [];
-  for (let i = 0; i < prefix.length; i++) {
-    const prefixSeg = prefix[i] as SelectorSegment;
-    const fullSeg = full[i] as SelectorSegment;
-    if (prefixSeg === fullSeg) {
-      specificPrefix.push(prefixSeg);
-    } else if (isAll(prefixSeg) && typeof fullSeg === "number") {
-      specificPrefix.push(fullSeg);
-    } else {
-      return null;
-    }
-  }
-  return { specificPrefix, rest: full.slice(prefix.length) };
-};
+  /** Follows selector segments to collect matched nodes. */
+  navigate(target: Selector, depth = 0): Node[] {
+    if (depth === target.length) return [this];
+    const seg = target.segments[depth]!;
 
-// ── Node utilities ──────────────────────────────────────────────────
-
-/** Walks every node in the tree, calling `visitor` with its path. */
-const forEachNode = (node: Node, visitor: (path: Selector, current: Node) => void, path: SelectorSegment[] = []): void => {
-  visitor(path, node);
-  if (node.kind === "record") {
-    for (const k in node.fields) {
-      path.push(k);
-      forEachNode(node.fields[k]!, visitor, path);
-      path.pop();
-    }
-  } else if (node.kind === "list") {
-    for (let i = 0; i < node.items.length; i++) {
-      path.push(i);
-      forEachNode(node.items[i]!, visitor, path);
-      path.pop();
-    }
-  }
-};
-
-/**
- * Maps over the tree, optionally replacing nodes.
- * If `visitor` returns a Node, that replaces the current node (children are not visited).
- * If `visitor` returns undefined, the node is kept and children are visited recursively.
- */
-const mapTree = (node: Node, visitor: (path: Selector, current: Node) => Node | undefined, path: SelectorSegment[] = []): Node => {
-  const replacement = visitor(path, node);
-  if (replacement !== undefined) return replacement;
-
-  if (node.kind === "record") {
-    let fields: Record<string, Node> | undefined;
-    for (const k in node.fields) {
-      const v = node.fields[k]!;
-      path.push(k);
-      const next = mapTree(v, visitor, path);
-      path.pop();
-      if (next !== v && fields === undefined) {
-        fields = { ...node.fields };
-      }
-      if (fields !== undefined) fields[k] = next;
-    }
-    return fields !== undefined ? { kind: "record", tag: node.tag, fields } : node;
-  }
-
-  if (node.kind === "list") {
-    let items: Node[] | undefined;
-    for (let i = 0; i < node.items.length; i++) {
-      const v = node.items[i]!;
-      path.push(i);
-      const next = mapTree(v, visitor, path);
-      path.pop();
-      if (next !== v && items === undefined) {
-        items = node.items.slice();
-      }
-      if (items !== undefined) items[i] = next;
-    }
-    return items !== undefined ? { kind: "list", tag: node.tag, items } : node;
-  }
-
-  return node;
-};
-
-type TracedNode = { path: Selector; node: Node };
-
-
-
-// ── Targeted navigation ─────────────────────────────────────────────
-
-/**
- * Follows selector segments directly into the tree to find and transform
- * matched nodes. O(depth + wildcard fan-out) instead of O(total_nodes).
- * Returns the (possibly new) node and the number of matches found.
- */
-const navigateAndTransform = (
-  node: Node, target: Selector, depth: number,
-  transform: (current: Node) => Node,
-): { node: Node; matched: number } => {
-  if (depth === target.length) {
-    return { node: transform(node), matched: 1 };
-  }
-  const seg = target[depth]!;
-
-  if (isAll(seg) && node.kind === "list") {
-    let items: Node[] | undefined;
-    let matched = 0;
-    for (let i = 0; i < node.items.length; i++) {
-      const r = navigateAndTransform(node.items[i]!, target, depth + 1, transform);
-      matched += r.matched;
-      if (r.node !== node.items[i]) {
-        if (items === undefined) items = node.items.slice();
-        items[i] = r.node;
-      }
-    }
-    return {
-      node: items !== undefined ? { kind: "list", tag: node.tag, items } : node,
-      matched,
-    };
-  }
-
-  if (typeof seg === "string" && node.kind === "record" && seg in node.fields) {
-    const child = node.fields[seg]!;
-    const r = navigateAndTransform(child, target, depth + 1, transform);
-    if (r.node === child) return { node, matched: r.matched };
-    return {
-      node: { kind: "record", tag: node.tag, fields: { ...node.fields, [seg]: r.node } },
-      matched: r.matched,
-    };
-  }
-
-  if (typeof seg === "number" && node.kind === "list" && seg >= 0 && seg < node.items.length) {
-    const child = node.items[seg]!;
-    const r = navigateAndTransform(child, target, depth + 1, transform);
-    if (r.node === child) return { node, matched: r.matched };
-    const items = node.items.slice();
-    items[seg] = r.node;
-    return { node: { kind: "list", tag: node.tag, items }, matched: r.matched };
-  }
-
-  return { node, matched: 0 };
-};
-
-/** Follows selector segments to collect matched nodes. O(depth + wildcard fan-out). */
-const navigateAndCollect = (node: Node, target: Selector, depth: number): Node[] => {
-  if (depth === target.length) return [node];
-  const seg = target[depth]!;
-
-  if (isAll(seg) && node.kind === "list") {
-    const result: Node[] = [];
-    for (const item of node.items) {
-      result.push(...navigateAndCollect(item, target, depth + 1));
-    }
-    return result;
-  }
-  if (typeof seg === "string" && node.kind === "record" && seg in node.fields) {
-    return navigateAndCollect(node.fields[seg]!, target, depth + 1);
-  }
-  if (typeof seg === "number" && node.kind === "list" && seg >= 0 && seg < node.items.length) {
-    return navigateAndCollect(node.items[seg]!, target, depth + 1);
-  }
-  return [];
-};
-
-/** Follows selector segments to collect matched nodes with their concrete paths. */
-const navigateAndTrace = (
-  node: Node, target: Selector, depth: number, path: SelectorSegment[] = [],
-): TracedNode[] => {
-  if (depth === target.length) return [{ path: [...path], node }];
-  const seg = target[depth]!;
-
-  if (isAll(seg) && node.kind === "list") {
-    const result: TracedNode[] = [];
-    for (let i = 0; i < node.items.length; i++) {
-      path.push(i);
-      result.push(...navigateAndTrace(node.items[i]!, target, depth + 1, path));
-      path.pop();
-    }
-    return result;
-  }
-  if (typeof seg === "string" && node.kind === "record" && seg in node.fields) {
-    path.push(seg);
-    const result = navigateAndTrace(node.fields[seg]!, target, depth + 1, path);
-    path.pop();
-    return result;
-  }
-  if (typeof seg === "number" && node.kind === "list" && seg >= 0 && seg < node.items.length) {
-    path.push(seg);
-    const result = navigateAndTrace(node.items[seg]!, target, depth + 1, path);
-    path.pop();
-    return result;
-  }
-  return [];
-};
-
-const mapMatchedNodes = (node: Node, target: Selector, transform: (current: Node) => Node): Node => {
-  const { node: result, matched } = navigateAndTransform(node, target, 0, transform);
-  if (matched === 0) {
-    throw new Error(`No nodes match selector '${formatSelector(target)}'.`);
-  }
-  return result;
-};
-
-// ── Record helpers ──────────────────────────────────────────────────
-
-const setField = (fields: Record<string, Node>, key: string, value: Node): Record<string, Node> => ({
-  ...fields,
-  [key]: value,
-});
-
-const deleteField = (fields: Record<string, Node>, key: string): Record<string, Node> => {
-  const result: Record<string, Node> = {};
-  for (const k in fields) {
-    if (k !== key) result[k] = fields[k]!;
-  }
-  return result;
-};
-
-const renameField = (fields: Record<string, Node>, from: string, to: string): Record<string, Node> => {
-  if (from === to || !(from in fields)) return fields;
-  const result: Record<string, Node> = {};
-  for (const k in fields) {
-    if (k === from) result[to] = fields[k]!;
-    else if (k === to) continue;
-    else result[k] = fields[k]!;
-  }
-  return result;
-};
-
-// ── Reference resolution & mapping ──────────────────────────────────
-
-/**
- * Resolves a (possibly relative) reference selector to an absolute path
- * by combining it with the node's position in the tree.
- * E.g. basePath=["person","age"], refSel=["..","name"] → ["person","name"]
- * @param basePath The base path of the current node.
- * @param refSel The reference selector to resolve.
- * @returns The resolved absolute path, or `null` if the reference escapes the document root.
- */
-const resolveReference = (basePath: Selector, refSel: Selector): Selector | null => {
-  const isAbs = refSel.length > 0 && refSel[0] === "/";
-  const combined = isAbs ? refSel.slice(1) : [...basePath, ...refSel];
-  const stack: SelectorSegment[] = [];
-  for (const seg of combined) {
-    if (isUp(seg)) {
-      if (stack.length === 0) {
-        // Reference escapes the document root - return null to signal invalid ref
-        return null;
-      }
-      stack.pop();
-    } else {
-      stack.push(seg);
-    }
-  }
-  return stack;
-};
-
-/**
- * Converts an absolute path into a relative selector from `basePath`.
- * Finds the longest common prefix, then prepends `".."` segments
- * to walk up from the base.
- *
- * E.g. basePath=["person","age"], absolutePath=["person","name"] → ["..","name"]
- */
-const makeRelative = (basePath: Selector, absolutePath: Selector): Selector => {
-  let common = 0;
-  while (common < basePath.length && common < absolutePath.length) {
-    const baseSeg = basePath[common] as SelectorSegment;
-    const absSeg = absolutePath[common] as SelectorSegment;
-    if (!areSegmentsCompatible(baseSeg, absSeg)) break;
-    common++;
-  }
-  const ups: SelectorSegment[] = basePath.slice(common).map(() => "..");
-  return [...ups, ...absolutePath.slice(common)];
-};
-
-/**
- * Rewrites all reference nodes in the tree after a structural edit (rename, wrap).
- *
- * The `transform` callback maps absolute selectors to their new locations
- * (e.g. after a rename, `/person/name` → `/person/fullName`).
- *
- * For each reference node, this function:
- * 1. Resolves its selector to an absolute path (handling relative `..` segments)
- * 2. Transforms both the reference's target and the node's own base path
- * 3. Converts back to absolute or relative form, preserving the original style
- *
- * If a reference escapes the document root (invalid), it is left unchanged.
- * This ensures consistent behavior across all structural operations and
- * prevents crashes in CRDT scenarios where concurrent edits may create
- * temporarily invalid references.
- */
-const mapReferences = (node: Node, transform: (abs: Selector) => Selector): Node =>
-  mapTree(node, (basePath, current) => {
-    if (current.kind !== "reference") return undefined;
-    const isAbs = current.selector.length > 0 && current.selector[0] === "/";
-    const resolved = resolveReference(basePath, current.selector);
-    // If the reference escapes the document root, leave it unchanged
-    if (resolved === null) return undefined;
-    const mappedBase = transform(basePath);
-    const mappedRef = transform(resolved);
-    if (isAbs) {
-      return { kind: "reference", selector: ["/", ...mappedRef] };
-    }
-    return { kind: "reference", selector: makeRelative(mappedBase, mappedRef) };
-  });
-
-// ── Structural selector transforms ─────────────────────────────────
-
-const transformSelectorForRecordWrap = (wrappedField: string, wrapTarget: Selector, other: Selector): Selector => {
-  const m = matchPrefix(wrapTarget, other);
-  return m == null ? other : [...m.specificPrefix, wrappedField, ...m.rest];
-};
-
-const transformSelectorForListWrap = (wrapTarget: Selector, other: Selector): Selector => {
-  const m = matchPrefix(wrapTarget, other);
-  return m == null ? other : [...m.specificPrefix, "*", ...m.rest];
-};
-
-const transformSelectorForRename = (renameTarget: Selector, to: string, other: Selector): Selector => {
-  const m = matchPrefix(renameTarget, other);
-  if (m == null) return other;
-  return [...m.specificPrefix.slice(0, -1), to, ...m.rest];
-};
-
-/** Shift numeric indices >= threshold by delta within a list targeted by listTarget. */
-const shiftIndexSelector = (listTarget: Selector, threshold: number, delta: number, other: Selector): Selector | null => {
-  const m = matchPrefix(listTarget, other);
-  if (m == null || m.rest.length === 0) return other;
-  const [head, ...tail] = m.rest;
-  if (typeof head !== "number") return other;
-  const shifted = head + (head >= threshold ? delta : 0);
-  if (shifted < 0) return null; // index shifted out of bounds
-  return [...m.specificPrefix, shifted, ...tail];
-};
-
-// ── Apply a single edit ─────────────────────────────────────────────
-
-const expectRecord = (n: Node, editKind: string) => {
-  if (n.kind !== "record") throw new Error(`${editKind}: expected record, found '${n.kind}'`);
-  return n;
-};
-
-const expectList = (n: Node, editKind: string) => {
-  if (n.kind !== "list") throw new Error(`${editKind}: expected list, found '${n.kind}'`);
-  return n;
-};
-
-const applyEdit = (doc: Node, edit: Edit): Node => {
-  switch (edit.kind) {
-    case "set-value":
-      return mapMatchedNodes(doc, edit.target, () => primitive(edit.value));
-
-    case "record-add": {
-      const parent = edit.target.slice(0, -1);
-      const field = String(edit.target[edit.target.length - 1]);
-      return mapMatchedNodes(doc, parent, (n) => {
-        const r = expectRecord(n, edit.kind);
-        return record(r.tag, setField(r.fields, field, edit.node));
-      });
-    }
-
-    case "record-delete": {
-      const parent = edit.target.slice(0, -1);
-      const field = String(edit.target[edit.target.length - 1]);
-      return mapMatchedNodes(doc, parent, (n) => {
-        const r = expectRecord(n, edit.kind);
-        return record(r.tag, deleteField(r.fields, field));
-      });
-    }
-
-    case "record-rename-field": {
-      const parent = edit.target.slice(0, -1);
-      const from = String(edit.target[edit.target.length - 1]);
-      const renamed = mapMatchedNodes(doc, parent, (n) => {
-        const r = expectRecord(n, edit.kind);
-        return record(r.tag, renameField(r.fields, from, edit.to));
-      });
-      return mapReferences(renamed, (abs) =>
-        transformSelectorForRename(edit.target, edit.to, abs),
-      );
-    }
-
-    case "list-push-back":
-      return mapMatchedNodes(doc, edit.target, (n) => {
-        const l = expectList(n, edit.kind);
-        return list(l.tag, [...l.items, edit.node]);
-      });
-
-    case "list-push-front":
-      return mapMatchedNodes(doc, edit.target, (n) => {
-        const l = expectList(n, edit.kind);
-        return list(l.tag, [edit.node, ...l.items]);
-      });
-
-    case "list-pop-back":
-      return mapMatchedNodes(doc, edit.target, (n) => {
-        const l = expectList(n, edit.kind);
-        if (l.items.length === 0) throw new Error("list-pop-back: list is empty");
-        return list(l.tag, l.items.slice(0, -1));
-      });
-
-    case "list-pop-front":
-      return mapMatchedNodes(doc, edit.target, (n) => {
-        const l = expectList(n, edit.kind);
-        if (l.items.length === 0) throw new Error("list-pop-front: list is empty");
-        return list(l.tag, l.items.slice(1));
-      });
-
-    case "update-tag":
-      return mapMatchedNodes(doc, edit.target, (n) => {
-        if (n.kind === "record") {
-          return { kind: "record", tag: edit.tag, fields: n.fields };
-        }
-        if (n.kind === "list") {
-          return { kind: "list", tag: edit.tag, items: n.items };
-        }
-        throw new Error(
-          `update-tag: expected record or list, found '${n.kind}'`,
-        );
-      });
-
-    case "wrap-record": {
-      const wrapped = mapMatchedNodes(doc, edit.target, (n) =>
-        record(edit.tag, { [edit.field]: n }),
-      );
-      return mapReferences(wrapped, (abs) =>
-        transformSelectorForRecordWrap(edit.field, edit.target, abs),
-      );
-    }
-
-    case "wrap-list": {
-      const wrapped = mapMatchedNodes(doc, edit.target, (n) =>
-        list(edit.tag, [n]),
-      );
-      return mapReferences(wrapped, (abs) =>
-        transformSelectorForListWrap(edit.target, abs),
-      );
-    }
-
-    case "copy": {
-      const sourceNodes = navigateAndCollect(doc, edit.source, 0);
-      const targetNodes = navigateAndTrace(doc, edit.target, 0);
-      if (sourceNodes.length === 0) {
-        throw new Error(
-          `copy: no nodes match source selector '${
-            formatSelector(edit.source)
-          }'`,
-        );
-      }
-      if (targetNodes.length === 0) {
-        throw new Error(
-          `copy: no nodes match target selector '${
-            formatSelector(edit.target)
-          }'`,
-        );
-      }
-
-      let result = doc;
-      if (sourceNodes.length === targetNodes.length) {
-        for (let i = 0; i < sourceNodes.length; i++) {
-          const replacementNode = sourceNodes[i] as Node;
-          const { node } = navigateAndTransform(result, (targetNodes[i] as TracedNode).path, 0, () => replacementNode);
-          result = node;
-        }
-      } else if (
-        targetNodes.length === 1 &&
-        targetNodes[0]?.node.kind === "list"
-      ) {
-        const newList = list(targetNodes[0]?.node.tag, sourceNodes);
-        const { node } = navigateAndTransform(result, targetNodes[0]?.path, 0, () => newList);
-        result = node;
-      } else {
-        throw new Error(
-          `copy: source/target arity mismatch (source=${sourceNodes.length}, target=${targetNodes.length}). Need equal counts or one list target.`,
-        );
+    if (seg === "*" && this instanceof ListNode) {
+      const result: Node[] = [];
+      for (const item of this.items) {
+        result.push(...item.navigate(target, depth + 1));
       }
       return result;
     }
-  }
-};
-
-// ── Event graph internals ───────────────────────────────────────────
-
-const formatEventKey = (id: EventId): string => `${id.peer}:${id.seq}`;
-
-const compareByStableOrder = (a: EventId, b: EventId): number => {
-  if (a.peer < b.peer) return -1;
-  if (a.peer > b.peer) return 1;
-  return a.seq - b.seq;
-};
-
-
-
-const areEventsEqual = (a: Event, b: Event): boolean => {
-  if (a === b) return true;
-  if (a.id.peer !== b.id.peer || a.id.seq !== b.id.seq) return false;
-  if (a.parents.length !== b.parents.length) return false;
-  for (let i = 0; i < a.parents.length; i++) {
-    const ap = a.parents[i]!, bp = b.parents[i]!;
-    if (ap.peer !== bp.peer || ap.seq !== bp.seq) return false;
-  }
-  const aKeys = Object.keys(a.clock);
-  if (aKeys.length !== Object.keys(b.clock).length) return false;
-  for (const k of aKeys) {
-    if (a.clock[k] !== b.clock[k]) return false;
-  }
-  return areEditsEqual(a.edit, b.edit);
-};
-
-const areSelectorsEqual = (a: Selector, b: Selector): boolean =>
-  a.length === b.length && a.every((seg, i) => seg === b[i]);
-
-const areNodesEqual = (a: Node, b: Node): boolean => {
-  if (a.kind !== b.kind) return false;
-  switch (a.kind) {
-    case "primitive":
-      return a.value === (b as typeof a).value;
-    case "reference":
-      return areSelectorsEqual(a.selector, (b as typeof a).selector);
-    case "record": {
-      const br = b as typeof a;
-      if (a.tag !== br.tag) return false;
-      const aKeys = Object.keys(a.fields);
-      if (aKeys.length !== Object.keys(br.fields).length) return false;
-      return aKeys.every((k) => k in br.fields && areNodesEqual(a.fields[k]!, br.fields[k]!));
+    if (typeof seg === "string" && this instanceof RecordNode && seg in this.fields) {
+      return this.fields[seg]!.navigate(target, depth + 1);
     }
-    case "list": {
-      const bl = b as typeof a;
-      if (a.tag !== bl.tag || a.items.length !== bl.items.length) return false;
-      return a.items.every((item, i) => areNodesEqual(item, bl.items[i]!));
+    if (typeof seg === "number" && this instanceof ListNode && seg >= 0 && seg < this.items.length) {
+      return this.items[seg]!.navigate(target, depth + 1);
     }
+    return [];
   }
-};
 
-const areEditsEqual = (a: Edit, b: Edit): boolean => {
-  if (a.kind !== b.kind) return false;
-  if (!areSelectorsEqual(a.target, b.target)) return false;
-  switch (a.kind) {
-    case "set-value":
-      return a.value === (b as typeof a).value;
-    case "record-add":
-    case "list-push-back":
-    case "list-push-front":
-      return areNodesEqual(a.node, (b as typeof a).node);
-    case "record-delete":
-    case "list-pop-back":
-    case "list-pop-front":
-      return true;
-    case "update-tag":
-      return a.tag === (b as typeof a).tag;
-    case "record-rename-field":
-      return a.to === (b as typeof a).to;
-    case "copy":
-      return areSelectorsEqual(a.source, (b as typeof a).source);
-    case "wrap-record":
-      return a.field === (b as typeof a).field && a.tag === (b as typeof a).tag;
-    case "wrap-list":
-      return a.tag === (b as typeof a).tag;
-  }
-};
+  /** Follows selector segments to collect matched nodes with their concrete paths. */
+  navigateWithPaths(target: Selector, depth = 0, path: SelectorSegment[] = []): { path: Selector; node: Node }[] {
+    if (depth === target.length) return [{ path: new Selector([...path]), node: this }];
+    const seg = target.segments[depth]!;
 
-const validateEvent = (known: Record<string, Event>, event: Event): Event => {
-  const key = formatEventKey(event.id);
-  if (!Number.isInteger(event.id.seq) || event.id.seq < 0) {
-    throw new Error(`Invalid seq for '${key}'.`);
+    if (seg === "*" && this instanceof ListNode) {
+      const result: { path: Selector; node: Node }[] = [];
+      for (let i = 0; i < this.items.length; i++) {
+        path.push(i);
+        result.push(...this.items[i]!.navigateWithPaths(target, depth + 1, path));
+        path.pop();
+      }
+      return result;
+    }
+    if (typeof seg === "string" && this instanceof RecordNode && seg in this.fields) {
+      path.push(seg);
+      const result = this.fields[seg]!.navigateWithPaths(target, depth + 1, path);
+      path.pop();
+      return result;
+    }
+    if (typeof seg === "number" && this instanceof ListNode && seg >= 0 && seg < this.items.length) {
+      path.push(seg);
+      const result = this.items[seg]!.navigateWithPaths(target, depth + 1, path);
+      path.pop();
+      return result;
+    }
+    return [];
   }
-  if (event.parents.some((p) => formatEventKey(p) === key)) {
-    throw new Error(`Event '${key}' is its own parent.`);
-  }
-  for (const p of event.parents) {
-    if (known[formatEventKey(p)] == null) {
-      throw new Error(`Unknown parent '${formatEventKey(p)}' for event '${key}'.`);
+
+  /** Walks every node in the tree, calling `visitor` with its path. */
+  forEach(visitor: (path: Selector, node: Node) => void, path: SelectorSegment[] = []): void {
+    visitor(new Selector([...path]), this);
+    if (this instanceof RecordNode) {
+      for (const k in this.fields) {
+        path.push(k);
+        this.fields[k]!.forEach(visitor, path);
+        path.pop();
+      }
+    } else if (this instanceof ListNode) {
+      for (let i = 0; i < this.items.length; i++) {
+        path.push(i);
+        this.items[i]!.forEach(visitor, path);
+        path.pop();
+      }
     }
   }
-  return event;
-};
 
-// ── Public API ──────────────────────────────────────────────────────
-
-// ── Concurrency detection ───────────────────────────────────────────
-
-const clockDominates = (a: VectorClock, b: VectorClock): boolean => Object.entries(b).every(([peer, seq]) => (a[peer] ?? -1) >= seq);
-
-const isConcurrent = (a: Event, b: Event): boolean => a !== b && !clockDominates(a.clock, b.clock) && !clockDominates(b.clock, a.clock);
-
-// ── Edit selector transforms ────────────────────────────────────────
-
-const transformSelector = (sel: Selector, priorEdit: Edit): Selector | null => {
-  switch (priorEdit.kind) {
-    case "record-rename-field": {
-      return transformSelectorForRename(priorEdit.target, priorEdit.to, sel);
-    }
-    case "wrap-record":
-      return transformSelectorForRecordWrap(priorEdit.field, priorEdit.target, sel);
-    case "wrap-list":
-      return transformSelectorForListWrap(priorEdit.target, sel);
-    case "record-delete": {
-      // target includes the field as last segment — drop edits traversing it
-      const m = matchPrefix(priorEdit.target, sel);
-      if (m != null) return null;
-      return sel;
-    }
-    case "list-push-front":
-      return shiftIndexSelector(priorEdit.target, 0, +1, sel);
-    case "list-pop-front": {
-      const m = matchPrefix(priorEdit.target, sel);
-      if (m != null && m.rest.length > 0 && m.rest[0] === 0) return null;
-      return shiftIndexSelector(priorEdit.target, 1, -1, sel);
-    }
-    case "list-pop-back":
-    case "list-push-back":
-      return sel;
-    default:
-      return sel;
+  /** Rewrites all reference nodes in the tree after a structural edit. Mutates in place. */
+  updateReferences(transform: (abs: Selector) => Selector): void {
+    this.forEach((basePath, current) => {
+      if (!(current instanceof ReferenceNode)) return;
+      const resolved = ReferenceNode.resolveReference(basePath, current.selector);
+      if (resolved === null) return;
+      const mappedBase = transform(basePath);
+      const mappedRef = transform(resolved);
+      if (current.selector.isAbsolute) {
+        current.selector = new Selector(["/", ...mappedRef.segments]);
+      } else {
+        current.selector = ReferenceNode.makeRelative(mappedBase, mappedRef);
+      }
+    });
   }
-};
 
-const transformEdit = (edit: Edit, priorEdit: Edit): Edit | null => {
-  if (edit.kind === "copy") {
-    const target = transformSelector(edit.target, priorEdit);
-    const source = transformSelector(edit.source, priorEdit);
-    if (target === null || source === null) return null;
-    return { ...edit, target, source };
+  format(): string {
+    return JSON.stringify(this.toPlain(), null, 2);
   }
-  const target = transformSelector(edit.target, priorEdit);
-  if (target === null) return null;
 
-  return { ...edit, target } as Edit;
-};
+  static fromPlain(plain: PlainNode): Node {
+    if (plain === null || typeof plain !== "object") return new PrimitiveNode(plain);
+    if ("$ref" in plain) return new ReferenceNode(Selector.parse((plain as PlainRef).$ref));
+    if ("$items" in plain && Array.isArray((plain as PlainList).$items)) {
+      const l = plain as PlainList;
+      return new ListNode(l.$tag, l.$items.map(Node.fromPlain));
+    }
+    const r = plain as PlainRecord;
+    const fields: Record<string, Node> = {};
+    for (const [k, v] of Object.entries(r)) {
+      if (k !== "$tag") fields[k] = Node.fromPlain(v as PlainNode);
+    }
+    return new RecordNode(r.$tag, fields);
+  }
+}
 
-const STRUCTURAL_EDITS: ReadonlySet<Edit["kind"]> = new Set([
-  "record-rename-field", "record-delete",
-  "wrap-record", "wrap-list",
-  "list-push-front", "list-push-back",
-  "list-pop-front", "list-pop-back",
-]);
+// Backward-compatible factory exports
+export const primitive = (value: PrimitiveValue): PrimitiveNode => new PrimitiveNode(value);
+export const record = (tag: string, fields: Record<string, Node>): RecordNode => new RecordNode(tag, fields);
 
-const isStructuralEdit = (edit: Edit): boolean =>
-  STRUCTURAL_EDITS.has(edit.kind);
+export class RecordNode extends Node {
+  readonly kind = "record";
+  tag: string;
+  fields: Record<string, Node>;
 
-const getEditSelectors = (edit: Edit): Selector[] =>
-  edit.kind === "copy" ? [edit.target, edit.source] : [edit.target];
+  constructor(tag: string, fields: Record<string, Node>) {
+    super();
+    this.tag = tag;
+    this.fields = fields;
+  }
 
-/** Checks whether an edit can be applied to the current document state. */
-const canApplyEdit = (doc: Node, edit: Edit): boolean => {
-  if (edit.kind === "copy") {
-    const sourceNodes = navigateAndCollect(doc, edit.source, 0);
-    const targetNodes = navigateAndCollect(doc, edit.target, 0);
+  addField(name: string, value: Node): void {
+    this.fields[name] = value;
+  }
+
+  deleteField(name: string): void {
+    const result: Record<string, Node> = {};
+    for (const k in this.fields) {
+      if (k !== name) result[k] = this.fields[k]!;
+    }
+    this.fields = result;
+  }
+
+  renameField(from: string, to: string): void {
+    if (from === to || !(from in this.fields)) return;
+    const result: Record<string, Node> = {};
+    for (const k in this.fields) {
+      if (k === from) result[to] = this.fields[k]!;
+      else if (k === to) continue;
+      else result[k] = this.fields[k]!;
+    }
+    this.fields = result;
+  }
+
+  updateTag(tag: string): void {
+    this.tag = tag;
+  }
+
+  clone(): RecordNode {
+    const fields: Record<string, Node> = {};
+    for (const k in this.fields) fields[k] = this.fields[k]!.clone();
+    return new RecordNode(this.tag, fields);
+  }
+
+  toPlain(): unknown {
+    const out: Record<string, unknown> = { $tag: this.tag };
+    for (const k in this.fields) out[k] = this.fields[k]!.toPlain();
+    return out;
+  }
+
+  equals(other: Node): boolean {
+    if (!(other instanceof RecordNode)) return false;
+    if (this.tag !== other.tag) return false;
+    const aKeys = Object.keys(this.fields);
+    if (aKeys.length !== Object.keys(other.fields).length) return false;
+    return aKeys.every((k) => k in other.fields && this.fields[k]!.equals(other.fields[k]!));
+  }
+}
+
+export class ListNode extends Node {
+  readonly kind = "list";
+  tag: string;
+  items: Node[];
+
+  constructor(tag: string, items: Node[]) {
+    super();
+    this.tag = tag;
+    this.items = items;
+  }
+
+  pushBack(node: Node): void {
+    this.items.push(node);
+  }
+
+  pushFront(node: Node): void {
+    this.items.unshift(node);
+  }
+
+  popBack(): Node {
+    if (this.items.length === 0) throw new Error("list-pop-back: list is empty");
+    return this.items.pop()!;
+  }
+
+  popFront(): Node {
+    if (this.items.length === 0) throw new Error("list-pop-front: list is empty");
+    return this.items.shift()!;
+  }
+
+  updateTag(tag: string): void {
+    this.tag = tag;
+  }
+
+  clone(): ListNode {
+    return new ListNode(this.tag, this.items.map((item) => item.clone()));
+  }
+
+  toPlain(): unknown {
+    return { $tag: this.tag, $items: this.items.map((item) => item.toPlain()) };
+  }
+
+  equals(other: Node): boolean {
+    if (!(other instanceof ListNode)) return false;
+    if (this.tag !== other.tag || this.items.length !== other.items.length) return false;
+    return this.items.every((item, i) => item.equals(other.items[i]!));
+  }
+}
+
+export class PrimitiveNode extends Node {
+  readonly kind = "primitive";
+  value: PrimitiveValue;
+
+  constructor(value: PrimitiveValue) {
+    super();
+    this.value = value;
+  }
+
+  setValue(value: PrimitiveValue): void {
+    this.value = value;
+  }
+
+  clone(): PrimitiveNode {
+    return new PrimitiveNode(this.value);
+  }
+
+  toPlain(): PrimitiveValue {
+    return this.value;
+  }
+
+  equals(other: Node): boolean {
+    return other instanceof PrimitiveNode && this.value === other.value;
+  }
+}
+
+export class ReferenceNode extends Node {
+  readonly kind = "reference";
+  selector: Selector;
+
+  constructor(selector: Selector) {
+    super();
+    this.selector = selector;
+  }
+
+  setSelector(sel: Selector): void {
+    this.selector = sel;
+  }
+
+  clone(): ReferenceNode {
+    return new ReferenceNode(new Selector([...this.selector.segments]));
+  }
+
+  toPlain(): string {
+    return this.selector.format();
+  }
+
+  equals(other: Node): boolean {
+    return other instanceof ReferenceNode && this.selector.equals(other.selector);
+  }
+
+  /** Resolves a (possibly relative) reference to an absolute path. */
+  static resolveReference(basePath: Selector, refSel: Selector): Selector | null {
+    const combined = refSel.isAbsolute
+      ? refSel.segments.slice(1)
+      : [...basePath.segments, ...refSel.segments];
+    const stack: SelectorSegment[] = [];
+    for (const seg of combined) {
+      if (seg === "..") {
+        if (stack.length === 0) return null;
+        stack.pop();
+      } else {
+        stack.push(seg);
+      }
+    }
+    return new Selector(stack);
+  }
+
+  /** Converts an absolute path into a relative selector from `basePath`. */
+  static makeRelative(basePath: Selector, absolutePath: Selector): Selector {
+    let common = 0;
+    while (common < basePath.length && common < absolutePath.length) {
+      const baseSeg = basePath.segments[common]!;
+      const absSeg = absolutePath.segments[common]!;
+      const compatible = baseSeg === absSeg ||
+        (baseSeg === "*" && typeof absSeg === "number") ||
+        (typeof baseSeg === "number" && absSeg === "*");
+      if (!compatible) break;
+      common++;
+    }
+    const ups: SelectorSegment[] = basePath.slice(common).segments.map(() => "..");
+    return new Selector([...ups, ...absolutePath.slice(common).segments]);
+  }
+}
+
+// ── Edit hierarchy (Command pattern) ────────────────────────────────
+
+/**
+ * A single edit operation on the document tree.
+ * Each subclass implements apply/canApply/transformSelector/equals.
+ */
+export abstract class Edit {
+  abstract readonly kind: string;
+  abstract readonly target: Selector;
+  abstract readonly isStructural: boolean;
+
+  /** Mutates `doc` in place to apply this edit. */
+  abstract apply(doc: Node): void;
+
+  /** Checks whether this edit can be applied to the current document state. */
+  abstract canApply(doc: Node): boolean;
+
+  /** Transforms another selector through the structural change made by this edit. */
+  abstract transformSelector(sel: Selector): Selector | null;
+
+  abstract equals(other: Edit): boolean;
+
+  /** Returns a copy of this edit with a different target. */
+  abstract withTarget(target: Selector): Edit;
+
+  get selectors(): Selector[] {
+    return [this.target];
+  }
+
+  /** Returns a transformed copy of this edit accounting for a prior concurrent structural edit. */
+  transform(prior: Edit): Edit | null {
+    const t = prior.transformSelector(this.target);
+    return t ? this.withTarget(t) : null;
+  }
+
+  private navigateAndThrow(doc: Node, target: Selector): Node[] {
+    const nodes = doc.navigate(target);
+    if (nodes.length === 0) {
+      throw new Error(`No nodes match selector '${target.format()}'.`);
+    }
+    return nodes;
+  }
+
+  protected navigateOrThrow(doc: Node, target: Selector): Node[] {
+    return this.navigateAndThrow(doc, target);
+  }
+
+  protected expectRecord(n: Node): RecordNode {
+    if (!(n instanceof RecordNode)) throw new Error(`${this.kind}: expected record, found '${n.kind}'`);
+    return n;
+  }
+
+  protected expectList(n: Node): ListNode {
+    if (!(n instanceof ListNode)) throw new Error(`${this.kind}: expected list, found '${n.kind}'`);
+    return n;
+  }
+}
+
+export class SetValueEdit extends Edit {
+  readonly kind = "set-value";
+  readonly isStructural = false;
+
+  constructor(readonly target: Selector, readonly value: PrimitiveValue) { super(); }
+
+  apply(doc: Node): void {
+    for (const node of this.navigateOrThrow(doc, this.target)) {
+      (node as PrimitiveNode).value = this.value;
+    }
+  }
+
+  canApply(doc: Node): boolean {
+    return doc.navigate(this.target).length > 0;
+  }
+
+  transformSelector(sel: Selector): Selector | null { return sel; }
+
+  equals(other: Edit): boolean {
+    return other instanceof SetValueEdit && this.target.equals(other.target) && this.value === other.value;
+  }
+
+  withTarget(target: Selector): SetValueEdit { return new SetValueEdit(target, this.value); }
+}
+
+export class RecordAddEdit extends Edit {
+  readonly kind = "record-add";
+  readonly isStructural = false;
+
+  constructor(readonly target: Selector, readonly node: Node) { super(); }
+
+  apply(doc: Node): void {
+    const parentSel = this.target.parent;
+    const field = String(this.target.lastSegment);
+    for (const parent of this.navigateOrThrow(doc, parentSel)) {
+      this.expectRecord(parent).addField(field, this.node.clone());
+    }
+  }
+
+  canApply(doc: Node): boolean {
+    const parentSel = this.target.parent;
+    const nodes = doc.navigate(parentSel);
+    return nodes.length > 0 && nodes.every((n) => n instanceof RecordNode);
+  }
+
+  transformSelector(sel: Selector): Selector | null { return sel; }
+
+  equals(other: Edit): boolean {
+    return other instanceof RecordAddEdit && this.target.equals(other.target) && this.node.equals(other.node);
+  }
+
+  withTarget(target: Selector): RecordAddEdit { return new RecordAddEdit(target, this.node); }
+}
+
+export class RecordDeleteEdit extends Edit {
+  readonly kind = "record-delete";
+  readonly isStructural = true;
+
+  constructor(readonly target: Selector) { super(); }
+
+  apply(doc: Node): void {
+    const parentSel = this.target.parent;
+    const field = String(this.target.lastSegment);
+    for (const parent of this.navigateOrThrow(doc, parentSel)) {
+      this.expectRecord(parent).deleteField(field);
+    }
+  }
+
+  canApply(doc: Node): boolean {
+    const parentSel = this.target.parent;
+    const nodes = doc.navigate(parentSel);
+    return nodes.length > 0 && nodes.every((n) => n instanceof RecordNode);
+  }
+
+  transformSelector(sel: Selector): Selector | null {
+    const m = this.target.matchPrefix(sel);
+    if (m != null) return null;
+    return sel;
+  }
+
+  equals(other: Edit): boolean {
+    return other instanceof RecordDeleteEdit && this.target.equals(other.target);
+  }
+
+  withTarget(target: Selector): RecordDeleteEdit { return new RecordDeleteEdit(target); }
+}
+
+export class RecordRenameFieldEdit extends Edit {
+  readonly kind = "record-rename-field";
+  readonly isStructural = true;
+
+  constructor(readonly target: Selector, readonly to: string) { super(); }
+
+  apply(doc: Node): void {
+    const parentSel = this.target.parent;
+    const from = String(this.target.lastSegment);
+    for (const parent of this.navigateOrThrow(doc, parentSel)) {
+      this.expectRecord(parent).renameField(from, this.to);
+    }
+    doc.updateReferences((abs) => this.transformSelectorForRename(abs));
+  }
+
+  canApply(doc: Node): boolean {
+    const parentSel = this.target.parent;
+    const nodes = doc.navigate(parentSel);
+    return nodes.length > 0 && nodes.every((n) => n instanceof RecordNode);
+  }
+
+  private transformSelectorForRename(other: Selector): Selector {
+    const m = this.target.matchPrefix(other);
+    if (m == null) return other;
+    return new Selector([...m.specificPrefix.segments.slice(0, -1), this.to, ...m.rest.segments]);
+  }
+
+  transformSelector(sel: Selector): Selector | null {
+    return this.transformSelectorForRename(sel);
+  }
+
+  equals(other: Edit): boolean {
+    return other instanceof RecordRenameFieldEdit && this.target.equals(other.target) && this.to === other.to;
+  }
+
+  withTarget(target: Selector): RecordRenameFieldEdit { return new RecordRenameFieldEdit(target, this.to); }
+}
+
+export class ListPushBackEdit extends Edit {
+  readonly kind = "list-push-back";
+  readonly isStructural = true;
+
+  constructor(readonly target: Selector, readonly node: Node) { super(); }
+
+  apply(doc: Node): void {
+    for (const n of this.navigateOrThrow(doc, this.target)) {
+      this.expectList(n).pushBack(this.node.clone());
+    }
+  }
+
+  canApply(doc: Node): boolean {
+    const nodes = doc.navigate(this.target);
+    return nodes.length > 0 && nodes.every((n) => n instanceof ListNode);
+  }
+
+  transformSelector(sel: Selector): Selector | null { return sel; }
+
+  equals(other: Edit): boolean {
+    return other instanceof ListPushBackEdit && this.target.equals(other.target) && this.node.equals(other.node);
+  }
+
+  withTarget(target: Selector): ListPushBackEdit { return new ListPushBackEdit(target, this.node); }
+}
+
+export class ListPushFrontEdit extends Edit {
+  readonly kind = "list-push-front";
+  readonly isStructural = true;
+
+  constructor(readonly target: Selector, readonly node: Node) { super(); }
+
+  apply(doc: Node): void {
+    for (const n of this.navigateOrThrow(doc, this.target)) {
+      this.expectList(n).pushFront(this.node.clone());
+    }
+  }
+
+  canApply(doc: Node): boolean {
+    const nodes = doc.navigate(this.target);
+    return nodes.length > 0 && nodes.every((n) => n instanceof ListNode);
+  }
+
+  transformSelector(sel: Selector): Selector | null {
+    return shiftIndexSelector(this.target, 0, +1, sel);
+  }
+
+  equals(other: Edit): boolean {
+    return other instanceof ListPushFrontEdit && this.target.equals(other.target) && this.node.equals(other.node);
+  }
+
+  withTarget(target: Selector): ListPushFrontEdit { return new ListPushFrontEdit(target, this.node); }
+}
+
+export class ListPopBackEdit extends Edit {
+  readonly kind = "list-pop-back";
+  readonly isStructural = true;
+
+  constructor(readonly target: Selector) { super(); }
+
+  apply(doc: Node): void {
+    for (const n of this.navigateOrThrow(doc, this.target)) {
+      this.expectList(n).popBack();
+    }
+  }
+
+  canApply(doc: Node): boolean {
+    const nodes = doc.navigate(this.target);
+    return nodes.length > 0 && nodes.every((n) => n instanceof ListNode && n.items.length > 0);
+  }
+
+  transformSelector(sel: Selector): Selector | null { return sel; }
+
+  equals(other: Edit): boolean {
+    return other instanceof ListPopBackEdit && this.target.equals(other.target);
+  }
+
+  withTarget(target: Selector): ListPopBackEdit { return new ListPopBackEdit(target); }
+}
+
+export class ListPopFrontEdit extends Edit {
+  readonly kind = "list-pop-front";
+  readonly isStructural = true;
+
+  constructor(readonly target: Selector) { super(); }
+
+  apply(doc: Node): void {
+    for (const n of this.navigateOrThrow(doc, this.target)) {
+      this.expectList(n).popFront();
+    }
+  }
+
+  canApply(doc: Node): boolean {
+    const nodes = doc.navigate(this.target);
+    return nodes.length > 0 && nodes.every((n) => n instanceof ListNode && n.items.length > 0);
+  }
+
+  transformSelector(sel: Selector): Selector | null {
+    const m = this.target.matchPrefix(sel);
+    if (m != null && m.rest.length > 0 && m.rest.segments[0] === 0) return null;
+    return shiftIndexSelector(this.target, 1, -1, sel);
+  }
+
+  equals(other: Edit): boolean {
+    return other instanceof ListPopFrontEdit && this.target.equals(other.target);
+  }
+
+  withTarget(target: Selector): ListPopFrontEdit { return new ListPopFrontEdit(target); }
+}
+
+export class UpdateTagEdit extends Edit {
+  readonly kind = "update-tag";
+  readonly isStructural = false;
+
+  constructor(readonly target: Selector, readonly tag: string) { super(); }
+
+  apply(doc: Node): void {
+    for (const n of this.navigateOrThrow(doc, this.target)) {
+      if (n instanceof RecordNode) n.updateTag(this.tag);
+      else if (n instanceof ListNode) n.updateTag(this.tag);
+      else throw new Error(`update-tag: expected record or list, found '${n.kind}'`);
+    }
+  }
+
+  canApply(doc: Node): boolean {
+    const nodes = doc.navigate(this.target);
+    return nodes.length > 0 && nodes.every((n) => n instanceof RecordNode || n instanceof ListNode);
+  }
+
+  transformSelector(sel: Selector): Selector | null { return sel; }
+
+  equals(other: Edit): boolean {
+    return other instanceof UpdateTagEdit && this.target.equals(other.target) && this.tag === other.tag;
+  }
+
+  withTarget(target: Selector): UpdateTagEdit { return new UpdateTagEdit(target, this.tag); }
+}
+
+export class CopyEdit extends Edit {
+  readonly kind = "copy";
+  readonly isStructural = false;
+
+  constructor(readonly target: Selector, readonly source: Selector) { super(); }
+
+  override get selectors(): Selector[] { return [this.target, this.source]; }
+
+  apply(doc: Node): void {
+    const sourceNodes = doc.navigate(this.source);
+    const targetEntries = doc.navigateWithPaths(this.target);
+    if (sourceNodes.length === 0) {
+      throw new Error(`copy: no nodes match source selector '${this.source.format()}'`);
+    }
+    if (targetEntries.length === 0) {
+      throw new Error(`copy: no nodes match target selector '${this.target.format()}'`);
+    }
+
+    if (sourceNodes.length === targetEntries.length) {
+      for (let i = 0; i < sourceNodes.length; i++) {
+        const replacementNode = sourceNodes[i]!.clone();
+        const entry = targetEntries[i]!;
+        replaceNodeAtPath(doc, entry.path, replacementNode);
+      }
+    } else if (targetEntries.length === 1 && targetEntries[0]?.node instanceof ListNode) {
+      const listNode = targetEntries[0].node;
+      listNode.items = sourceNodes.map((n) => n.clone());
+      listNode.tag = listNode.tag;
+    } else {
+      throw new Error(
+        `copy: source/target arity mismatch (source=${sourceNodes.length}, target=${targetEntries.length}). Need equal counts or one list target.`,
+      );
+    }
+  }
+
+  canApply(doc: Node): boolean {
+    const sourceNodes = doc.navigate(this.source);
+    const targetNodes = doc.navigate(this.target);
     if (sourceNodes.length === 0 || targetNodes.length === 0) return false;
     if (sourceNodes.length !== targetNodes.length) {
-      if (targetNodes.length !== 1 || targetNodes[0]?.kind !== "list") return false;
+      if (targetNodes.length !== 1 || !(targetNodes[0] instanceof ListNode)) return false;
     }
     return true;
   }
 
-  const targets = getEditSelectors(edit);
-  for (const target of targets) {
-    const effective =
-      edit.kind === "record-add" ||
-      edit.kind === "record-delete" ||
-      edit.kind === "record-rename-field"
-        ? target.slice(0, -1)
-        : target;
-    const nodes = navigateAndCollect(doc, effective, 0);
-    if (nodes.length === 0) return false;
-    for (const node of nodes) {
-      switch (edit.kind) {
-        case "set-value":
-          break;
-        case "record-add":
-        case "record-delete":
-        case "record-rename-field":
-          if (node.kind !== "record") return false;
-          break;
-        case "list-push-back":
-        case "list-push-front":
-          if (node.kind !== "list") return false;
-          break;
-        case "list-pop-back":
-        case "list-pop-front":
-          if (node.kind !== "list" || node.items.length === 0) return false;
-          break;
-        case "update-tag":
-          if (node.kind !== "record" && node.kind !== "list") return false;
-          break;
+  transformSelector(sel: Selector): Selector | null { return sel; }
+
+  override transform(prior: Edit): Edit | null {
+    const t = prior.transformSelector(this.target);
+    const s = prior.transformSelector(this.source);
+    if (t === null || s === null) return null;
+    return new CopyEdit(t, s);
+  }
+
+  equals(other: Edit): boolean {
+    return other instanceof CopyEdit && this.target.equals(other.target) && this.source.equals(other.source);
+  }
+
+  withTarget(target: Selector): CopyEdit { return new CopyEdit(target, this.source); }
+}
+
+export class WrapRecordEdit extends Edit {
+  readonly kind = "wrap-record";
+  readonly isStructural = true;
+
+  constructor(readonly target: Selector, readonly field: string, readonly tag: string) { super(); }
+
+  apply(doc: Node): void {
+    applyWrap(doc, this.target, (child) => new RecordNode(this.tag, { [this.field]: child }));
+    doc.updateReferences((abs) => this.transformSelectorForRecordWrap(abs));
+  }
+
+  canApply(doc: Node): boolean {
+    return doc.navigate(this.target).length > 0;
+  }
+
+  private transformSelectorForRecordWrap(other: Selector): Selector {
+    const m = this.target.matchPrefix(other);
+    return m == null ? other : new Selector([...m.specificPrefix.segments, this.field, ...m.rest.segments]);
+  }
+
+  transformSelector(sel: Selector): Selector | null {
+    return this.transformSelectorForRecordWrap(sel);
+  }
+
+  equals(other: Edit): boolean {
+    return other instanceof WrapRecordEdit && this.target.equals(other.target) &&
+      this.field === other.field && this.tag === other.tag;
+  }
+
+  withTarget(target: Selector): WrapRecordEdit { return new WrapRecordEdit(target, this.field, this.tag); }
+}
+
+export class WrapListEdit extends Edit {
+  readonly kind = "wrap-list";
+  readonly isStructural = true;
+
+  constructor(readonly target: Selector, readonly tag: string) { super(); }
+
+  apply(doc: Node): void {
+    applyWrap(doc, this.target, (child) => new ListNode(this.tag, [child]));
+    doc.updateReferences((abs) => this.transformSelectorForListWrap(abs));
+  }
+
+  canApply(doc: Node): boolean {
+    return doc.navigate(this.target).length > 0;
+  }
+
+  private transformSelectorForListWrap(other: Selector): Selector {
+    const m = this.target.matchPrefix(other);
+    return m == null ? other : new Selector([...m.specificPrefix.segments, "*", ...m.rest.segments]);
+  }
+
+  transformSelector(sel: Selector): Selector | null {
+    return this.transformSelectorForListWrap(sel);
+  }
+
+  equals(other: Edit): boolean {
+    return other instanceof WrapListEdit && this.target.equals(other.target) && this.tag === other.tag;
+  }
+
+  withTarget(target: Selector): WrapListEdit { return new WrapListEdit(target, this.tag); }
+}
+
+// ── Edit helpers ────────────────────────────────────────────────────
+
+/** Shift numeric indices >= threshold by delta within a list targeted by listTarget. */
+function shiftIndexSelector(listTarget: Selector, threshold: number, delta: number, other: Selector): Selector | null {
+  const m = listTarget.matchPrefix(other);
+  if (m == null || m.rest.length === 0) return other;
+  const head = m.rest.segments[0]!;
+  const tail = m.rest.slice(1);
+  if (typeof head !== "number") return other;
+  const shifted = head + (head >= threshold ? delta : 0);
+  if (shifted < 0) return null;
+  return new Selector([...m.specificPrefix.segments, shifted, ...tail.segments]);
+}
+
+/** Replaces the node at a given concrete path within the doc tree. Mutates in place. */
+function replaceNodeAtPath(doc: Node, path: Selector, replacement: Node): void {
+  if (path.length === 0) return;
+  const parentSel = path.parent;
+  const lastSeg = path.lastSegment;
+  const parents = doc.navigate(parentSel);
+  for (const parent of parents) {
+    if (parent instanceof RecordNode && typeof lastSeg === "string") {
+      parent.fields[lastSeg] = replacement;
+    } else if (parent instanceof ListNode && typeof lastSeg === "number") {
+      parent.items[lastSeg] = replacement;
+    }
+  }
+}
+
+/** Applies a wrap operation by navigating to each target node's parent and replacing the child. */
+function applyWrap(doc: Node, target: Selector, wrapper: (child: Node) => Node): void {
+  // Handle root-level wrap
+  if (target.length === 0) {
+    throw new Error("Cannot wrap the root node.");
+  }
+
+  const parentSel = target.parent;
+  const lastSeg = target.lastSegment;
+
+  if (parentSel.length === 0) {
+    // Target is a direct child of root
+    if (lastSeg === "*" && doc instanceof ListNode) {
+      for (let i = 0; i < doc.items.length; i++) {
+        doc.items[i] = wrapper(doc.items[i]!);
+      }
+    } else if (typeof lastSeg === "string" && doc instanceof RecordNode && lastSeg in doc.fields) {
+      doc.fields[lastSeg] = wrapper(doc.fields[lastSeg]!);
+    } else if (typeof lastSeg === "number" && doc instanceof ListNode) {
+      doc.items[lastSeg] = wrapper(doc.items[lastSeg]!);
+    }
+    return;
+  }
+
+  const parents = doc.navigate(parentSel);
+  for (const parent of parents) {
+    if (lastSeg === "*" && parent instanceof ListNode) {
+      for (let i = 0; i < parent.items.length; i++) {
+        parent.items[i] = wrapper(parent.items[i]!);
+      }
+    } else if (typeof lastSeg === "string" && parent instanceof RecordNode && lastSeg in parent.fields) {
+      parent.fields[lastSeg] = wrapper(parent.fields[lastSeg]!);
+    } else if (typeof lastSeg === "number" && parent instanceof ListNode && lastSeg < parent.items.length) {
+      parent.items[lastSeg] = wrapper(parent.items[lastSeg]!);
+    }
+  }
+}
+
+// ── Event ───────────────────────────────────────────────────────────
+
+export class Event {
+  constructor(
+    readonly id: EventId,
+    readonly parents: EventId[],
+    readonly edit: Edit,
+    readonly clock: VectorClock,
+  ) {}
+
+  equals(other: Event): boolean {
+    if (!this.id.equals(other.id)) return false;
+    if (this.parents.length !== other.parents.length) return false;
+    for (let i = 0; i < this.parents.length; i++) {
+      if (!this.parents[i]!.equals(other.parents[i]!)) return false;
+    }
+    const aKeys = this.clock.clone();
+    const bKeys = other.clock.clone();
+    const aRec = aKeys.toRecord();
+    const bRec = bKeys.toRecord();
+    const aKeyList = Object.keys(aRec);
+    if (aKeyList.length !== Object.keys(bRec).length) return false;
+    for (const k of aKeyList) {
+      if (aRec[k] !== bRec[k]) return false;
+    }
+    return this.edit.equals(other.edit);
+  }
+
+  isConcurrentWith(other: Event): boolean {
+    return this !== other && !this.clock.dominates(other.clock) && !other.clock.dominates(this.clock);
+  }
+
+  validate(known: Map<string, Event>): void {
+    const key = this.id.format();
+    if (!Number.isInteger(this.id.seq) || this.id.seq < 0) {
+      throw new Error(`Invalid seq for '${key}'.`);
+    }
+    if (this.parents.some((p) => p.format() === key)) {
+      throw new Error(`Event '${key}' is its own parent.`);
+    }
+    for (const p of this.parents) {
+      if (!known.has(p.format())) {
+        throw new Error(`Unknown parent '${p.format()}' for event '${key}'.`);
       }
     }
   }
-  return true;
-};
 
-// ── Topological materialization ─────────────────────────────────────
-
-/**
- * Returns the set of all event keys reachable from `frontier` by walking parent links.
- *
- * Two uses:
- * - **Sync**: called with a remote peer's frontiers (strict=false) to determine which
- *   events they've already seen, so `eventsSince` can compute the diff.
- * - **Materialization**: called with a custom frontier to materialize the document at a
- *   historical point (a subset of the full graph). When called with the graph's own
- *   frontiers, the closure is the entire graph.
- *
- * If `strict` is true, throws on missing events; if false, silently skips them
- * (necessary for remote frontiers that may reference events not yet received).
- */
-const computeClosure = (events: Record<string, Event>, frontier: EventId[], strict = true): Set<string> => {
-  const closure = new Set<string>();
-  const stack = frontier.map(formatEventKey);
-  while (stack.length > 0) {
-    const key = stack.pop() as string;
-    if (closure.has(key)) continue;
-    const ev = events[key];
-    if (ev == null) {
-      if (strict) throw new Error(`Unknown version '${key}'.`);
-      continue;
-    }
-    closure.add(key);
-    for (const p of ev.parents) stack.push(formatEventKey(p));
-  }
-  return closure;
-};
-
-const computeTopologicalOrder = (events: Record<string, Event>, frontier: EventId[]): string[] => {
-  const closure = computeClosure(events, frontier);
-  const indegree: Record<string, number> = {};
-  const children: Record<string, string[]> = {};
-  for (const key of closure) {
-    indegree[key] = 0;
-    children[key] = [];
-  }
-  for (const key of closure) {
-    const ev = events[key] as Event;
-    for (const p of ev.parents) {
-      const pk = formatEventKey(p);
-      if (!closure.has(pk)) continue;
-      indegree[key] = (indegree[key] ?? 0) + 1;
-      children[pk]?.push(key);
-    }
-  }
-  // Sort concurrent events: more generic (wildcard) before more specific,
-  // then by event ID for stability.
-  // Returns negative when left should be processed before right.
-  const compareEvents = (leftKey: string, rightKey: string) => {
-    const leftEvent = events[leftKey] as Event, rightEvent = events[rightKey] as Event;
-    const leftTarget = leftEvent.edit.target, rightTarget = rightEvent.edit.target;
-    const minLength = Math.min(leftTarget.length, rightTarget.length);
-    for (let i = 0; i < minLength; i++) {
-      const leftIsAll = isAll(leftTarget[i] as SelectorSegment);
-      const rightIsAll = isAll(rightTarget[i] as SelectorSegment);
-      if (leftIsAll && !rightIsAll) return -1;
-      if (!leftIsAll && rightIsAll) return 1;
-    }
-    if (leftTarget.length !== rightTarget.length) return leftTarget.length - rightTarget.length;
-    return compareByStableOrder(leftEvent.id, rightEvent.id);
-  };
-
-  const queue = new BinaryHeap<string>(compareEvents);
-  for (const key of Object.keys(indegree)) {
-    if (indegree[key] === 0) queue.push(key);
-  }
-  const ordered: string[] = [];
-  while (queue.length > 0) {
-    const key = queue.pop()!;
-    ordered.push(key);
-    for (const ch of children[key] as string[]) {
-      indegree[ch] = (indegree[ch] ?? 0) - 1;
-      if (indegree[ch] === 0) {
-        queue.push(ch);
+  /** Transforms this event's edit against all concurrent prior structural edits. */
+  resolveAgainst(applied: { ev: Event; edit: Edit }[]): { edit: Edit | null; hasConcurrent: boolean } {
+    let edit: Edit | null = this.edit;
+    let hasConcurrent = false;
+    for (const prior of applied) {
+      if (this.clock.dominates(prior.ev.clock)) continue;
+      if (this.isConcurrentWith(prior.ev)) {
+        hasConcurrent = true;
+        if (edit !== null && prior.edit.isStructural) {
+          edit = edit.transform(prior.edit);
+        }
       }
     }
+    return { edit, hasConcurrent };
   }
-  if (ordered.length !== closure.size) {
-    throw new Error("Event graph contains a cycle.");
+}
+
+// ── EventGraph ──────────────────────────────────────────────────────
+
+export class EventGraph {
+  initial: Node;
+  events: Map<string, Event>;
+  frontierIds: EventId[];
+
+  constructor(initial: Node, events?: Map<string, Event>, frontiers?: EventId[]) {
+    this.initial = initial;
+    this.events = events ?? new Map();
+    this.frontierIds = frontiers ?? [];
   }
-  return ordered;
-};
 
-/**
- * Reconstructs the document by replaying events in deterministic topological order.
- * Concurrent structural edits (rename, wrap) automatically transform subsequent selectors.
- * Wildcard edits are deferred so they apply to concurrently inserted items.
- *
- * Complexity: O(n × c × p) where n = total events, c = max concurrent events per
- * sync round, p = peers. For typical usage where peers sync frequently, c << n.
- *
- * @param eventGraph - The event graph to materialize.
- * @param frontiers - Optional frontier to materialize up to (defaults to the graph's current frontiers).
- */
-/**
- * Transforms an edit against all concurrent prior structural edits.
- * Returns the transformed edit (or null if invalidated) and whether
- * any concurrent events were encountered.
- */
-const resolveEdit = (ev: Event, applied: { ev: Event; edit: Edit }[]): { edit: Edit | null; hasConcurrent: boolean } => {
-  let edit: Edit | null = ev.edit;
-  let hasConcurrent = false;
-  for (const prior of applied) {
-    if (clockDominates(ev.clock, prior.ev.clock)) continue;
-    if (isConcurrent(ev, prior.ev)) {
-      hasConcurrent = true;
-      if (edit !== null && isStructuralEdit(prior.edit)) {
-        edit = transformEdit(edit, prior.edit);
-      }
-    }
+  get frontiers(): EventId[] {
+    return this.frontierIds;
   }
-  return { edit, hasConcurrent };
-};
 
-export const materialize = (eventGraph: EventGraph, frontiers?: EventId[]): Node => {
-  const frontier = frontiers ?? eventGraph.frontiers;
-  const ordered = computeTopologicalOrder(eventGraph.events, frontier);
-
-  let doc = eventGraph.initial;
-  const applied: { ev: Event; edit: Edit }[] = [];
-  for (const key of ordered) {
-    const ev = eventGraph.events[key] as Event;
-    const { edit, hasConcurrent } = resolveEdit(ev, applied);
-    if (edit !== null) {
-      if (hasConcurrent && !canApplyEdit(doc, edit)) {
+  computeClosure(frontier: EventId[], strict = true): Set<string> {
+    const closure = new Set<string>();
+    const stack = frontier.map((id) => id.format());
+    while (stack.length > 0) {
+      const key = stack.pop() as string;
+      if (closure.has(key)) continue;
+      const ev = this.events.get(key);
+      if (ev == null) {
+        if (strict) throw new Error(`Unknown version '${key}'.`);
         continue;
       }
-      doc = applyEdit(doc, edit);
-      applied.push({ ev, edit });
+      closure.add(key);
+      for (const p of ev.parents) stack.push(p.format());
     }
+    return closure;
   }
-  return doc;
-};
 
-// ── Formatting ──────────────────────────────────────────────────────
-
-/** Converts a document node to a plain JS object for easy inspection. */
-export const nodeToPlainObject = (node: Node): unknown => {
-  switch (node.kind) {
-    case "primitive":
-      return node.value;
-    case "reference":
-      return formatSelector(node.selector);
-    case "record": {
-      const out: Record<string, unknown> = { $tag: node.tag };
-      for (const k in node.fields) out[k] = nodeToPlainObject(node.fields[k]!);
-      return out;
+  computeTopologicalOrder(frontier?: EventId[]): string[] {
+    const front = frontier ?? this.frontierIds;
+    const closure = this.computeClosure(front);
+    const indegree: Record<string, number> = {};
+    const children: Record<string, string[]> = {};
+    for (const key of closure) {
+      indegree[key] = 0;
+      children[key] = [];
     }
-    case "list":
-      return { $tag: node.tag, $items: node.items.map(nodeToPlainObject) };
+    for (const key of closure) {
+      const ev = this.events.get(key) as Event;
+      for (const p of ev.parents) {
+        const pk = p.format();
+        if (!closure.has(pk)) continue;
+        indegree[key] = (indegree[key] ?? 0) + 1;
+        children[pk]?.push(key);
+      }
+    }
+    const events = this.events;
+    const compareEvents = (leftKey: string, rightKey: string) => {
+      const leftEvent = events.get(leftKey) as Event, rightEvent = events.get(rightKey) as Event;
+      const leftTarget = leftEvent.edit.target, rightTarget = rightEvent.edit.target;
+      const minLength = Math.min(leftTarget.length, rightTarget.length);
+      for (let i = 0; i < minLength; i++) {
+        const leftIsAll = leftTarget.segments[i] === "*";
+        const rightIsAll = rightTarget.segments[i] === "*";
+        if (leftIsAll && !rightIsAll) return -1;
+        if (!leftIsAll && rightIsAll) return 1;
+      }
+      if (leftTarget.length !== rightTarget.length) return leftTarget.length - rightTarget.length;
+      return leftEvent.id.compareTo(rightEvent.id);
+    };
+    const queue = new BinaryHeap<string>(compareEvents);
+    for (const key of Object.keys(indegree)) {
+      if (indegree[key] === 0) queue.push(key);
+    }
+    const ordered: string[] = [];
+    while (queue.length > 0) {
+      const key = queue.pop()!;
+      ordered.push(key);
+      for (const ch of children[key] as string[]) {
+        indegree[ch] = (indegree[ch] ?? 0) - 1;
+        if (indegree[ch] === 0) queue.push(ch);
+      }
+    }
+    if (ordered.length !== closure.size) {
+      throw new Error("Event graph contains a cycle.");
+    }
+    return ordered;
   }
-};
 
-/** Serializes a document node to a pretty-printed JSON string. */
-export const formatNode = (node: Node): string =>
-  JSON.stringify(nodeToPlainObject(node), null, 2);
+  materialize(frontier?: EventId[]): Node {
+    const ordered = this.computeTopologicalOrder(frontier);
+    const doc = this.initial.clone();
+    const applied: { ev: Event; edit: Edit }[] = [];
+    for (const key of ordered) {
+      const ev = this.events.get(key) as Event;
+      const { edit, hasConcurrent } = ev.resolveAgainst(applied);
+      if (edit !== null) {
+        if (hasConcurrent && !edit.canApply(doc)) continue;
+        edit.apply(doc);
+        applied.push({ ev, edit });
+      }
+    }
+    return doc;
+  }
+}
 
-// ── OO wrapper ──────────────────────────────────────────────────────
+// Backward-compatible standalone materialize
+export function materialize(graphLike: { initial: Node; events: Record<string, Event> | Map<string, Event>; frontiers: EventId[] }, frontiers?: EventId[]): Node {
+  let eventsMap: Map<string, Event>;
+  if (graphLike.events instanceof Map) {
+    eventsMap = graphLike.events;
+  } else {
+    eventsMap = new Map(Object.entries(graphLike.events));
+  }
+  const graph = new EventGraph(graphLike.initial, eventsMap, graphLike.frontiers);
+  return graph.materialize(frontiers);
+}
+
+// ── Denicek (collaborative document peer) ───────────────────────────
 
 /**
  * A collaborative document scoped to a single peer.
@@ -1043,55 +1186,60 @@ export const formatNode = (node: Node): string =>
 export class Denicek {
   readonly peer: string;
   private initialDoc: Node;
-  private events: Record<string, Event> = {};
-  private currentFrontiers: EventId[] = [];
+  private graph: EventGraph;
   private pendingEvents: Event[] = [];
   private bufferedEvents: Event[] = [];
   private cachedDoc: Node | null = null;
 
   constructor(peer: string, initial?: PlainNode);
-  constructor(peer: string, graph: EventGraph);
-  constructor(peer: string, arg?: PlainNode | EventGraph) {
+  constructor(peer: string, graph: { initial: Node; events: Record<string, Event>; frontiers: EventId[] });
+  constructor(peer: string, arg?: PlainNode | { initial: Node; events: Record<string, Event>; frontiers: EventId[] }) {
     this.peer = peer;
-    if (arg && typeof arg === "object" && "events" in arg) {
-      const g = arg as EventGraph;
+    if (arg && typeof arg === "object" && arg !== null && "events" in arg) {
+      const g = arg as { initial: Node; events: Record<string, Event>; frontiers: EventId[] };
       this.initialDoc = g.initial;
-      this.events = g.events;
-      this.currentFrontiers = g.frontiers;
+      const eventsMap = new Map<string, Event>(Object.entries(g.events));
+      this.graph = new EventGraph(g.initial, eventsMap, g.frontiers);
     } else {
-      this.initialDoc = plainObjectToNode((arg as PlainNode) ?? { $tag: "root" });
+      this.initialDoc = Node.fromPlain((arg as PlainNode) ?? { $tag: "root" });
+      this.graph = new EventGraph(this.initialDoc);
     }
   }
 
   private updateFrontiers(event: Event): void {
-    const parentKeys = new Set(event.parents.map(formatEventKey));
-    this.currentFrontiers = [
-      ...this.currentFrontiers.filter((h) => !parentKeys.has(formatEventKey(h))),
+    const parentKeys = new Set(event.parents.map((p) => p.format()));
+    this.graph.frontierIds = [
+      ...this.graph.frontierIds.filter((h) => !parentKeys.has(h.format())),
       event.id,
-    ].sort(compareByStableOrder);
+    ].sort((a, b) => a.compareTo(b));
   }
 
   private insertEvent(event: Event): void {
-    const validated = validateEvent(this.events, event);
-    this.events[formatEventKey(validated.id)] = validated;
-    this.updateFrontiers(validated);
+    event.validate(this.graph.events);
+    this.graph.events.set(event.id.format(), event);
+    this.updateFrontiers(event);
   }
 
   private commit(edit: Edit): void {
     const doc = this.cachedDoc ?? this.rematerialize();
-    const newDoc = applyEdit(doc, edit);
-    const parents = [...this.currentFrontiers];
-    const clock: VectorClock = {};
-    for (const p of parents) {
-      for (const [k, v] of Object.entries(this.events[formatEventKey(p)]?.clock ?? {})) {
-        clock[k] = Math.max(clock[k] ?? -1, v);
-      }
+    try {
+      edit.apply(doc);
+    } catch (e) {
+      // Edit may have partially mutated doc — invalidate cache
+      this.cachedDoc = null;
+      throw e;
     }
-    clock[this.peer] = (clock[this.peer] ?? -1) + 1;
-    const event: Event = { id: { peer: this.peer, seq: clock[this.peer] }, parents, edit, clock };
+    const parents = [...this.graph.frontierIds];
+    const clock = new VectorClock();
+    for (const p of parents) {
+      const parentEvent = this.graph.events.get(p.format());
+      if (parentEvent) clock.merge(parentEvent.clock);
+    }
+    const seq = clock.tick(this.peer);
+    const event = new Event(new EventId(this.peer, seq), parents, edit, clock);
     this.insertEvent(event);
     this.pendingEvents.push(event);
-    this.cachedDoc = newDoc;
+    this.cachedDoc = doc;
   }
 
   /** Returns and clears events produced by local edits since the last drain. */
@@ -1101,20 +1249,16 @@ export class Denicek {
     return events;
   }
 
-  /** Returns the current frontier (tip event IDs). Exchange with another peer
-   *  to compute which events need to be sent via {@link eventsSince}. */
+  /** Returns the current frontier (tip event IDs). */
   get frontiers(): EventId[] {
-    return [...this.currentFrontiers];
+    return [...this.graph.frontierIds];
   }
 
-  /** Returns all events that the holder of `remoteFrontiers` hasn't seen.
-   *  Idempotent — safe to call repeatedly or after network failures.
-   *  Events are returned in arbitrary order; the consumer must handle
-   *  out-of-order delivery (e.g. via {@link applyRemote}'s buffering). */
+  /** Returns all events that the holder of `remoteFrontiers` hasn't seen. */
   eventsSince(remoteFrontiers: EventId[]): Event[] {
-    const remoteKnown = computeClosure(this.events, remoteFrontiers, false);
-    return Object.values(this.events).filter(
-      (ev) => !remoteKnown.has(formatEventKey(ev.id)),
+    const remoteKnown = this.graph.computeClosure(remoteFrontiers, false);
+    return [...this.graph.events.values()].filter(
+      (ev) => !remoteKnown.has(ev.id.format()),
     );
   }
 
@@ -1128,10 +1272,10 @@ export class Denicek {
   private flushBuffered(): void {
     const pending = new Map<string, Event>();
     for (const event of this.bufferedEvents) {
-      const key = formatEventKey(event.id);
-      const existing = this.events[key];
+      const key = event.id.format();
+      const existing = this.graph.events.get(key);
       if (existing != null) {
-        if (!areEventsEqual(existing, event)) {
+        if (!existing.equals(event)) {
           throw new Error(`Conflicting payload for event '${key}'.`);
         }
         continue;
@@ -1150,8 +1294,8 @@ export class Denicek {
     for (const [key, event] of pending) {
       let count = 0;
       for (const p of event.parents) {
-        const pk = formatEventKey(p);
-        if (this.events[pk] == null) {
+        const pk = p.format();
+        if (!this.graph.events.has(pk)) {
           count++;
           let deps = dependents.get(pk);
           if (deps == null) {
@@ -1193,53 +1337,53 @@ export class Denicek {
 
   add(target: string, field: string, value: PlainNode): void {
     const path = target === "" ? field : `${target}/${field}`;
-    this.commit({ kind: "record-add", target: parseSelector(path), node: plainObjectToNode(value) });
+    this.commit(new RecordAddEdit(Selector.parse(path), Node.fromPlain(value)));
   }
 
   delete(target: string, field: string): void {
     const path = target === "" ? field : `${target}/${field}`;
-    this.commit({ kind: "record-delete", target: parseSelector(path) });
+    this.commit(new RecordDeleteEdit(Selector.parse(path)));
   }
 
   rename(target: string, from: string, to: string): void {
     const path = target === "" ? from : `${target}/${from}`;
-    this.commit({ kind: "record-rename-field", target: parseSelector(path), to });
+    this.commit(new RecordRenameFieldEdit(Selector.parse(path), to));
   }
 
   set(target: string, value: PrimitiveValue): void {
-    this.commit({ kind: "set-value", target: parseSelector(target), value });
+    this.commit(new SetValueEdit(Selector.parse(target), value));
   }
 
   pushBack(target: string, value: PlainNode): void {
-    this.commit({ kind: "list-push-back", target: parseSelector(target), node: plainObjectToNode(value) });
+    this.commit(new ListPushBackEdit(Selector.parse(target), Node.fromPlain(value)));
   }
 
   pushFront(target: string, value: PlainNode): void {
-    this.commit({ kind: "list-push-front", target: parseSelector(target), node: plainObjectToNode(value) });
+    this.commit(new ListPushFrontEdit(Selector.parse(target), Node.fromPlain(value)));
   }
 
   popBack(target: string): void {
-    this.commit({ kind: "list-pop-back", target: parseSelector(target) });
+    this.commit(new ListPopBackEdit(Selector.parse(target)));
   }
 
   popFront(target: string): void {
-    this.commit({ kind: "list-pop-front", target: parseSelector(target) });
+    this.commit(new ListPopFrontEdit(Selector.parse(target)));
   }
 
   updateTag(target: string, tag: string): void {
-    this.commit({ kind: "update-tag", target: parseSelector(target), tag });
+    this.commit(new UpdateTagEdit(Selector.parse(target), tag));
   }
 
   wrapRecord(target: string, field: string, tag: string): void {
-    this.commit({ kind: "wrap-record", target: parseSelector(target), field, tag });
+    this.commit(new WrapRecordEdit(Selector.parse(target), field, tag));
   }
 
   wrapList(target: string, tag: string): void {
-    this.commit({ kind: "wrap-list", target: parseSelector(target), tag });
+    this.commit(new WrapListEdit(Selector.parse(target), tag));
   }
 
   copy(target: string, source: string): void {
-    this.commit({ kind: "copy", target: parseSelector(target), source: parseSelector(source) });
+    this.commit(new CopyEdit(Selector.parse(target), Selector.parse(source)));
   }
 
   materialize(): Node {
@@ -1250,10 +1394,10 @@ export class Denicek {
   }
 
   private rematerialize(): Node {
-    return materialize({ initial: this.initialDoc, events: this.events, frontiers: this.currentFrontiers });
+    return this.graph.materialize();
   }
 
   toPlain(): unknown {
-    return nodeToPlainObject(this.materialize());
+    return this.materialize().toPlain();
   }
 }
