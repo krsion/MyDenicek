@@ -1,3 +1,5 @@
+import { BinaryHeap } from "@std/data-structures/binary-heap";
+
 // ── Primitives & selectors ──────────────────────────────────────────
 
 /** Scalar values that can appear as leaf nodes in the document tree. */
@@ -12,8 +14,6 @@ export type SelectorSegment = string | number;
 
 /** An ordered path of segments addressing a node (or set of nodes) in the document tree. */
 export type Selector = SelectorSegment[];
-
-
 
 const isAll = (s: SelectorSegment): boolean => s === "*";
 const isUp = (s: SelectorSegment): boolean => s === "..";
@@ -41,46 +41,18 @@ export type Node =
  * Structural edits automatically update all references affected by the change.
  */
 export type Edit =
-  | { kind: "primitive-edit"; target: Selector; op: string; args?: string }
-  | { kind: "record-add"; target: Selector; field: string; node: Node }
-  | {
-    kind: "record-delete";
-    target: Selector;
-    field: string;
-  }
+  | { kind: "set-value"; target: Selector; value: PrimitiveValue }
+  | { kind: "record-add"; target: Selector; node: Node }
+  | { kind: "record-delete"; target: Selector }
   | { kind: "list-push-back"; target: Selector; node: Node }
   | { kind: "list-push-front"; target: Selector; node: Node }
   | { kind: "list-pop-back"; target: Selector }
   | { kind: "list-pop-front"; target: Selector }
   | { kind: "update-tag"; target: Selector; tag: string }
-  | {
-    kind: "record-rename-field";
-    target: Selector;
-    from: string;
-    to: string;
-  }
+  | { kind: "record-rename-field"; target: Selector; to: string }
   | { kind: "copy"; target: Selector; source: Selector }
-  | {
-    kind: "wrap-record";
-    target: Selector;
-    field: string;
-    tag: string;
-  }
-  | {
-    kind: "wrap-list";
-    target: Selector;
-    tag: string;
-  };
-
-/** Replaces internal `Selector` fields with user-facing string paths. */
-type WithStringPaths<T> = T extends { target: Selector; source: Selector }
-  ? Omit<T, "target" | "source"> & { target: string; source: string }
-  : T extends { target: Selector }
-  ? Omit<T, "target"> & { target: string }
-  : T;
-
-/** User-facing edit description using string paths (e.g. `"person/name"`) instead of parsed selectors. */
-export type EditInput = WithStringPaths<Edit>;
+  | { kind: "wrap-record"; target: Selector; field: string; tag: string;}
+  | { kind: "wrap-list"; target: Selector; tag: string; };
 
 // ── Event graph ─────────────────────────────────────────────────────
 
@@ -90,11 +62,15 @@ export interface EventId {
   seq: number;
 }
 
+/** Vector clock mapping peer → latest seq seen. */
+export type VectorClock = Record<string, number>;
+
 /** An immutable edit event in the causal DAG, with parent links for ordering. */
 export interface Event {
   id: EventId;
   parents: EventId[];
   edit: Edit;
+  clock: VectorClock;
 }
 
 /**
@@ -184,41 +160,34 @@ export const plainObjectToNode = (plain: PlainNode): Node => {
     return list(l.$tag, l.$items.map(plainObjectToNode));
   }
   const r = plain as PlainRecord;
-  const fields: Record<string, Node> = {};
-  for (const [k, v] of Object.entries(r)) {
-    if (k === "$tag") continue;
-    fields[k] = plainObjectToNode(v as PlainNode);
-  }
+  const fields = Object.fromEntries(
+    Object.entries(r)
+      .filter(([k]) => k !== "$tag")
+      .map(([k, v]) => [k, plainObjectToNode(v as PlainNode)]),
+  );
   return record(r.$tag, fields);
 };
 
 // ── Selector matching ───────────────────────────────────────────────
 
 const segmentsCompatible = (a: SelectorSegment, b: SelectorSegment): boolean =>
-  a === b ||
-  (isAll(a) && typeof b === "number") ||
-  (typeof a === "number" && isAll(b));
+  a === b || (isAll(a) && typeof b === "number") || (typeof a === "number" && isAll(b));
 
-const selectorsMatch = (path: Selector, target: Selector): boolean => {
-  if (path.length !== target.length) return false;
-  for (let i = 0; i < path.length; i++) {
-    if (
-      !segmentsCompatible(
-        path[i] as SelectorSegment,
-        target[i] as SelectorSegment,
-      )
-    ) {
-      return false;
-    }
-  }
-  return true;
-};
+const selectorsMatch = (path: Selector, target: Selector): boolean =>
+  path.length === target.length &&
+  path.every((seg, i) => segmentsCompatible(seg, target[i] as SelectorSegment));
 
+/**
+ * Result of matching a prefix selector against a full selector via {@link matchPrefix}.
+ * - `specificPrefix` — the matched prefix with wildcards resolved to concrete indices
+ *    (e.g. prefix `["items","*"]` matched against `["items",2,"name"]` yields `["items",2]`)
+ * - `rest` — the unmatched tail segments (e.g. `["name"]`)
+ */
 type PrefixMatch = { specificPrefix: Selector; rest: Selector };
 
 // Wildcard in prefix matches concrete index in full (but not vice versa),
 // so structural edit targets with "*" can transform concrete selectors.
-const removePrefix = (prefix: Selector, full: Selector): PrefixMatch | null => {
+const matchPrefix = (prefix: Selector, full: Selector): PrefixMatch | null => {
   if (prefix.length > full.length) return null;
   const specificPrefix: SelectorSegment[] = [];
   for (let i = 0; i < prefix.length; i++) {
@@ -237,19 +206,40 @@ const removePrefix = (prefix: Selector, full: Selector): PrefixMatch | null => {
 
 // ── Node utilities ──────────────────────────────────────────────────
 
-const walkAndReplace = (
-  node: Node,
-  visitor: (path: Selector, current: Node) => Node | undefined,
-  path: Selector = [],
-): Node => {
-  const direct = visitor(path, node);
-  if (direct !== undefined) return direct;
+/** Walks every node in the tree, calling `visitor` with its path. */
+const forEachNode = (node: Node, visitor: (path: Selector, current: Node) => void, path: SelectorSegment[] = []): void => {
+  visitor(path, node);
+  if (node.kind === "record") {
+    for (const [k, v] of Object.entries(node.fields)) {
+      path.push(k);
+      forEachNode(v, visitor, path);
+      path.pop();
+    }
+  } else if (node.kind === "list") {
+    for (let i = 0; i < node.items.length; i++) {
+      path.push(i);
+      forEachNode(node.items[i]!, visitor, path);
+      path.pop();
+    }
+  }
+};
+
+/**
+ * Maps over the tree, optionally replacing nodes.
+ * If `visitor` returns a Node, that replaces the current node (children are not visited).
+ * If `visitor` returns undefined, the node is kept and children are visited recursively.
+ */
+const mapTree = (node: Node, visitor: (path: Selector, current: Node) => Node | undefined, path: SelectorSegment[] = []): Node => {
+  const replacement = visitor(path, node);
+  if (replacement !== undefined) return replacement;
 
   if (node.kind === "record") {
     let changed = false;
     const fields: Record<string, Node> = {};
     for (const [k, v] of Object.entries(node.fields)) {
-      const next = walkAndReplace(v, visitor, [...path, k]);
+      path.push(k);
+      const next = mapTree(v, visitor, path);
+      path.pop();
       changed ||= next !== v;
       fields[k] = next;
     }
@@ -259,7 +249,9 @@ const walkAndReplace = (
   if (node.kind === "list") {
     let changed = false;
     const items = node.items.map((item, i) => {
-      const next = walkAndReplace(item, visitor, [...path, i]);
+      path.push(i);
+      const next = mapTree(item, visitor, path);
+      path.pop();
       changed ||= next !== item;
       return next;
     });
@@ -269,50 +261,27 @@ const walkAndReplace = (
   return node;
 };
 
-const walkDocument = (
-  node: Node,
-  visitor: (path: Selector, current: Node) => void,
-  path: Selector = [],
-): void => {
-  visitor(path, node);
-  if (node.kind === "record") {
-    for (const [k, v] of Object.entries(node.fields)) {
-      walkDocument(v, visitor, [...path, k]);
-    }
-  } else if (node.kind === "list") {
-    for (const [i, item] of node.items.entries()) {
-      walkDocument(item, visitor, [...path, i]);
-    }
-  }
-};
-
 type TracedNode = { path: Selector; node: Node };
 
+/** Finds all nodes matching `target`, returning each with its concrete path. */
 const traceNodes = (node: Node, target: Selector): TracedNode[] => {
   const found: TracedNode[] = [];
-  walkDocument(node, (path, current) => {
-    if (selectorsMatch(path, target)) found.push({ path, node: current });
+  forEachNode(node, (path, current) => {
+    if (selectorsMatch(path, target)) found.push({ path: [...path], node: current });
   });
   return found;
 };
 
 /** Returns all nodes in the document tree that match the given selector. */
-const selectNodes = (node: Node, target: Selector): Node[] =>
-  traceNodes(node, target).map((e) => e.node);
+const selectNodes = (node: Node, target: Selector): Node[] => traceNodes(node, target).map((e) => e.node);
 
-const selectorKey = (sel: Selector): string =>
-  sel.length === 0 ? "<root>" : sel.map(String).join("/");
+const selectorKey = (sel: Selector): string => sel.length === 0 ? "<root>" : sel.map(seg => String(seg)).join("/");
 
-const replaceAtPaths = (node: Node, replacements: Record<string, Node>): Node =>
-  walkAndReplace(node, (path) => replacements[selectorKey(path)]);
+const replaceAtPaths = (node: Node, replacements: Record<string, Node>): Node => mapTree(node, (path) => replacements[selectorKey(path)]);
 
-const mapMatchedNodes = (
-  node: Node,
-  target: Selector,
-  transform: (current: Node) => Node,
-): Node => {
+const mapMatchedNodes = (node: Node, target: Selector, transform: (current: Node) => Node): Node => {
   let matched = 0;
-  const result = walkAndReplace(node, (path, current) => {
+  const result = mapTree(node, (path, current) => {
     if (!selectorsMatch(path, target)) return undefined;
     matched++;
     return transform(current);
@@ -325,29 +294,15 @@ const mapMatchedNodes = (
 
 // ── Record helpers ──────────────────────────────────────────────────
 
-const setField = (
-  fields: Record<string, Node>,
-  key: string,
-  value: Node,
-): Record<string, Node> => ({
+const setField = (fields: Record<string, Node>, key: string, value: Node): Record<string, Node> => ({
   ...fields,
   [key]: value,
 });
 
-const deleteField = (
-  fields: Record<string, Node>,
-  key: string,
-): Record<string, Node> => {
-  const next = { ...fields };
-  delete next[key];
-  return next;
-};
+const deleteField = (fields: Record<string, Node>, key: string): Record<string, Node> =>
+  Object.fromEntries(Object.entries(fields).filter(([k]) => k !== key));
 
-const renameField = (
-  fields: Record<string, Node>,
-  from: string,
-  to: string,
-): Record<string, Node> => {
+const renameField = (fields: Record<string, Node>, from: string, to: string): Record<string, Node> => {
   if (from === to || !(from in fields)) return fields;
   const result: Record<string, Node> = {};
   for (const [k, v] of Object.entries(fields)) {
@@ -366,16 +321,17 @@ const renameField = (
  * E.g. basePath=["person","age"], refSel=["..","name"] → ["person","name"]
  * @param basePath The base path of the current node.
  * @param refSel The reference selector to resolve.
- * @returns The resolved absolute path.
+ * @returns The resolved absolute path, or `null` if the reference escapes the document root.
  */
-const resolveReference = (basePath: Selector, refSel: Selector): Selector => {
+const resolveReference = (basePath: Selector, refSel: Selector): Selector | null => {
   const isAbs = refSel.length > 0 && refSel[0] === "/";
   const combined = isAbs ? refSel.slice(1) : [...basePath, ...refSel];
   const stack: SelectorSegment[] = [];
   for (const seg of combined) {
     if (isUp(seg)) {
       if (stack.length === 0) {
-        throw new Error("Reference escapes the document root.");
+        // Reference escapes the document root - return null to signal invalid ref
+        return null;
       }
       stack.pop();
     } else {
@@ -414,15 +370,19 @@ const makeRelative = (basePath: Selector, absolutePath: Selector): Selector => {
  * 1. Resolves its selector to an absolute path (handling relative `..` segments)
  * 2. Transforms both the reference's target and the node's own base path
  * 3. Converts back to absolute or relative form, preserving the original style
+ *
+ * If a reference escapes the document root (invalid), it is left unchanged.
+ * This ensures consistent behavior across all structural operations and
+ * prevents crashes in CRDT scenarios where concurrent edits may create
+ * temporarily invalid references.
  */
-const mapReferences = (
-  node: Node,
-  transform: (abs: Selector) => Selector,
-): Node =>
-  walkAndReplace(node, (basePath, current) => {
+const mapReferences = (node: Node, transform: (abs: Selector) => Selector): Node =>
+  mapTree(node, (basePath, current) => {
     if (current.kind !== "reference") return undefined;
     const isAbs = current.selector.length > 0 && current.selector[0] === "/";
     const resolved = resolveReference(basePath, current.selector);
+    // If the reference escapes the document root, leave it unchanged
+    if (resolved === null) return undefined;
     const mappedBase = transform(basePath);
     const mappedRef = transform(resolved);
     if (isAbs) {
@@ -433,166 +393,104 @@ const mapReferences = (
 
 // ── Structural selector transforms ─────────────────────────────────
 
-const wrapRecordSelector = (
-  wrappedField: string,
-  wrapTarget: Selector,
-  other: Selector,
-): Selector => {
-  const m = removePrefix(wrapTarget, other);
+const wrapRecordSelector = (wrappedField: string, wrapTarget: Selector, other: Selector): Selector => {
+  const m = matchPrefix(wrapTarget, other);
   return m == null ? other : [...m.specificPrefix, wrappedField, ...m.rest];
 };
 
 const wrapListSelector = (wrapTarget: Selector, other: Selector): Selector => {
-  const m = removePrefix(wrapTarget, other);
+  const m = matchPrefix(wrapTarget, other);
   return m == null ? other : [...m.specificPrefix, "*", ...m.rest];
 };
 
-const renameFieldSelector = (
-  renameTarget: Selector,
-  from: string,
-  to: string,
-  other: Selector,
-): Selector => {
-  const m = removePrefix(renameTarget, other);
+const renameFieldSelector = (renameTarget: Selector, to: string, other: Selector): Selector => {
+  const m = matchPrefix(renameTarget, other);
   if (m == null) return other;
-  const [head, ...tail] = m.rest;
-  if (head !== from) return other;
-  return [...m.specificPrefix, to, ...tail];
+  return [...m.specificPrefix.slice(0, -1), to, ...m.rest];
 };
 
-// ── Primitive operations ────────────────────────────────────────────
-
-const applyPrimitiveOp = (
-  value: PrimitiveValue,
-  op: string,
-  args?: string,
-): PrimitiveValue => {
-  if (typeof value !== "string") return value;
-  switch (op) {
-    case "take-first":
-      return value.slice(0, 1);
-    case "skip-first":
-      return value.slice(1);
-    case "before-comma": {
-      const c = value.indexOf(",");
-      return c === -1 ? value : value.slice(0, c);
-    }
-    case "after-comma": {
-      const c = value.indexOf(",");
-      return c === -1 ? value : value.slice(c + 1);
-    }
-    case "upper":
-      return value.toUpperCase();
-    case "lower":
-      return value.toLowerCase();
-    case "replace": {
-      if (args == null) return value;
-      const slash = args.indexOf("/");
-      if (slash === -1) return value;
-      return value.replaceAll(args.slice(0, slash), args.slice(slash + 1));
-    }
-    default:
-      return value;
-  }
+/** Shift numeric indices >= threshold by delta within a list targeted by listTarget. */
+const shiftIndexSelector = (listTarget: Selector, threshold: number, delta: number, other: Selector): Selector | null => {
+  const m = matchPrefix(listTarget, other);
+  if (m == null || m.rest.length === 0) return other;
+  const [head, ...tail] = m.rest;
+  if (typeof head !== "number") return other;
+  const shifted = head + (head >= threshold ? delta : 0);
+  if (shifted < 0) return null; // index shifted out of bounds
+  return [...m.specificPrefix, shifted, ...tail];
 };
 
 // ── Apply a single edit ─────────────────────────────────────────────
 
-/**
- * Applies a transform to all nodes matching `edit.target`, asserting they are
- * the expected `kind`. Throws on zero matches or kind mismatch.
- */
-const applyToMatched = <K extends Node["kind"]>(
-  doc: Node,
-  target: Selector,
-  expectedKind: K,
-  editKind: string,
-  transform: (n: Extract<Node, { kind: K }>) => Node,
-): Node =>
-  mapMatchedNodes(doc, target, (n) => {
-    if (n.kind !== expectedKind) {
-      throw new Error(
-        `${editKind}: expected ${expectedKind}, found '${n.kind}'`,
-      );
-    }
-    return transform(n as Extract<Node, { kind: K }>);
-  });
+const expectRecord = (n: Node, editKind: string) => {
+  if (n.kind !== "record") throw new Error(`${editKind}: expected record, found '${n.kind}'`);
+  return n;
+};
 
-/**
- * Applies a transform and then rewrites all references.
- */
-const applyStructural = (
-  doc: Node,
-  target: Selector,
-  transform: (n: Node) => Node,
-  rewriteRef: (abs: Selector) => Selector,
-): Node => {
-  const result = mapMatchedNodes(doc, target, transform);
-  return mapReferences(result, rewriteRef);
+const expectList = (n: Node, editKind: string) => {
+  if (n.kind !== "list") throw new Error(`${editKind}: expected list, found '${n.kind}'`);
+  return n;
 };
 
 const applyEdit = (doc: Node, edit: Edit): Node => {
   switch (edit.kind) {
-    case "primitive-edit":
-      return applyToMatched(doc, edit.target, "primitive", edit.kind, (n) => ({
-        kind: "primitive",
-        value: applyPrimitiveOp(n.value, edit.op, edit.args),
-      }));
+    case "set-value":
+      return mapMatchedNodes(doc, edit.target, () => primitive(edit.value));
 
-    case "record-add":
-      return applyToMatched(doc, edit.target, "record", edit.kind, (n) => ({
-        kind: "record",
-        tag: n.tag,
-        fields: setField(n.fields, edit.field, edit.node),
-      }));
+    case "record-add": {
+      const parent = edit.target.slice(0, -1);
+      const field = String(edit.target[edit.target.length - 1]);
+      return mapMatchedNodes(doc, parent, (n) => {
+        const r = expectRecord(n, edit.kind);
+        return record(r.tag, setField(r.fields, field, edit.node));
+      });
+    }
 
-    case "record-delete":
-      return applyToMatched(doc, edit.target, "record", edit.kind, (n) => ({
-        kind: "record",
-        tag: n.tag,
-        fields: deleteField(n.fields, edit.field),
-      }));
+    case "record-delete": {
+      const parent = edit.target.slice(0, -1);
+      const field = String(edit.target[edit.target.length - 1]);
+      return mapMatchedNodes(doc, parent, (n) => {
+        const r = expectRecord(n, edit.kind);
+        return record(r.tag, deleteField(r.fields, field));
+      });
+    }
 
-    case "record-rename-field":
-      return applyStructural(
-        applyToMatched(doc, edit.target, "record", edit.kind, (n) => ({
-          kind: "record",
-          tag: n.tag,
-          fields: renameField(n.fields, edit.from, edit.to),
-        })),
-        edit.target,
-        (n) => n,
-        (abs) => renameFieldSelector(edit.target, edit.from, edit.to, abs),
+    case "record-rename-field": {
+      const parent = edit.target.slice(0, -1);
+      const from = String(edit.target[edit.target.length - 1]);
+      const renamed = mapMatchedNodes(doc, parent, (n) => {
+        const r = expectRecord(n, edit.kind);
+        return record(r.tag, renameField(r.fields, from, edit.to));
+      });
+      return mapReferences(renamed, (abs) =>
+        renameFieldSelector(edit.target, edit.to, abs),
       );
+    }
 
     case "list-push-back":
-      return applyToMatched(doc, edit.target, "list", edit.kind, (n) => ({
-        kind: "list",
-        tag: n.tag,
-        items: [...n.items, edit.node],
-      }));
+      return mapMatchedNodes(doc, edit.target, (n) => {
+        const l = expectList(n, edit.kind);
+        return list(l.tag, [...l.items, edit.node]);
+      });
 
     case "list-push-front":
-      return applyToMatched(doc, edit.target, "list", edit.kind, (n) => ({
-        kind: "list",
-        tag: n.tag,
-        items: [edit.node, ...n.items],
-      }));
+      return mapMatchedNodes(doc, edit.target, (n) => {
+        const l = expectList(n, edit.kind);
+        return list(l.tag, [edit.node, ...l.items]);
+      });
 
     case "list-pop-back":
-      return applyToMatched(doc, edit.target, "list", edit.kind, (n) => {
-        if (n.items.length === 0) {
-          throw new Error("list-pop-back: list is empty");
-        }
-        return { kind: "list", tag: n.tag, items: n.items.slice(0, -1) };
+      return mapMatchedNodes(doc, edit.target, (n) => {
+        const l = expectList(n, edit.kind);
+        if (l.items.length === 0) throw new Error("list-pop-back: list is empty");
+        return list(l.tag, l.items.slice(0, -1));
       });
 
     case "list-pop-front":
-      return applyToMatched(doc, edit.target, "list", edit.kind, (n) => {
-        if (n.items.length === 0) {
-          throw new Error("list-pop-front: list is empty");
-        }
-        return { kind: "list", tag: n.tag, items: n.items.slice(1) };
+      return mapMatchedNodes(doc, edit.target, (n) => {
+        const l = expectList(n, edit.kind);
+        if (l.items.length === 0) throw new Error("list-pop-front: list is empty");
+        return list(l.tag, l.items.slice(1));
       });
 
     case "update-tag":
@@ -608,24 +506,26 @@ const applyEdit = (doc: Node, edit: Edit): Node => {
         );
       });
 
-    case "wrap-record":
-      return applyStructural(
-        doc,
-        edit.target,
-        (n) => record(edit.tag, { [edit.field]: n }),
-        (abs) => wrapRecordSelector(edit.field, edit.target, abs),
+    case "wrap-record": {
+      const wrapped = mapMatchedNodes(doc, edit.target, (n) =>
+        record(edit.tag, { [edit.field]: n }),
       );
+      return mapReferences(wrapped, (abs) =>
+        wrapRecordSelector(edit.field, edit.target, abs),
+      );
+    }
 
-    case "wrap-list":
-      return applyStructural(
-        doc,
-        edit.target,
-        (n) => list(edit.tag, [n]),
-        (abs) => wrapListSelector(edit.target, abs),
+    case "wrap-list": {
+      const wrapped = mapMatchedNodes(doc, edit.target, (n) =>
+        list(edit.tag, [n]),
       );
+      return mapReferences(wrapped, (abs) =>
+        wrapListSelector(edit.target, abs),
+      );
+    }
 
     case "copy": {
-      const sourceNodes = traceNodes(doc, edit.source).map((e) => e.node);
+      const sourceNodes = selectNodes(doc, edit.source);
       const targetNodes = traceNodes(doc, edit.target);
       if (sourceNodes.length === 0) {
         throw new Error(
@@ -670,54 +570,28 @@ const applyEdit = (doc: Node, edit: Edit): Node => {
 
 const eventKey = (id: EventId): string => `${id.peer}:${id.seq}`;
 
-const compareEventIds = (a: EventId, b: EventId): number => {
+const stableEventOrder = (a: EventId, b: EventId): number => {
   if (a.peer < b.peer) return -1;
   if (a.peer > b.peer) return 1;
   return a.seq - b.seq;
 };
 
-const normalizeParents = (parents: EventId[]): EventId[] => {
-  const seen = new Map<string, EventId>();
-  for (const p of parents) seen.set(eventKey(p), p);
-  return [...seen.values()].sort(compareEventIds);
-};
 
-const computeFrontiers = (events: Record<string, Event>): EventId[] => {
-  const parentKeys = new Set<string>();
-  for (const ev of Object.values(events)) {
-    for (const p of ev.parents) parentKeys.add(eventKey(p));
-  }
-  return Object.values(events)
-    .map((ev) => ev.id)
-    .filter((id) => !parentKeys.has(eventKey(id)))
-    .sort(compareEventIds);
-};
 
-const computeNextSeqByPeer = (
-  events: Record<string, Event>,
-): Record<string, number> => {
-  const next: Record<string, number> = {};
-  for (const ev of Object.values(events)) {
-    next[ev.id.peer] = Math.max(next[ev.id.peer] ?? 0, ev.id.seq + 1);
-  }
-  return next;
-};
-
-const deepEqual = (a: unknown, b: unknown): boolean => {
+const eventsEqual = (a: Event, b: Event): boolean => {
   if (a === b) return true;
-  if (a == null || b == null) return false;
-  if (typeof a !== typeof b) return false;
-  if (typeof a !== "object") return false;
-  if (Array.isArray(a)) {
-    if (!Array.isArray(b)) return false;
-    if (a.length !== b.length) return false;
-    return a.every((v, i) => deepEqual(v, b[i]));
+  if (a.id.peer !== b.id.peer || a.id.seq !== b.id.seq) return false;
+  if (a.parents.length !== b.parents.length) return false;
+  for (let i = 0; i < a.parents.length; i++) {
+    const ap = a.parents[i]!, bp = b.parents[i]!;
+    if (ap.peer !== bp.peer || ap.seq !== bp.seq) return false;
   }
-  const aObj = a as Record<string, unknown>;
-  const bObj = b as Record<string, unknown>;
-  const aKeys = Object.keys(aObj);
-  if (aKeys.length !== Object.keys(bObj).length) return false;
-  return aKeys.every((k) => deepEqual(aObj[k], bObj[k]));
+  const aKeys = Object.keys(a.clock);
+  if (aKeys.length !== Object.keys(b.clock).length) return false;
+  for (const k of aKeys) {
+    if (a.clock[k] !== b.clock[k]) return false;
+  }
+  return JSON.stringify(a.edit) === JSON.stringify(b.edit);
 };
 
 const validateEvent = (known: Record<string, Event>, event: Event): Event => {
@@ -725,219 +599,204 @@ const validateEvent = (known: Record<string, Event>, event: Event): Event => {
   if (!Number.isInteger(event.id.seq) || event.id.seq < 0) {
     throw new Error(`Invalid seq for '${key}'.`);
   }
-  const parents = normalizeParents(event.parents);
-  if (parents.some((p) => eventKey(p) === key)) {
+  if (event.parents.some((p) => eventKey(p) === key)) {
     throw new Error(`Event '${key}' is its own parent.`);
   }
-  for (const p of parents) {
+  for (const p of event.parents) {
     if (known[eventKey(p)] == null) {
       throw new Error(`Unknown parent '${eventKey(p)}' for event '${key}'.`);
     }
   }
-  return { ...event, parents };
+  return event;
 };
 
 // ── Public API ──────────────────────────────────────────────────────
 
 /** Creates a new empty event graph with the given initial document (defaults to an empty record). */
-const init = (initial: Node = record("root", {})): EventGraph => ({
-  initial,
-  events: {},
-  frontiers: [],
-});
+const init = (initial: Node = record("root", {})): EventGraph => ( { initial, events: {}, frontiers: [] });
+
+/** Computes new frontiers after adding an event: removes its parents, adds itself. */
+const updateFrontiers = (current: EventId[], event: Event): EventId[] => {
+  const parentKeys = new Set(event.parents.map(eventKey));
+  return [
+    ...current.filter((h) => !parentKeys.has(eventKey(h))),
+    event.id,
+  ].sort(stableEventOrder);
+};
 
 /** Ingests an event produced by another peer. Idempotent — duplicate events are ignored. */
-const applyRemoteEvent = (
-  core: EventGraph,
-  event: Event,
-): EventGraph => {
+const applyRemoteEvent = (core: EventGraph, event: Event): EventGraph => {
   const key = eventKey(event.id);
   const existing = core.events[key];
   if (existing != null) {
-    if (!deepEqual(existing, event)) {
+    if (!eventsEqual(existing, event)) {
       throw new Error(`Conflicting payload for event '${key}'.`);
     }
     return core;
   }
   const validated = validateEvent(core.events, event);
-  const validatedKey = eventKey(validated.id);
-  const events = { ...core.events, [validatedKey]: validated };
-  const parentKeys = new Set(validated.parents.map(eventKey));
-  const frontiers = [
-    ...core.frontiers.filter((h) => !parentKeys.has(eventKey(h))),
-    validated.id,
-  ].sort(compareEventIds);
-  return { initial: core.initial, events, frontiers };
+  const events = { ...core.events, [eventKey(validated.id)]: validated };
+  return { initial: core.initial, events, frontiers: updateFrontiers(core.frontiers, validated) };
 };
 
-/**
- * Appends a local edit to the event graph. Returns `[updatedGraph, newEvent]`.
- * Destructure with a leading semicolon for ASI safety: `;[core, event] = commitLocal(core, peer, edit)`.
- */
-const commitLocal = (
-  eventGraph: EventGraph,
-  peer: string,
-  input: EditInput,
-): [EventGraph, Event] => {
-  const edit: Edit = input.kind === "copy"
-    ? { ...input, target: selector(input.target), source: selector(input.source) } as Edit
-    : { ...input, target: selector(input.target) } as Edit;
-  const seq = computeNextSeqByPeer(eventGraph.events)[peer] ?? 0;
-  const event: Event = {
-    id: { peer, seq },
-    parents: [...eventGraph.frontiers],
-    edit,
-  };
+const commitLocalEdit = (eventGraph: EventGraph, peer: string, edit: Edit): [EventGraph, Event] => {
+  const parents = [...eventGraph.frontiers];
+  const clock: VectorClock = {};
+  for (const p of parents) {
+    for (const [k, v] of Object.entries(eventGraph.events[eventKey(p)]?.clock ?? {})) {
+      clock[k] = Math.max(clock[k] ?? -1, v);
+    }
+  }
+  clock[peer] = (clock[peer] ?? -1) + 1;
+  const event: Event = { id: { peer, seq: clock[peer] }, parents, edit, clock };
   return [applyRemoteEvent(eventGraph, event), event];
-};
-
-/** Merges two event graphs (set-union of events). Both must share the same initial document. */
-const mergeGraphs = (left: EventGraph, right: EventGraph): EventGraph => {
-  if (!deepEqual(left.initial, right.initial)) {
-    throw new Error("Cannot merge cores with different initial documents.");
-  }
-  const events: Record<string, Event> = { ...left.events };
-  for (const ev of Object.values(right.events)) {
-    const key = eventKey(ev.id);
-    const existing = events[key];
-    if (existing != null) {
-      if (!deepEqual(existing, ev)) {
-        throw new Error(`Conflicting payload for event '${key}' during merge.`);
-      }
-      continue;
-    }
-    events[key] = ev;
-  }
-  for (const ev of Object.values(events)) {
-    for (const p of ev.parents) {
-      if (events[eventKey(p)] == null) {
-        throw new Error(
-          `Merged core is missing parent '${eventKey(p)}' required by '${
-            eventKey(ev.id)
-          }'.`,
-        );
-      }
-    }
-  }
-  return { initial: left.initial, events, frontiers: computeFrontiers(events) };
 };
 
 // ── Concurrency detection ───────────────────────────────────────────
 
-const computeAncestors = (
-  events: Record<string, Event>,
-  ordered: string[],
-): Record<string, Set<string>> => {
-  const ancestors: Record<string, Set<string>> = {};
-  for (const key of ordered) {
-    const ev = events[key] as Event;
-    const mine = new Set<string>();
-    for (const p of ev.parents) {
-      const pk = eventKey(p);
-      mine.add(pk);
-      const parentAnc = ancestors[pk];
-      if (parentAnc != null) {
-        for (const a of parentAnc) mine.add(a);
-      }
-    }
-    ancestors[key] = mine;
-  }
-  return ancestors;
-};
+const clockDominates = (a: VectorClock, b: VectorClock): boolean => Object.entries(b).every(([peer, seq]) => (a[peer] ?? -1) >= seq);
 
-const isConcurrent = (
-  ancestors: Record<string, Set<string>>,
-  a: string,
-  b: string,
-): boolean => a !== b && !ancestors[a]?.has(b) && !ancestors[b]?.has(a);
+const isConcurrent = (a: Event, b: Event): boolean => a !== b && !clockDominates(a.clock, b.clock) && !clockDominates(b.clock, a.clock);
 
 // ── Edit selector transforms ────────────────────────────────────────
 
-const transformSelector = (sel: Selector, priorEdit: Edit): Selector => {
+const transformSelector = (sel: Selector, priorEdit: Edit): Selector | null => {
   switch (priorEdit.kind) {
-    case "record-rename-field":
-      return renameFieldSelector(
-        priorEdit.target,
-        priorEdit.from,
-        priorEdit.to,
-        sel,
-      );
+    case "record-rename-field": {
+      return renameFieldSelector(priorEdit.target, priorEdit.to, sel);
+    }
     case "wrap-record":
       return wrapRecordSelector(priorEdit.field, priorEdit.target, sel);
     case "wrap-list":
       return wrapListSelector(priorEdit.target, sel);
+    case "record-delete": {
+      // target includes the field as last segment — drop edits traversing it
+      const m = matchPrefix(priorEdit.target, sel);
+      if (m != null) return null;
+      return sel;
+    }
+    case "list-push-front":
+      return shiftIndexSelector(priorEdit.target, 0, +1, sel);
+    case "list-pop-front": {
+      const m = matchPrefix(priorEdit.target, sel);
+      if (m != null && m.rest.length > 0 && m.rest[0] === 0) return null;
+      return shiftIndexSelector(priorEdit.target, 1, -1, sel);
+    }
+    case "list-pop-back":
+    case "list-push-back":
+      return sel;
     default:
       return sel;
   }
 };
 
-const transformEdit = (edit: Edit, priorEdit: Edit): Edit => {
+const transformEdit = (edit: Edit, priorEdit: Edit): Edit | null => {
   if (edit.kind === "copy") {
-    return {
-      ...edit,
-      target: transformSelector(edit.target, priorEdit),
-      source: transformSelector(edit.source, priorEdit),
-    };
+    const target = transformSelector(edit.target, priorEdit);
+    const source = transformSelector(edit.source, priorEdit);
+    if (target === null || source === null) return null;
+    return { ...edit, target, source };
   }
-  return {
-    ...edit,
-    target: transformSelector(edit.target, priorEdit),
-  } as Edit;
+  const target = transformSelector(edit.target, priorEdit);
+  if (target === null) return null;
+
+  return { ...edit, target } as Edit;
 };
 
+const STRUCTURAL_EDITS: ReadonlySet<Edit["kind"]> = new Set([
+  "record-rename-field", "record-delete",
+  "wrap-record", "wrap-list",
+  "list-push-front", "list-push-back",
+  "list-pop-front", "list-pop-back",
+]);
+
 const isStructuralEdit = (edit: Edit): boolean =>
-  edit.kind === "record-rename-field" ||
-  edit.kind === "wrap-record" ||
-  edit.kind === "wrap-list";
+  STRUCTURAL_EDITS.has(edit.kind);
 
 const editSelectors = (edit: Edit): Selector[] =>
   edit.kind === "copy" ? [edit.target, edit.source] : [edit.target];
 
-const hasWildcard = (edit: Edit): boolean =>
-  editSelectors(edit).some((sel) => sel.some(isAll));
+/** Checks whether an edit can be applied to the current document state. */
+const editApplies = (doc: Node, edit: Edit): boolean => {
+  if (edit.kind === "copy") {
+    const sourceNodes = selectNodes(doc, edit.source);
+    const targetNodes = selectNodes(doc, edit.target);
+    if (sourceNodes.length === 0 || targetNodes.length === 0) return false;
+    if (sourceNodes.length !== targetNodes.length) {
+      if (targetNodes.length !== 1 || targetNodes[0]?.kind !== "list") return false;
+    }
+    return true;
+  }
+
+  const targets = editSelectors(edit);
+  for (const target of targets) {
+    const effective =
+      edit.kind === "record-add" ||
+      edit.kind === "record-delete" ||
+      edit.kind === "record-rename-field"
+        ? target.slice(0, -1)
+        : target;
+    const nodes = selectNodes(doc, effective);
+    if (nodes.length === 0) return false;
+    for (const node of nodes) {
+      switch (edit.kind) {
+        case "set-value":
+          break;
+        case "record-add":
+        case "record-delete":
+        case "record-rename-field":
+          if (node.kind !== "record") return false;
+          break;
+        case "list-push-back":
+        case "list-push-front":
+          if (node.kind !== "list") return false;
+          break;
+        case "list-pop-back":
+        case "list-pop-front":
+          if (node.kind !== "list" || node.items.length === 0) return false;
+          break;
+        case "update-tag":
+          if (node.kind !== "record" && node.kind !== "list") return false;
+          break;
+      }
+    }
+  }
+  return true;
+};
 
 // ── Topological materialization ─────────────────────────────────────
 
-const closureFrom = (
-  events: Record<string, Event>,
-  frontier: EventId[],
-): Set<string> => {
+/**
+ * Returns the set of all event keys reachable from `frontier` by walking parent links.
+ *
+ * Two uses:
+ * - **Sync**: called with a remote peer's frontiers (strict=false) to determine which
+ *   events they've already seen, so `eventsSince` can compute the diff.
+ * - **Materialization**: called with a custom frontier to materialize the document at a
+ *   historical point (a subset of the full graph). When called with the graph's own
+ *   frontiers, the closure is the entire graph.
+ *
+ * If `strict` is true, throws on missing events; if false, silently skips them
+ * (necessary for remote frontiers that may reference events not yet received).
+ */
+const closureFrom = (events: Record<string, Event>, frontier: EventId[], strict = true): Set<string> => {
   const closure = new Set<string>();
   const stack = frontier.map(eventKey);
   while (stack.length > 0) {
     const key = stack.pop() as string;
     if (closure.has(key)) continue;
     const ev = events[key];
-    if (ev == null) throw new Error(`Unknown version '${key}'.`);
+    if (ev == null) {
+      if (strict) throw new Error(`Unknown version '${key}'.`);
+      continue;
+    }
     closure.add(key);
     for (const p of ev.parents) stack.push(eventKey(p));
   }
   return closure;
 };
 
-// Binary insertion into a sorted array — O(log n) search + O(n) splice.
-const insertSorted = (
-  arr: string[],
-  item: string,
-  cmp: (a: string, b: string) => number,
-): void => {
-  let lo = 0;
-  let hi = arr.length;
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1;
-    if (cmp(arr[mid] as string, item) <= 0) {
-      lo = mid + 1;
-    } else {
-      hi = mid;
-    }
-  }
-  arr.splice(lo, 0, item);
-};
-
-const topologicalOrder = (
-  events: Record<string, Event>,
-  frontier: EventId[],
-): string[] => {
+const topologicalOrder = (events: Record<string, Event>, frontier: EventId[]): string[] => {
   const closure = closureFrom(events, frontier);
   const indegree: Record<string, number> = {};
   const children: Record<string, string[]> = {};
@@ -954,25 +813,35 @@ const topologicalOrder = (
       children[pk]?.push(key);
     }
   }
-  // Sort concurrent events: non-wildcard before wildcard, then by event ID
-  const cmp = (a: string, b: string) => {
-    const aWild = hasWildcard((events[a] as Event).edit) ? 1 : 0;
-    const bWild = hasWildcard((events[b] as Event).edit) ? 1 : 0;
-    if (aWild !== bWild) return aWild - bWild;
-    return compareEventIds((events[a] as Event).id, (events[b] as Event).id);
+  // Sort concurrent events: non-wildcard first, then wildcard by genericness
+  // (more generic wildcards before more specific), then by event ID.
+  // Returns negative when left should be processed before right.
+  const compareEvents = (leftKey: string, rightKey: string) => {
+    const leftEvent = events[leftKey] as Event, rightEvent = events[rightKey] as Event;
+    const leftTarget = leftEvent.edit.target, rightTarget = rightEvent.edit.target;
+    const minLength = Math.min(leftTarget.length, rightTarget.length);
+    for (let i = 0; i < minLength; i++) {
+      const leftIsAll = isAll(leftTarget[i] as SelectorSegment);
+      const rightIsAll = isAll(rightTarget[i] as SelectorSegment);
+      if (leftIsAll && !rightIsAll) return -1;
+      if (!leftIsAll && rightIsAll) return 1;
+    }
+    if (leftTarget.length !== rightTarget.length) return leftTarget.length - rightTarget.length;
+    return stableEventOrder(leftEvent.id, rightEvent.id);
   };
 
-  const queue = Object.keys(indegree)
-    .filter((key) => indegree[key] === 0)
-    .sort(cmp);
+  const queue = new BinaryHeap<string>(compareEvents);
+  for (const key of Object.keys(indegree)) {
+    if (indegree[key] === 0) queue.push(key);
+  }
   const ordered: string[] = [];
   while (queue.length > 0) {
-    const key = queue.shift() as string;
+    const key = queue.pop()!;
     ordered.push(key);
     for (const ch of children[key] as string[]) {
       indegree[ch] = (indegree[ch] ?? 0) - 1;
       if (indegree[ch] === 0) {
-        insertSorted(queue, ch, cmp);
+        queue.push(ch);
       }
     }
   }
@@ -987,34 +856,38 @@ const topologicalOrder = (
  * Concurrent structural edits (rename, wrap) automatically transform subsequent selectors.
  * Wildcard edits are deferred so they apply to concurrently inserted items.
  *
- * Complexity: O(n²) in the number of events (ancestor sets + linear scan of applied edits).
+ * Complexity: O(n × c × p) where n = total events, c = max concurrent events per
+ * sync round, p = peers. For typical usage where peers sync frequently, c << n.
  *
  * @param eventGraph - The event graph to materialize.
  * @param frontiers - Optional frontier to materialize up to (defaults to the graph's current frontiers).
  */
-export const materialize = (
-  eventGraph: EventGraph,
-  frontiers?: EventId[],
-): Node => {
+export const materialize = (eventGraph: EventGraph, frontiers?: EventId[]): Node => {
   const frontier = frontiers ?? eventGraph.frontiers;
   const ordered = topologicalOrder(eventGraph.events, frontier);
-  const ancestors = computeAncestors(eventGraph.events, ordered);
 
   let doc = eventGraph.initial;
-  const applied: { key: string; edit: Edit }[] = [];
+  const applied: { ev: Event; edit: Edit }[] = [];
   for (const key of ordered) {
     const ev = eventGraph.events[key] as Event;
-    let edit = ev.edit;
+    let edit: Edit | null = ev.edit;
+    let hasConcurrent = false;
     for (const prior of applied) {
-      if (
-        isStructuralEdit(prior.edit) &&
-        isConcurrent(ancestors, key, prior.key)
-      ) {
-        edit = transformEdit(edit, prior.edit);
+      if (clockDominates(ev.clock, prior.ev.clock)) continue;
+      if (isConcurrent(ev, prior.ev)) {
+        hasConcurrent = true;
+        if (edit !== null && isStructuralEdit(prior.edit)) {
+          edit = transformEdit(edit, prior.edit);
+        }
       }
     }
-    doc = applyEdit(doc, edit);
-    applied.push({ key, edit });
+    if (edit !== null) {
+      if (hasConcurrent && !editApplies(doc, edit)) {
+        continue;
+      }
+      doc = applyEdit(doc, edit);
+      applied.push({ ev, edit });
+    }
   }
   return doc;
 };
@@ -1052,89 +925,183 @@ export const formatNode = (node: Node): string =>
  * with named methods, and read back via {@link toPlain}.
  */
 export class Denicek {
-  #graph: EventGraph;
-  #pending: Event[] = [];
+  private graph: EventGraph;
+  private pending: Event[] = [];
+  private buffered: Event[] = [];
   readonly peer: string;
 
-  constructor(peer: string, initial: PlainNode = { $tag: "root" }) {
+  constructor(peer: string, initial?: PlainNode);
+  constructor(peer: string, graph: EventGraph);
+  constructor(peer: string, arg?: PlainNode | EventGraph) {
     this.peer = peer;
-    this.#graph = init(plainObjectToNode(initial));
+    if (arg && typeof arg === "object" && "events" in arg) {
+      this.graph = arg as EventGraph;
+    } else {
+      this.graph = init(plainObjectToNode((arg as PlainNode) ?? { $tag: "root" }));
+    }
   }
 
-  private commit(input: EditInput): void {
-    const [graph, event] = commitLocal(this.#graph, this.peer, input);
-    this.#graph = graph;
-    this.#pending.push(event);
+  private commit(edit: Edit): void {
+    applyEdit(this.materialize(), edit);
+    const [graph, event] = commitLocalEdit(this.graph, this.peer, edit);
+    this.graph = graph;
+    this.pending.push(event);
   }
 
   /** Returns and clears events produced by local edits since the last drain. */
   drain(): Event[] {
-    const events = this.#pending;
-    this.#pending = [];
+    const events = this.pending;
+    this.pending = [];
     return events;
   }
 
-  /** Ingests an event produced by another peer. */
+  /** Returns the current frontier (tip event IDs). Exchange with another peer
+   *  to compute which events need to be sent via {@link eventsSince}. */
+  get frontiers(): EventId[] {
+    return [...this.graph.frontiers];
+  }
+
+  /** Returns all events that the holder of `remoteFrontiers` hasn't seen.
+   *  Idempotent — safe to call repeatedly or after network failures. */
+  eventsSince(remoteFrontiers: EventId[]): Event[] {
+    const remoteKnown = closureFrom(this.graph.events, remoteFrontiers, false);
+    return Object.values(this.graph.events).filter(
+      (ev) => !remoteKnown.has(eventKey(ev.id)),
+    );
+  }
+
+  /** Ingests an event produced by another peer. Buffers out-of-order events. */
   applyRemote(event: Event): void {
-    this.#graph = applyRemoteEvent(this.#graph, event);
+    this.buffered.push(event);
+    this.flushBuffered();
+  }
+
+  private flushBuffered(): void {
+    // Index buffered events, filtering out duplicates already in the graph
+    const pending = new Map<string, Event>();
+    for (const event of this.buffered) {
+      const key = eventKey(event.id);
+      const existing = this.graph.events[key];
+      if (existing != null) {
+        if (!eventsEqual(existing, event)) {
+          throw new Error(`Conflicting payload for event '${key}'.`);
+        }
+        continue;
+      }
+      pending.set(key, event);
+    }
+
+    if (pending.size === 0) {
+      this.buffered = [];
+      return;
+    }
+
+    // Compute wait counts and reverse dependency index
+    const waitCount = new Map<string, number>();
+    const dependents = new Map<string, string[]>();
+
+    for (const [key, event] of pending) {
+      let count = 0;
+      for (const p of event.parents) {
+        const pk = eventKey(p);
+        if (this.graph.events[pk] == null) {
+          count++;
+          let deps = dependents.get(pk);
+          if (deps == null) {
+            deps = [];
+            dependents.set(pk, deps);
+          }
+          deps.push(key);
+        }
+      }
+      waitCount.set(key, count);
+    }
+
+    // Seed the ready queue with events whose parents are all satisfied
+    const ready: string[] = [];
+    for (const [key, count] of waitCount) {
+      if (count === 0) ready.push(key);
+    }
+
+    // Process ready events, decrementing dependents as we go
+    while (ready.length > 0) {
+      const key = ready.pop()!;
+      const event = pending.get(key)!;
+      pending.delete(key);
+
+      const validated = validateEvent(this.graph.events, event);
+      this.graph.events[eventKey(validated.id)] = validated;
+      this.graph.frontiers = updateFrontiers(this.graph.frontiers, validated);
+
+      const deps = dependents.get(key);
+      if (deps != null) {
+        for (const depKey of deps) {
+          const newCount = waitCount.get(depKey)! - 1;
+          waitCount.set(depKey, newCount);
+          if (newCount === 0 && pending.has(depKey)) {
+            ready.push(depKey);
+          }
+        }
+      }
+    }
+
+    // Events with unmet dependencies remain buffered
+    this.buffered = [...pending.values()];
   }
 
   add(target: string, field: string, value: PlainNode): void {
-    this.commit({ kind: "record-add", target, field, node: plainObjectToNode(value) });
+    const path = target === "" ? field : `${target}/${field}`;
+    this.commit({ kind: "record-add", target: selector(path), node: plainObjectToNode(value) });
   }
 
   delete(target: string, field: string): void {
-    this.commit({ kind: "record-delete", target, field });
+    const path = target === "" ? field : `${target}/${field}`;
+    this.commit({ kind: "record-delete", target: selector(path) });
   }
 
   rename(target: string, from: string, to: string): void {
-    this.commit({ kind: "record-rename-field", target, from, to });
+    const path = target === "" ? from : `${target}/${from}`;
+    this.commit({ kind: "record-rename-field", target: selector(path), to });
   }
 
-  edit(target: string, op: string, args?: string): void {
-    this.commit({ kind: "primitive-edit", target, op, args });
+  set(target: string, value: PrimitiveValue): void {
+    this.commit({ kind: "set-value", target: selector(target), value });
   }
 
   pushBack(target: string, value: PlainNode): void {
-    this.commit({ kind: "list-push-back", target, node: plainObjectToNode(value) });
+    this.commit({ kind: "list-push-back", target: selector(target), node: plainObjectToNode(value) });
   }
 
   pushFront(target: string, value: PlainNode): void {
-    this.commit({ kind: "list-push-front", target, node: plainObjectToNode(value) });
+    this.commit({ kind: "list-push-front", target: selector(target), node: plainObjectToNode(value) });
   }
 
   popBack(target: string): void {
-    this.commit({ kind: "list-pop-back", target });
+    this.commit({ kind: "list-pop-back", target: selector(target) });
   }
 
   popFront(target: string): void {
-    this.commit({ kind: "list-pop-front", target });
+    this.commit({ kind: "list-pop-front", target: selector(target) });
   }
 
   updateTag(target: string, tag: string): void {
-    this.commit({ kind: "update-tag", target, tag });
+    this.commit({ kind: "update-tag", target: selector(target), tag });
   }
 
   wrapRecord(target: string, field: string, tag: string): void {
-    this.commit({ kind: "wrap-record", target, field, tag });
+    this.commit({ kind: "wrap-record", target: selector(target), field, tag });
   }
 
   wrapList(target: string, tag: string): void {
-    this.commit({ kind: "wrap-list", target, tag });
+    this.commit({ kind: "wrap-list", target: selector(target), tag });
   }
 
   copy(target: string, source: string): void {
-    this.commit({ kind: "copy", target, source });
-  }
-
-  merge(other: Denicek): Denicek {
-    const result = new Denicek(this.peer);
-    result.#graph = mergeGraphs(this.#graph, other.#graph);
-    return result;
+    this.commit({ kind: "copy", target: selector(target), source: selector(source) });
   }
 
   materialize(): Node {
-    return materialize(this.#graph);
+    return materialize(this.graph);
   }
 
   toPlain(): unknown {
