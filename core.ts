@@ -497,10 +497,11 @@ export abstract class Edit {
 
   /**
    * Mutates `doc` in place to apply this edit.
-   * When `strict` is true (local edits), throws on type mismatch.
-   * When false (concurrent merge), skips non-matching node types.
+   * When `strict` is true (local edits), throws on type mismatch or missing path.
+   * When false (concurrent merge), returns a conflict node if the edit can't apply,
+   * or null if applied successfully.
    */
-  abstract apply(doc: Node, strict?: boolean): void;
+  abstract apply(doc: Node, strict?: boolean): Node | null;
 
   /** Transforms another selector through the structural change made by this edit. */
   abstract transformSelector(sel: Selector): Selector | null;
@@ -537,6 +538,16 @@ export abstract class Edit {
     if (!(n instanceof ListNode)) throw new Error(`${this.kind}: expected list, found '${n.kind}'`);
     return n;
   }
+
+  /** Builds a conflict node describing an edit that couldn't be applied. */
+  protected conflict(data?: Node): RecordNode {
+    const fields: Record<string, Node> = {
+      kind: new PrimitiveNode(this.kind),
+      target: new PrimitiveNode(this.target.format()),
+    };
+    if (data) fields.data = data;
+    return new RecordNode("conflict", fields);
+  }
 }
 
 export class SetValueEdit extends Edit {
@@ -545,11 +556,14 @@ export class SetValueEdit extends Edit {
 
   constructor(readonly target: Selector, readonly value: PrimitiveValue) { super(); }
 
-  apply(doc: Node, strict = false): void {
-    for (const node of this.navigateOrThrow(doc, this.target, strict)) {
+  apply(doc: Node, strict = false): Node | null {
+    const nodes = this.navigateOrThrow(doc, this.target, strict);
+    if (nodes.length === 0) return this.conflict(new PrimitiveNode(this.value));
+    for (const node of nodes) {
       if (node instanceof PrimitiveNode) node.value = this.value;
       else if (strict) throw new Error(`${this.kind}: expected primitive, found '${node.kind}'`);
     }
+    return null;
   }
 
   transformSelector(sel: Selector): Selector | null { return sel; }
@@ -567,13 +581,16 @@ export class RecordAddEdit extends Edit {
 
   constructor(readonly target: Selector, readonly node: Node) { super(); }
 
-  apply(doc: Node, strict = false): void {
+  apply(doc: Node, strict = false): Node | null {
     const parentSel = this.target.parent;
     const field = String(this.target.lastSegment);
-    for (const parent of this.navigateOrThrow(doc, parentSel, strict)) {
+    const parents = this.navigateOrThrow(doc, parentSel, strict);
+    if (parents.length === 0) return this.conflict(this.node.clone());
+    for (const parent of parents) {
       if (parent instanceof RecordNode) parent.addField(field, this.node.clone());
       else if (strict) this.assertRecord(parent);
     }
+    return null;
   }
 
   transformSelector(sel: Selector): Selector | null { return sel; }
@@ -591,13 +608,16 @@ export class RecordDeleteEdit extends Edit {
 
   constructor(readonly target: Selector) { super(); }
 
-  apply(doc: Node, strict = false): void {
+  apply(doc: Node, strict = false): Node | null {
     const parentSel = this.target.parent;
     const field = String(this.target.lastSegment);
-    for (const parent of this.navigateOrThrow(doc, parentSel, strict)) {
+    const parents = this.navigateOrThrow(doc, parentSel, strict);
+    if (parents.length === 0) return this.conflict();
+    for (const parent of parents) {
       if (parent instanceof RecordNode) parent.deleteField(field);
       else if (strict) this.assertRecord(parent);
     }
+    return null;
   }
 
   transformSelector(sel: Selector): Selector | null {
@@ -619,14 +639,17 @@ export class RecordRenameFieldEdit extends Edit {
 
   constructor(readonly target: Selector, readonly to: string) { super(); }
 
-  apply(doc: Node, strict = false): void {
+  apply(doc: Node, strict = false): Node | null {
     const parentSel = this.target.parent;
     const from = String(this.target.lastSegment);
-    for (const parent of this.navigateOrThrow(doc, parentSel, strict)) {
+    const parents = this.navigateOrThrow(doc, parentSel, strict);
+    if (parents.length === 0) return this.conflict();
+    for (const parent of parents) {
       if (parent instanceof RecordNode) parent.renameField(from, this.to);
       else if (strict) this.assertRecord(parent);
     }
     doc.updateReferences((abs) => this.transformSelectorForRename(abs));
+    return null;
   }
 
   private transformSelectorForRename(other: Selector): Selector {
@@ -652,11 +675,14 @@ export class ListPushBackEdit extends Edit {
 
   constructor(readonly target: Selector, readonly node: Node) { super(); }
 
-  apply(doc: Node, strict = false): void {
-    for (const n of this.navigateOrThrow(doc, this.target, strict)) {
+  apply(doc: Node, strict = false): Node | null {
+    const nodes = this.navigateOrThrow(doc, this.target, strict);
+    if (nodes.length === 0) return this.conflict(this.node.clone());
+    for (const n of nodes) {
       if (n instanceof ListNode) n.pushBack(this.node.clone());
       else if (strict) this.assertList(n);
     }
+    return null;
   }
 
   transformSelector(sel: Selector): Selector | null { return sel; }
@@ -674,11 +700,14 @@ export class ListPushFrontEdit extends Edit {
 
   constructor(readonly target: Selector, readonly node: Node) { super(); }
 
-  apply(doc: Node, strict = false): void {
-    for (const n of this.navigateOrThrow(doc, this.target, strict)) {
+  apply(doc: Node, strict = false): Node | null {
+    const nodes = this.navigateOrThrow(doc, this.target, strict);
+    if (nodes.length === 0) return this.conflict(this.node.clone());
+    for (const n of nodes) {
       if (n instanceof ListNode) n.pushFront(this.node.clone());
       else if (strict) this.assertList(n);
     }
+    return null;
   }
 
   transformSelector(sel: Selector): Selector | null {
@@ -698,11 +727,14 @@ export class ListPopBackEdit extends Edit {
 
   constructor(readonly target: Selector) { super(); }
 
-  apply(doc: Node, strict = false): void {
-    for (const n of this.navigateOrThrow(doc, this.target, strict)) {
+  apply(doc: Node, strict = false): Node | null {
+    const nodes = this.navigateOrThrow(doc, this.target, strict);
+    if (nodes.length === 0) return this.conflict();
+    for (const n of nodes) {
       if (n instanceof ListNode) n.popBack();
       else if (strict) this.assertList(n);
     }
+    return null;
   }
 
   transformSelector(sel: Selector): Selector | null { return sel; }
@@ -727,11 +759,14 @@ export class ListPopFrontEdit extends Edit {
 
   constructor(readonly target: Selector) { super(); }
 
-  apply(doc: Node, strict = false): void {
-    for (const n of this.navigateOrThrow(doc, this.target, strict)) {
+  apply(doc: Node, strict = false): Node | null {
+    const nodes = this.navigateOrThrow(doc, this.target, strict);
+    if (nodes.length === 0) return this.conflict();
+    for (const n of nodes) {
       if (n instanceof ListNode) n.popFront();
       else if (strict) this.assertList(n);
     }
+    return null;
   }
 
   transformSelector(sel: Selector): Selector | null {
@@ -760,11 +795,15 @@ export class UpdateTagEdit extends Edit {
 
   constructor(readonly target: Selector, readonly tag: string) { super(); }
 
-  apply(doc: Node, strict = false): void {
-    for (const n of this.navigateOrThrow(doc, this.target, strict)) {
+  apply(doc: Node, strict = false): Node | null {
+    const nodes = this.navigateOrThrow(doc, this.target, strict);
+    if (nodes.length === 0) return this.conflict();
+    for (const n of nodes) {
       if (n instanceof RecordNode) n.updateTag(this.tag);
       else if (n instanceof ListNode) n.updateTag(this.tag);
+      else if (strict) throw new Error(`${this.kind}: expected record or list, found '${n.kind}'`);
     }
+    return null;
   }
 
   transformSelector(sel: Selector): Selector | null { return sel; }
@@ -784,16 +823,16 @@ export class CopyEdit extends Edit {
 
   override get selectors(): Selector[] { return [this.target, this.source]; }
 
-  apply(doc: Node, strict = false): void {
+  apply(doc: Node, strict = false): Node | null {
     const sourceNodes = doc.navigate(this.source);
     const targetEntries = doc.navigateWithPaths(this.target);
     if (sourceNodes.length === 0) {
-      if (!strict) return;
-      throw new Error(`copy: no nodes match source selector '${this.source.format()}'`);
+      if (strict) throw new Error(`copy: no nodes match source selector '${this.source.format()}'`);
+      return this.conflict();
     }
     if (targetEntries.length === 0) {
-      if (!strict) return;
-      throw new Error(`copy: no nodes match target selector '${this.target.format()}'`);
+      if (strict) throw new Error(`copy: no nodes match target selector '${this.target.format()}'`);
+      return this.conflict();
     }
 
     if (sourceNodes.length === targetEntries.length) {
@@ -805,13 +844,11 @@ export class CopyEdit extends Edit {
     } else if (targetEntries.length === 1 && targetEntries[0]?.node instanceof ListNode) {
       const listNode = targetEntries[0].node;
       listNode.items = sourceNodes.map((n) => n.clone());
-    } else if (!strict) {
-      return;
     } else {
-      throw new Error(
-        `copy: source/target arity mismatch (source=${sourceNodes.length}, target=${targetEntries.length}). Need equal counts or one list target.`,
-      );
+      if (strict) throw new Error(`copy: source/target arity mismatch (source=${sourceNodes.length}, target=${targetEntries.length}). Need equal counts or one list target.`);
+      return this.conflict();
     }
+    return null;
   }
 
   transformSelector(sel: Selector): Selector | null { return sel; }
@@ -836,9 +873,15 @@ export class WrapRecordEdit extends Edit {
 
   constructor(readonly target: Selector, readonly field: string, readonly tag: string) { super(); }
 
-  apply(doc: Node, strict = false): void {
+  apply(doc: Node, strict = false): Node | null {
+    const nodes = doc.navigate(this.target);
+    if (nodes.length === 0) {
+      if (strict) throw new Error(`No nodes match selector '${this.target.format()}'.`);
+      return this.conflict();
+    }
     applyWrap(doc, this.target, (child) => new RecordNode(this.tag, { [this.field]: child }));
     doc.updateReferences((abs) => this.transformSelectorForRecordWrap(abs));
+    return null;
   }
 
   private transformSelectorForRecordWrap(other: Selector): Selector {
@@ -864,9 +907,15 @@ export class WrapListEdit extends Edit {
 
   constructor(readonly target: Selector, readonly tag: string) { super(); }
 
-  apply(doc: Node, strict = false): void {
+  apply(doc: Node, strict = false): Node | null {
+    const nodes = doc.navigate(this.target);
+    if (nodes.length === 0) {
+      if (strict) throw new Error(`No nodes match selector '${this.target.format()}'.`);
+      return this.conflict();
+    }
     applyWrap(doc, this.target, (child) => new ListNode(this.tag, [child]));
     doc.updateReferences((abs) => this.transformSelectorForListWrap(abs));
+    return null;
   }
 
   private transformSelectorForListWrap(other: Selector): Selector {
@@ -1016,6 +1065,8 @@ export class Event {
 
 // ── EventGraph ──────────────────────────────────────────────────────
 
+export type MaterializeResult = { doc: Node; conflicts: Node[] };
+
 export class EventGraph {
   initial: Node;
   events: Map<string, Event>;
@@ -1099,19 +1150,24 @@ export class EventGraph {
     return ordered;
   }
 
-  materialize(frontier?: EventId[]): Node {
+  materialize(frontier?: EventId[]): MaterializeResult {
     const ordered = this.computeTopologicalOrder(frontier);
     const doc = this.initial.clone();
     const applied: { ev: Event; edit: Edit }[] = [];
+    const conflicts: Node[] = [];
     for (const key of ordered) {
       const ev = this.events.get(key) as Event;
       const edit = ev.resolveAgainst(applied);
       if (edit !== null) {
-        edit.apply(doc);
-        applied.push({ ev, edit });
+        const conflict = edit.apply(doc);
+        if (conflict) {
+          conflicts.push(conflict);
+        } else {
+          applied.push({ ev, edit });
+        }
       }
     }
-    return doc;
+    return { doc, conflicts };
   }
 }
 
@@ -1334,8 +1390,17 @@ export class Denicek {
     return doc;
   }
 
+  /** Returns conflicts from the last materialization, if any. */
+  get conflicts(): Node[] {
+    return this.lastConflicts;
+  }
+
+  private lastConflicts: Node[] = [];
+
   private rematerialize(): Node {
-    return this.graph.materialize();
+    const { doc, conflicts } = this.graph.materialize();
+    this.lastConflicts = conflicts;
+    return doc;
   }
 
   toPlain(): unknown {
