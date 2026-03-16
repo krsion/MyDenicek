@@ -186,87 +186,55 @@ export abstract class Node {
   abstract toPlain(): unknown;
   abstract equals(other: Node): boolean;
 
+  /** Returns child nodes matching the given segment, for navigation. */
+  protected abstract resolveSegment(seg: SelectorSegment): { key: SelectorSegment; child: Node }[];
+
+  /** Replaces a child at the given key. Used by copy and wrap operations. */
+  abstract replaceChild(key: SelectorSegment, replacement: Node): void;
+
+  /** Wraps children at the given key with a wrapper function. */
+  abstract wrapChild(key: SelectorSegment, wrapper: (child: Node) => Node): void;
+
+  /** Called during updateReferences — only ReferenceNode overrides to update its selector. */
+  protected applyReferenceTransform(_basePath: Selector, _transform: (abs: Selector) => Selector): void {}
+
   /** Follows selector segments to collect matched nodes. */
   navigate(target: Selector, depth = 0): Node[] {
     if (depth === target.length) return [this];
-    const seg = target.segments[depth]!;
-
-    if (seg === "*" && this instanceof ListNode) {
-      const result: Node[] = [];
-      for (const item of this.items) {
-        result.push(...item.navigate(target, depth + 1));
-      }
-      return result;
+    const entries = this.resolveSegment(target.segments[depth]!);
+    const result: Node[] = [];
+    for (const { child } of entries) {
+      result.push(...child.navigate(target, depth + 1));
     }
-    if (typeof seg === "string" && this instanceof RecordNode && seg in this.fields) {
-      return this.fields[seg]!.navigate(target, depth + 1);
-    }
-    if (typeof seg === "number" && this instanceof ListNode && seg >= 0 && seg < this.items.length) {
-      return this.items[seg]!.navigate(target, depth + 1);
-    }
-    return [];
+    return result;
   }
 
   /** Follows selector segments to collect matched nodes with their concrete paths. */
   navigateWithPaths(target: Selector, depth = 0, path: SelectorSegment[] = []): { path: Selector; node: Node }[] {
     if (depth === target.length) return [{ path: new Selector([...path]), node: this }];
-    const seg = target.segments[depth]!;
-
-    if (seg === "*" && this instanceof ListNode) {
-      const result: { path: Selector; node: Node }[] = [];
-      for (let i = 0; i < this.items.length; i++) {
-        path.push(i);
-        result.push(...this.items[i]!.navigateWithPaths(target, depth + 1, path));
-        path.pop();
-      }
-      return result;
-    }
-    if (typeof seg === "string" && this instanceof RecordNode && seg in this.fields) {
-      path.push(seg);
-      const result = this.fields[seg]!.navigateWithPaths(target, depth + 1, path);
+    const entries = this.resolveSegment(target.segments[depth]!);
+    const result: { path: Selector; node: Node }[] = [];
+    for (const { key, child } of entries) {
+      path.push(key);
+      result.push(...child.navigateWithPaths(target, depth + 1, path));
       path.pop();
-      return result;
     }
-    if (typeof seg === "number" && this instanceof ListNode && seg >= 0 && seg < this.items.length) {
-      path.push(seg);
-      const result = this.items[seg]!.navigateWithPaths(target, depth + 1, path);
-      path.pop();
-      return result;
-    }
-    return [];
+    return result;
   }
 
   /** Walks every node in the tree, calling `visitor` with its path. */
   forEach(visitor: (path: Selector, node: Node) => void, path: SelectorSegment[] = []): void {
     visitor(new Selector([...path]), this);
-    if (this instanceof RecordNode) {
-      for (const k in this.fields) {
-        path.push(k);
-        this.fields[k]!.forEach(visitor, path);
-        path.pop();
-      }
-    } else if (this instanceof ListNode) {
-      for (let i = 0; i < this.items.length; i++) {
-        path.push(i);
-        this.items[i]!.forEach(visitor, path);
-        path.pop();
-      }
-    }
+    this.forEachChild(visitor, path);
   }
+
+  /** Visits children — overridden by RecordNode and ListNode. */
+  protected forEachChild(_visitor: (path: Selector, node: Node) => void, _path: SelectorSegment[]): void {}
 
   /** Rewrites all reference nodes in the tree after a structural edit. Mutates in place. */
   updateReferences(transform: (abs: Selector) => Selector): void {
     this.forEach((basePath, current) => {
-      if (!(current instanceof ReferenceNode)) return;
-      const resolved = ReferenceNode.resolveReference(basePath, current.selector);
-      if (resolved === null) return;
-      const mappedBase = transform(basePath);
-      const mappedRef = transform(resolved);
-      if (current.selector.isAbsolute) {
-        current.selector = new Selector(["/", ...mappedRef.segments]);
-      } else {
-        current.selector = ReferenceNode.makeRelative(mappedBase, mappedRef);
-      }
+      current.applyReferenceTransform(basePath, transform);
     });
   }
 
@@ -330,6 +298,31 @@ export class RecordNode extends Node {
     this.tag = tag;
   }
 
+  protected resolveSegment(seg: SelectorSegment): { key: SelectorSegment; child: Node }[] {
+    if (typeof seg === "string" && seg in this.fields) {
+      return [{ key: seg, child: this.fields[seg]! }];
+    }
+    return [];
+  }
+
+  replaceChild(key: SelectorSegment, replacement: Node): void {
+    if (typeof key === "string") this.fields[key] = replacement;
+  }
+
+  wrapChild(key: SelectorSegment, wrapper: (child: Node) => Node): void {
+    if (typeof key === "string" && key in this.fields) {
+      this.fields[key] = wrapper(this.fields[key]!);
+    }
+  }
+
+  protected override forEachChild(visitor: (path: Selector, node: Node) => void, path: SelectorSegment[]): void {
+    for (const k in this.fields) {
+      path.push(k);
+      this.fields[k]!.forEach(visitor, path);
+      path.pop();
+    }
+  }
+
   clone(): RecordNode {
     const fields: Record<string, Node> = {};
     for (const k in this.fields) fields[k] = this.fields[k]!.clone();
@@ -384,6 +377,40 @@ export class ListNode extends Node {
     this.tag = tag;
   }
 
+  protected resolveSegment(seg: SelectorSegment): { key: SelectorSegment; child: Node }[] {
+    if (seg === "*") {
+      return this.items.map((child, i) => ({ key: i, child }));
+    }
+    if (typeof seg === "number" && seg >= 0 && seg < this.items.length) {
+      return [{ key: seg, child: this.items[seg]! }];
+    }
+    return [];
+  }
+
+  replaceChild(key: SelectorSegment, replacement: Node): void {
+    if (typeof key === "number" && key >= 0 && key < this.items.length) {
+      this.items[key] = replacement;
+    }
+  }
+
+  wrapChild(key: SelectorSegment, wrapper: (child: Node) => Node): void {
+    if (key === "*") {
+      for (let i = 0; i < this.items.length; i++) {
+        this.items[i] = wrapper(this.items[i]!);
+      }
+    } else if (typeof key === "number" && key >= 0 && key < this.items.length) {
+      this.items[key] = wrapper(this.items[key]!);
+    }
+  }
+
+  protected override forEachChild(visitor: (path: Selector, node: Node) => void, path: SelectorSegment[]): void {
+    for (let i = 0; i < this.items.length; i++) {
+      path.push(i);
+      this.items[i]!.forEach(visitor, path);
+      path.pop();
+    }
+  }
+
   clone(): ListNode {
     return new ListNode(this.tag, this.items.map((item) => item.clone()));
   }
@@ -412,6 +439,10 @@ export class PrimitiveNode extends Node {
     this.value = value;
   }
 
+  protected resolveSegment(): { key: SelectorSegment; child: Node }[] { return []; }
+  replaceChild(): void {}
+  wrapChild(): void {}
+
   clone(): PrimitiveNode {
     return new PrimitiveNode(this.value);
   }
@@ -436,6 +467,22 @@ export class ReferenceNode extends Node {
 
   setSelector(sel: Selector): void {
     this.selector = sel;
+  }
+
+  protected resolveSegment(): { key: SelectorSegment; child: Node }[] { return []; }
+  replaceChild(): void {}
+  wrapChild(): void {}
+
+  protected override applyReferenceTransform(basePath: Selector, transform: (abs: Selector) => Selector): void {
+    const resolved = ReferenceNode.resolveReference(basePath, this.selector);
+    if (resolved === null) return;
+    const mappedBase = transform(basePath);
+    const mappedRef = transform(resolved);
+    if (this.selector.isAbsolute) {
+      this.selector = new Selector(["/", ...mappedRef.segments]);
+    } else {
+      this.selector = ReferenceNode.makeRelative(mappedBase, mappedRef);
+    }
   }
 
   clone(): ReferenceNode {
@@ -951,53 +998,26 @@ function shiftIndexSelector(listTarget: Selector, threshold: number, delta: numb
 /** Replaces the node at a given concrete path within the doc tree. Mutates in place. */
 function replaceNodeAtPath(doc: Node, path: Selector, replacement: Node): void {
   if (path.length === 0) return;
-  const parentSel = path.parent;
-  const lastSeg = path.lastSegment;
-  const parents = doc.navigate(parentSel);
+  const parents = doc.navigate(path.parent);
   for (const parent of parents) {
-    if (parent instanceof RecordNode && typeof lastSeg === "string") {
-      parent.fields[lastSeg] = replacement;
-    } else if (parent instanceof ListNode && typeof lastSeg === "number") {
-      parent.items[lastSeg] = replacement;
-    }
+    parent.replaceChild(path.lastSegment, replacement);
   }
 }
 
 /** Applies a wrap operation by navigating to each target node's parent and replacing the child. */
 function applyWrap(doc: Node, target: Selector, wrapper: (child: Node) => Node): void {
-  // Handle root-level wrap
   if (target.length === 0) {
     throw new Error("Cannot wrap the root node.");
   }
 
-  const parentSel = target.parent;
-  const lastSeg = target.lastSegment;
-
-  if (parentSel.length === 0) {
-    // Target is a direct child of root
-    if (lastSeg === "*" && doc instanceof ListNode) {
-      for (let i = 0; i < doc.items.length; i++) {
-        doc.items[i] = wrapper(doc.items[i]!);
-      }
-    } else if (typeof lastSeg === "string" && doc instanceof RecordNode && lastSeg in doc.fields) {
-      doc.fields[lastSeg] = wrapper(doc.fields[lastSeg]!);
-    } else if (typeof lastSeg === "number" && doc instanceof ListNode) {
-      doc.items[lastSeg] = wrapper(doc.items[lastSeg]!);
-    }
+  if (target.length === 1) {
+    doc.wrapChild(target.lastSegment, wrapper);
     return;
   }
 
-  const parents = doc.navigate(parentSel);
+  const parents = doc.navigate(target.parent);
   for (const parent of parents) {
-    if (lastSeg === "*" && parent instanceof ListNode) {
-      for (let i = 0; i < parent.items.length; i++) {
-        parent.items[i] = wrapper(parent.items[i]!);
-      }
-    } else if (typeof lastSeg === "string" && parent instanceof RecordNode && lastSeg in parent.fields) {
-      parent.fields[lastSeg] = wrapper(parent.fields[lastSeg]!);
-    } else if (typeof lastSeg === "number" && parent instanceof ListNode && lastSeg < parent.items.length) {
-      parent.items[lastSeg] = wrapper(parent.items[lastSeg]!);
-    }
+    parent.wrapChild(target.lastSegment, wrapper);
   }
 }
 
