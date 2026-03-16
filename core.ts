@@ -189,7 +189,6 @@ export interface PlainRecord { $tag: string; [key: string]: PlainNode }
  * - {@link ReferenceNode} — a selector pointing to another node in the tree
  */
 export abstract class Node {
-  abstract readonly kind: string;
   abstract clone(): Node;
   abstract toPlain(): unknown;
   abstract equals(other: Node): boolean;
@@ -285,7 +284,6 @@ export abstract class Node {
 
 
 export class RecordNode extends Node {
-  readonly kind = "record";
   tag: string;
   fields: Record<string, Node>;
 
@@ -369,7 +367,6 @@ export class RecordNode extends Node {
 }
 
 export class ListNode extends Node {
-  readonly kind = "list";
   tag: string;
   items: Node[];
 
@@ -451,7 +448,6 @@ export class ListNode extends Node {
 }
 
 export class PrimitiveNode extends Node {
-  readonly kind = "primitive";
   value: PrimitiveValue;
 
   constructor(value: PrimitiveValue) {
@@ -477,7 +473,6 @@ export class PrimitiveNode extends Node {
 }
 
 export class ReferenceNode extends Node {
-  readonly kind = "reference";
   selector: Selector;
 
   constructor(selector: Selector) {
@@ -554,7 +549,6 @@ export class ReferenceNode extends Node {
  * Each subclass implements apply/transformSelector/equals.
  */
 export abstract class Edit {
-  abstract readonly kind: string;
   abstract readonly target: Selector;
   abstract readonly isStructural: boolean;
 
@@ -593,19 +587,19 @@ export abstract class Edit {
   }
 
   protected assertRecord(n: Node): RecordNode {
-    if (!(n instanceof RecordNode)) throw new Error(`${this.kind}: expected record, found '${n.kind}'`);
+    if (!(n instanceof RecordNode)) throw new Error(`${this.constructor.name}: expected record, found '${n.constructor.name}'`);
     return n;
   }
 
   protected assertList(n: Node): ListNode {
-    if (!(n instanceof ListNode)) throw new Error(`${this.kind}: expected list, found '${n.kind}'`);
+    if (!(n instanceof ListNode)) throw new Error(`${this.constructor.name}: expected list, found '${n.constructor.name}'`);
     return n;
   }
 
   /** Builds a conflict node describing an edit that couldn't be applied. */
   protected conflict(data?: Node): RecordNode {
     const fields: Record<string, Node> = {
-      kind: new PrimitiveNode(this.kind),
+      kind: new PrimitiveNode(this.constructor.name),
       target: new PrimitiveNode(this.target.format()),
     };
     if (data) fields.data = data;
@@ -614,7 +608,6 @@ export abstract class Edit {
 }
 
 export class SetValueEdit extends Edit {
-  readonly kind = "set-value";
   readonly isStructural = false;
 
   constructor(readonly target: Selector, readonly value: PrimitiveValue) { super(); }
@@ -624,7 +617,7 @@ export class SetValueEdit extends Edit {
     if (nodes.length === 0) return this.conflict(new PrimitiveNode(this.value));
     for (const node of nodes) {
       if (node instanceof PrimitiveNode) node.value = this.value;
-      else if (strict) throw new Error(`${this.kind}: expected primitive, found '${node.kind}'`);
+      else if (strict) throw new Error(`${this.constructor.name}: expected primitive, found '${node.constructor.name}'`);
     }
     return null;
   }
@@ -639,7 +632,6 @@ export class SetValueEdit extends Edit {
 }
 
 export class RecordAddEdit extends Edit {
-  readonly kind = "record-add";
   readonly isStructural = false;
 
   constructor(readonly target: Selector, readonly node: Node) { super(); }
@@ -666,7 +658,6 @@ export class RecordAddEdit extends Edit {
 }
 
 export class RecordDeleteEdit extends Edit {
-  readonly kind = "record-delete";
   readonly isStructural = true;
 
   constructor(readonly target: Selector) { super(); }
@@ -697,7 +688,6 @@ export class RecordDeleteEdit extends Edit {
 }
 
 export class RecordRenameFieldEdit extends Edit {
-  readonly kind = "record-rename-field";
   readonly isStructural = true;
 
   constructor(readonly target: Selector, readonly to: string) { super(); }
@@ -733,7 +723,6 @@ export class RecordRenameFieldEdit extends Edit {
 }
 
 export class ListPushBackEdit extends Edit {
-  readonly kind = "list-push-back";
   readonly isStructural = true;
 
   constructor(readonly target: Selector, readonly node: Node) { super(); }
@@ -758,7 +747,6 @@ export class ListPushBackEdit extends Edit {
 }
 
 export class ListPushFrontEdit extends Edit {
-  readonly kind = "list-push-front";
   readonly isStructural = true;
 
   constructor(readonly target: Selector, readonly node: Node) { super(); }
@@ -785,7 +773,6 @@ export class ListPushFrontEdit extends Edit {
 }
 
 export class ListPopBackEdit extends Edit {
-  readonly kind = "list-pop-back";
   readonly isStructural = true;
 
   constructor(readonly target: Selector) { super(); }
@@ -817,7 +804,6 @@ export class ListPopBackEdit extends Edit {
 }
 
 export class ListPopFrontEdit extends Edit {
-  readonly kind = "list-pop-front";
   readonly isStructural = true;
 
   constructor(readonly target: Selector) { super(); }
@@ -853,7 +839,6 @@ export class ListPopFrontEdit extends Edit {
 }
 
 export class UpdateTagEdit extends Edit {
-  readonly kind = "update-tag";
   readonly isStructural = false;
 
   constructor(readonly target: Selector, readonly tag: string) { super(); }
@@ -864,7 +849,7 @@ export class UpdateTagEdit extends Edit {
     for (const n of nodes) {
       if (n instanceof RecordNode) n.updateTag(this.tag);
       else if (n instanceof ListNode) n.updateTag(this.tag);
-      else if (strict) throw new Error(`${this.kind}: expected record or list, found '${n.kind}'`);
+      else if (strict) throw new Error(`${this.constructor.name}: expected record or list, found '${n.constructor.name}'`);
     }
     return null;
   }
@@ -879,7 +864,6 @@ export class UpdateTagEdit extends Edit {
 }
 
 export class CopyEdit extends Edit {
-  readonly kind = "copy";
   readonly isStructural = false;
 
   constructor(readonly target: Selector, readonly source: Selector) { super(); }
@@ -931,7 +915,6 @@ export class CopyEdit extends Edit {
 }
 
 export class WrapRecordEdit extends Edit {
-  readonly kind = "wrap-record";
   readonly isStructural = true;
 
   constructor(readonly target: Selector, readonly field: string, readonly tag: string) { super(); }
@@ -965,7 +948,6 @@ export class WrapRecordEdit extends Edit {
 }
 
 export class WrapListEdit extends Edit {
-  readonly kind = "wrap-list";
   readonly isStructural = true;
 
   constructor(readonly target: Selector, readonly tag: string) { super(); }

@@ -348,7 +348,7 @@ Deno.test("commit throws on kind mismatch", () => {
     $tag: "root",
     items: { $tag: "ul", $items: [] as string[] },
   });
-  assertThrows(() => core.add("items", "x", "a"), Error, "expected record, found 'list'");
+  assertThrows(() => core.add("items", "x", "a"), Error, "expected record, found 'ListNode'");
 });
 
 Deno.test("materialize throws on cycle", () => {
