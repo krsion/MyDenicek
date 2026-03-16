@@ -79,6 +79,9 @@ export class Selector {
       this.segments.every((seg, i) => seg === other.segments[i]);
   }
 
+  /***
+   * If `this` is a prefix of `full` (e.g., `a/*` is a prefix of `a/1/b`), returns the specific prefix segments and the remaining suffix. (e.g. a/1, b) Returns null if not a prefix.
+   */
   matchPrefix(full: Selector): PrefixMatch | null {
     if (this.segments.length > full.segments.length) return null;
     const specificPrefix: SelectorSegment[] = [];
@@ -485,18 +488,19 @@ export class ReferenceNode extends Node {
 
 /**
  * A single edit operation on the document tree.
- * Each subclass implements apply/canApply/transformSelector/equals.
+ * Each subclass implements apply/transformSelector/equals.
  */
 export abstract class Edit {
   abstract readonly kind: string;
   abstract readonly target: Selector;
   abstract readonly isStructural: boolean;
 
-  /** Mutates `doc` in place to apply this edit. */
-  abstract apply(doc: Node): void;
-
-  /** Checks whether this edit can be applied to the current document state. */
-  abstract canApply(doc: Node): boolean;
+  /**
+   * Mutates `doc` in place to apply this edit.
+   * When `strict` is true (local edits), throws on type mismatch.
+   * When false (concurrent merge), skips non-matching node types.
+   */
+  abstract apply(doc: Node, strict?: boolean): void;
 
   /** Transforms another selector through the structural change made by this edit. */
   abstract transformSelector(sel: Selector): Selector | null;
@@ -516,24 +520,20 @@ export abstract class Edit {
     return t ? this.withTarget(t) : null;
   }
 
-  private navigateAndThrow(doc: Node, target: Selector): Node[] {
+  protected navigateOrThrow(doc: Node, target: Selector, strict = false): Node[] {
     const nodes = doc.navigate(target);
-    if (nodes.length === 0) {
+    if (nodes.length === 0 && strict) {
       throw new Error(`No nodes match selector '${target.format()}'.`);
     }
     return nodes;
   }
 
-  protected navigateOrThrow(doc: Node, target: Selector): Node[] {
-    return this.navigateAndThrow(doc, target);
-  }
-
-  protected expectRecord(n: Node): RecordNode {
+  protected assertRecord(n: Node): RecordNode {
     if (!(n instanceof RecordNode)) throw new Error(`${this.kind}: expected record, found '${n.kind}'`);
     return n;
   }
 
-  protected expectList(n: Node): ListNode {
+  protected assertList(n: Node): ListNode {
     if (!(n instanceof ListNode)) throw new Error(`${this.kind}: expected list, found '${n.kind}'`);
     return n;
   }
@@ -545,20 +545,17 @@ export class SetValueEdit extends Edit {
 
   constructor(readonly target: Selector, readonly value: PrimitiveValue) { super(); }
 
-  apply(doc: Node): void {
-    for (const node of this.navigateOrThrow(doc, this.target)) {
-      (node as PrimitiveNode).value = this.value;
+  apply(doc: Node, strict = false): void {
+    for (const node of this.navigateOrThrow(doc, this.target, strict)) {
+      if (node instanceof PrimitiveNode) node.value = this.value;
+      else if (strict) throw new Error(`${this.kind}: expected primitive, found '${node.kind}'`);
     }
-  }
-
-  canApply(doc: Node): boolean {
-    return doc.navigate(this.target).length > 0;
   }
 
   transformSelector(sel: Selector): Selector | null { return sel; }
 
   equals(other: Edit): boolean {
-    return other instanceof SetValueEdit && this.target.equals(other.target) && this.value === other.value;
+    return other instanceof SetValueEdit&& this.target.equals(other.target) && this.value === other.value;
   }
 
   withTarget(target: Selector): SetValueEdit { return new SetValueEdit(target, this.value); }
@@ -570,24 +567,19 @@ export class RecordAddEdit extends Edit {
 
   constructor(readonly target: Selector, readonly node: Node) { super(); }
 
-  apply(doc: Node): void {
+  apply(doc: Node, strict = false): void {
     const parentSel = this.target.parent;
     const field = String(this.target.lastSegment);
-    for (const parent of this.navigateOrThrow(doc, parentSel)) {
-      this.expectRecord(parent).addField(field, this.node.clone());
+    for (const parent of this.navigateOrThrow(doc, parentSel, strict)) {
+      if (parent instanceof RecordNode) parent.addField(field, this.node.clone());
+      else if (strict) this.assertRecord(parent);
     }
-  }
-
-  canApply(doc: Node): boolean {
-    const parentSel = this.target.parent;
-    const nodes = doc.navigate(parentSel);
-    return nodes.length > 0 && nodes.every((n) => n instanceof RecordNode);
   }
 
   transformSelector(sel: Selector): Selector | null { return sel; }
 
   equals(other: Edit): boolean {
-    return other instanceof RecordAddEdit && this.target.equals(other.target) && this.node.equals(other.node);
+    return other instanceof RecordAddEdit&& this.target.equals(other.target) && this.node.equals(other.node);
   }
 
   withTarget(target: Selector): RecordAddEdit { return new RecordAddEdit(target, this.node); }
@@ -599,18 +591,13 @@ export class RecordDeleteEdit extends Edit {
 
   constructor(readonly target: Selector) { super(); }
 
-  apply(doc: Node): void {
+  apply(doc: Node, strict = false): void {
     const parentSel = this.target.parent;
     const field = String(this.target.lastSegment);
-    for (const parent of this.navigateOrThrow(doc, parentSel)) {
-      this.expectRecord(parent).deleteField(field);
+    for (const parent of this.navigateOrThrow(doc, parentSel, strict)) {
+      if (parent instanceof RecordNode) parent.deleteField(field);
+      else if (strict) this.assertRecord(parent);
     }
-  }
-
-  canApply(doc: Node): boolean {
-    const parentSel = this.target.parent;
-    const nodes = doc.navigate(parentSel);
-    return nodes.length > 0 && nodes.every((n) => n instanceof RecordNode);
   }
 
   transformSelector(sel: Selector): Selector | null {
@@ -620,7 +607,7 @@ export class RecordDeleteEdit extends Edit {
   }
 
   equals(other: Edit): boolean {
-    return other instanceof RecordDeleteEdit && this.target.equals(other.target);
+    return other instanceof RecordDeleteEdit&& this.target.equals(other.target);
   }
 
   withTarget(target: Selector): RecordDeleteEdit { return new RecordDeleteEdit(target); }
@@ -632,19 +619,14 @@ export class RecordRenameFieldEdit extends Edit {
 
   constructor(readonly target: Selector, readonly to: string) { super(); }
 
-  apply(doc: Node): void {
+  apply(doc: Node, strict = false): void {
     const parentSel = this.target.parent;
     const from = String(this.target.lastSegment);
-    for (const parent of this.navigateOrThrow(doc, parentSel)) {
-      this.expectRecord(parent).renameField(from, this.to);
+    for (const parent of this.navigateOrThrow(doc, parentSel, strict)) {
+      if (parent instanceof RecordNode) parent.renameField(from, this.to);
+      else if (strict) this.assertRecord(parent);
     }
     doc.updateReferences((abs) => this.transformSelectorForRename(abs));
-  }
-
-  canApply(doc: Node): boolean {
-    const parentSel = this.target.parent;
-    const nodes = doc.navigate(parentSel);
-    return nodes.length > 0 && nodes.every((n) => n instanceof RecordNode);
   }
 
   private transformSelectorForRename(other: Selector): Selector {
@@ -670,21 +652,17 @@ export class ListPushBackEdit extends Edit {
 
   constructor(readonly target: Selector, readonly node: Node) { super(); }
 
-  apply(doc: Node): void {
-    for (const n of this.navigateOrThrow(doc, this.target)) {
-      this.expectList(n).pushBack(this.node.clone());
+  apply(doc: Node, strict = false): void {
+    for (const n of this.navigateOrThrow(doc, this.target, strict)) {
+      if (n instanceof ListNode) n.pushBack(this.node.clone());
+      else if (strict) this.assertList(n);
     }
-  }
-
-  canApply(doc: Node): boolean {
-    const nodes = doc.navigate(this.target);
-    return nodes.length > 0 && nodes.every((n) => n instanceof ListNode);
   }
 
   transformSelector(sel: Selector): Selector | null { return sel; }
 
   equals(other: Edit): boolean {
-    return other instanceof ListPushBackEdit && this.target.equals(other.target) && this.node.equals(other.node);
+    return other instanceof ListPushBackEdit&& this.target.equals(other.target) && this.node.equals(other.node);
   }
 
   withTarget(target: Selector): ListPushBackEdit { return new ListPushBackEdit(target, this.node); }
@@ -696,15 +674,11 @@ export class ListPushFrontEdit extends Edit {
 
   constructor(readonly target: Selector, readonly node: Node) { super(); }
 
-  apply(doc: Node): void {
-    for (const n of this.navigateOrThrow(doc, this.target)) {
-      this.expectList(n).pushFront(this.node.clone());
+  apply(doc: Node, strict = false): void {
+    for (const n of this.navigateOrThrow(doc, this.target, strict)) {
+      if (n instanceof ListNode) n.pushFront(this.node.clone());
+      else if (strict) this.assertList(n);
     }
-  }
-
-  canApply(doc: Node): boolean {
-    const nodes = doc.navigate(this.target);
-    return nodes.length > 0 && nodes.every((n) => n instanceof ListNode);
   }
 
   transformSelector(sel: Selector): Selector | null {
@@ -724,18 +698,21 @@ export class ListPopBackEdit extends Edit {
 
   constructor(readonly target: Selector) { super(); }
 
-  apply(doc: Node): void {
-    for (const n of this.navigateOrThrow(doc, this.target)) {
-      this.expectList(n).popBack();
+  apply(doc: Node, strict = false): void {
+    for (const n of this.navigateOrThrow(doc, this.target, strict)) {
+      if (n instanceof ListNode) n.popBack();
+      else if (strict) this.assertList(n);
     }
   }
 
-  canApply(doc: Node): boolean {
-    const nodes = doc.navigate(this.target);
-    return nodes.length > 0 && nodes.every((n) => n instanceof ListNode && n.items.length > 0);
-  }
-
   transformSelector(sel: Selector): Selector | null { return sel; }
+
+  override transform(prior: Edit): Edit | null {
+    if ((prior instanceof ListPopBackEdit || prior instanceof ListPopFrontEdit) && prior.target.equals(this.target)) {
+      return null;
+    }
+    return super.transform(prior);
+  }
 
   equals(other: Edit): boolean {
     return other instanceof ListPopBackEdit && this.target.equals(other.target);
@@ -750,21 +727,24 @@ export class ListPopFrontEdit extends Edit {
 
   constructor(readonly target: Selector) { super(); }
 
-  apply(doc: Node): void {
-    for (const n of this.navigateOrThrow(doc, this.target)) {
-      this.expectList(n).popFront();
+  apply(doc: Node, strict = false): void {
+    for (const n of this.navigateOrThrow(doc, this.target, strict)) {
+      if (n instanceof ListNode) n.popFront();
+      else if (strict) this.assertList(n);
     }
-  }
-
-  canApply(doc: Node): boolean {
-    const nodes = doc.navigate(this.target);
-    return nodes.length > 0 && nodes.every((n) => n instanceof ListNode && n.items.length > 0);
   }
 
   transformSelector(sel: Selector): Selector | null {
     const m = this.target.matchPrefix(sel);
     if (m != null && m.rest.length > 0 && m.rest.segments[0] === 0) return null;
     return shiftIndexSelector(this.target, 1, -1, sel);
+  }
+
+  override transform(prior: Edit): Edit | null {
+    if ((prior instanceof ListPopBackEdit || prior instanceof ListPopFrontEdit) && prior.target.equals(this.target)) {
+      return null;
+    }
+    return super.transform(prior);
   }
 
   equals(other: Edit): boolean {
@@ -780,23 +760,17 @@ export class UpdateTagEdit extends Edit {
 
   constructor(readonly target: Selector, readonly tag: string) { super(); }
 
-  apply(doc: Node): void {
-    for (const n of this.navigateOrThrow(doc, this.target)) {
+  apply(doc: Node, strict = false): void {
+    for (const n of this.navigateOrThrow(doc, this.target, strict)) {
       if (n instanceof RecordNode) n.updateTag(this.tag);
       else if (n instanceof ListNode) n.updateTag(this.tag);
-      else throw new Error(`update-tag: expected record or list, found '${n.kind}'`);
     }
-  }
-
-  canApply(doc: Node): boolean {
-    const nodes = doc.navigate(this.target);
-    return nodes.length > 0 && nodes.every((n) => n instanceof RecordNode || n instanceof ListNode);
   }
 
   transformSelector(sel: Selector): Selector | null { return sel; }
 
   equals(other: Edit): boolean {
-    return other instanceof UpdateTagEdit && this.target.equals(other.target) && this.tag === other.tag;
+    return other instanceof UpdateTagEdit&& this.target.equals(other.target) && this.tag === other.tag;
   }
 
   withTarget(target: Selector): UpdateTagEdit { return new UpdateTagEdit(target, this.tag); }
@@ -810,13 +784,15 @@ export class CopyEdit extends Edit {
 
   override get selectors(): Selector[] { return [this.target, this.source]; }
 
-  apply(doc: Node): void {
+  apply(doc: Node, strict = false): void {
     const sourceNodes = doc.navigate(this.source);
     const targetEntries = doc.navigateWithPaths(this.target);
     if (sourceNodes.length === 0) {
+      if (!strict) return;
       throw new Error(`copy: no nodes match source selector '${this.source.format()}'`);
     }
     if (targetEntries.length === 0) {
+      if (!strict) return;
       throw new Error(`copy: no nodes match target selector '${this.target.format()}'`);
     }
 
@@ -829,22 +805,13 @@ export class CopyEdit extends Edit {
     } else if (targetEntries.length === 1 && targetEntries[0]?.node instanceof ListNode) {
       const listNode = targetEntries[0].node;
       listNode.items = sourceNodes.map((n) => n.clone());
-      listNode.tag = listNode.tag;
+    } else if (!strict) {
+      return;
     } else {
       throw new Error(
         `copy: source/target arity mismatch (source=${sourceNodes.length}, target=${targetEntries.length}). Need equal counts or one list target.`,
       );
     }
-  }
-
-  canApply(doc: Node): boolean {
-    const sourceNodes = doc.navigate(this.source);
-    const targetNodes = doc.navigate(this.target);
-    if (sourceNodes.length === 0 || targetNodes.length === 0) return false;
-    if (sourceNodes.length !== targetNodes.length) {
-      if (targetNodes.length !== 1 || !(targetNodes[0] instanceof ListNode)) return false;
-    }
-    return true;
   }
 
   transformSelector(sel: Selector): Selector | null { return sel; }
@@ -869,13 +836,9 @@ export class WrapRecordEdit extends Edit {
 
   constructor(readonly target: Selector, readonly field: string, readonly tag: string) { super(); }
 
-  apply(doc: Node): void {
+  apply(doc: Node, strict = false): void {
     applyWrap(doc, this.target, (child) => new RecordNode(this.tag, { [this.field]: child }));
     doc.updateReferences((abs) => this.transformSelectorForRecordWrap(abs));
-  }
-
-  canApply(doc: Node): boolean {
-    return doc.navigate(this.target).length > 0;
   }
 
   private transformSelectorForRecordWrap(other: Selector): Selector {
@@ -901,13 +864,9 @@ export class WrapListEdit extends Edit {
 
   constructor(readonly target: Selector, readonly tag: string) { super(); }
 
-  apply(doc: Node): void {
+  apply(doc: Node, strict = false): void {
     applyWrap(doc, this.target, (child) => new ListNode(this.tag, [child]));
     doc.updateReferences((abs) => this.transformSelectorForListWrap(abs));
-  }
-
-  canApply(doc: Node): boolean {
-    return doc.navigate(this.target).length > 0;
   }
 
   private transformSelectorForListWrap(other: Selector): Selector {
@@ -1041,19 +1000,17 @@ export class Event {
   }
 
   /** Transforms this event's edit against all concurrent prior structural edits. */
-  resolveAgainst(applied: { ev: Event; edit: Edit }[]): { edit: Edit | null; hasConcurrent: boolean } {
+  resolveAgainst(applied: { ev: Event; edit: Edit }[]): Edit | null {
     let edit: Edit | null = this.edit;
-    let hasConcurrent = false;
     for (const prior of applied) {
       if (this.clock.dominates(prior.ev.clock)) continue;
       if (this.isConcurrentWith(prior.ev)) {
-        hasConcurrent = true;
         if (edit !== null && prior.edit.isStructural) {
           edit = edit.transform(prior.edit);
         }
       }
     }
-    return { edit, hasConcurrent };
+    return edit;
   }
 }
 
@@ -1148,9 +1105,8 @@ export class EventGraph {
     const applied: { ev: Event; edit: Edit }[] = [];
     for (const key of ordered) {
       const ev = this.events.get(key) as Event;
-      const { edit, hasConcurrent } = ev.resolveAgainst(applied);
+      const edit = ev.resolveAgainst(applied);
       if (edit !== null) {
-        if (hasConcurrent && !edit.canApply(doc)) continue;
         edit.apply(doc);
         applied.push({ ev, edit });
       }
@@ -1209,9 +1165,8 @@ export class Denicek {
   private commit(edit: Edit): void {
     const doc = this.cachedDoc ?? this.rematerialize();
     try {
-      edit.apply(doc);
+      edit.apply(doc, true);
     } catch (e) {
-      // Edit may have partially mutated doc — invalidate cache
       this.cachedDoc = null;
       throw e;
     }
