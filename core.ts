@@ -70,10 +70,6 @@ export class Selector {
     return new Selector(this.segments.slice(start, end));
   }
 
-  append(...extra: SelectorSegment[]): Selector {
-    return new Selector([...this.segments, ...extra]);
-  }
-
   equals(other: Selector): boolean {
     return this.segments.length === other.segments.length &&
       this.segments.every((seg, i) => seg === other.segments[i]);
@@ -270,10 +266,6 @@ export abstract class Node {
     }
   }
 
-  format(): string {
-    return JSON.stringify(this.toPlain(), null, 2);
-  }
-
   static fromPlain(plain: PlainNode): Node {
     if (plain === null || typeof plain !== "object") return new PrimitiveNode(plain);
     if ("$ref" in plain) return new ReferenceNode(Selector.parse((plain as PlainRef).$ref));
@@ -467,10 +459,6 @@ export class PrimitiveNode extends Node {
     this.value = value;
   }
 
-  setValue(value: PrimitiveValue): void {
-    this.value = value;
-  }
-
   protected resolveSegment(): { key: SelectorSegment; child: Node }[] { return []; }
   replaceChild(): void {}
   wrapChild(): void {}
@@ -495,10 +483,6 @@ export class ReferenceNode extends Node {
   constructor(selector: Selector) {
     super();
     this.selector = selector;
-  }
-
-  setSelector(sel: Selector): void {
-    this.selector = sel;
   }
 
   protected resolveSegment(): { key: SelectorSegment; child: Node }[] { return []; }
