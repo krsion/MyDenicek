@@ -98,6 +98,18 @@ export class Selector {
     }
     return { specificPrefix: new Selector(specificPrefix), rest: full.slice(this.segments.length) };
   }
+
+  /** Shifts numeric indices in `other` that traverse through this selector's list target. */
+  shiftIndex(other: Selector, threshold: number, delta: number): Selector | null {
+    const m = this.matchPrefix(other);
+    if (m == null || m.rest.length === 0) return other;
+    const head = m.rest.segments[0]!;
+    const tail = m.rest.slice(1);
+    if (typeof head !== "number") return other;
+    const shifted = head + (head >= threshold ? delta : 0);
+    if (shifted < 0) return null;
+    return new Selector([...m.specificPrefix.segments, shifted, ...tail.segments]);
+  }
 }
 
 
@@ -236,6 +248,26 @@ export abstract class Node {
     this.forEach((basePath, current) => {
       current.applyReferenceTransform(basePath, transform);
     });
+  }
+
+  /** Replaces the node at a concrete path within this tree. */
+  replaceAtPath(path: Selector, replacement: Node): void {
+    if (path.length === 0) return;
+    for (const parent of this.navigate(path.parent)) {
+      parent.replaceChild(path.lastSegment, replacement);
+    }
+  }
+
+  /** Wraps nodes at the given selector path with a wrapper function. */
+  wrapAtPath(target: Selector, wrapper: (child: Node) => Node): void {
+    if (target.length === 0) throw new Error("Cannot wrap the root node.");
+    if (target.length === 1) {
+      this.wrapChild(target.lastSegment, wrapper);
+      return;
+    }
+    for (const parent of this.navigate(target.parent)) {
+      parent.wrapChild(target.lastSegment, wrapper);
+    }
   }
 
   format(): string {
@@ -758,7 +790,7 @@ export class ListPushFrontEdit extends Edit {
   }
 
   transformSelector(sel: Selector): Selector | null {
-    return shiftIndexSelector(this.target, 0, +1, sel);
+    return this.target.shiftIndex(sel, 0, +1);
   }
 
   equals(other: Edit): boolean {
@@ -819,7 +851,7 @@ export class ListPopFrontEdit extends Edit {
   transformSelector(sel: Selector): Selector | null {
     const m = this.target.matchPrefix(sel);
     if (m != null && m.rest.length > 0 && m.rest.segments[0] === 0) return null;
-    return shiftIndexSelector(this.target, 1, -1, sel);
+    return this.target.shiftIndex(sel, 1, -1);
   }
 
   override transform(prior: Edit): Edit | null {
@@ -886,7 +918,7 @@ export class CopyEdit extends Edit {
       for (let i = 0; i < sourceNodes.length; i++) {
         const replacementNode = sourceNodes[i]!.clone();
         const entry = targetEntries[i]!;
-        replaceNodeAtPath(doc, entry.path, replacementNode);
+        doc.replaceAtPath(entry.path, replacementNode);
       }
     } else if (targetEntries.length === 1 && targetEntries[0]?.node instanceof ListNode) {
       const listNode = targetEntries[0].node;
@@ -926,7 +958,7 @@ export class WrapRecordEdit extends Edit {
       if (strict) throw new Error(`No nodes match selector '${this.target.format()}'.`);
       return this.conflict();
     }
-    applyWrap(doc, this.target, (child) => new RecordNode(this.tag, { [this.field]: child }));
+    doc.wrapAtPath(this.target, (child) => new RecordNode(this.tag, { [this.field]: child }));
     doc.updateReferences((abs) => this.transformSelectorForRecordWrap(abs));
     return null;
   }
@@ -960,7 +992,7 @@ export class WrapListEdit extends Edit {
       if (strict) throw new Error(`No nodes match selector '${this.target.format()}'.`);
       return this.conflict();
     }
-    applyWrap(doc, this.target, (child) => new ListNode(this.tag, [child]));
+    doc.wrapAtPath(this.target, (child) => new ListNode(this.tag, [child]));
     doc.updateReferences((abs) => this.transformSelectorForListWrap(abs));
     return null;
   }
@@ -981,45 +1013,6 @@ export class WrapListEdit extends Edit {
   withTarget(target: Selector): WrapListEdit { return new WrapListEdit(target, this.tag); }
 }
 
-// ── Edit helpers ────────────────────────────────────────────────────
-
-/** Shift numeric indices >= threshold by delta within a list targeted by listTarget. */
-function shiftIndexSelector(listTarget: Selector, threshold: number, delta: number, other: Selector): Selector | null {
-  const m = listTarget.matchPrefix(other);
-  if (m == null || m.rest.length === 0) return other;
-  const head = m.rest.segments[0]!;
-  const tail = m.rest.slice(1);
-  if (typeof head !== "number") return other;
-  const shifted = head + (head >= threshold ? delta : 0);
-  if (shifted < 0) return null;
-  return new Selector([...m.specificPrefix.segments, shifted, ...tail.segments]);
-}
-
-/** Replaces the node at a given concrete path within the doc tree. Mutates in place. */
-function replaceNodeAtPath(doc: Node, path: Selector, replacement: Node): void {
-  if (path.length === 0) return;
-  const parents = doc.navigate(path.parent);
-  for (const parent of parents) {
-    parent.replaceChild(path.lastSegment, replacement);
-  }
-}
-
-/** Applies a wrap operation by navigating to each target node's parent and replacing the child. */
-function applyWrap(doc: Node, target: Selector, wrapper: (child: Node) => Node): void {
-  if (target.length === 0) {
-    throw new Error("Cannot wrap the root node.");
-  }
-
-  if (target.length === 1) {
-    doc.wrapChild(target.lastSegment, wrapper);
-    return;
-  }
-
-  const parents = doc.navigate(target.parent);
-  for (const parent of parents) {
-    parent.wrapChild(target.lastSegment, wrapper);
-  }
-}
 
 // ── Event ───────────────────────────────────────────────────────────
 
