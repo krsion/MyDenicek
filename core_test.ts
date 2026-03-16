@@ -6,12 +6,9 @@ import {
   EventId,
   VectorClock,
   RecordAddEdit,
-  materialize,
-  primitive,
-  record,
-  parseSelector,
-  Selector,
+  RecordNode,
   PrimitiveNode,
+  Selector,
 } from "./core.ts";
 
 /** Exchange events between two peers so both converge (frontier-based). */
@@ -369,7 +366,7 @@ Deno.test("materialize throws on cycle", () => {
     new VectorClock({ b: 0 }),
   ));
   const graph = new EventGraph(
-    record("root", {}),
+    new RecordNode("root", {}),
     events,
     [new EventId("a", 0), new EventId("b", 0)],
   );

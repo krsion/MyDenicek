@@ -97,8 +97,7 @@ export class Selector {
   }
 }
 
-// Backward-compatible export
-export const parseSelector = Selector.parse;
+
 
 // ── EventId ─────────────────────────────────────────────────────────
 
@@ -288,9 +287,7 @@ export abstract class Node {
   }
 }
 
-// Backward-compatible factory exports
-export const primitive = (value: PrimitiveValue): PrimitiveNode => new PrimitiveNode(value);
-export const record = (tag: string, fields: Record<string, Node>): RecordNode => new RecordNode(tag, fields);
+
 
 export class RecordNode extends Node {
   readonly kind = "record";
@@ -1162,17 +1159,6 @@ export class EventGraph {
   }
 }
 
-// Backward-compatible standalone materialize
-export function materialize(graphLike: { initial: Node; events: Record<string, Event> | Map<string, Event>; frontiers: EventId[] }, frontiers?: EventId[]): Node {
-  let eventsMap: Map<string, Event>;
-  if (graphLike.events instanceof Map) {
-    eventsMap = graphLike.events;
-  } else {
-    eventsMap = new Map(Object.entries(graphLike.events));
-  }
-  const graph = new EventGraph(graphLike.initial, eventsMap, graphLike.frontiers);
-  return graph.materialize(frontiers);
-}
 
 // ── Denicek (collaborative document peer) ───────────────────────────
 
