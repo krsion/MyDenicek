@@ -167,6 +167,12 @@ export class VectorClock {
     return { ...this.entries };
   }
 
+  equals(other: VectorClock): boolean {
+    const aKeys = Object.keys(this.entries);
+    if (aKeys.length !== Object.keys(other.entries).length) return false;
+    return aKeys.every((k) => this.entries[k] === other.get(k));
+  }
+
   clone(): VectorClock {
     return new VectorClock(this.entries);
   }
@@ -201,6 +207,21 @@ export abstract class Node {
 
   /** Wraps children at the given key with a wrapper function. */
   abstract wrapChild(key: SelectorSegment, wrapper: (child: Node) => Node): void;
+
+  // ── Polymorphic edit operations ───────────────────────────────────
+  // Subclasses override the methods they support and return true.
+  // Default: return false (not applicable to this node type).
+
+  setPrimitive(_value: PrimitiveValue): boolean { return false; }
+  addField(_name: string, _value: Node): boolean { return false; }
+  deleteField(_name: string): boolean { return false; }
+  renameField(_from: string, _to: string): boolean { return false; }
+  pushBack(_node: Node): boolean { return false; }
+  pushFront(_node: Node): boolean { return false; }
+  popBack(): boolean { return false; }
+  popFront(): boolean { return false; }
+  updateTag(_tag: string): boolean { return false; }
+  setItems(_items: Node[]): boolean { return false; }
 
   /** Called during updateReferences — only ReferenceNode overrides to update its selector. */
   protected applyReferenceTransform(_basePath: Selector, _transform: (abs: Selector) => Selector): void {}
@@ -293,20 +314,22 @@ export class RecordNode extends Node {
     this.fields = fields;
   }
 
-  addField(name: string, value: Node): void {
+  override addField(name: string, value: Node): boolean {
     this.fields[name] = value;
+    return true;
   }
 
-  deleteField(name: string): void {
+  override deleteField(name: string): boolean {
     const result: Record<string, Node> = {};
     for (const k in this.fields) {
       if (k !== name) result[k] = this.fields[k]!;
     }
     this.fields = result;
+    return true;
   }
 
-  renameField(from: string, to: string): void {
-    if (from === to || !(from in this.fields)) return;
+  override renameField(from: string, to: string): boolean {
+    if (from === to || !(from in this.fields)) return true;
     const result: Record<string, Node> = {};
     for (const k in this.fields) {
       if (k === from) result[to] = this.fields[k]!;
@@ -314,10 +337,12 @@ export class RecordNode extends Node {
       else result[k] = this.fields[k]!;
     }
     this.fields = result;
+    return true;
   }
 
-  updateTag(tag: string): void {
+  override updateTag(tag: string): boolean {
     this.tag = tag;
+    return true;
   }
 
   protected resolveSegment(seg: SelectorSegment): { key: SelectorSegment; child: Node }[] {
@@ -376,26 +401,36 @@ export class ListNode extends Node {
     this.items = items;
   }
 
-  pushBack(node: Node): void {
+  override pushBack(node: Node): boolean {
     this.items.push(node);
+    return true;
   }
 
-  pushFront(node: Node): void {
+  override pushFront(node: Node): boolean {
     this.items.unshift(node);
+    return true;
   }
 
-  popBack(): Node {
+  override popBack(): boolean {
     if (this.items.length === 0) throw new Error("list-pop-back: list is empty");
-    return this.items.pop()!;
+    this.items.pop();
+    return true;
   }
 
-  popFront(): Node {
+  override popFront(): boolean {
     if (this.items.length === 0) throw new Error("list-pop-front: list is empty");
-    return this.items.shift()!;
+    this.items.shift();
+    return true;
   }
 
-  updateTag(tag: string): void {
+  override updateTag(tag: string): boolean {
     this.tag = tag;
+    return true;
+  }
+
+  override setItems(items: Node[]): boolean {
+    this.items = items;
+    return true;
   }
 
   protected resolveSegment(seg: SelectorSegment): { key: SelectorSegment; child: Node }[] {
@@ -453,6 +488,11 @@ export class PrimitiveNode extends Node {
   constructor(value: PrimitiveValue) {
     super();
     this.value = value;
+  }
+
+  override setPrimitive(value: PrimitiveValue): boolean {
+    this.value = value;
+    return true;
   }
 
   protected resolveSegment(): { key: SelectorSegment; child: Node }[] { return []; }
@@ -616,8 +656,9 @@ export class SetValueEdit extends Edit {
     const nodes = this.navigateOrThrow(doc, this.target, strict);
     if (nodes.length === 0) return this.conflict(new PrimitiveNode(this.value));
     for (const node of nodes) {
-      if (node instanceof PrimitiveNode) node.value = this.value;
-      else if (strict) throw new Error(`${this.constructor.name}: expected primitive, found '${node.constructor.name}'`);
+      if (!node.setPrimitive(this.value) && strict) {
+        throw new Error(`${this.constructor.name}: expected PrimitiveNode, found '${node.constructor.name}'`);
+      }
     }
     return null;
   }
@@ -642,8 +683,7 @@ export class RecordAddEdit extends Edit {
     const parents = this.navigateOrThrow(doc, parentSel, strict);
     if (parents.length === 0) return this.conflict(this.node.clone());
     for (const parent of parents) {
-      if (parent instanceof RecordNode) parent.addField(field, this.node.clone());
-      else if (strict) this.assertRecord(parent);
+      if (!parent.addField(field, this.node.clone()) && strict) this.assertRecord(parent);
     }
     return null;
   }
@@ -668,8 +708,7 @@ export class RecordDeleteEdit extends Edit {
     const parents = this.navigateOrThrow(doc, parentSel, strict);
     if (parents.length === 0) return this.conflict();
     for (const parent of parents) {
-      if (parent instanceof RecordNode) parent.deleteField(field);
-      else if (strict) this.assertRecord(parent);
+      if (!parent.deleteField(field) && strict) this.assertRecord(parent);
     }
     return null;
   }
@@ -698,21 +737,16 @@ export class RecordRenameFieldEdit extends Edit {
     const parents = this.navigateOrThrow(doc, parentSel, strict);
     if (parents.length === 0) return this.conflict();
     for (const parent of parents) {
-      if (parent instanceof RecordNode) parent.renameField(from, this.to);
-      else if (strict) this.assertRecord(parent);
+      if (!parent.renameField(from, this.to) && strict) this.assertRecord(parent);
     }
-    doc.updateReferences((abs) => this.transformSelectorForRename(abs));
+    doc.updateReferences((abs) => this.transformSelector(abs)!);
     return null;
   }
 
-  private transformSelectorForRename(other: Selector): Selector {
-    const m = this.target.matchPrefix(other);
-    if (m == null) return other;
-    return new Selector([...m.specificPrefix.segments.slice(0, -1), this.to, ...m.rest.segments]);
-  }
-
   transformSelector(sel: Selector): Selector | null {
-    return this.transformSelectorForRename(sel);
+    const m = this.target.matchPrefix(sel);
+    if (m == null) return sel;
+    return new Selector([...m.specificPrefix.segments.slice(0, -1), this.to, ...m.rest.segments]);
   }
 
   equals(other: Edit): boolean {
@@ -731,8 +765,7 @@ export class ListPushBackEdit extends Edit {
     const nodes = this.navigateOrThrow(doc, this.target, strict);
     if (nodes.length === 0) return this.conflict(this.node.clone());
     for (const n of nodes) {
-      if (n instanceof ListNode) n.pushBack(this.node.clone());
-      else if (strict) this.assertList(n);
+      if (!n.pushBack(this.node.clone()) && strict) this.assertList(n);
     }
     return null;
   }
@@ -755,8 +788,7 @@ export class ListPushFrontEdit extends Edit {
     const nodes = this.navigateOrThrow(doc, this.target, strict);
     if (nodes.length === 0) return this.conflict(this.node.clone());
     for (const n of nodes) {
-      if (n instanceof ListNode) n.pushFront(this.node.clone());
-      else if (strict) this.assertList(n);
+      if (!n.pushFront(this.node.clone()) && strict) this.assertList(n);
     }
     return null;
   }
@@ -781,8 +813,7 @@ export class ListPopBackEdit extends Edit {
     const nodes = this.navigateOrThrow(doc, this.target, strict);
     if (nodes.length === 0) return this.conflict();
     for (const n of nodes) {
-      if (n instanceof ListNode) n.popBack();
-      else if (strict) this.assertList(n);
+      if (!n.popBack() && strict) this.assertList(n);
     }
     return null;
   }
@@ -812,8 +843,7 @@ export class ListPopFrontEdit extends Edit {
     const nodes = this.navigateOrThrow(doc, this.target, strict);
     if (nodes.length === 0) return this.conflict();
     for (const n of nodes) {
-      if (n instanceof ListNode) n.popFront();
-      else if (strict) this.assertList(n);
+      if (!n.popFront() && strict) this.assertList(n);
     }
     return null;
   }
@@ -847,9 +877,9 @@ export class UpdateTagEdit extends Edit {
     const nodes = this.navigateOrThrow(doc, this.target, strict);
     if (nodes.length === 0) return this.conflict();
     for (const n of nodes) {
-      if (n instanceof RecordNode) n.updateTag(this.tag);
-      else if (n instanceof ListNode) n.updateTag(this.tag);
-      else if (strict) throw new Error(`${this.constructor.name}: expected record or list, found '${n.constructor.name}'`);
+      if (!n.updateTag(this.tag) && strict) {
+        throw new Error(`${this.constructor.name}: expected RecordNode or ListNode, found '${n.constructor.name}'`);
+      }
     }
     return null;
   }
@@ -888,9 +918,8 @@ export class CopyEdit extends Edit {
         const entry = targetEntries[i]!;
         doc.replaceAtPath(entry.path, replacementNode);
       }
-    } else if (targetEntries.length === 1 && targetEntries[0]?.node instanceof ListNode) {
-      const listNode = targetEntries[0].node;
-      listNode.items = sourceNodes.map((n) => n.clone());
+    } else if (targetEntries.length === 1 && targetEntries[0]!.node.setItems(sourceNodes.map((n) => n.clone()))) {
+      // setItems succeeded — target was a ListNode
     } else {
       if (strict) throw new Error(`copy: source/target arity mismatch (source=${sourceNodes.length}, target=${targetEntries.length}). Need equal counts or one list target.`);
       return this.conflict();
@@ -926,17 +955,13 @@ export class WrapRecordEdit extends Edit {
       return this.conflict();
     }
     doc.wrapAtPath(this.target, (child) => new RecordNode(this.tag, { [this.field]: child }));
-    doc.updateReferences((abs) => this.transformSelectorForRecordWrap(abs));
+    doc.updateReferences((abs) => this.transformSelector(abs)!);
     return null;
   }
 
-  private transformSelectorForRecordWrap(other: Selector): Selector {
-    const m = this.target.matchPrefix(other);
-    return m == null ? other : new Selector([...m.specificPrefix.segments, this.field, ...m.rest.segments]);
-  }
-
   transformSelector(sel: Selector): Selector | null {
-    return this.transformSelectorForRecordWrap(sel);
+    const m = this.target.matchPrefix(sel);
+    return m == null ? sel : new Selector([...m.specificPrefix.segments, this.field, ...m.rest.segments]);
   }
 
   equals(other: Edit): boolean {
@@ -959,17 +984,13 @@ export class WrapListEdit extends Edit {
       return this.conflict();
     }
     doc.wrapAtPath(this.target, (child) => new ListNode(this.tag, [child]));
-    doc.updateReferences((abs) => this.transformSelectorForListWrap(abs));
+    doc.updateReferences((abs) => this.transformSelector(abs)!);
     return null;
   }
 
-  private transformSelectorForListWrap(other: Selector): Selector {
-    const m = this.target.matchPrefix(other);
-    return m == null ? other : new Selector([...m.specificPrefix.segments, "*", ...m.rest.segments]);
-  }
-
   transformSelector(sel: Selector): Selector | null {
-    return this.transformSelectorForListWrap(sel);
+    const m = this.target.matchPrefix(sel);
+    return m == null ? sel : new Selector([...m.specificPrefix.segments, "*", ...m.rest.segments]);
   }
 
   equals(other: Edit): boolean {
@@ -996,15 +1017,7 @@ export class Event {
     for (let i = 0; i < this.parents.length; i++) {
       if (!this.parents[i]!.equals(other.parents[i]!)) return false;
     }
-    const aKeys = this.clock.clone();
-    const bKeys = other.clock.clone();
-    const aRec = aKeys.toRecord();
-    const bRec = bKeys.toRecord();
-    const aKeyList = Object.keys(aRec);
-    if (aKeyList.length !== Object.keys(bRec).length) return false;
-    for (const k of aKeyList) {
-      if (aRec[k] !== bRec[k]) return false;
-    }
+    if (!this.clock.equals(other.clock)) return false;
     return this.edit.equals(other.edit);
   }
 
@@ -1057,8 +1070,14 @@ export class EventGraph {
     this.frontierIds = frontiers ?? [];
   }
 
-  get frontiers(): EventId[] {
-    return this.frontierIds;
+  insertEvent(event: Event): void {
+    event.validate(this.events);
+    this.events.set(event.id.format(), event);
+    const parentKeys = new Set(event.parents.map((p) => p.format()));
+    this.frontierIds = [
+      ...this.frontierIds.filter((h) => !parentKeys.has(h.format())),
+      event.id,
+    ].sort((a, b) => a.compareTo(b));
   }
 
   computeClosure(frontier: EventId[], strict = true): Set<string> {
@@ -1162,7 +1181,6 @@ export class EventGraph {
  */
 export class Denicek {
   readonly peer: string;
-  private initialDoc: Node;
   private graph: EventGraph;
   private pendingEvents: Event[] = [];
   private bufferedEvents: Event[] = [];
@@ -1174,27 +1192,11 @@ export class Denicek {
     this.peer = peer;
     if (arg && typeof arg === "object" && arg !== null && "events" in arg) {
       const g = arg as { initial: Node; events: Record<string, Event>; frontiers: EventId[] };
-      this.initialDoc = g.initial;
       const eventsMap = new Map<string, Event>(Object.entries(g.events));
       this.graph = new EventGraph(g.initial, eventsMap, g.frontiers);
     } else {
-      this.initialDoc = Node.fromPlain((arg as PlainNode) ?? { $tag: "root" });
-      this.graph = new EventGraph(this.initialDoc);
+      this.graph = new EventGraph(Node.fromPlain((arg as PlainNode) ?? { $tag: "root" }));
     }
-  }
-
-  private updateFrontiers(event: Event): void {
-    const parentKeys = new Set(event.parents.map((p) => p.format()));
-    this.graph.frontierIds = [
-      ...this.graph.frontierIds.filter((h) => !parentKeys.has(h.format())),
-      event.id,
-    ].sort((a, b) => a.compareTo(b));
-  }
-
-  private insertEvent(event: Event): void {
-    event.validate(this.graph.events);
-    this.graph.events.set(event.id.format(), event);
-    this.updateFrontiers(event);
   }
 
   private commit(edit: Edit): void {
@@ -1213,7 +1215,7 @@ export class Denicek {
     }
     const seq = clock.tick(this.peer);
     const event = new Event(new EventId(this.peer, seq), parents, edit, clock);
-    this.insertEvent(event);
+    this.graph.insertEvent(event);
     this.pendingEvents.push(event);
     this.cachedDoc = doc;
   }
@@ -1294,7 +1296,7 @@ export class Denicek {
       const event = pending.get(key)!;
       pending.delete(key);
 
-      this.insertEvent(event);
+      this.graph.insertEvent(event);
 
       const deps = dependents.get(key);
       if (deps != null) {
