@@ -1060,24 +1060,123 @@ export class Event {
 export type MaterializeResult = { doc: Node; conflicts: Node[] };
 
 export class EventGraph {
-  initial: Node;
-  events: Map<string, Event>;
-  frontierIds: EventId[];
+  private initial: Node;
+  private events: Map<string, Event>;
+  private _frontierIds: EventId[];
+  private cachedOrder: string[] | null = null;
 
   constructor(initial: Node, events?: Map<string, Event>, frontiers?: EventId[]) {
     this.initial = initial;
     this.events = events ?? new Map();
-    this.frontierIds = frontiers ?? [];
+    this._frontierIds = frontiers ?? [];
+  }
+
+  get frontiers(): EventId[] {
+    return [...this._frontierIds];
+  }
+
+  hasEvent(key: string): boolean {
+    return this.events.has(key);
+  }
+
+  getEvent(key: string): Event | undefined {
+    return this.events.get(key);
   }
 
   insertEvent(event: Event): void {
     event.validate(this.events);
     this.events.set(event.id.format(), event);
     const parentKeys = new Set(event.parents.map((p) => p.format()));
-    this.frontierIds = [
-      ...this.frontierIds.filter((h) => !parentKeys.has(h.format())),
+    this._frontierIds = [
+      ...this._frontierIds.filter((h) => !parentKeys.has(h.format())),
       event.id,
     ].sort((a, b) => a.compareTo(b));
+    this.cachedOrder = null;
+  }
+
+  /** Creates a new event from a local edit, inserts it, and returns it. */
+  createEvent(peer: string, edit: Edit): Event {
+    const parents = [...this._frontierIds];
+    const clock = new VectorClock();
+    for (const p of parents) {
+      const parentEvent = this.events.get(p.format());
+      if (parentEvent) clock.merge(parentEvent.clock);
+    }
+    const seq = clock.tick(peer);
+    const event = new Event(new EventId(peer, seq), parents, edit, clock);
+    this.insertEvent(event);
+    return event;
+  }
+
+  /** Ingests remote events, buffering out-of-order ones. Returns leftover buffered events. */
+  ingestEvents(incoming: Event[], buffered: Event[]): Event[] {
+    const allEvents = [...buffered, ...incoming];
+    const pending = new Map<string, Event>();
+    for (const event of allEvents) {
+      const key = event.id.format();
+      const existing = this.events.get(key);
+      if (existing != null) {
+        if (!existing.equals(event)) {
+          throw new Error(`Conflicting payload for event '${key}'.`);
+        }
+        continue;
+      }
+      pending.set(key, event);
+    }
+
+    if (pending.size === 0) return [];
+
+    const waitCount = new Map<string, number>();
+    const dependents = new Map<string, string[]>();
+
+    for (const [key, event] of pending) {
+      let count = 0;
+      for (const p of event.parents) {
+        const pk = p.format();
+        if (!this.events.has(pk)) {
+          count++;
+          let deps = dependents.get(pk);
+          if (deps == null) {
+            deps = [];
+            dependents.set(pk, deps);
+          }
+          deps.push(key);
+        }
+      }
+      waitCount.set(key, count);
+    }
+
+    const ready: string[] = [];
+    for (const [key, count] of waitCount) {
+      if (count === 0) ready.push(key);
+    }
+
+    while (ready.length > 0) {
+      const key = ready.pop()!;
+      const event = pending.get(key)!;
+      pending.delete(key);
+      this.insertEvent(event);
+      const deps = dependents.get(key);
+      if (deps != null) {
+        for (const depKey of deps) {
+          const newCount = waitCount.get(depKey)! - 1;
+          waitCount.set(depKey, newCount);
+          if (newCount === 0 && pending.has(depKey)) {
+            ready.push(depKey);
+          }
+        }
+      }
+    }
+
+    return [...pending.values()];
+  }
+
+  /** Returns events not known by a peer with the given frontiers. */
+  eventsSince(remoteFrontiers: EventId[]): Event[] {
+    const remoteKnown = this.computeClosure(remoteFrontiers, false);
+    return [...this.events.values()].filter(
+      (ev) => !remoteKnown.has(ev.id.format()),
+    );
   }
 
   computeClosure(frontier: EventId[], strict = true): Set<string> {
@@ -1098,7 +1197,7 @@ export class EventGraph {
   }
 
   computeTopologicalOrder(frontier?: EventId[]): string[] {
-    const front = frontier ?? this.frontierIds;
+    const front = frontier ?? this._frontierIds;
     const closure = this.computeClosure(front);
     const indegree: Record<string, number> = {};
     const children: Record<string, string[]> = {};
@@ -1149,7 +1248,9 @@ export class EventGraph {
   }
 
   materialize(frontier?: EventId[]): MaterializeResult {
-    const ordered = this.computeTopologicalOrder(frontier);
+    const ordered = frontier
+      ? this.computeTopologicalOrder(frontier)
+      : (this.cachedOrder ??= this.computeTopologicalOrder());
     const doc = this.initial.clone();
     const applied: { ev: Event; edit: Edit }[] = [];
     const conflicts: Node[] = [];
@@ -1166,6 +1267,22 @@ export class EventGraph {
       }
     }
     return { doc, conflicts };
+  }
+
+  /**
+   * Compacts the event graph by materializing the current state into a new
+   * initial document and discarding all events. Call this when all peers
+   * have synced and old history is no longer needed.
+   *
+   * After compaction, the graph has zero events and the current materialized
+   * state becomes the new initial document.
+   */
+  compact(): void {
+    const { doc } = this.materialize();
+    this.initial = doc;
+    this.events = new Map();
+    this._frontierIds = [];
+    this.cachedOrder = null;
   }
 }
 
@@ -1207,15 +1324,7 @@ export class Denicek {
       this.cachedDoc = null;
       throw e;
     }
-    const parents = [...this.graph.frontierIds];
-    const clock = new VectorClock();
-    for (const p of parents) {
-      const parentEvent = this.graph.events.get(p.format());
-      if (parentEvent) clock.merge(parentEvent.clock);
-    }
-    const seq = clock.tick(this.peer);
-    const event = new Event(new EventId(this.peer, seq), parents, edit, clock);
-    this.graph.insertEvent(event);
+    const event = this.graph.createEvent(this.peer, edit);
     this.pendingEvents.push(event);
     this.cachedDoc = doc;
   }
@@ -1229,88 +1338,18 @@ export class Denicek {
 
   /** Returns the current frontier (tip event IDs). */
   get frontiers(): EventId[] {
-    return [...this.graph.frontierIds];
+    return this.graph.frontiers;
   }
 
   /** Returns all events that the holder of `remoteFrontiers` hasn't seen. */
   eventsSince(remoteFrontiers: EventId[]): Event[] {
-    const remoteKnown = this.graph.computeClosure(remoteFrontiers, false);
-    return [...this.graph.events.values()].filter(
-      (ev) => !remoteKnown.has(ev.id.format()),
-    );
+    return this.graph.eventsSince(remoteFrontiers);
   }
 
   /** Ingests an event produced by another peer. Buffers out-of-order events. */
   applyRemote(event: Event): void {
-    this.bufferedEvents.push(event);
+    this.bufferedEvents = this.graph.ingestEvents([event], this.bufferedEvents);
     this.cachedDoc = null;
-    this.flushBuffered();
-  }
-
-  private flushBuffered(): void {
-    const pending = new Map<string, Event>();
-    for (const event of this.bufferedEvents) {
-      const key = event.id.format();
-      const existing = this.graph.events.get(key);
-      if (existing != null) {
-        if (!existing.equals(event)) {
-          throw new Error(`Conflicting payload for event '${key}'.`);
-        }
-        continue;
-      }
-      pending.set(key, event);
-    }
-
-    if (pending.size === 0) {
-      this.bufferedEvents = [];
-      return;
-    }
-
-    const waitCount = new Map<string, number>();
-    const dependents = new Map<string, string[]>();
-
-    for (const [key, event] of pending) {
-      let count = 0;
-      for (const p of event.parents) {
-        const pk = p.format();
-        if (!this.graph.events.has(pk)) {
-          count++;
-          let deps = dependents.get(pk);
-          if (deps == null) {
-            deps = [];
-            dependents.set(pk, deps);
-          }
-          deps.push(key);
-        }
-      }
-      waitCount.set(key, count);
-    }
-
-    const ready: string[] = [];
-    for (const [key, count] of waitCount) {
-      if (count === 0) ready.push(key);
-    }
-
-    while (ready.length > 0) {
-      const key = ready.pop()!;
-      const event = pending.get(key)!;
-      pending.delete(key);
-
-      this.graph.insertEvent(event);
-
-      const deps = dependents.get(key);
-      if (deps != null) {
-        for (const depKey of deps) {
-          const newCount = waitCount.get(depKey)! - 1;
-          waitCount.set(depKey, newCount);
-          if (newCount === 0 && pending.has(depKey)) {
-            ready.push(depKey);
-          }
-        }
-      }
-    }
-
-    this.bufferedEvents = [...pending.values()];
   }
 
   add(target: string, field: string, value: PlainNode): void {
@@ -1382,6 +1421,15 @@ export class Denicek {
     const { doc, conflicts } = this.graph.materialize();
     this.lastConflicts = conflicts;
     return doc;
+  }
+
+  /**
+   * Compacts the event graph — materializes current state as the new baseline
+   * and discards all events. Call when all peers have synced.
+   */
+  compact(): void {
+    this.graph.compact();
+    this.cachedDoc = null;
   }
 
   toPlain(): unknown {
