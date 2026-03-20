@@ -3,7 +3,7 @@ import { BinaryHeap } from "@std/data-structures/binary-heap";
 // ── Primitives ──────────────────────────────────────────────────────
 
 /** Scalar values that can appear as leaf nodes in the document tree. */
-export type PrimitiveValue = string | number | boolean | null;
+export type PrimitiveValue = string | number | boolean;
 
 /**
  * A single segment in a selector path.
@@ -14,7 +14,15 @@ export type SelectorSegment = string | number;
 
 // ── Selector ────────────────────────────────────────────────────────
 
-type PrefixMatch = { specificPrefix: Selector; rest: Selector };
+type PrefixMatch = { kind: "matched"; specificPrefix: Selector; rest: Selector } | { kind: "no-match" };
+type SelectorTransform = { kind: "mapped"; selector: Selector } | { kind: "removed" };
+
+const NO_PREFIX_MATCH: PrefixMatch = { kind: "no-match" };
+const REMOVED_SELECTOR: SelectorTransform = { kind: "removed" };
+
+function mapSelector(selector: Selector): SelectorTransform {
+  return { kind: "mapped", selector };
+}
 
 /** An ordered path of segments addressing a node (or set of nodes) in the document tree. */
 export class Selector {
@@ -76,10 +84,11 @@ export class Selector {
   }
 
   /***
-   * If `this` is a prefix of `full` (e.g., `a/*` is a prefix of `a/1/b`), returns the specific prefix segments and the remaining suffix. (e.g. a/1, b) Returns null if not a prefix.
+   * If `this` is a prefix of `full` (e.g., `a/*` is a prefix of `a/1/b`),
+   * returns the specific prefix segments and the remaining suffix.
    */
-  matchPrefix(full: Selector): PrefixMatch | null {
-    if (this.segments.length > full.segments.length) return null;
+  matchPrefix(full: Selector): PrefixMatch {
+    if (this.segments.length > full.segments.length) return NO_PREFIX_MATCH;
     const specificPrefix: SelectorSegment[] = [];
     for (let i = 0; i < this.segments.length; i++) {
       const prefixSeg = this.segments[i]!;
@@ -89,22 +98,22 @@ export class Selector {
       } else if (prefixSeg === "*" && typeof fullSeg === "number") {
         specificPrefix.push(fullSeg);
       } else {
-        return null;
+        return NO_PREFIX_MATCH;
       }
     }
-    return { specificPrefix: new Selector(specificPrefix), rest: full.slice(this.segments.length) };
+    return { kind: "matched", specificPrefix: new Selector(specificPrefix), rest: full.slice(this.segments.length) };
   }
 
   /** Shifts numeric indices in `other` that traverse through this selector's list target. */
-  shiftIndex(other: Selector, threshold: number, delta: number): Selector | null {
+  shiftIndex(other: Selector, threshold: number, delta: number): SelectorTransform {
     const m = this.matchPrefix(other);
-    if (m == null || m.rest.length === 0) return other;
+    if (m.kind === "no-match" || m.rest.length === 0) return mapSelector(other);
     const head = m.rest.segments[0]!;
     const tail = m.rest.slice(1);
-    if (typeof head !== "number") return other;
+    if (typeof head !== "number") return mapSelector(other);
     const shifted = head + (head >= threshold ? delta : 0);
-    if (shifted < 0) return null;
-    return new Selector([...m.specificPrefix.segments, shifted, ...tail.segments]);
+    if (shifted < 0) return REMOVED_SELECTOR;
+    return mapSelector(new Selector([...m.specificPrefix.segments, shifted, ...tail.segments]));
   }
 }
 
@@ -161,10 +170,6 @@ export class VectorClock {
     for (const [peer, seq] of Object.entries(other.entries)) {
       this.entries[peer] = Math.max(this.get(peer), seq);
     }
-  }
-
-  toRecord(): Record<string, number> {
-    return { ...this.entries };
   }
 
   equals(other: VectorClock): boolean {
@@ -287,7 +292,8 @@ export abstract class Node {
   }
 
   static fromPlain(plain: PlainNode): Node {
-    if (plain === null || typeof plain !== "object") return new PrimitiveNode(plain);
+    if (plain === null) throw new Error("Null is not a valid PlainNode.");
+    if (typeof plain !== "object") return new PrimitiveNode(plain);
     if ("$ref" in plain) return new ReferenceNode(Selector.parse((plain as PlainRef).$ref));
     if ("$items" in plain && Array.isArray((plain as PlainList).$items)) {
       const l = plain as PlainList;
@@ -594,14 +600,14 @@ export abstract class Edit {
 
   /**
    * Mutates `doc` in place to apply this edit.
-   * When `strict` is true (local edits), throws on type mismatch or missing path.
-   * When false (concurrent merge), returns a conflict node if the edit can't apply,
-   * or null if applied successfully.
+   * Concrete edits throw on type mismatch or missing path.
+   * Explicit replay no-ops are surfaced by materialization as conflicts.
    */
-  abstract apply(doc: Node, strict?: boolean): Node | null;
+  abstract apply(doc: Node): void;
+  abstract canApply(doc: Node): boolean;
 
   /** Transforms another selector through the structural change made by this edit. */
-  abstract transformSelector(sel: Selector): Selector | null;
+  abstract transformSelector(sel: Selector): SelectorTransform;
 
   abstract equals(other: Edit): boolean;
 
@@ -613,14 +619,16 @@ export abstract class Edit {
   }
 
   /** Returns a transformed copy of this edit accounting for a prior concurrent structural edit. */
-  transform(prior: Edit): Edit | null {
+  transform(prior: Edit): Edit {
     const t = prior.transformSelector(this.target);
-    return t ? this.withTarget(t) : null;
+    return t.kind === "mapped"
+      ? this.withTarget(t.selector)
+      : this.handleRemovedTarget(prior);
   }
 
-  protected navigateOrThrow(doc: Node, target: Selector, strict = false): Node[] {
+  protected navigateOrThrow(doc: Node, target: Selector): Node[] {
     const nodes = doc.navigate(target);
-    if (nodes.length === 0 && strict) {
+    if (nodes.length === 0) {
       throw new Error(`No nodes match selector '${target.format()}'.`);
     }
     return nodes;
@@ -645,25 +653,99 @@ export abstract class Edit {
     if (data) fields.data = data;
     return new RecordNode("conflict", fields);
   }
+
+  protected canFindNodes(doc: Node, target: Selector): boolean {
+    return doc.navigate(target).length > 0;
+  }
+
+  protected canFindNodesOfType(doc: Node, target: Selector, predicate: (node: Node) => boolean): boolean {
+    const nodes = doc.navigate(target);
+    return nodes.length > 0 && nodes.every(predicate);
+  }
+
+  protected handleRemovedTarget(prior: Edit): Edit {
+    throw new Error(
+      `${this.constructor.name} must explicitly handle removal of '${this.target.format()}' by ${prior.constructor.name}.`,
+    );
+  }
+
+  protected createRemovedTargetNoOp(prior: Edit): NoOpEdit {
+    return new NoOpEdit(
+      this.target,
+      `${prior.constructor.name} removed '${this.target.format()}' before ${this.constructor.name} could apply.`,
+    );
+  }
+
+  protected transformSelectorOrThrow(sel: Selector): Selector {
+    const result = this.transformSelector(sel);
+    if (result.kind === "removed") {
+      throw new Error(`${this.constructor.name}: unexpectedly removed selector '${sel.format()}' while updating references.`);
+    }
+    return result.selector;
+  }
 }
 
-export class SetValueEdit extends Edit {
+abstract class NoOpOnRemovedTargetEdit extends Edit {
+  protected override handleRemovedTarget(prior: Edit): Edit {
+    return this.createRemovedTargetNoOp(prior);
+  }
+}
+
+/**
+ * Explicit replay no-op used when concurrent structural edits remove or
+ * overwrite an edit's target before replay.
+ */
+class NoOpEdit extends Edit {
+  readonly isStructural = false;
+
+  constructor(readonly target: Selector, readonly reason: string) { super(); }
+
+  apply(_doc: Node): void {
+    throw new Error("NoOpEdit must be surfaced as a conflict during materialization.");
+  }
+
+  toConflict(): RecordNode {
+    return this.conflict(new PrimitiveNode(this.reason));
+  }
+
+  canApply(_doc: Node): boolean {
+    return true;
+  }
+
+  transformSelector(sel: Selector): SelectorTransform { return mapSelector(sel); }
+
+  override transform(_prior: Edit): Edit {
+    return this;
+  }
+
+  equals(other: Edit): boolean {
+    return other instanceof NoOpEdit &&
+      this.target.equals(other.target) &&
+      this.reason === other.reason;
+  }
+
+  withTarget(target: Selector): NoOpEdit { return new NoOpEdit(target, this.reason); }
+}
+
+export class SetValueEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = false;
 
   constructor(readonly target: Selector, readonly value: PrimitiveValue) { super(); }
 
-  apply(doc: Node, strict = false): Node | null {
-    const nodes = this.navigateOrThrow(doc, this.target, strict);
-    if (nodes.length === 0) return this.conflict(new PrimitiveNode(this.value));
+  apply(doc: Node): void {
+    const nodes = this.navigateOrThrow(doc, this.target);
     for (const node of nodes) {
-      if (!node.setPrimitive(this.value) && strict) {
+      if (!node.setPrimitive(this.value)) {
         throw new Error(`${this.constructor.name}: expected PrimitiveNode, found '${node.constructor.name}'`);
       }
     }
-    return null;
   }
 
-  transformSelector(sel: Selector): Selector | null { return sel; }
+  canApply(doc: Node): boolean {
+    return this.canFindNodesOfType(doc, this.target, (node) => node instanceof PrimitiveNode);
+  }
+
+  transformSelector(sel: Selector): SelectorTransform { return mapSelector(sel); }
 
   equals(other: Edit): boolean {
     return other instanceof SetValueEdit&& this.target.equals(other.target) && this.value === other.value;
@@ -672,23 +754,25 @@ export class SetValueEdit extends Edit {
   withTarget(target: Selector): SetValueEdit { return new SetValueEdit(target, this.value); }
 }
 
-export class RecordAddEdit extends Edit {
+export class RecordAddEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = false;
 
   constructor(readonly target: Selector, readonly node: Node) { super(); }
 
-  apply(doc: Node, strict = false): Node | null {
+  apply(doc: Node): void {
     const parentSel = this.target.parent;
     const field = String(this.target.lastSegment);
-    const parents = this.navigateOrThrow(doc, parentSel, strict);
-    if (parents.length === 0) return this.conflict(this.node.clone());
+    const parents = this.navigateOrThrow(doc, parentSel);
     for (const parent of parents) {
-      if (!parent.addField(field, this.node.clone()) && strict) this.assertRecord(parent);
+      if (!parent.addField(field, this.node.clone())) this.assertRecord(parent);
     }
-    return null;
   }
 
-  transformSelector(sel: Selector): Selector | null { return sel; }
+  canApply(doc: Node): boolean {
+    return this.canFindNodesOfType(doc, this.target.parent, (node) => node instanceof RecordNode);
+  }
+
+  transformSelector(sel: Selector): SelectorTransform { return mapSelector(sel); }
 
   equals(other: Edit): boolean {
     return other instanceof RecordAddEdit&& this.target.equals(other.target) && this.node.equals(other.node);
@@ -697,26 +781,28 @@ export class RecordAddEdit extends Edit {
   withTarget(target: Selector): RecordAddEdit { return new RecordAddEdit(target, this.node); }
 }
 
-export class RecordDeleteEdit extends Edit {
+export class RecordDeleteEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = true;
 
   constructor(readonly target: Selector) { super(); }
 
-  apply(doc: Node, strict = false): Node | null {
+  apply(doc: Node): void {
     const parentSel = this.target.parent;
     const field = String(this.target.lastSegment);
-    const parents = this.navigateOrThrow(doc, parentSel, strict);
-    if (parents.length === 0) return this.conflict();
+    const parents = this.navigateOrThrow(doc, parentSel);
     for (const parent of parents) {
-      if (!parent.deleteField(field) && strict) this.assertRecord(parent);
+      if (!parent.deleteField(field)) this.assertRecord(parent);
     }
-    return null;
   }
 
-  transformSelector(sel: Selector): Selector | null {
+  canApply(doc: Node): boolean {
+    return this.canFindNodesOfType(doc, this.target.parent, (node) => node instanceof RecordNode);
+  }
+
+  transformSelector(sel: Selector): SelectorTransform {
     const m = this.target.matchPrefix(sel);
-    if (m != null) return null;
-    return sel;
+    if (m.kind === "matched") return REMOVED_SELECTOR;
+    return mapSelector(sel);
   }
 
   equals(other: Edit): boolean {
@@ -726,27 +812,29 @@ export class RecordDeleteEdit extends Edit {
   withTarget(target: Selector): RecordDeleteEdit { return new RecordDeleteEdit(target); }
 }
 
-export class RecordRenameFieldEdit extends Edit {
+export class RecordRenameFieldEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = true;
 
   constructor(readonly target: Selector, readonly to: string) { super(); }
 
-  apply(doc: Node, strict = false): Node | null {
+  apply(doc: Node): void {
     const parentSel = this.target.parent;
     const from = String(this.target.lastSegment);
-    const parents = this.navigateOrThrow(doc, parentSel, strict);
-    if (parents.length === 0) return this.conflict();
+    const parents = this.navigateOrThrow(doc, parentSel);
     for (const parent of parents) {
-      if (!parent.renameField(from, this.to) && strict) this.assertRecord(parent);
+      if (!parent.renameField(from, this.to)) this.assertRecord(parent);
     }
-    doc.updateReferences((abs) => this.transformSelector(abs)!);
-    return null;
+    doc.updateReferences((abs) => this.transformSelectorOrThrow(abs));
   }
 
-  transformSelector(sel: Selector): Selector | null {
+  canApply(doc: Node): boolean {
+    return this.canFindNodesOfType(doc, this.target.parent, (node) => node instanceof RecordNode);
+  }
+
+  transformSelector(sel: Selector): SelectorTransform {
     const m = this.target.matchPrefix(sel);
-    if (m == null) return sel;
-    return new Selector([...m.specificPrefix.segments.slice(0, -1), this.to, ...m.rest.segments]);
+    if (m.kind === "no-match") return mapSelector(sel);
+    return mapSelector(new Selector([...m.specificPrefix.segments.slice(0, -1), this.to, ...m.rest.segments]));
   }
 
   equals(other: Edit): boolean {
@@ -756,21 +844,23 @@ export class RecordRenameFieldEdit extends Edit {
   withTarget(target: Selector): RecordRenameFieldEdit { return new RecordRenameFieldEdit(target, this.to); }
 }
 
-export class ListPushBackEdit extends Edit {
+export class ListPushBackEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = true;
 
   constructor(readonly target: Selector, readonly node: Node) { super(); }
 
-  apply(doc: Node, strict = false): Node | null {
-    const nodes = this.navigateOrThrow(doc, this.target, strict);
-    if (nodes.length === 0) return this.conflict(this.node.clone());
+  apply(doc: Node): void {
+    const nodes = this.navigateOrThrow(doc, this.target);
     for (const n of nodes) {
-      if (!n.pushBack(this.node.clone()) && strict) this.assertList(n);
+      if (!n.pushBack(this.node.clone())) this.assertList(n);
     }
-    return null;
   }
 
-  transformSelector(sel: Selector): Selector | null { return sel; }
+  canApply(doc: Node): boolean {
+    return this.canFindNodesOfType(doc, this.target, (node) => node instanceof ListNode);
+  }
+
+  transformSelector(sel: Selector): SelectorTransform { return mapSelector(sel); }
 
   equals(other: Edit): boolean {
     return other instanceof ListPushBackEdit&& this.target.equals(other.target) && this.node.equals(other.node);
@@ -779,21 +869,23 @@ export class ListPushBackEdit extends Edit {
   withTarget(target: Selector): ListPushBackEdit { return new ListPushBackEdit(target, this.node); }
 }
 
-export class ListPushFrontEdit extends Edit {
+export class ListPushFrontEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = true;
 
   constructor(readonly target: Selector, readonly node: Node) { super(); }
 
-  apply(doc: Node, strict = false): Node | null {
-    const nodes = this.navigateOrThrow(doc, this.target, strict);
-    if (nodes.length === 0) return this.conflict(this.node.clone());
+  apply(doc: Node): void {
+    const nodes = this.navigateOrThrow(doc, this.target);
     for (const n of nodes) {
-      if (!n.pushFront(this.node.clone()) && strict) this.assertList(n);
+      if (!n.pushFront(this.node.clone())) this.assertList(n);
     }
-    return null;
   }
 
-  transformSelector(sel: Selector): Selector | null {
+  canApply(doc: Node): boolean {
+    return this.canFindNodesOfType(doc, this.target, (node) => node instanceof ListNode);
+  }
+
+  transformSelector(sel: Selector): SelectorTransform {
     return this.target.shiftIndex(sel, 0, +1);
   }
 
@@ -804,25 +896,31 @@ export class ListPushFrontEdit extends Edit {
   withTarget(target: Selector): ListPushFrontEdit { return new ListPushFrontEdit(target, this.node); }
 }
 
-export class ListPopBackEdit extends Edit {
+export class ListPopBackEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = true;
 
   constructor(readonly target: Selector) { super(); }
 
-  apply(doc: Node, strict = false): Node | null {
-    const nodes = this.navigateOrThrow(doc, this.target, strict);
-    if (nodes.length === 0) return this.conflict();
+  apply(doc: Node): void {
+    const nodes = this.navigateOrThrow(doc, this.target);
     for (const n of nodes) {
-      if (!n.popBack() && strict) this.assertList(n);
+      if (!n.popBack()) this.assertList(n);
     }
-    return null;
   }
 
-  transformSelector(sel: Selector): Selector | null { return sel; }
+  canApply(doc: Node): boolean {
+    const nodes = doc.navigate(this.target);
+    return nodes.length > 0 && nodes.every((node) => node instanceof ListNode && node.items.length > 0);
+  }
 
-  override transform(prior: Edit): Edit | null {
+  transformSelector(sel: Selector): SelectorTransform { return mapSelector(sel); }
+
+  override transform(prior: Edit): Edit {
+    // Two concurrent pops of the same list edge collapse to one removal.
+    // Otherwise replay could remove a second item that neither peer observed
+    // as the last element when they issued their pop.
     if ((prior instanceof ListPopBackEdit || prior instanceof ListPopFrontEdit) && prior.target.equals(this.target)) {
-      return null;
+      return new NoOpEdit(this.target, `${prior.constructor.name} already removed the list item targeted by ${this.constructor.name}.`);
     }
     return super.transform(prior);
   }
@@ -834,29 +932,35 @@ export class ListPopBackEdit extends Edit {
   withTarget(target: Selector): ListPopBackEdit { return new ListPopBackEdit(target); }
 }
 
-export class ListPopFrontEdit extends Edit {
+export class ListPopFrontEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = true;
 
   constructor(readonly target: Selector) { super(); }
 
-  apply(doc: Node, strict = false): Node | null {
-    const nodes = this.navigateOrThrow(doc, this.target, strict);
-    if (nodes.length === 0) return this.conflict();
+  apply(doc: Node): void {
+    const nodes = this.navigateOrThrow(doc, this.target);
     for (const n of nodes) {
-      if (!n.popFront() && strict) this.assertList(n);
+      if (!n.popFront()) this.assertList(n);
     }
-    return null;
   }
 
-  transformSelector(sel: Selector): Selector | null {
+  canApply(doc: Node): boolean {
+    const nodes = doc.navigate(this.target);
+    return nodes.length > 0 && nodes.every((node) => node instanceof ListNode && node.items.length > 0);
+  }
+
+  transformSelector(sel: Selector): SelectorTransform {
     const m = this.target.matchPrefix(sel);
-    if (m != null && m.rest.length > 0 && m.rest.segments[0] === 0) return null;
+    if (m.kind === "matched" && m.rest.length > 0 && m.rest.segments[0] === 0) return REMOVED_SELECTOR;
     return this.target.shiftIndex(sel, 1, -1);
   }
 
-  override transform(prior: Edit): Edit | null {
+  override transform(prior: Edit): Edit {
+    // Two concurrent pops of the same list edge collapse to one removal.
+    // Otherwise replay could remove a second item that neither peer observed
+    // as the first element when they issued their pop.
     if ((prior instanceof ListPopBackEdit || prior instanceof ListPopFrontEdit) && prior.target.equals(this.target)) {
-      return null;
+      return new NoOpEdit(this.target, `${prior.constructor.name} already removed the list item targeted by ${this.constructor.name}.`);
     }
     return super.transform(prior);
   }
@@ -868,23 +972,25 @@ export class ListPopFrontEdit extends Edit {
   withTarget(target: Selector): ListPopFrontEdit { return new ListPopFrontEdit(target); }
 }
 
-export class UpdateTagEdit extends Edit {
+export class UpdateTagEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = false;
 
   constructor(readonly target: Selector, readonly tag: string) { super(); }
 
-  apply(doc: Node, strict = false): Node | null {
-    const nodes = this.navigateOrThrow(doc, this.target, strict);
-    if (nodes.length === 0) return this.conflict();
+  apply(doc: Node): void {
+    const nodes = this.navigateOrThrow(doc, this.target);
     for (const n of nodes) {
-      if (!n.updateTag(this.tag) && strict) {
+      if (!n.updateTag(this.tag)) {
         throw new Error(`${this.constructor.name}: expected RecordNode or ListNode, found '${n.constructor.name}'`);
       }
     }
-    return null;
   }
 
-  transformSelector(sel: Selector): Selector | null { return sel; }
+  canApply(doc: Node): boolean {
+    return this.canFindNodesOfType(doc, this.target, (node) => node instanceof RecordNode || node instanceof ListNode);
+  }
+
+  transformSelector(sel: Selector): SelectorTransform { return mapSelector(sel); }
 
   equals(other: Edit): boolean {
     return other instanceof UpdateTagEdit&& this.target.equals(other.target) && this.tag === other.tag;
@@ -900,16 +1006,14 @@ export class CopyEdit extends Edit {
 
   override get selectors(): Selector[] { return [this.target, this.source]; }
 
-  apply(doc: Node, strict = false): Node | null {
+  apply(doc: Node): void {
     const sourceNodes = doc.navigate(this.source);
     const targetEntries = doc.navigateWithPaths(this.target);
     if (sourceNodes.length === 0) {
-      if (strict) throw new Error(`copy: no nodes match source selector '${this.source.format()}'`);
-      return this.conflict();
+      throw new Error(`copy: no nodes match source selector '${this.source.format()}'`);
     }
     if (targetEntries.length === 0) {
-      if (strict) throw new Error(`copy: no nodes match target selector '${this.target.format()}'`);
-      return this.conflict();
+      throw new Error(`copy: no nodes match target selector '${this.target.format()}'`);
     }
 
     if (sourceNodes.length === targetEntries.length) {
@@ -921,19 +1025,31 @@ export class CopyEdit extends Edit {
     } else if (targetEntries.length === 1 && targetEntries[0]!.node.setItems(sourceNodes.map((n) => n.clone()))) {
       // setItems succeeded — target was a ListNode
     } else {
-      if (strict) throw new Error(`copy: source/target arity mismatch (source=${sourceNodes.length}, target=${targetEntries.length}). Need equal counts or one list target.`);
-      return this.conflict();
+      throw new Error(`copy: source/target arity mismatch (source=${sourceNodes.length}, target=${targetEntries.length}). Need equal counts or one list target.`);
     }
-    return null;
   }
 
-  transformSelector(sel: Selector): Selector | null { return sel; }
+  canApply(doc: Node): boolean {
+    const sourceNodes = doc.navigate(this.source);
+    const targetEntries = doc.navigateWithPaths(this.target);
+    return sourceNodes.length > 0 &&
+      targetEntries.length > 0 &&
+      (sourceNodes.length === targetEntries.length ||
+        (targetEntries.length === 1 && targetEntries[0]!.node instanceof ListNode));
+  }
 
-  override transform(prior: Edit): Edit | null {
+  transformSelector(sel: Selector): SelectorTransform { return mapSelector(sel); }
+
+  override transform(prior: Edit): Edit {
     const t = prior.transformSelector(this.target);
     const s = prior.transformSelector(this.source);
-    if (t === null || s === null) return null;
-    return new CopyEdit(t, s);
+    if (t.kind === "removed") {
+      return new NoOpEdit(this.target, `${prior.constructor.name} removed copy target '${this.target.format()}'.`);
+    }
+    if (s.kind === "removed") {
+      return new NoOpEdit(this.target, `${prior.constructor.name} removed copy source '${this.source.format()}'.`);
+    }
+    return new CopyEdit(t.selector, s.selector);
   }
 
   equals(other: Edit): boolean {
@@ -943,25 +1059,26 @@ export class CopyEdit extends Edit {
   withTarget(target: Selector): CopyEdit { return new CopyEdit(target, this.source); }
 }
 
-export class WrapRecordEdit extends Edit {
+export class WrapRecordEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = true;
 
   constructor(readonly target: Selector, readonly field: string, readonly tag: string) { super(); }
 
-  apply(doc: Node, strict = false): Node | null {
-    const nodes = doc.navigate(this.target);
-    if (nodes.length === 0) {
-      if (strict) throw new Error(`No nodes match selector '${this.target.format()}'.`);
-      return this.conflict();
-    }
+  apply(doc: Node): void {
+    this.navigateOrThrow(doc, this.target);
     doc.wrapAtPath(this.target, (child) => new RecordNode(this.tag, { [this.field]: child }));
-    doc.updateReferences((abs) => this.transformSelector(abs)!);
-    return null;
+    doc.updateReferences((abs) => this.transformSelectorOrThrow(abs));
   }
 
-  transformSelector(sel: Selector): Selector | null {
+  canApply(doc: Node): boolean {
+    return this.target.length > 0 && this.canFindNodes(doc, this.target);
+  }
+
+  transformSelector(sel: Selector): SelectorTransform {
     const m = this.target.matchPrefix(sel);
-    return m == null ? sel : new Selector([...m.specificPrefix.segments, this.field, ...m.rest.segments]);
+    return m.kind === "no-match"
+      ? mapSelector(sel)
+      : mapSelector(new Selector([...m.specificPrefix.segments, this.field, ...m.rest.segments]));
   }
 
   equals(other: Edit): boolean {
@@ -972,25 +1089,26 @@ export class WrapRecordEdit extends Edit {
   withTarget(target: Selector): WrapRecordEdit { return new WrapRecordEdit(target, this.field, this.tag); }
 }
 
-export class WrapListEdit extends Edit {
+export class WrapListEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = true;
 
   constructor(readonly target: Selector, readonly tag: string) { super(); }
 
-  apply(doc: Node, strict = false): Node | null {
-    const nodes = doc.navigate(this.target);
-    if (nodes.length === 0) {
-      if (strict) throw new Error(`No nodes match selector '${this.target.format()}'.`);
-      return this.conflict();
-    }
+  apply(doc: Node): void {
+    this.navigateOrThrow(doc, this.target);
     doc.wrapAtPath(this.target, (child) => new ListNode(this.tag, [child]));
-    doc.updateReferences((abs) => this.transformSelector(abs)!);
-    return null;
+    doc.updateReferences((abs) => this.transformSelectorOrThrow(abs));
   }
 
-  transformSelector(sel: Selector): Selector | null {
+  canApply(doc: Node): boolean {
+    return this.target.length > 0 && this.canFindNodes(doc, this.target);
+  }
+
+  transformSelector(sel: Selector): SelectorTransform {
     const m = this.target.matchPrefix(sel);
-    return m == null ? sel : new Selector([...m.specificPrefix.segments, "*", ...m.rest.segments]);
+    return m.kind === "no-match"
+      ? mapSelector(sel)
+      : mapSelector(new Selector([...m.specificPrefix.segments, "*", ...m.rest.segments]));
   }
 
   equals(other: Edit): boolean {
@@ -1040,16 +1158,28 @@ export class Event {
     }
   }
 
-  /** Transforms this event's edit against all concurrent prior structural edits. */
-  resolveAgainst(applied: { ev: Event; edit: Edit }[]): Edit | null {
-    let edit: Edit | null = this.edit;
+  /**
+   * Transforms this event's edit against all concurrent prior structural edits.
+   * If those edits have already removed or overwritten the target at replay
+   * time, the result becomes an explicit no-op edit reported as a conflict.
+   */
+  resolveAgainst(applied: { ev: Event; edit: Edit }[], doc: Node): Edit {
+    let edit: Edit = this.edit;
+    let sawConcurrentStructuralEdit = false;
     for (const prior of applied) {
       if (this.clock.dominates(prior.ev.clock)) continue;
       if (this.isConcurrentWith(prior.ev)) {
-        if (edit !== null && prior.edit.isStructural) {
+        if (prior.edit.isStructural) {
+          sawConcurrentStructuralEdit = true;
           edit = edit.transform(prior.edit);
         }
       }
+    }
+    if (sawConcurrentStructuralEdit && !edit.canApply(doc)) {
+      return new NoOpEdit(
+        edit.target,
+        `Concurrent replay left '${edit.target.format()}' unavailable before ${this.edit.constructor.name} could replay.`,
+      );
     }
     return edit;
   }
@@ -1109,10 +1239,12 @@ export class EventGraph {
   }
 
   /** Ingests remote events, buffering out-of-order ones. Returns leftover buffered events. */
-  ingestEvents(incoming: Event[], buffered: Event[]): Event[] {
-    const allEvents = [...buffered, ...incoming];
-    const pending = new Map<string, Event>();
-    for (const event of allEvents) {
+  ingestEvents(incomingEvents: Event[], bufferedEvents: Event[]): Event[] {
+    // Stage 1: merge newly received events with the existing buffer, deduplicate
+    // by ID, and reject same-ID/different-payload corruption.
+    const candidateEvents = [...bufferedEvents, ...incomingEvents];
+    const pendingByKey: Record<string, Event> = {};
+    for (const event of candidateEvents) {
       const key = event.id.format();
       const existing = this.events.get(key);
       if (existing != null) {
@@ -1121,95 +1253,100 @@ export class EventGraph {
         }
         continue;
       }
-      pending.set(key, event);
+      const pendingEvent = pendingByKey[key];
+      if (pendingEvent !== undefined && !pendingEvent.equals(event)) {
+        throw new Error(`Conflicting payload for event '${key}'.`);
+      }
+      pendingByKey[key] = event;
     }
 
-    if (pending.size === 0) return [];
+    if (Object.keys(pendingByKey).length === 0) return [];
 
-    const waitCount = new Map<string, number>();
-    const dependents = new Map<string, string[]>();
+    // Stage 2: for each still-pending event, count how many parents are missing
+    // and build the reverse dependency index needed to unblock children later.
+    const missingParentCountsByKey: Record<string, number> = {};
+    const childKeysByMissingParent: Record<string, string[]> = {};
 
-    for (const [key, event] of pending) {
-      let count = 0;
+    for (const [key, event] of Object.entries(pendingByKey)) {
+      let missingParentCount = 0;
       for (const p of event.parents) {
         const pk = p.format();
         if (!this.events.has(pk)) {
-          count++;
-          let deps = dependents.get(pk);
-          if (deps == null) {
-            deps = [];
-            dependents.set(pk, deps);
-          }
-          deps.push(key);
+          missingParentCount++;
+          (childKeysByMissingParent[pk] ??= []).push(key);
         }
       }
-      waitCount.set(key, count);
+      missingParentCountsByKey[key] = missingParentCount;
     }
 
-    const ready: string[] = [];
-    for (const [key, count] of waitCount) {
-      if (count === 0) ready.push(key);
+    // Stage 3: seed the worklist with everything whose parents are already known.
+    const readyKeys: string[] = [];
+    for (const [key, missingParentCount] of Object.entries(missingParentCountsByKey)) {
+      if (missingParentCount === 0) readyKeys.push(key);
     }
 
-    while (ready.length > 0) {
-      const key = ready.pop()!;
-      const event = pending.get(key)!;
-      pending.delete(key);
+    // Stage 4: flush causally ready events, decrementing their dependents until
+    // no more buffered events can be inserted in this pass.
+    while (readyKeys.length > 0) {
+      const key = readyKeys.pop()!;
+      const event = pendingByKey[key]!;
       this.insertEvent(event);
-      const deps = dependents.get(key);
-      if (deps != null) {
-        for (const depKey of deps) {
-          const newCount = waitCount.get(depKey)! - 1;
-          waitCount.set(depKey, newCount);
-          if (newCount === 0 && pending.has(depKey)) {
-            ready.push(depKey);
+      delete pendingByKey[key];
+      const childKeys = childKeysByMissingParent[key];
+      if (childKeys != null) {
+        for (const childKey of childKeys) {
+          const newMissingParentCount = missingParentCountsByKey[childKey]! - 1;
+          missingParentCountsByKey[childKey] = newMissingParentCount;
+          if (newMissingParentCount === 0 && pendingByKey[childKey] !== undefined) {
+            readyKeys.push(childKey);
           }
         }
       }
     }
 
-    return [...pending.values()];
+    // Anything left still depends on parents we have not seen yet.
+    return Object.values(pendingByKey);
   }
 
   /** Returns events not known by a peer with the given frontiers. */
   eventsSince(remoteFrontiers: EventId[]): Event[] {
-    const remoteKnown = this.computeClosure(remoteFrontiers, false);
+    const remoteKnown = this.filterCausalPast(remoteFrontiers, false);
     return [...this.events.values()].filter(
       (ev) => !remoteKnown.has(ev.id.format()),
     );
   }
 
-  computeClosure(frontier: EventId[], strict = true): Set<string> {
-    const closure = new Set<string>();
+  filterCausalPast(frontier: EventId[], strict = true): Set<string> {
+    const causalPast = new Set<string>();
     const stack = frontier.map((id) => id.format());
     while (stack.length > 0) {
       const key = stack.pop() as string;
-      if (closure.has(key)) continue;
+      if (causalPast.has(key)) continue;
       const ev = this.events.get(key);
       if (ev == null) {
         if (strict) throw new Error(`Unknown version '${key}'.`);
         continue;
       }
-      closure.add(key);
+      causalPast.add(key);
       for (const p of ev.parents) stack.push(p.format());
     }
-    return closure;
+    return causalPast;
   }
 
   computeTopologicalOrder(frontier?: EventId[]): string[] {
     const front = frontier ?? this._frontierIds;
-    const closure = this.computeClosure(front);
+    const causalPast = this.filterCausalPast(front);
     const indegree: Record<string, number> = {};
     const children: Record<string, string[]> = {};
-    for (const key of closure) {
+    for (const key of causalPast) {
       indegree[key] = 0;
       children[key] = [];
     }
-    for (const key of closure) {
+    for (const key of causalPast) {
       const ev = this.events.get(key) as Event;
       for (const p of ev.parents) {
         const pk = p.format();
-        if (!closure.has(pk)) continue;
+        if (!causalPast.has(pk)) continue;
         indegree[key] = (indegree[key] ?? 0) + 1;
         children[pk]?.push(key);
       }
@@ -1241,7 +1378,7 @@ export class EventGraph {
         if (indegree[ch] === 0) queue.push(ch);
       }
     }
-    if (ordered.length !== closure.size) {
+    if (ordered.length !== causalPast.size) {
       throw new Error("Event graph contains a cycle.");
     }
     return ordered;
@@ -1256,15 +1393,13 @@ export class EventGraph {
     const conflicts: Node[] = [];
     for (const key of ordered) {
       const ev = this.events.get(key) as Event;
-      const edit = ev.resolveAgainst(applied);
-      if (edit !== null) {
-        const conflict = edit.apply(doc);
-        if (conflict) {
-          conflicts.push(conflict);
-        } else {
-          applied.push({ ev, edit });
-        }
+      const edit = ev.resolveAgainst(applied, doc);
+      if (edit instanceof NoOpEdit) {
+        conflicts.push(edit.toConflict());
+        continue;
       }
+      edit.apply(doc);
+      applied.push({ ev, edit });
     }
     return { doc, conflicts };
   }
@@ -1319,7 +1454,7 @@ export class Denicek {
   private commit(edit: Edit): void {
     const doc = this.cachedDoc ?? this.rematerialize();
     try {
-      edit.apply(doc, true);
+      edit.apply(doc);
     } catch (e) {
       this.cachedDoc = null;
       throw e;

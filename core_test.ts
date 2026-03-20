@@ -1,9 +1,12 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import {
   Denicek,
+  Edit,
   Event,
   EventGraph,
   EventId,
+  Node,
+  RecordDeleteEdit,
   VectorClock,
   RecordAddEdit,
   RecordNode,
@@ -17,6 +20,11 @@ function sync(a: Denicek, b: Denicek): void {
   const bFrontiers = b.frontiers;
   for (const e of a.eventsSince(bFrontiers)) b.applyRemote(e);
   for (const e of b.eventsSince(aFrontiers)) a.applyRemote(e);
+}
+
+function materializedConflicts(peer: Denicek): unknown[] {
+  peer.materialize();
+  return peer.conflicts.map((conflict) => conflict.toPlain());
 }
 
 Deno.test("Concurrent add of record -> convergent LWW", () => {
@@ -320,6 +328,28 @@ Deno.test("applyRemote rejects conflicting payload", () => {
   );
 });
 
+Deno.test("ingestEvents rejects conflicting duplicate payload inside one batch", () => {
+  const graph = new EventGraph(new RecordNode("root", {}));
+  const original = new Event(
+    new EventId("alice", 0),
+    [],
+    new RecordAddEdit(Selector.parse("x"), new PrimitiveNode("a")),
+    new VectorClock({ alice: 0 }),
+  );
+  const conflicting = new Event(
+    new EventId("alice", 0),
+    [],
+    new RecordAddEdit(Selector.parse("y"), new PrimitiveNode("b")),
+    new VectorClock({ alice: 0 }),
+  );
+
+  assertThrows(
+    () => graph.ingestEvents([conflicting], [original]),
+    Error,
+    "Conflicting payload",
+  );
+});
+
 Deno.test("applyRemote buffers out-of-order events", () => {
   const alice = new Denicek("alice");
   const bob = new Denicek("bob");
@@ -351,6 +381,45 @@ Deno.test("commit throws on kind mismatch", () => {
   assertThrows(() => core.add("items", "x", "a"), Error, "expected record, found 'ListNode'");
 });
 
+Deno.test("fromPlain rejects null", () => {
+  assertThrows(() => Node.fromPlain(JSON.parse("null")), Error, "Null is not a valid PlainNode.");
+});
+
+Deno.test("default edit transform throws unless removal handling is explicit", () => {
+  class DummyEdit extends Edit {
+    readonly isStructural = false;
+
+    constructor(readonly target: Selector) { super(); }
+
+    apply(_doc: Node): void {}
+
+    canApply(_doc: Node): boolean {
+      return true;
+    }
+
+    transformSelector(sel: Selector) {
+      return { kind: "mapped", selector: sel } as const;
+    }
+
+    equals(other: Edit): boolean {
+      return other instanceof DummyEdit && this.target.equals(other.target);
+    }
+
+    withTarget(target: Selector): DummyEdit {
+      return new DummyEdit(target);
+    }
+  }
+
+  const edit = new DummyEdit(Selector.parse("item/name"));
+  const prior = new RecordDeleteEdit(Selector.parse("item"));
+
+  assertThrows(
+    () => edit.transform(prior),
+    Error,
+    "must explicitly handle removal",
+  );
+});
+
 Deno.test("materialize throws on cycle", () => {
   const events = new Map<string, Event>();
   events.set("a:0", new Event(
@@ -371,6 +440,26 @@ Deno.test("materialize throws on cycle", () => {
     [new EventId("a", 0), new EventId("b", 0)],
   );
   assertThrows(() => graph.materialize(), Error, "cycle");
+});
+
+Deno.test("materialize throws on invalid replay state", () => {
+  const graph = new EventGraph(
+    new RecordNode("root", {}),
+    new Map([
+      [
+        "alice:0",
+        new Event(
+          new EventId("alice", 0),
+          [],
+          new RecordAddEdit(Selector.parse("missing/x"), new PrimitiveNode("a")),
+          new VectorClock({ alice: 0 }),
+        ),
+      ],
+    ]),
+    [new EventId("alice", 0)],
+  );
+
+  assertThrows(() => graph.materialize(), Error, "No nodes match selector");
 });
 
 Deno.test("commit throws on pop-back from empty list", () => {
@@ -402,8 +491,74 @@ Deno.test("concurrent delete + edit: delete wins, edit is no-op", () => {
     $tag: "root",
     items: { $tag: "ul", $items: [{ $tag: "item", name: "a" }] },
   };
+  const expectedConflicts = [{
+    $tag: "conflict",
+    kind: "NoOpEdit",
+    target: "items/*/val",
+    data: "RecordDeleteEdit removed 'items/*/val' before SetValueEdit could apply.",
+  }];
   assertEquals(alice.toPlain(), expected);
   assertEquals(bob.toPlain(), expected);
+  assertEquals(materializedConflicts(alice), expectedConflicts);
+  assertEquals(materializedConflicts(bob), expectedConflicts);
+});
+
+Deno.test("concurrent wildcard edit on emptied list becomes no-op", () => {
+  const doc = {
+    $tag: "root",
+    items: { $tag: "ul", $items: ["only"] },
+  };
+  const alice = new Denicek("alice", doc);
+  const bob = new Denicek("bob", doc);
+
+  alice.popBack("items");
+  bob.set("items/*", "UPDATED");
+  sync(alice, bob);
+
+  const expected = {
+    $tag: "root",
+    items: { $tag: "ul", $items: [] as string[] },
+  };
+  const expectedConflicts = [{
+    $tag: "conflict",
+    kind: "NoOpEdit",
+    target: "items/*",
+    data: "Concurrent replay left 'items/*' unavailable before SetValueEdit could replay.",
+  }];
+  assertEquals(alice.toPlain(), expected);
+  assertEquals(bob.toPlain(), expected);
+  assertEquals(materializedConflicts(alice), expectedConflicts);
+  assertEquals(materializedConflicts(bob), expectedConflicts);
+});
+
+Deno.test("concurrent copy overwrite makes nested record edit a no-op", () => {
+  const doc = {
+    $tag: "root",
+    data: { $tag: "data", a: "1", b: "2" },
+  };
+  const alice = new Denicek("alice", doc);
+  const bob = new Denicek("bob", doc);
+
+  alice.wrapRecord("data", "b", "t1");
+  alice.add("data", "d", "v1");
+  alice.copy("data/b", "data/d");
+  bob.delete("data", "a");
+  sync(alice, bob);
+
+  const expected = {
+    $tag: "root",
+    data: { $tag: "t1", b: "v1", d: "v1" },
+  };
+  const expectedConflicts = [{
+    $tag: "conflict",
+    kind: "NoOpEdit",
+    target: "data/b/a",
+    data: "Concurrent replay left 'data/b/a' unavailable before RecordDeleteEdit could replay.",
+  }];
+  assertEquals(alice.toPlain(), expected);
+  assertEquals(bob.toPlain(), expected);
+  assertEquals(materializedConflicts(alice), expectedConflicts);
+  assertEquals(materializedConflicts(bob), expectedConflicts);
 });
 
 Deno.test("concurrent push-front shifts index-based selectors", () => {
@@ -450,7 +605,7 @@ Deno.test("concurrent double pop-back on single-item list converges", () => {
   bob.popBack("items");
   sync(alice, bob);
 
-  // Both popped — one succeeds, the other is a no-op (list already empty)
+  // Both peers saw the same last item, so the shared intent is one removal.
   const expected = { $tag: "root", items: { $tag: "ul", $items: [] as unknown[] } };
   assertEquals(alice.toPlain(), expected);
   assertEquals(bob.toPlain(), expected);

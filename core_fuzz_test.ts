@@ -102,7 +102,7 @@ const arbPeer = fc.nat({ max: NUM_PEERS - 1 });
 const arbField = fc.constantFrom("a", "b", "c", "d", "e");
 const arbTag = fc.constantFrom("t1", "t2", "t3");
 const arbVal: fc.Arbitrary<PlainNode> = fc.constantFrom("v1", "v2", "v3", "v4", "v5");
-const arbPrimVal: fc.Arbitrary<PrimitiveValue> = fc.constantFrom("v1", "v2", "v3", 42, true, null);
+const arbPrimVal: fc.Arbitrary<PrimitiveValue> = fc.constantFrom("v1", "v2", "v3", 42, true);
 
 const arbSyncOp: fc.Arbitrary<Op> = fc.record({
   kind: fc.constant("sync" as const),
