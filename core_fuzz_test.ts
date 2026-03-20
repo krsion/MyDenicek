@@ -8,7 +8,7 @@
  * Run: deno test core_fuzz_test.ts --allow-all
  */
 
-import fc from "npm:fast-check";
+import fc from "fast-check";
 import { assertEquals, assert } from "@std/assert";
 import { Denicek, type PlainNode, type PrimitiveValue } from "./core.ts";
 
