@@ -328,23 +328,24 @@ Deno.test("applyRemote rejects conflicting payload", () => {
   );
 });
 
-Deno.test("ingestEvents rejects conflicting duplicate payload inside one batch", () => {
+Deno.test("ingestEvents rejects conflicting duplicate payload against buffered event", () => {
   const graph = new EventGraph(new RecordNode("root", {}));
   const original = new Event(
     new EventId("alice", 0),
-    [],
+    [new EventId("missing", 0)],
     new RecordAddEdit(Selector.parse("x"), new PrimitiveNode("a")),
     new VectorClock({ alice: 0 }),
   );
   const conflicting = new Event(
     new EventId("alice", 0),
-    [],
+    [new EventId("missing", 0)],
     new RecordAddEdit(Selector.parse("y"), new PrimitiveNode("b")),
     new VectorClock({ alice: 0 }),
   );
 
+  graph.ingestEvents([original]);
   assertThrows(
-    () => graph.ingestEvents([conflicting], [original]),
+    () => graph.ingestEvents([conflicting]),
     Error,
     "Conflicting payload",
   );

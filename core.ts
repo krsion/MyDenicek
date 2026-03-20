@@ -1188,12 +1188,21 @@ export class Event {
 // ── EventGraph ──────────────────────────────────────────────────────
 
 export type MaterializeResult = { doc: Node; conflicts: Node[] };
+type PendingEventsByKey = Record<string, Event>;
+type MissingParentCountsByKey = Record<string, number>;
+type ChildKeysByMissingParent = Record<string, string[]>;
+type PendingDependencyIndex = {
+  missingParentCountsByKey: MissingParentCountsByKey;
+  childKeysByMissingParent: ChildKeysByMissingParent;
+  readyKeys: string[];
+};
 
 export class EventGraph {
   private initial: Node;
   private events: Map<string, Event>;
   private _frontierIds: EventId[];
   private cachedOrder: string[] | null = null;
+  private bufferedEvents: Event[] = [];
 
   constructor(initial: Node, events?: Map<string, Event>, frontiers?: EventId[]) {
     this.initial = initial;
@@ -1238,13 +1247,9 @@ export class EventGraph {
     return event;
   }
 
-  /** Ingests remote events, buffering out-of-order ones. Returns leftover buffered events. */
-  ingestEvents(incomingEvents: Event[], bufferedEvents: Event[]): Event[] {
-    // Stage 1: merge newly received events with the existing buffer, deduplicate
-    // by ID, and reject same-ID/different-payload corruption.
-    const candidateEvents = [...bufferedEvents, ...incomingEvents];
-    const pendingByKey: Record<string, Event> = {};
-    for (const event of candidateEvents) {
+  private collectPendingEvents(incomingEvents: Event[]): PendingEventsByKey {
+    const pendingByKey: PendingEventsByKey = {};
+    for (const event of [...this.bufferedEvents, ...incomingEvents]) {
       const key = event.id.format();
       const existing = this.events.get(key);
       if (existing != null) {
@@ -1259,13 +1264,13 @@ export class EventGraph {
       }
       pendingByKey[key] = event;
     }
+    return pendingByKey;
+  }
 
-    if (Object.keys(pendingByKey).length === 0) return [];
-
-    // Stage 2: for each still-pending event, count how many parents are missing
-    // and build the reverse dependency index needed to unblock children later.
-    const missingParentCountsByKey: Record<string, number> = {};
-    const childKeysByMissingParent: Record<string, string[]> = {};
+  private computePendingDependencyIndex(pendingByKey: PendingEventsByKey): PendingDependencyIndex {
+    const missingParentCountsByKey: MissingParentCountsByKey = {};
+    const childKeysByMissingParent: ChildKeysByMissingParent = {};
+    const readyKeys: string[] = [];
 
     for (const [key, event] of Object.entries(pendingByKey)) {
       let missingParentCount = 0;
@@ -1277,16 +1282,18 @@ export class EventGraph {
         }
       }
       missingParentCountsByKey[key] = missingParentCount;
-    }
-
-    // Stage 3: seed the worklist with everything whose parents are already known.
-    const readyKeys: string[] = [];
-    for (const [key, missingParentCount] of Object.entries(missingParentCountsByKey)) {
       if (missingParentCount === 0) readyKeys.push(key);
     }
 
-    // Stage 4: flush causally ready events, decrementing their dependents until
-    // no more buffered events can be inserted in this pass.
+    return { missingParentCountsByKey, childKeysByMissingParent, readyKeys };
+  }
+
+  private drainReadyEvents(
+    pendingByKey: PendingEventsByKey,
+    missingParentCountsByKey: MissingParentCountsByKey,
+    childKeysByMissingParent: ChildKeysByMissingParent,
+    readyKeys: string[],
+  ): Event[] {
     while (readyKeys.length > 0) {
       const key = readyKeys.pop()!;
       const event = pendingByKey[key]!;
@@ -1304,8 +1311,34 @@ export class EventGraph {
       }
     }
 
-    // Anything left still depends on parents we have not seen yet.
     return Object.values(pendingByKey);
+  }
+
+  /** Ingests remote events, buffering out-of-order ones. Returns the current buffer. */
+  ingestEvents(incomingEvents: Event[]): Event[] {
+    // Stage 1: merge newly received events with the existing buffer, deduplicate
+    // by ID, and reject same-ID/different-payload corruption.
+    const pendingByKey = this.collectPendingEvents(incomingEvents);
+    if (Object.keys(pendingByKey).length === 0) {
+      this.bufferedEvents = [];
+      return [];
+    }
+
+    // Stage 2: for each still-pending event, count how many parents are missing
+    // and identify which pending events are already causally ready.
+    const { missingParentCountsByKey, childKeysByMissingParent, readyKeys } =
+      this.computePendingDependencyIndex(pendingByKey);
+
+    // Stage 4: flush causally ready events, decrementing their dependents until
+    // no more buffered events can be inserted in this pass.
+    // Anything left still depends on parents we have not seen yet.
+    this.bufferedEvents = this.drainReadyEvents(
+      pendingByKey,
+      missingParentCountsByKey,
+      childKeysByMissingParent,
+      readyKeys,
+    );
+    return [...this.bufferedEvents];
   }
 
   /** Returns events not known by a peer with the given frontiers. */
@@ -1435,7 +1468,6 @@ export class Denicek {
   readonly peer: string;
   private graph: EventGraph;
   private pendingEvents: Event[] = [];
-  private bufferedEvents: Event[] = [];
   private cachedDoc: Node | null = null;
 
   constructor(peer: string, initial?: PlainNode);
@@ -1483,7 +1515,7 @@ export class Denicek {
 
   /** Ingests an event produced by another peer. Buffers out-of-order events. */
   applyRemote(event: Event): void {
-    this.bufferedEvents = this.graph.ingestEvents([event], this.bufferedEvents);
+    this.graph.ingestEvents([event]);
     this.cachedDoc = null;
   }
 
