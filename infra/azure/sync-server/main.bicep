@@ -1,25 +1,25 @@
 targetScope = 'resourceGroup'
 
-@description('Azure region for the App Service deployment.')
+@description('Azure region for the deployment.')
 param location string = resourceGroup().location
 
-@description('Name of the Linux App Service plan.')
-param appServicePlanName string
+@description('Globally unique name of the Azure Container Registry.')
+param containerRegistryName string
 
-@description('Globally unique name of the sync server web app.')
-param webAppName string
+@description('Name of the Container Apps managed environment.')
+param containerAppEnvironmentName string
 
-@description('SKU name for the App Service plan.')
-param appServiceSkuName string = 'F1'
+@description('Globally unique name of the sync server container app.')
+param containerAppName string
 
-@description('SKU tier for the App Service plan.')
-param appServiceSkuTier string = 'Free'
+@description('Globally unique name of the persistence storage account.')
+param persistenceStorageAccountName string
 
-@description('Optional Azure Container Registry name. When provided, the template grants the web app AcrPull with its system-assigned managed identity.')
-param containerRegistryName string = ''
+@description('Azure Files share name used for sync-server persistence.')
+param persistenceShareName string = 'sync-data'
 
-@description('Optional container registry login server. Leave empty when using Azure Container Registry and provide containerRegistryName instead.')
-param containerRegistryLoginServer string = ''
+@description('Globally unique name of the Azure Static Web App.')
+param staticWebAppName string
 
 @description('Container image repository name, for example sync-server.')
 param containerImageRepository string = 'sync-server'
@@ -27,99 +27,209 @@ param containerImageRepository string = 'sync-server'
 @description('Container image tag to deploy.')
 param containerImageTag string = 'latest'
 
-@description('Path inside the container for persisted room event logs. Use /home/... on App Service so the mounted storage is used.')
-param persistencePath string = '/home/site/data'
-
-@description('Whether to keep App Service storage mounted at /home.')
-param enableAppServiceStorage bool = true
-
-@description('Whether Always On should be enabled for the web app.')
-param alwaysOn bool = false
+@description('Path inside the container where the Azure Files share is mounted.')
+param persistencePath string = '/mnt/sync-data'
 
 @description('Optional tags applied to Azure resources.')
 param tags object = {}
 
-var resolvedContainerRegistryLoginServer = !empty(containerRegistryName)
-  ? '${containerRegistryName}.azurecr.io'
-  : containerRegistryLoginServer
-var containerImageName = empty(resolvedContainerRegistryLoginServer)
-  ? '${containerImageRepository}:${containerImageTag}'
-  : '${resolvedContainerRegistryLoginServer}/${containerImageRepository}:${containerImageTag}'
 var acrPullRoleDefinitionId = subscriptionResourceId(
   'Microsoft.Authorization/roleDefinitions',
   '7f951dda-4ed3-4680-a7ca-43fe172d538d'
 )
 
-resource appServicePlan 'Microsoft.Web/serverfarms@2025-03-01' = {
-  name: appServicePlanName
+resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
+  name: containerRegistryName
   location: location
-  kind: 'linux'
   sku: {
-    name: appServiceSkuName
-    tier: appServiceSkuTier
-    size: appServiceSkuName
-    capacity: 1
+    name: 'Basic'
   }
   properties: {
-    reserved: true
+    adminUserEnabled: false
   }
   tags: tags
 }
 
-resource webApp 'Microsoft.Web/sites@2025-03-01' = {
-  name: webAppName
+var containerImageName = '${containerRegistry.properties.loginServer}/${containerImageRepository}:${containerImageTag}'
+
+resource containerAppEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' = {
+  name: containerAppEnvironmentName
   location: location
-  kind: 'app,linux,container'
-  identity: {
-    type: 'SystemAssigned'
-  }
   properties: {
-    serverFarmId: appServicePlan.id
-    httpsOnly: true
-    clientAffinityEnabled: false
-    publicNetworkAccess: 'Enabled'
-    siteConfig: {
-      alwaysOn: alwaysOn
-      acrUseManagedIdentityCreds: !empty(containerRegistryName)
-      ftpsState: 'Disabled'
-      healthCheckPath: '/healthz'
-      http20Enabled: true
-      linuxFxVersion: 'DOCKER|${containerImageName}'
-      minTlsVersion: '1.2'
-      webSocketsEnabled: true
+    appLogsConfiguration: {
+      destination: 'none'
     }
   }
   tags: tags
 }
 
-resource webAppAppSettings 'Microsoft.Web/sites/config@2025-03-01' = {
-  name: 'appsettings'
-  parent: webApp
+resource persistenceStorage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
+  name: persistenceStorageAccountName
+  location: location
+  kind: 'StorageV2'
+  sku: {
+    name: 'Standard_LRS'
+  }
   properties: {
-    HOSTNAME: '0.0.0.0'
-    PERSISTENCE_PATH: persistencePath
-    PORT: '8080'
-    WEBSITES_ENABLE_APP_SERVICE_STORAGE: enableAppServiceStorage ? 'true' : 'false'
-    WEBSITES_PORT: '8080'
+    accessTier: 'Hot'
+    allowBlobPublicAccess: false
+    allowSharedKeyAccess: true
+    minimumTlsVersion: 'TLS1_2'
+    supportsHttpsTrafficOnly: true
+  }
+  tags: tags
+}
+
+resource persistenceFileService 'Microsoft.Storage/storageAccounts/fileServices@2023-05-01' = {
+  name: 'default'
+  parent: persistenceStorage
+}
+
+resource persistenceShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-05-01' = {
+  name: persistenceShareName
+  parent: persistenceFileService
+  properties: {
+    enabledProtocols: 'SMB'
+    shareQuota: 10
   }
 }
 
-resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = if (!empty(containerRegistryName)) {
-  name: containerRegistryName
+resource environmentStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01' = {
+  name: 'syncdata'
+  parent: containerAppEnvironment
+  properties: {
+    azureFile: {
+      accessMode: 'ReadWrite'
+      accountKey: persistenceStorage.listKeys().keys[0].value
+      accountName: persistenceStorage.name
+      shareName: persistenceShare.name
+    }
+  }
 }
 
-resource containerRegistryPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(containerRegistryName)) {
-  name: guid(containerRegistry.id, webApp.id, 'acr-pull')
+resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
+  name: containerAppName
+  location: location
+  identity: {
+    type: 'SystemAssigned'
+  }
+  properties: {
+    managedEnvironmentId: containerAppEnvironment.id
+    configuration: {
+      activeRevisionsMode: 'Single'
+      ingress: {
+        allowInsecure: false
+        external: true
+        targetPort: 8080
+        transport: 'auto'
+      }
+      registries: [
+        {
+          server: containerRegistry.properties.loginServer
+          identity: 'system'
+        }
+      ]
+    }
+    template: {
+      containers: [
+        {
+          name: 'sync-server'
+          image: containerImageName
+          env: [
+            {
+              name: 'HOSTNAME'
+              value: '0.0.0.0'
+            }
+            {
+              name: 'PERSISTENCE_PATH'
+              value: persistencePath
+            }
+            {
+              name: 'PORT'
+              value: '8080'
+            }
+          ]
+          probes: [
+            {
+              type: 'Liveness'
+              httpGet: {
+                path: '/healthz'
+                port: 8080
+              }
+              initialDelaySeconds: 10
+              periodSeconds: 30
+            }
+            {
+              type: 'Readiness'
+              httpGet: {
+                path: '/healthz'
+                port: 8080
+              }
+              initialDelaySeconds: 5
+              periodSeconds: 15
+            }
+          ]
+          resources: {
+            cpu: json('0.25')
+            memory: '0.5Gi'
+          }
+          volumeMounts: [
+            {
+              mountPath: persistencePath
+              volumeName: 'syncdata'
+            }
+          ]
+        }
+      ]
+      scale: {
+        minReplicas: 0
+        maxReplicas: 1
+      }
+      volumes: [
+        {
+          name: 'syncdata'
+          storageName: environmentStorage.name
+          storageType: 'AzureFile'
+        }
+      ]
+    }
+  }
+  tags: tags
+}
+
+resource containerRegistryPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(containerRegistry.id, containerApp.id, 'acr-pull')
   scope: containerRegistry
   properties: {
-    principalId: webApp.identity.principalId
+    principalId: containerApp.identity.principalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: acrPullRoleDefinitionId
   }
 }
 
-output appServicePlanId string = appServicePlan.id
+resource staticWebApp 'Microsoft.Web/staticSites@2025-03-01' = {
+  name: staticWebAppName
+  location: location
+  sku: {
+    name: 'Free'
+    tier: 'Free'
+  }
+  properties: {
+    allowConfigFileUpdates: true
+    publicNetworkAccess: 'Enabled'
+    stagingEnvironmentPolicy: 'Disabled'
+  }
+  tags: tags
+}
+
+output containerAppEnvironmentId string = containerAppEnvironment.id
+output containerAppUrl string = 'https://${containerApp.properties.latestRevisionFqdn}'
 output containerImage string = containerImageName
-output healthCheckUrl string = 'https://${webApp.properties.defaultHostName}/healthz'
-output webAppUrl string = 'https://${webApp.properties.defaultHostName}'
-output webSocketSyncUrl string = 'wss://${webApp.properties.defaultHostName}/sync'
+output containerRegistryLoginServer string = containerRegistry.properties.loginServer
+output healthCheckUrl string = 'https://${containerApp.properties.latestRevisionFqdn}/healthz'
+output persistenceShareName string = persistenceShare.name
+output persistenceStorageAccountName string = persistenceStorage.name
+output staticWebAppDefaultHostname string = staticWebApp.properties.defaultHostname
+output staticWebAppName string = staticWebApp.name
+output staticWebAppUrl string = 'https://${staticWebApp.properties.defaultHostname}'
+output webSocketSyncUrl string = 'wss://${containerApp.properties.latestRevisionFqdn}/sync'

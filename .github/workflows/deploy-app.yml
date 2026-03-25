@@ -1,4 +1,4 @@
-name: Azure infra setup
+name: Deploy sync server and frontend
 
 on:
   workflow_dispatch:
@@ -8,10 +8,10 @@ on:
         required: true
         default: mydenicek-core-krsion-dev
         type: string
-      location:
-        description: Azure region
+      image_tag:
+        description: Container image tag
         required: true
-        default: westeurope
+        default: latest
         type: string
 
 permissions:
@@ -22,13 +22,20 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      LOCATION: ${{ inputs.location }}
-      NAME_PREFIX: ${{ inputs.name_prefix }}
       IMAGE_REPOSITORY: sync-server
+      IMAGE_TAG: ${{ inputs.image_tag }}
+      NAME_PREFIX: ${{ inputs.name_prefix }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: packages/ui/package-lock.json
 
       - name: Login to Azure
         uses: azure/login@v2
@@ -50,55 +57,40 @@ jobs:
           BASE="$(echo "$NORMALIZED_PREFIX" | tr -cd 'a-z0-9')"
           ACR_NAME="${BASE}acr"
           ACR_NAME="${ACR_NAME:0:50}"
-          if [ "${#ACR_NAME}" -lt 5 ]; then
-            echo "Derived ACR name '$ACR_NAME' is too short. Use a longer name_prefix." >&2
-            exit 1
-          fi
-
-          PERSISTENCE_STORAGE_ACCOUNT_NAME="${BASE}sync"
-          PERSISTENCE_STORAGE_ACCOUNT_NAME="${PERSISTENCE_STORAGE_ACCOUNT_NAME:0:24}"
-          if [ "${#PERSISTENCE_STORAGE_ACCOUNT_NAME}" -lt 3 ]; then
-            echo "Derived storage account name '$PERSISTENCE_STORAGE_ACCOUNT_NAME' is too short. Use a longer name_prefix." >&2
-            exit 1
-          fi
-
           CONTAINER_APP_ENVIRONMENT_NAME="cae-$NORMALIZED_PREFIX"
           CONTAINER_APP_ENVIRONMENT_NAME="${CONTAINER_APP_ENVIRONMENT_NAME:0:60}"
           CONTAINER_APP_NAME="${NORMALIZED_PREFIX}-sync"
           CONTAINER_APP_NAME="${CONTAINER_APP_NAME:0:32}"
+          PERSISTENCE_STORAGE_ACCOUNT_NAME="${BASE}sync"
+          PERSISTENCE_STORAGE_ACCOUNT_NAME="${PERSISTENCE_STORAGE_ACCOUNT_NAME:0:24}"
+          RESOURCE_GROUP="rg-$NORMALIZED_PREFIX"
           STATIC_WEB_APP_NAME="${NORMALIZED_PREFIX}-web"
           STATIC_WEB_APP_NAME="${STATIC_WEB_APP_NAME:0:40}"
-          RESOURCE_GROUP="rg-$NORMALIZED_PREFIX"
 
-          echo "RESOURCE_GROUP=$RESOURCE_GROUP" >> "$GITHUB_ENV"
           echo "ACR_NAME=$ACR_NAME" >> "$GITHUB_ENV"
           echo "CONTAINER_APP_ENVIRONMENT_NAME=$CONTAINER_APP_ENVIRONMENT_NAME" >> "$GITHUB_ENV"
           echo "CONTAINER_APP_NAME=$CONTAINER_APP_NAME" >> "$GITHUB_ENV"
-          echo "DEPLOYMENT_NAME=azure-infra-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
+          echo "DEPLOYMENT_NAME=app-deploy-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
           echo "PERSISTENCE_STORAGE_ACCOUNT_NAME=$PERSISTENCE_STORAGE_ACCOUNT_NAME" >> "$GITHUB_ENV"
+          echo "RESOURCE_GROUP=$RESOURCE_GROUP" >> "$GITHUB_ENV"
           echo "STATIC_WEB_APP_NAME=$STATIC_WEB_APP_NAME" >> "$GITHUB_ENV"
 
-      - name: Register Azure resource providers
+      - name: Build sync-server image in ACR
         shell: bash
         run: |
           set -euo pipefail
-          az provider register --namespace Microsoft.App --wait --only-show-errors
-          az provider register --namespace Microsoft.Authorization --wait --only-show-errors
-          az provider register --namespace Microsoft.ContainerRegistry --wait --only-show-errors
-          az provider register --namespace Microsoft.Storage --wait --only-show-errors
-          az provider register --namespace Microsoft.Web --wait --only-show-errors
+          az acr config authentication-as-arm update \
+            --registry "$ACR_NAME" \
+            --status enabled \
+            --only-show-errors
+          az acr build \
+            --resource-group "$RESOURCE_GROUP" \
+            --registry "$ACR_NAME" \
+            --image "$IMAGE_REPOSITORY:$IMAGE_TAG" \
+            --file packages/sync-server/Dockerfile \
+            .
 
-      - name: Create or reuse resource group
-        shell: bash
-        run: |
-          set -euo pipefail
-          az group create \
-            --name "$RESOURCE_GROUP" \
-            --location "$LOCATION" \
-            --only-show-errors \
-            --output table
-
-      - name: Deploy Azure infrastructure
+      - name: Redeploy sync-server configuration
         shell: bash
         run: |
           set -euo pipefail
@@ -110,21 +102,30 @@ jobs:
               containerAppEnvironmentName="$CONTAINER_APP_ENVIRONMENT_NAME" \
               containerAppName="$CONTAINER_APP_NAME" \
               containerImageRepository="$IMAGE_REPOSITORY" \
-              containerImageTag=latest \
+              containerImageTag="$IMAGE_TAG" \
               containerRegistryName="$ACR_NAME" \
               persistenceStorageAccountName="$PERSISTENCE_STORAGE_ACCOUNT_NAME" \
               staticWebAppName="$STATIC_WEB_APP_NAME" \
             --only-show-errors \
             --output table
 
-      - name: Enable ACR ARM-token authentication
-        shell: bash
-        run: |
-          set -euo pipefail
-          az acr config authentication-as-arm update \
-            --registry "$ACR_NAME" \
-            --status enabled \
-            --only-show-errors
+      - name: Install frontend dependencies
+        working-directory: packages/ui
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: packages/ui
+        run: npm run build
+
+      - name: Deploy frontend to Azure Static Web Apps
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          action: upload
+          app_location: packages/ui/dist
+          output_location: ''
+          skip_app_build: true
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Print deployment outputs
         shell: bash
@@ -134,8 +135,3 @@ jobs:
           echo "Sync server: $(az deployment group show --name "$DEPLOYMENT_NAME" --resource-group "$RESOURCE_GROUP" --query properties.outputs.containerAppUrl.value -o tsv)"
           echo "Health check: $(az deployment group show --name "$DEPLOYMENT_NAME" --resource-group "$RESOURCE_GROUP" --query properties.outputs.healthCheckUrl.value -o tsv)"
           echo "WebSocket sync: $(az deployment group show --name "$DEPLOYMENT_NAME" --resource-group "$RESOURCE_GROUP" --query properties.outputs.webSocketSyncUrl.value -o tsv)"
-          echo "ACR login server: $(az deployment group show --name "$DEPLOYMENT_NAME" --resource-group "$RESOURCE_GROUP" --query properties.outputs.containerRegistryLoginServer.value -o tsv)"
-          echo ""
-          echo "Next: store the Static Web Apps deployment token as the GitHub secret AZURE_STATIC_WEB_APPS_API_TOKEN."
-          echo "Command:"
-          echo "az staticwebapp secrets list --name $STATIC_WEB_APP_NAME --resource-group $RESOURCE_GROUP --query properties.apiKey -o tsv"

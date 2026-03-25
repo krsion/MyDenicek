@@ -32,11 +32,14 @@ Useful container environment variables:
 - `HOSTNAME` — bind address (defaults to `0.0.0.0`)
 - `PERSISTENCE_PATH` — persisted data path (defaults to `/home/site/data` in the Docker image)
 
-## Deploy to Azure App Service
+## Deploy to Azure Container Apps
 
-Use `.github\workflows\infra-setup.yml` with GitHub OIDC. See
-`infra\azure\sync-server\README.md` for the short reference, one-time Azure OIDC
-setup, required GitHub variables, and the derived Azure naming defaults.
+Use `.github\workflows\infra-setup.yml` to provision Azure Container Apps, Azure
+Container Registry, and Azure Static Web Apps. Then use
+`.github\workflows\deploy-app.yml` to deploy the sync-server image and frontend.
+
+See `infra\azure\sync-server\README.md` for the OIDC setup, GitHub variables,
+Static Web Apps deployment token step, and workflow usage.
 
 ## Use the client helper
 
