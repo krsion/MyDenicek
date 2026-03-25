@@ -3,17 +3,17 @@
 ## Commands
 
 ```sh
-deno check core.ts                    # Type-check
-deno test --allow-all                 # Run all tests (unit + fuzz)
-deno test tests/core.test.ts --no-check              # Unit tests only
-deno test tests/core-properties.test.ts --no-check   # Property-based tests (fast-check)
-deno run tools/core-random-fuzzer.ts                 # Standalone long-running random fuzzer
-deno test --filter "Converge" --no-check tests/core-properties.test.ts  # Run a single property test by name
+deno check packages/core/mod.ts                                  # Type-check the package
+deno test --allow-all --no-check packages/core/tests             # Run all package tests
+deno test packages/core/tests/core.test.ts --no-check            # Unit tests only
+deno test packages/core/tests/core-properties.test.ts --no-check # Property-based tests (fast-check)
+deno run packages/core/tools/core-random-fuzzer.ts               # Standalone long-running random fuzzer
+deno test --filter "Converge" --no-check packages/core/tests/core-properties.test.ts  # Run a single property test by name
 ```
 
 ## Architecture
 
-This is a **CRDT (Conflict-free Replicated Data Type)** for collaborative editing of a tagged document tree. Everything lives in `core.ts`.
+This is a **CRDT (Conflict-free Replicated Data Type)** for collaborative editing of a tagged document tree. The publishable package lives under `packages/core`, with `packages/core/mod.ts` as the public entrypoint.
 
 **Document model:** A tree of `Node` variants (record, list, primitive, reference), addressed by `Selector` paths like `["items", 2, "name"]`. Wildcards (`*`) target all children of a list.
 

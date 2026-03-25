@@ -1,0 +1,22 @@
+{
+  "name": "@mydenicek/core",
+  "version": "0.1.0",
+  "description": "CRDT for collaborative editing of tagged document trees.",
+  "license": "MIT",
+  "exports": "./mod.ts",
+  "publish": {
+    "exclude": ["tests/", "tools/"]
+  },
+  "tasks": {
+    "check": "deno check mod.ts",
+    "test": "deno test --allow-all --no-check tests",
+    "property-test": "deno test tests/core-properties.test.ts --allow-all",
+    "random-fuzzer": "deno run tools/core-random-fuzzer.ts"
+  },
+  "imports": {
+    "@std/assert": "jsr:@std/assert@1",
+    "@std/data-structures": "jsr:@std/data-structures@1",
+    "@std/random": "jsr:@std/random",
+    "fast-check": "npm:fast-check@^4.5.3"
+  }
+}

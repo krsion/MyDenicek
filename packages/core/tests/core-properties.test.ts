@@ -10,7 +10,7 @@
 
 import fc from "fast-check";
 import { assertEquals, assert } from "@std/assert";
-import { Denicek, type PlainNode, type PrimitiveValue } from "../core.ts";
+import { Denicek, type PlainNode, type PrimitiveValue } from "../mod.ts";
 
 // ══════════════════════════════════════════════════════════════════════
 // HELPERS

@@ -1,14 +1,9 @@
 {
+  "workspace": ["./packages/core"],
   "tasks": {
-    "dev": "deno run --watch main.ts",
-    "test": "deno test --allow-all",
-    "property-test": "deno test tests/core-properties.test.ts --allow-all",
-    "random-fuzzer": "deno run tools/core-random-fuzzer.ts"
-  },
-  "imports": {
-    "@std/assert": "jsr:@std/assert@1",
-    "@std/data-structures": "jsr:@std/data-structures@1",
-    "@std/random": "jsr:@std/random",
-    "fast-check": "npm:fast-check@^4.5.3"
+    "check": "deno check packages/core/mod.ts",
+    "test": "deno test --allow-all --no-check packages/core/tests",
+    "property-test": "deno test packages/core/tests/core-properties.test.ts --allow-all",
+    "random-fuzzer": "deno run packages/core/tools/core-random-fuzzer.ts"
   }
 }

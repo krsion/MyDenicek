@@ -4,7 +4,7 @@
 // 3 peers, N seeds, 100 iterations per seed.
 // Each iteration: random edit on random peer, sync 2 random peers, assert convergence.
 
-import { Denicek, type PlainNode } from "../core.ts";
+import { Denicek, type PlainNode } from "../mod.ts";
 import { randomIntegerBetween, randomSeeded, sample } from "@std/random";
 
 // ── Constants ───────────────────────────────────────────────────────

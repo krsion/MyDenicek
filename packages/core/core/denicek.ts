@@ -15,24 +15,20 @@ import { type PrimitiveValue, Selector } from './selector.ts';
  * {@link applyRemote}, and the document is reconstructed via {@link materialize}.
  */
 export class Denicek {
+  /** Stable identifier of the local peer that produces events. */
   readonly peer: string;
   private graph: EventGraph;
   private pendingEvents: Event[] = [];
   private cachedDoc: Node | null = null;
 
+  /** Creates a peer with an optional initial plain document tree. */
   constructor(peer: string, initial?: PlainNode);
-  constructor(peer: string, graph: { initial: Node; events: Record<string, Event>; frontiers: EventId[] });
-  constructor(peer: string, arg?: PlainNode | { initial: Node; events: Record<string, Event>; frontiers: EventId[] }) {
+  constructor(peer: string, arg?: PlainNode) {
     this.peer = peer;
-    if (arg && typeof arg === "object" && arg !== null && "events" in arg) {
-      const g = arg as { initial: Node; events: Record<string, Event>; frontiers: EventId[] };
-      const eventsMap = new Map<string, Event>(Object.entries(g.events));
-      this.graph = new EventGraph(g.initial, eventsMap, g.frontiers);
-    } else {
-      this.graph = new EventGraph(Node.fromPlain((arg as PlainNode) ?? { $tag: "root" }));
-    }
+    this.graph = new EventGraph(Node.fromPlain(arg ?? { $tag: "root" }));
   }
 
+  /** Applies a validated local edit and records the resulting event. */
   private commit(edit: Edit): void {
     const doc = this.cachedDoc ?? this.rematerialize();
     try {
@@ -46,94 +42,108 @@ export class Denicek {
     this.cachedDoc = doc;
   }
 
-  /** Returns and clears events produced by local edits since the last drain. */
-  drain(): Event[] {
+  /** Returns and clears opaque event payloads produced by local edits since the last drain. */
+  drain(): unknown[] {
     const events = this.pendingEvents;
     this.pendingEvents = [];
     return events;
   }
 
-  /** Returns the current frontier (tip event IDs). */
-  get frontiers(): EventId[] {
-    return this.graph.frontiers;
+  /** Returns the current frontier as formatted event id strings. */
+  get frontiers(): string[] {
+    return this.graph.frontiers.map((eventId) => eventId.format());
   }
 
-  /** Returns all events that the holder of `remoteFrontiers` hasn't seen. */
-  eventsSince(remoteFrontiers: EventId[]): Event[] {
-    return this.graph.eventsSince(remoteFrontiers);
+  /** Returns opaque event payloads unknown to a peer with the given frontier strings. */
+  eventsSince(remoteFrontiers: string[]): unknown[] {
+    return this.graph.eventsSince(remoteFrontiers.map((frontier) => EventId.parse(frontier)));
   }
 
-  /** Ingests an event produced by another peer. Buffers out-of-order events. */
-  applyRemote(event: Event): void {
-    this.graph.ingestEvents([event]);
+  /** Ingests an opaque event payload produced by another peer. Buffers out-of-order events. */
+  applyRemote(event: unknown): void {
+    this.graph.ingestEvents([event as Event]);
     this.cachedDoc = null;
   }
 
+  /** Adds a named field to every record matched by `target`. */
   add(target: string, field: string, value: PlainNode): void {
     const path = target === "" ? field : `${target}/${field}`;
     this.commit(new RecordAddEdit(Selector.parse(path), Node.fromPlain(value)));
   }
 
+  /** Deletes a named field from every record matched by `target`. */
   delete(target: string, field: string): void {
     const path = target === "" ? field : `${target}/${field}`;
     this.commit(new RecordDeleteEdit(Selector.parse(path)));
   }
 
+  /** Renames a field on every record matched by `target`. */
   rename(target: string, from: string, to: string): void {
     const path = target === "" ? from : `${target}/${from}`;
     this.commit(new RecordRenameFieldEdit(Selector.parse(path), to));
   }
 
+  /** Replaces every primitive node matched by `target` with `value`. */
   set(target: string, value: PrimitiveValue): void {
     this.commit(new SetValueEdit(Selector.parse(target), value));
   }
 
+  /** Appends `value` to every list matched by `target`. */
   pushBack(target: string, value: PlainNode): void {
     this.commit(new ListPushBackEdit(Selector.parse(target), Node.fromPlain(value)));
   }
 
+  /** Prepends `value` to every list matched by `target`. */
   pushFront(target: string, value: PlainNode): void {
     this.commit(new ListPushFrontEdit(Selector.parse(target), Node.fromPlain(value)));
   }
 
+  /** Removes the last item from every list matched by `target`. */
   popBack(target: string): void {
     this.commit(new ListPopBackEdit(Selector.parse(target)));
   }
 
+  /** Removes the first item from every list matched by `target`. */
   popFront(target: string): void {
     this.commit(new ListPopFrontEdit(Selector.parse(target)));
   }
 
+  /** Updates the structural tag on every matched record or list node. */
   updateTag(target: string, tag: string): void {
     this.commit(new UpdateTagEdit(Selector.parse(target), tag));
   }
 
+  /** Wraps every node matched by `target` in a record with the given field and tag. */
   wrapRecord(target: string, field: string, tag: string): void {
     this.commit(new WrapRecordEdit(Selector.parse(target), field, tag));
   }
 
+  /** Wraps every node matched by `target` in a single-item list with the given tag. */
   wrapList(target: string, tag: string): void {
     this.commit(new WrapListEdit(Selector.parse(target), tag));
   }
 
+  /** Copies nodes from `source` into `target` following the package copy semantics. */
   copy(target: string, source: string): void {
     this.commit(new CopyEdit(Selector.parse(target), Selector.parse(source)));
   }
 
-  materialize(): Node {
-    if (this.cachedDoc !== null) return this.cachedDoc;
+  /** Materializes the current document into a plain serializable tree. */
+  materialize(): PlainNode {
+    if (this.cachedDoc !== null) return this.cachedDoc.toPlain() as PlainNode;
     const doc = this.rematerialize();
     this.cachedDoc = doc;
-    return doc;
+    return doc.toPlain() as PlainNode;
   }
 
-  /** Returns conflicts from the last materialization, if any. */
-  get conflicts(): Node[] {
-    return this.lastConflicts;
+  /** Returns the plain conflict nodes produced during the last materialization. */
+  get conflicts(): PlainNode[] {
+    return this.lastConflicts.map((conflict) => conflict.toPlain() as PlainNode);
   }
 
   private lastConflicts: Node[] = [];
 
+  /** Rebuilds the internal mutable document tree and refreshes cached conflicts. */
   private rematerialize(): Node {
     const { doc, conflicts } = this.graph.materialize();
     this.lastConflicts = conflicts;
@@ -149,7 +159,8 @@ export class Denicek {
     this.cachedDoc = null;
   }
 
-  toPlain(): unknown {
-    return this.materialize().toPlain();
+  /** Returns the current document as a plain serializable tree. */
+  toPlain(): PlainNode {
+    return this.materialize();
   }
 }
