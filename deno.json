@@ -4,6 +4,10 @@
     "check": "deno check packages/core/mod.ts",
     "test": "deno test --allow-all --no-check packages/core/tests",
     "property-test": "deno test packages/core/tests/core-properties.test.ts --allow-all",
-    "random-fuzzer": "deno run packages/core/tools/core-random-fuzzer.ts"
+    "random-fuzzer": "deno run packages/core/tools/core-random-fuzzer.ts",
+    "ui:install": "cd packages/ui && npm install",
+    "ui:dev": "cd packages/ui && npm run dev",
+    "ui:build": "cd packages/ui && npm run build",
+    "ui:test": "cd packages/ui && npm test"
   }
 }
