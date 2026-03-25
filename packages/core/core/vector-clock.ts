@@ -40,4 +40,8 @@ export class VectorClock {
   clone(): VectorClock {
     return new VectorClock(this.entries);
   }
+
+  toRecord(): Record<string, number> {
+    return { ...this.entries };
+  }
 }

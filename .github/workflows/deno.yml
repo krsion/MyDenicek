@@ -3,7 +3,7 @@
 # separate terms of service, privacy policy, and support
 # documentation.
 
-# This workflow installs Deno and validates the package in `packages/core`.
+# This workflow installs Deno and validates the monorepo packages.
 # For more information see: https://github.com/denoland/setup-deno
 
 name: Deno CI
@@ -35,13 +35,19 @@ jobs:
       #   run: deno fmt --check
 
       - name: Run linter
-        run: deno lint packages/core
+        run: deno lint packages/core packages/sync-server apps/sync-sample
 
-      - name: Type-check package
-        run: deno check packages/core/mod.ts
+      - name: Type-check packages and sample app
+        run: |
+          deno check packages/core/mod.ts
+          deno check packages/sync-server/mod.ts
+          deno check packages/sync-server/main.ts
+          deno check apps/sync-sample/main.ts
 
       - name: Run package tests
-        run: deno test --allow-all --no-check packages/core/tests
+        run: |
+          deno test --allow-all --no-check packages/core/tests
+          deno test --allow-read --allow-write packages/sync-server/tests
 
       - name: Lint package docs
         working-directory: packages/core
