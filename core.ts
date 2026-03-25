@@ -1276,6 +1276,9 @@ export class EventGraph {
       let missingParentCount = 0;
       for (const p of event.parents) {
         const pk = p.format();
+        // Parents remain missing until they have actually been inserted into
+        // `this.events`; merely being present in `pendingByKey` is not enough
+        // to make a child causally ready.
         if (!this.events.has(pk)) {
           missingParentCount++;
           (childKeysByMissingParent[pk] ??= []).push(key);

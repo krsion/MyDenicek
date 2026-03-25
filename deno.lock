@@ -5,7 +5,8 @@
     "jsr:@std/data-structures@1": "1.0.10",
     "jsr:@std/internal@^1.0.12": "1.0.12",
     "jsr:@std/random@*": "0.1.5",
-    "npm:fast-check@*": "4.5.3"
+    "npm:fast-check@*": "4.5.3",
+    "npm:fast-check@^4.5.3": "4.5.3"
   },
   "jsr": {
     "@std/assert@1.0.19": {
@@ -39,7 +40,8 @@
     "dependencies": [
       "jsr:@std/assert@1",
       "jsr:@std/data-structures@1",
-      "jsr:@std/random@*"
+      "jsr:@std/random@*",
+      "npm:fast-check@^4.5.3"
     ]
   }
 }

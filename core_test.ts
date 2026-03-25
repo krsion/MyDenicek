@@ -27,6 +27,15 @@ function materializedConflicts(peer: Denicek): unknown[] {
   return peer.conflicts.map((conflict) => conflict.toPlain());
 }
 
+function createRecordAddEvent(peer: string, seq: number, parentSeqs: number[], field: string): Event {
+  return new Event(
+    new EventId(peer, seq),
+    parentSeqs.map((parentSeq) => new EventId(peer, parentSeq)),
+    new RecordAddEdit(Selector.parse(field), new PrimitiveNode(field)),
+    new VectorClock({ [peer]: seq }),
+  );
+}
+
 Deno.test("Concurrent add of record -> convergent LWW", () => {
   const alice = new Denicek("alice");
   const bob = new Denicek("bob");
@@ -367,6 +376,47 @@ Deno.test("applyRemote buffers out-of-order events", () => {
   alice.applyRemote(events[0]!);
   // Now both events flush in causal order
   assertEquals(alice.toPlain(), bob.toPlain());
+});
+
+Deno.test("ingestEvents flushes a buffered dependency chain when the missing ancestor arrives", () => {
+  const graph = new EventGraph(new RecordNode("root", {}));
+  const rootEvent = createRecordAddEvent("alice", 0, [], "rootValue");
+  const parentEvent = createRecordAddEvent("alice", 1, [0], "parentValue");
+  const childEvent = createRecordAddEvent("alice", 2, [1], "childValue");
+
+  assertEquals(graph.ingestEvents([childEvent]), [childEvent]);
+  assertEquals(graph.ingestEvents([parentEvent]), [childEvent, parentEvent]);
+  assertEquals(graph.ingestEvents([rootEvent]), []);
+
+  assertEquals(graph.hasEvent(rootEvent.id.format()), true);
+  assertEquals(graph.hasEvent(parentEvent.id.format()), true);
+  assertEquals(graph.hasEvent(childEvent.id.format()), true);
+  assertEquals(graph.materialize().doc.toPlain(), {
+    $tag: "root",
+    rootValue: "rootValue",
+    parentValue: "parentValue",
+    childValue: "childValue",
+  });
+});
+
+Deno.test("ingestEvents keeps children blocked until buffered parents are inserted", () => {
+  const graph = new EventGraph(new RecordNode("root", {}));
+  const rootEvent = createRecordAddEvent("alice", 0, [], "rootValue");
+  const parentEvent = createRecordAddEvent("alice", 1, [0], "parentValue");
+  const childEvent = createRecordAddEvent("alice", 2, [1], "childValue");
+
+  assertEquals(graph.ingestEvents([parentEvent]), [parentEvent]);
+  assertEquals(graph.ingestEvents([rootEvent, childEvent]), []);
+
+  assertEquals(graph.hasEvent(rootEvent.id.format()), true);
+  assertEquals(graph.hasEvent(parentEvent.id.format()), true);
+  assertEquals(graph.hasEvent(childEvent.id.format()), true);
+  assertEquals(graph.materialize().doc.toPlain(), {
+    $tag: "root",
+    rootValue: "rootValue",
+    parentValue: "parentValue",
+    childValue: "childValue",
+  });
 });
 
 Deno.test("commit throws on edit targeting non-existent path", () => {
