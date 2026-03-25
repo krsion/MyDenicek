@@ -6,10 +6,12 @@ export function collectAndValidateInternalEventsSince(document: Denicek, frontie
   if (!Array.isArray(events)) {
     throw new TypeError('Denicek.eventsSince() must return an array.');
   }
+  const validatedEvents: Event[] = [];
   for (const event of events) {
     if (!(event instanceof Event)) {
       throw new TypeError('Denicek.eventsSince() returned a non-Event value.');
     }
+    validatedEvents.push(event);
   }
-  return events;
+  return validatedEvents;
 }
