@@ -5,6 +5,7 @@ The supported deployment path is `.github\workflows\infra-setup.yml`. It logs in
 The workflow intentionally keeps inputs small. You provide:
 
 - `name_prefix` — defaults to `mydenicek-core-dev`
+  (for this repo it should be `mydenicek-core-krsion-dev`)
 - `location` — defaults to `westeurope`
 - `image_tag` — defaults to `latest`
 
