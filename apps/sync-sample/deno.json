@@ -1,0 +1,6 @@
+{
+  "name": "sync-sample",
+  "tasks": {
+    "start": "deno run --allow-net main.ts"
+  }
+}
