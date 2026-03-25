@@ -45,6 +45,11 @@
           "jsr:@std/random@*",
           "npm:fast-check@^4.5.3"
         ]
+      },
+      "packages/sync-server": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
       }
     }
   }
