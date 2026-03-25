@@ -18,14 +18,14 @@ type ClientState = {
   frontiers: string[];
 };
 
-function computeRoomFilePath(persistencePath: string, roomId: string): string {
+function buildRoomFilePath(persistencePath: string, roomId: string): string {
   const safeRoomId = encodeURIComponent(roomId);
   return `${persistencePath}/${safeRoomId}.json`;
 }
 
 async function loadRoomEvents(persistencePath: string, roomId: string): Promise<SyncRoom> {
   const room = new SyncRoom(roomId);
-  const roomFilePath = computeRoomFilePath(persistencePath, roomId);
+  const roomFilePath = buildRoomFilePath(persistencePath, roomId);
   try {
     const fileText = await Deno.readTextFile(roomFilePath);
     room.ingestEncodedEvents(JSON.parse(fileText));
@@ -39,7 +39,7 @@ async function loadRoomEvents(persistencePath: string, roomId: string): Promise<
 
 async function persistRoomEvents(persistencePath: string, room: SyncRoom): Promise<void> {
   await Deno.mkdir(persistencePath, { recursive: true });
-  const roomFilePath = computeRoomFilePath(persistencePath, room.id);
+  const roomFilePath = buildRoomFilePath(persistencePath, room.id);
   const temporaryRoomFilePath = `${roomFilePath}.${crypto.randomUUID()}.tmp`;
   await Deno.writeTextFile(temporaryRoomFilePath, JSON.stringify(room.listEncodedEvents(), null, 2));
   await Deno.rename(temporaryRoomFilePath, roomFilePath);
@@ -67,6 +67,9 @@ export function createSyncServer(options: SyncServerOptions = {}): SyncServerHan
 
   async function broadcastRoomState(changedSocket: WebSocket, room: SyncRoom): Promise<void> {
     for (const [socket, state] of clients.entries()) {
+      // The originating socket already receives its direct sync response in the
+      // request handler below, so broadcasting only forwards the merged state
+      // to the other sockets in the same room.
       if (socket === changedSocket || state.roomId !== room.id || socket.readyState !== WebSocket.OPEN) {
         continue;
       }
@@ -80,18 +83,19 @@ export function createSyncServer(options: SyncServerOptions = {}): SyncServerHan
         continue;
       }
       socket.send(JSON.stringify(response));
-      state.frontiers = [...response.frontiers];
+      state.frontiers = response.frontiers;
     }
   }
 
-  function queueRoomPersistence(room: SyncRoom): Promise<void> {
-    if (options.persistencePath === undefined) {
+  function enqueueRoomPersistence(room: SyncRoom): Promise<void> {
+    const persistencePath = options.persistencePath;
+    if (persistencePath === undefined) {
       return Promise.resolve();
     }
     const previousWrite = pendingRoomWrites.get(room.id) ?? Promise.resolve();
     const nextWrite = previousWrite
       .catch(() => undefined)
-      .then(() => persistRoomEvents(options.persistencePath as string, room))
+      .then(() => persistRoomEvents(persistencePath, room))
       .finally(() => {
         if (pendingRoomWrites.get(room.id) === nextWrite) {
           pendingRoomWrites.delete(room.id);
@@ -130,24 +134,24 @@ export function createSyncServer(options: SyncServerOptions = {}): SyncServerHan
       try {
         const message = JSON.parse(String(event.data)) as EncodedSyncRequest;
         if (message.type !== 'sync') {
-          throw new Error(`Unsupported message type '${String((message as { type?: string }).type)}'.`);
+          throw new Error(`Unsupported sync message type '${String((message as { type?: string }).type)}'.`);
         }
         const clientState = clients.get(socket);
-        const connectedRoomId = clientState?.roomId ?? roomId;
-        if (message.roomId !== connectedRoomId) {
-          throw new Error(`Socket for room '${connectedRoomId}' cannot sync room '${message.roomId}'.`);
+        const clientRoomId = clientState?.roomId ?? roomId;
+        if (message.roomId !== clientRoomId) {
+          throw new Error(`Socket for room '${clientRoomId}' cannot sync room '${message.roomId}'.`);
         }
-        const room = await ensureRoomLoaded(connectedRoomId);
+        const room = await ensureRoomLoaded(clientRoomId);
         const responseMessage = room.computeSyncResponse({
           ...message,
-          roomId: connectedRoomId,
+          roomId: clientRoomId,
         });
         if (clientState !== undefined) {
           clientState.roomId = room.id;
-          clientState.frontiers = [...responseMessage.frontiers];
+          clientState.frontiers = responseMessage.frontiers;
         }
         socket.send(JSON.stringify(responseMessage));
-        await queueRoomPersistence(room);
+        await enqueueRoomPersistence(room);
         await broadcastRoomState(socket, room);
       } catch (error) {
         socket.send(JSON.stringify({

@@ -26,14 +26,14 @@ export class SyncClient {
   private knownServerFrontiers: string[] = [];
 
   constructor(options: SyncClientOptions) {
-    this.url = this.computeSyncUrl(options.url, options.roomId);
+    this.url = this.buildSyncUrl(options.url, options.roomId);
     this.roomId = options.roomId;
     this.document = options.document;
     this.autoSyncIntervalMs = options.autoSyncIntervalMs ?? 1000;
     this.onRemoteChange = options.onRemoteChange;
   }
 
-  private computeSyncUrl(baseUrl: string, roomId: string): string {
+  private buildSyncUrl(baseUrl: string, roomId: string): string {
     const url = new URL(baseUrl);
     url.searchParams.set('room', roomId);
     return url.toString();
@@ -91,7 +91,14 @@ export class SyncClient {
   }
 
   private handleSocketMessage(rawMessage: string): void {
-    const message = JSON.parse(rawMessage) as EncodedSyncMessage;
+    let message: EncodedSyncMessage;
+    try {
+      message = JSON.parse(rawMessage) as EncodedSyncMessage;
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      console.error(`Could not parse sync message (${reason}): ${rawMessage.slice(0, 200)}`);
+      return;
+    }
     if (message.type === 'hello') {
       this.handleHelloMessage(message);
       return;
@@ -101,7 +108,7 @@ export class SyncClient {
       return;
     }
     applySyncResponse(this.document, message);
-    this.knownServerFrontiers = [...message.frontiers];
+    this.knownServerFrontiers = message.frontiers;
     this.onRemoteChange?.(this.document, message);
   }
 

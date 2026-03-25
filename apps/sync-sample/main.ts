@@ -84,6 +84,10 @@ while (true) {
   }
   if (command.startsWith('toggle ')) {
     const index = Number(command.slice('toggle '.length));
+    if (!Number.isInteger(index) || index < 0) {
+      console.log('Invalid item index. Please provide a non-negative number.');
+      continue;
+    }
     const plain = document.toPlain();
     const items = typeof plain === 'object' && plain !== null && 'items' in plain
       ? (plain.items as { $items: Array<{ done?: boolean }> }).$items

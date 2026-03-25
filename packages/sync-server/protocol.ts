@@ -2,24 +2,24 @@ import { Denicek, type PlainNode, type PrimitiveValue } from '../core/mod.ts';
 import {
   CopyEdit,
   Edit,
+  Event,
+  EventId,
   ListPopBackEdit,
   ListPopFrontEdit,
   ListPushBackEdit,
   ListPushFrontEdit,
   NoOpEdit,
+  Node,
   RecordAddEdit,
   RecordDeleteEdit,
   RecordRenameFieldEdit,
+  Selector,
   SetValueEdit,
   UpdateTagEdit,
+  VectorClock,
   WrapListEdit,
   WrapRecordEdit,
-} from '../core/core/edits.ts';
-import { Event } from '../core/core/event.ts';
-import { EventId } from '../core/core/event-id.ts';
-import { Node } from '../core/core/nodes.ts';
-import { Selector } from '../core/core/selector.ts';
-import { VectorClock } from '../core/core/vector-clock.ts';
+} from '../core/internal.ts';
 
 export interface EncodedEventId {
   peer: string;
@@ -84,8 +84,7 @@ function decodeEventId(encodedEventId: EncodedEventId): EventId {
 }
 
 function extractClockEntries(clock: VectorClock): Record<string, number> {
-  const entries = (clock as unknown as { entries: Record<string, number> }).entries;
-  return { ...entries };
+  return clock.toRecord();
 }
 
 function encodeEdit(edit: Edit): EncodedEdit {
@@ -128,7 +127,7 @@ function encodeEdit(edit: Edit): EncodedEdit {
   if (edit instanceof NoOpEdit) {
     return { kind: 'NoOpEdit', target: edit.target.format(), reason: edit.reason };
   }
-  throw new Error(`Cannot encode unsupported edit '${edit.constructor.name}'.`);
+  throw new Error(`Cannot encode unknown edit type '${edit.constructor.name}'.`);
 }
 
 function decodeEdit(encodedEdit: EncodedEdit): Edit {
@@ -162,13 +161,12 @@ function decodeEdit(encodedEdit: EncodedEdit): Edit {
   }
 }
 
-export function encodeEvent(event: unknown): EncodedEvent {
-  const typedEvent = event as Event;
+export function encodeEvent(event: Event): EncodedEvent {
   return {
-    id: encodeEventId(typedEvent.id),
-    parents: typedEvent.parents.map(encodeEventId),
-    edit: encodeEdit(typedEvent.edit),
-    clock: extractClockEntries(typedEvent.clock),
+    id: encodeEventId(event.id),
+    parents: event.parents.map(encodeEventId),
+    edit: encodeEdit(event.edit),
+    clock: extractClockEntries(event.clock),
   };
 }
 

@@ -54,3 +54,35 @@ Deno.test('SyncRoom exchanges only missing events between peers', () => {
   assertEquals(alice.toPlain(), bob.toPlain());
   assertEquals(aliceServerFrontiers, finalBobResponse.frontiers);
 });
+
+Deno.test('SyncRoom converges after concurrent edits from both peers', () => {
+  const initial = {
+    $tag: 'root',
+    title: 'Tasks',
+    items: { $tag: 'items', $items: [{ $tag: 'item', name: 'Initial', done: false }] },
+  } as const;
+  const room = new SyncRoom('demo');
+  const alice = new Denicek('alice', initial);
+  const bob = new Denicek('bob', initial);
+
+  alice.rename('items/*', 'name', 'label');
+  bob.wrapRecord('items/*', 'inner', 'wrapped-item');
+
+  let aliceServerFrontiers: string[] = [];
+  const aliceResponse = room.computeSyncResponse(createSyncRequest(alice, 'demo', aliceServerFrontiers));
+  applySyncResponse(alice, aliceResponse);
+  aliceServerFrontiers = aliceResponse.frontiers;
+
+  let bobServerFrontiers: string[] = [];
+  const bobResponse = room.computeSyncResponse(createSyncRequest(bob, 'demo', bobServerFrontiers));
+  applySyncResponse(bob, bobResponse);
+  bobServerFrontiers = bobResponse.frontiers;
+
+  const finalAliceResponse = room.computeSyncResponse(createSyncRequest(alice, 'demo', aliceServerFrontiers));
+  applySyncResponse(alice, finalAliceResponse);
+
+  const finalBobResponse = room.computeSyncResponse(createSyncRequest(bob, 'demo', bobServerFrontiers));
+  applySyncResponse(bob, finalBobResponse);
+
+  assertEquals(alice.toPlain(), bob.toPlain());
+});
