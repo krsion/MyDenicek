@@ -1,4 +1,4 @@
-import { type PrimitiveValue, type SelectorSegment } from '../selector.ts';
+import type { PrimitiveValue, SelectorSegment } from '../selector.ts';
 import { Node } from './base.ts';
 
 export class PrimitiveNode extends Node {

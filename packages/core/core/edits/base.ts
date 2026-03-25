@@ -1,5 +1,5 @@
-import { type PrimitiveValue, mapSelector, REMOVED_SELECTOR, type SelectorTransform, Selector } from '../selector.ts';
-import { ListNode, Node, PrimitiveNode, RecordNode } from '../nodes.ts';
+import { mapSelector, type SelectorTransform, type Selector } from '../selector.ts';
+import { ListNode, type Node, PrimitiveNode, RecordNode } from '../nodes.ts';
 
 export abstract class Edit {
   abstract readonly target: Selector;

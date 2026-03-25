@@ -1,8 +1,8 @@
 import { BinaryHeap } from '@std/data-structures/binary-heap';
-import { Edit, NoOpEdit } from './edits.ts';
+import { type Edit, NoOpEdit } from './edits.ts';
 import { Event } from './event.ts';
 import { EventId } from './event-id.ts';
-import { Node } from './nodes.ts';
+import type { Node } from './nodes.ts';
 import { VectorClock } from './vector-clock.ts';
 
 // ── EventGraph ──────────────────────────────────────────────────────

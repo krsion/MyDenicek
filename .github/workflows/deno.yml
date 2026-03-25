@@ -3,10 +3,10 @@
 # separate terms of service, privacy policy, and support
 # documentation.
 
-# This workflow will install Deno then run `deno lint` and `deno test`.
+# This workflow installs Deno and validates the package in `packages/core`.
 # For more information see: https://github.com/denoland/setup-deno
 
-name: Deno
+name: Deno CI
 
 on:
   push:
@@ -18,7 +18,7 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  validate:
     runs-on: ubuntu-latest
 
     steps:
@@ -35,7 +35,14 @@ jobs:
       #   run: deno fmt --check
 
       - name: Run linter
-        run: deno lint
+        run: deno lint packages/core
 
-      - name: Run tests
-        run: deno test -A
+      - name: Type-check package
+        run: deno check packages/core/mod.ts
+
+      - name: Run package tests
+        run: deno test --allow-all --no-check packages/core/tests
+
+      - name: Lint package docs
+        working-directory: packages/core
+        run: deno doc --lint mod.ts

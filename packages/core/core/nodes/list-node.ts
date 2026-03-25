@@ -1,4 +1,4 @@
-import { type SelectorSegment, Selector } from '../selector.ts';
+import type { SelectorSegment, Selector } from '../selector.ts';
 import { Node } from './base.ts';
 
 export class ListNode extends Node {

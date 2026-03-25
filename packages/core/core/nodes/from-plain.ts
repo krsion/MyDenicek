@@ -3,7 +3,7 @@ import type { Node } from './base.ts';
 import { PrimitiveNode } from './primitive-node.ts';
 import { RecordNode } from './record-node.ts';
 import { ReferenceNode } from './reference-node.ts';
-import { type PlainList, type PlainNode, type PlainRecord, type PlainRef } from './plain.ts';
+import type { PlainList, PlainNode, PlainRecord, PlainRef } from './plain.ts';
 import { Selector } from '../selector.ts';
 
 export function createNodeFromPlain(plain: PlainNode): Node {

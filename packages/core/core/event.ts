@@ -1,7 +1,7 @@
-import { Edit, NoOpEdit } from './edits.ts';
-import { EventId } from './event-id.ts';
-import { Node } from './nodes.ts';
-import { VectorClock } from './vector-clock.ts';
+import { type Edit, NoOpEdit } from './edits.ts';
+import type { EventId } from './event-id.ts';
+import type { Node } from './nodes.ts';
+import type { VectorClock } from './vector-clock.ts';
 
 // ── Event ───────────────────────────────────────────────────────────
 

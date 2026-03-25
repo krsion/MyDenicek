@@ -1,5 +1,5 @@
-import { CopyEdit, Edit, ListPopBackEdit, ListPopFrontEdit, ListPushBackEdit, ListPushFrontEdit, RecordAddEdit, RecordDeleteEdit, RecordRenameFieldEdit, SetValueEdit, UpdateTagEdit, WrapListEdit, WrapRecordEdit } from './edits.ts';
-import { Event } from './event.ts';
+import { CopyEdit, type Edit, ListPopBackEdit, ListPopFrontEdit, ListPushBackEdit, ListPushFrontEdit, RecordAddEdit, RecordDeleteEdit, RecordRenameFieldEdit, SetValueEdit, UpdateTagEdit, WrapListEdit, WrapRecordEdit } from './edits.ts';
+import type { Event } from './event.ts';
 import { EventGraph } from './event-graph.ts';
 import { EventId } from './event-id.ts';
 import { Node, type PlainNode } from './nodes.ts';

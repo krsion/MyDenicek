@@ -1,6 +1,6 @@
 import { Edit, NoOpEdit, NoOpOnRemovedTargetEdit } from './base.ts';
 import { mapSelector, type SelectorTransform, Selector } from '../selector.ts';
-import { ListNode, Node, RecordNode } from '../nodes.ts';
+import { ListNode, type Node, RecordNode } from '../nodes.ts';
 
 export class UpdateTagEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = false;

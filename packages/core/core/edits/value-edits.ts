@@ -1,6 +1,6 @@
-import { Edit, NoOpOnRemovedTargetEdit } from './base.ts';
-import { mapSelector, type PrimitiveValue, type SelectorTransform, Selector } from '../selector.ts';
-import { Node, PrimitiveNode } from '../nodes.ts';
+import { type Edit, NoOpOnRemovedTargetEdit } from './base.ts';
+import { mapSelector, type PrimitiveValue, type SelectorTransform, type Selector } from '../selector.ts';
+import { type Node, PrimitiveNode } from '../nodes.ts';
 
 export class SetValueEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = false;

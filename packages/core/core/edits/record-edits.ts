@@ -1,6 +1,6 @@
-import { Edit, NoOpOnRemovedTargetEdit } from './base.ts';
+import { type Edit, NoOpOnRemovedTargetEdit } from './base.ts';
 import { mapSelector, REMOVED_SELECTOR, type SelectorTransform, Selector } from '../selector.ts';
-import { Node, RecordNode } from '../nodes.ts';
+import { type Node, RecordNode } from '../nodes.ts';
 
 export class RecordAddEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = false;
