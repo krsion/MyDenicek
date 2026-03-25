@@ -4,6 +4,7 @@ import { type Node, RecordNode } from '../nodes.ts';
 
 export class RecordAddEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = false;
+  readonly kind = 'RecordAdd';
 
   constructor(readonly target: Selector, readonly node: Node) { super(); }
 
@@ -31,6 +32,7 @@ export class RecordAddEdit extends NoOpOnRemovedTargetEdit {
 
 export class RecordDeleteEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = true;
+  readonly kind = 'RecordDelete';
 
   constructor(readonly target: Selector) { super(); }
 
@@ -62,6 +64,7 @@ export class RecordDeleteEdit extends NoOpOnRemovedTargetEdit {
 
 export class RecordRenameFieldEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = true;
+  readonly kind = 'RecordRenameField';
 
   constructor(readonly target: Selector, readonly to: string) { super(); }
 

@@ -1,6 +1,6 @@
 import { CopyEdit, type Edit, ListPopBackEdit, ListPopFrontEdit, ListPushBackEdit, ListPushFrontEdit, RecordAddEdit, RecordDeleteEdit, RecordRenameFieldEdit, SetValueEdit, UpdateTagEdit, WrapListEdit, WrapRecordEdit } from './edits.ts';
 import type { Event } from './event.ts';
-import { EventGraph } from './event-graph.ts';
+import { EventGraph, type EventSnapshot } from './event-graph.ts';
 import { EventId } from './event-id.ts';
 import { Node, type PlainNode } from './nodes.ts';
 import { type PrimitiveValue, Selector } from './selector.ts';
@@ -162,5 +162,10 @@ export class Denicek {
   /** Returns the current document as a plain serializable tree. */
   toPlain(): PlainNode {
     return this.materialize();
+  }
+
+  /** Returns a serializable snapshot of all known events for UI inspection. */
+  inspectEvents(): EventSnapshot[] {
+    return this.graph.snapshotEvents();
   }
 }

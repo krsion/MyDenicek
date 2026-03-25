@@ -1,4 +1,4 @@
-import { Denicek } from '@mydenicek/core';
+import type { Denicek } from '@mydenicek/core';
 import { Event } from '@mydenicek/core/internal.ts';
 
 export function collectAndValidateInternalEventsSince(document: Denicek, frontiers: string[]): Event[] {
@@ -6,10 +6,12 @@ export function collectAndValidateInternalEventsSince(document: Denicek, frontie
   if (!Array.isArray(events)) {
     throw new TypeError('Denicek.eventsSince() must return an array.');
   }
+  const validatedEvents: Event[] = [];
   for (const event of events) {
     if (!(event instanceof Event)) {
       throw new TypeError('Denicek.eventsSince() returned a non-Event value.');
     }
+    validatedEvents.push(event);
   }
-  return events;
+  return validatedEvents;
 }

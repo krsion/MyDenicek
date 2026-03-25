@@ -4,6 +4,7 @@ import { ListNode, type Node } from '../nodes.ts';
 
 export class ListPushBackEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = true;
+  readonly kind = 'ListPushBack';
 
   constructor(readonly target: Selector, readonly node: Node) { super(); }
 
@@ -29,6 +30,7 @@ export class ListPushBackEdit extends NoOpOnRemovedTargetEdit {
 
 export class ListPushFrontEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = true;
+  readonly kind = 'ListPushFront';
 
   constructor(readonly target: Selector, readonly node: Node) { super(); }
 
@@ -56,6 +58,7 @@ export class ListPushFrontEdit extends NoOpOnRemovedTargetEdit {
 
 export class ListPopBackEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = true;
+  readonly kind = 'ListPopBack';
 
   constructor(readonly target: Selector) { super(); }
 
@@ -92,6 +95,7 @@ export class ListPopBackEdit extends NoOpOnRemovedTargetEdit {
 
 export class ListPopFrontEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = true;
+  readonly kind = 'ListPopFront';
 
   constructor(readonly target: Selector) { super(); }
 
