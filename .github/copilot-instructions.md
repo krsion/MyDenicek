@@ -5,10 +5,10 @@
 ```sh
 deno check core.ts                    # Type-check
 deno test --allow-all                 # Run all tests (unit + fuzz)
-deno test core_test.ts --no-check     # Unit tests only
-deno test core_fuzz_test.ts --no-check # Property-based fuzz tests (fast-check)
-deno run core_fuzz.ts                 # Standalone long-running random fuzzer
-deno test --filter "Converge" --no-check core_fuzz_test.ts  # Run a single test by name
+deno test tests/core.test.ts --no-check              # Unit tests only
+deno test tests/core-properties.test.ts --no-check   # Property-based tests (fast-check)
+deno run tools/core-random-fuzzer.ts                 # Standalone long-running random fuzzer
+deno test --filter "Converge" --no-check tests/core-properties.test.ts  # Run a single property test by name
 ```
 
 ## Architecture

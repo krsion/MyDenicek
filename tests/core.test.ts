@@ -12,7 +12,7 @@ import {
   RecordNode,
   PrimitiveNode,
   Selector,
-} from "./core.ts";
+} from "../core.ts";
 
 /** Exchange events between two peers so both converge (frontier-based). */
 function sync(a: Denicek, b: Denicek): void {

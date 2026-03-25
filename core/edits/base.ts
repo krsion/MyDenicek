@@ -1,0 +1,135 @@
+import { type PrimitiveValue, mapSelector, REMOVED_SELECTOR, type SelectorTransform, Selector } from '../selector.ts';
+import { ListNode, Node, PrimitiveNode, RecordNode } from '../nodes.ts';
+
+export abstract class Edit {
+  abstract readonly target: Selector;
+  abstract readonly isStructural: boolean;
+
+  /**
+   * Mutates `doc` in place to apply this edit.
+   * Concrete edits throw on type mismatch or missing path.
+   * Explicit replay no-ops are surfaced by materialization as conflicts.
+   */
+  abstract apply(doc: Node): void;
+  abstract canApply(doc: Node): boolean;
+
+  /** Transforms another selector through the structural change made by this edit. */
+  abstract transformSelector(sel: Selector): SelectorTransform;
+
+  abstract equals(other: Edit): boolean;
+
+  /** Returns a copy of this edit with a different target. */
+  abstract withTarget(target: Selector): Edit;
+
+  get selectors(): Selector[] {
+    return [this.target];
+  }
+
+  /** Returns a transformed copy of this edit accounting for a prior concurrent structural edit. */
+  transform(prior: Edit): Edit {
+    const t = prior.transformSelector(this.target);
+    return t.kind === "mapped"
+      ? this.withTarget(t.selector)
+      : this.handleRemovedTarget(prior);
+  }
+
+  protected navigateOrThrow(doc: Node, target: Selector): Node[] {
+    const nodes = doc.navigate(target);
+    if (nodes.length === 0) {
+      throw new Error(`No nodes match selector '${target.format()}'.`);
+    }
+    return nodes;
+  }
+
+  protected assertRecord(n: Node): RecordNode {
+    if (!(n instanceof RecordNode)) throw new Error(`${this.constructor.name}: expected record, found '${n.constructor.name}'`);
+    return n;
+  }
+
+  protected assertList(n: Node): ListNode {
+    if (!(n instanceof ListNode)) throw new Error(`${this.constructor.name}: expected list, found '${n.constructor.name}'`);
+    return n;
+  }
+
+  /** Builds a conflict node describing an edit that couldn't be applied. */
+  protected conflict(data?: Node): RecordNode {
+    const fields: Record<string, Node> = {
+      kind: new PrimitiveNode(this.constructor.name),
+      target: new PrimitiveNode(this.target.format()),
+    };
+    if (data) fields.data = data;
+    return new RecordNode("conflict", fields);
+  }
+
+  protected canFindNodes(doc: Node, target: Selector): boolean {
+    return doc.navigate(target).length > 0;
+  }
+
+  protected canFindNodesOfType(doc: Node, target: Selector, predicate: (node: Node) => boolean): boolean {
+    const nodes = doc.navigate(target);
+    return nodes.length > 0 && nodes.every(predicate);
+  }
+
+  protected handleRemovedTarget(prior: Edit): Edit {
+    throw new Error(
+      `${this.constructor.name} must explicitly handle removal of '${this.target.format()}' by ${prior.constructor.name}.`,
+    );
+  }
+
+  protected createRemovedTargetNoOp(prior: Edit): NoOpEdit {
+    return new NoOpEdit(
+      this.target,
+      `${prior.constructor.name} removed '${this.target.format()}' before ${this.constructor.name} could apply.`,
+    );
+  }
+
+  protected transformSelectorOrThrow(sel: Selector): Selector {
+    const result = this.transformSelector(sel);
+    if (result.kind === "removed") {
+      throw new Error(`${this.constructor.name}: unexpectedly removed selector '${sel.format()}' while updating references.`);
+    }
+    return result.selector;
+  }
+}
+
+export abstract class NoOpOnRemovedTargetEdit extends Edit {
+  protected override handleRemovedTarget(prior: Edit): Edit {
+    return this.createRemovedTargetNoOp(prior);
+  }
+}
+
+/**
+ * Explicit replay no-op used when concurrent structural edits remove or
+ * overwrite an edit's target before replay.
+ */
+export class NoOpEdit extends Edit {
+  readonly isStructural = false;
+
+  constructor(readonly target: Selector, readonly reason: string) { super(); }
+
+  apply(_doc: Node): void {
+    throw new Error("NoOpEdit must be surfaced as a conflict during materialization.");
+  }
+
+  toConflict(): RecordNode {
+    return this.conflict(new PrimitiveNode(this.reason));
+  }
+
+  canApply(_doc: Node): boolean {
+    return true;
+  }
+
+  transformSelector(sel: Selector): SelectorTransform { return mapSelector(sel); }
+
+  override transform(_prior: Edit): Edit {
+    return this;
+  }
+
+  equals(other: Edit): boolean {
+    return other instanceof NoOpEdit &&
+      this.target.equals(other.target) &&
+      this.reason === other.reason;
+  }
+
+  withTarget(target: Selector): NoOpEdit { return new NoOpEdit(target, this.reason); }
+}

@@ -1,10 +1,10 @@
-// Fuzz test for CRDT convergence.
-// Run: deno run core_fuzz.ts [seeds] [iters]
+// Standalone random CRDT stress fuzzer.
+// Run: deno run tools/core-random-fuzzer.ts [seeds] [iters]
 //
 // 3 peers, N seeds, 100 iterations per seed.
 // Each iteration: random edit on random peer, sync 2 random peers, assert convergence.
 
-import { Denicek, type PlainNode } from "./core.ts";
+import { Denicek, type PlainNode } from "../core.ts";
 import { randomIntegerBetween, randomSeeded, sample } from "@std/random";
 
 // ── Constants ───────────────────────────────────────────────────────

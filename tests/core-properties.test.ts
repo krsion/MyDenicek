@@ -1,16 +1,16 @@
 /**
- * Unified CRDT Fuzz Tests
+ * Unified CRDT property tests
  *
  * Property-based tests using fast-check for automatic shrinking on failure.
  * Combines sync-as-operation, sync-order permutation, out-of-order delivery,
  * intent preservation, and CRDT algebraic properties.
  *
- * Run: deno test core_fuzz_test.ts --allow-all
+ * Run: deno test tests/core-properties.test.ts --allow-all
  */
 
 import fc from "fast-check";
 import { assertEquals, assert } from "@std/assert";
-import { Denicek, type PlainNode, type PrimitiveValue } from "./core.ts";
+import { Denicek, type PlainNode, type PrimitiveValue } from "../core.ts";
 
 // ══════════════════════════════════════════════════════════════════════
 // HELPERS
