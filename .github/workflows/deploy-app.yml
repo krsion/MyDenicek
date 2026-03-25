@@ -109,6 +109,24 @@ jobs:
             --only-show-errors \
             --output table
 
+      - name: Ensure AcrPull role assignment
+        shell: bash
+        run: |
+          set -euo pipefail
+          REGISTRY_ID="$(az acr show --name "$ACR_NAME" --resource-group "$RESOURCE_GROUP" --query id -o tsv)"
+          PRINCIPAL_ID="$(az resource show --resource-group "$RESOURCE_GROUP" --name "$CONTAINER_APP_NAME" --resource-type Microsoft.App/containerApps --query identity.principalId -o tsv)"
+          EXISTING_ASSIGNMENT="$(az role assignment list --assignee-object-id "$PRINCIPAL_ID" --scope "$REGISTRY_ID" --role AcrPull --query '[0].id' -o tsv)"
+
+          if [ -z "$EXISTING_ASSIGNMENT" ]; then
+            az role assignment create \
+              --assignee-object-id "$PRINCIPAL_ID" \
+              --assignee-principal-type ServicePrincipal \
+              --role AcrPull \
+              --scope "$REGISTRY_ID" \
+              --only-show-errors \
+              --output none
+          fi
+
       - name: Install frontend dependencies
         working-directory: packages/ui
         run: npm ci
