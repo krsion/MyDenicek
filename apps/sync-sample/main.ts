@@ -49,7 +49,7 @@ while (true) {
     continue;
   }
   if (command === 'exit') {
-    await client.close();
+    client.close();
     break;
   }
   if (command === 'help') {

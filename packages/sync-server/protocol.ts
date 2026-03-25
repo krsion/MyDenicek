@@ -1,7 +1,6 @@
-import { Denicek, type PlainNode, type PrimitiveValue } from '../core/mod.ts';
+import type { Denicek, PlainNode, PrimitiveValue } from '../core/mod.ts';
 import {
   CopyEdit,
-  Edit,
   Event,
   EventId,
   ListPopBackEdit,
@@ -20,6 +19,7 @@ import {
   WrapListEdit,
   WrapRecordEdit,
 } from '../core/internal.ts';
+import type { Edit } from '../core/internal.ts';
 
 export interface EncodedEventId {
   peer: string;

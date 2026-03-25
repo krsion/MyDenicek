@@ -65,7 +65,7 @@ export function createSyncServer(options: SyncServerOptions = {}): SyncServerHan
     return room;
   }
 
-  async function broadcastRoomState(changedSocket: WebSocket, room: SyncRoom): Promise<void> {
+  function broadcastRoomState(changedSocket: WebSocket, room: SyncRoom): void {
     for (const [socket, state] of clients.entries()) {
       // The originating socket already receives its direct sync response in the
       // request handler below, so broadcasting only forwards the merged state
@@ -105,7 +105,7 @@ export function createSyncServer(options: SyncServerOptions = {}): SyncServerHan
     return nextWrite;
   }
 
-  const server = Deno.serve({ port, hostname }, async (request) => {
+  const server = Deno.serve({ port, hostname }, (request) => {
     const url = new URL(request.url);
     if (request.method === 'GET' && url.pathname === '/healthz') {
       return new Response('ok');

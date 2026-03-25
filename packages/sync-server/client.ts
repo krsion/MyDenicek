@@ -1,4 +1,4 @@
-import { Denicek } from '../core/mod.ts';
+import type { Denicek } from '../core/mod.ts';
 import {
   applySyncResponse,
   createSyncRequest,
@@ -61,7 +61,7 @@ export class SyncClient {
     });
   }
 
-  async close(): Promise<void> {
+  close(): void {
     this.stopAutoSyncLoop();
     this.socket?.close();
     this.socket = null;
