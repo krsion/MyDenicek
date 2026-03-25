@@ -293,7 +293,7 @@ export class EventGraph {
       peer: ev.id.peer,
       seq: ev.id.seq,
       parents: ev.parents.map((p) => p.format()),
-      editKind: ev.edit.constructor.name,
+      editKind: ev.edit.kind,
       target: ev.edit.target.format(),
     }));
   }

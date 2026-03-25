@@ -4,6 +4,7 @@ import { type Node, PrimitiveNode } from '../nodes.ts';
 
 export class SetValueEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = false;
+  readonly kind = 'SetValue';
 
   constructor(readonly target: Selector, readonly value: PrimitiveValue) { super(); }
 

@@ -6,6 +6,7 @@ type Props = {
   events: EventSnapshot[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  peerColorMap: Map<string, string>;
 };
 
 type LayoutNode = EventSnapshot & { x: number; y: number; depth: number };
@@ -16,8 +17,8 @@ const X_SPACING = 130;
 const Y_SPACING = 90;
 const PADDING = 50;
 
-function computeLayout(events: EventSnapshot[]): { nodes: LayoutNode[]; links: LayoutLink[]; peerColumn: Map<string, number> } {
-  if (events.length === 0) return { nodes: [], links: [], peerColumn: new Map() };
+function computeLayout(events: EventSnapshot[]): { nodes: LayoutNode[]; links: LayoutLink[] } {
+  if (events.length === 0) return { nodes: [], links: [] };
 
   const byId = new Map(events.map(e => [e.id, e]));
 
@@ -57,7 +58,7 @@ function computeLayout(events: EventSnapshot[]): { nodes: LayoutNode[]; links: L
     }
   }
 
-  return { nodes, links, peerColumn };
+  return { nodes, links };
 }
 
 function topoSort(events: EventSnapshot[]): string[] {
@@ -95,9 +96,12 @@ function topoSort(events: EventSnapshot[]): string[] {
   return result;
 }
 
+const FALLBACK_COLOR = '#0078d4';
 const PEER_COLORS = ['#0078d4', '#107c10', '#d83b01', '#8764b8', '#00b7c3', '#ca5010'];
 
-export function EventGraphView({ events, selectedId, onSelect }: Props) {
+export { PEER_COLORS };
+
+export function EventGraphView({ events, selectedId, onSelect, peerColorMap }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
@@ -105,7 +109,7 @@ export function EventGraphView({ events, selectedId, onSelect }: Props) {
     const svg = d3.select(svgRef.current);
     svg.selectAll('*').remove();
 
-    const { nodes, links, peerColumn } = computeLayout(events);
+    const { nodes, links } = computeLayout(events);
 
     if (nodes.length === 0) {
       svg.append('text')
@@ -116,8 +120,8 @@ export function EventGraphView({ events, selectedId, onSelect }: Props) {
       return;
     }
 
-    // Assign colors by stable first-appearance column order from the layout.
-    const peerColor = new Map([...peerColumn.entries()].map(([p, col]) => [p, PEER_COLORS[col % PEER_COLORS.length]!]));
+    // Assign colors from the provided peer color map; fall back if a peer is unknown.
+    const peerColor = (peer: string) => peerColorMap.get(peer) ?? FALLBACK_COLOR;
 
     const maxX = Math.max(...nodes.map(n => n.x)) + PADDING + NODE_RADIUS;
     const maxY = Math.max(...nodes.map(n => n.y)) + PADDING + NODE_RADIUS + 30;
@@ -167,8 +171,8 @@ export function EventGraphView({ events, selectedId, onSelect }: Props) {
 
     nodeGroup.append('circle')
       .attr('r', NODE_RADIUS)
-      .attr('fill', d => d.id === selectedId ? (peerColor.get(d.peer) ?? '#0078d4') : '#fff')
-      .attr('stroke', d => peerColor.get(d.peer) ?? '#0078d4')
+      .attr('fill', d => d.id === selectedId ? peerColor(d.peer) : '#fff')
+      .attr('stroke', d => peerColor(d.peer))
       .attr('stroke-width', 2);
 
     nodeGroup.append('text')

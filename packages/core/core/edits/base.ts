@@ -4,6 +4,8 @@ import { ListNode, type Node, PrimitiveNode, RecordNode } from '../nodes.ts';
 export abstract class Edit {
   abstract readonly target: Selector;
   abstract readonly isStructural: boolean;
+  /** Stable string identifier for this edit type. Survives minification. */
+  abstract readonly kind: string;
 
   /**
    * Mutates `doc` in place to apply this edit.
@@ -104,6 +106,7 @@ export abstract class NoOpOnRemovedTargetEdit extends Edit {
  */
 export class NoOpEdit extends Edit {
   readonly isStructural = false;
+  readonly kind = 'NoOp';
 
   constructor(readonly target: Selector, readonly reason: string) { super(); }
 

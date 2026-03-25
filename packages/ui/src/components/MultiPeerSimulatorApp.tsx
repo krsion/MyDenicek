@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { PeerSession } from '../peer-session.ts';
 import { InMemorySyncService } from '../sync-service.ts';
-import { PeerWorkspace, PEER_COLORS } from './PeerWorkspace.tsx';
+import { PeerWorkspace } from './PeerWorkspace.tsx';
+import { PEER_COLORS } from './EventGraphView.tsx';
 import type { PlainNode } from '@core';
 
 const INITIAL_DOC: PlainNode = {
@@ -28,6 +29,10 @@ export function MultiPeerSimulatorApp() {
   const [newPeerId, setNewPeerId] = useState('');
   const [revision, setRevision] = useState(0);
   const syncService = useMemo(() => new InMemorySyncService(), []);
+  const peerColorMap = useMemo(
+    () => new Map(sessions.map((s, i) => [s.peerId, PEER_COLORS[i % PEER_COLORS.length]!])),
+    [sessions],
+  );
 
   // Force a re-render after any mutation (sessions mutate in place)
   const refresh = () => setRevision(r => r + 1);
@@ -130,11 +135,12 @@ export function MultiPeerSimulatorApp() {
 
       {/* Peer workspaces */}
       <div style={{ display: 'flex', gap: 12, padding: 16, overflowX: 'auto', alignItems: 'flex-start' }}>
-        {sessions.map((session, i) => (
+        {sessions.map((session) => (
           <PeerWorkspace
             key={session.peerId}
             session={session}
-            peerColor={PEER_COLORS[i % PEER_COLORS.length]!}
+            peerColor={peerColorMap.get(session.peerId)!}
+            peerColorMap={peerColorMap}
             onEdit={refresh}
           />
         ))}

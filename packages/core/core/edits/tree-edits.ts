@@ -4,6 +4,7 @@ import { ListNode, type Node, RecordNode } from '../nodes.ts';
 
 export class UpdateTagEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = false;
+  readonly kind = 'UpdateTag';
 
   constructor(readonly target: Selector, readonly tag: string) { super(); }
 
@@ -31,6 +32,7 @@ export class UpdateTagEdit extends NoOpOnRemovedTargetEdit {
 
 export class CopyEdit extends Edit {
   readonly isStructural = false;
+  readonly kind = 'Copy';
 
   constructor(readonly target: Selector, readonly source: Selector) { super(); }
 
@@ -91,6 +93,7 @@ export class CopyEdit extends Edit {
 
 export class WrapRecordEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = true;
+  readonly kind = 'WrapRecord';
 
   constructor(readonly target: Selector, readonly field: string, readonly tag: string) { super(); }
 
@@ -121,6 +124,7 @@ export class WrapRecordEdit extends NoOpOnRemovedTargetEdit {
 
 export class WrapListEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = true;
+  readonly kind = 'WrapList';
 
   constructor(readonly target: Selector, readonly tag: string) { super(); }
 

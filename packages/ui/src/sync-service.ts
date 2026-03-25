@@ -18,8 +18,8 @@ export class InMemorySyncService implements SyncService {
 
   sync(a: PeerSession, b: PeerSession): void {
     // One round is sufficient for convergence when both peers have all causal history.
-    a.receiveEventsFrom(b);
     b.receiveEventsFrom(a);
+    a.receiveEventsFrom(b);
   }
 
   syncAll(sessions: PeerSession[]): void {

@@ -23,7 +23,7 @@ describe('PeerSession', () => {
     session.set('title', 'Updated');
     const snap = session.snapshot();
     expect(snap.events).toHaveLength(1);
-    expect(snap.events[0]!.editKind).toBe('SetValueEdit');
+    expect(snap.events[0]!.editKind).toBe('SetValue');
     expect(snap.events[0]!.peer).toBe('alice');
     expect((snap.doc as unknown as { title: string }).title).toBe('Updated');
   });

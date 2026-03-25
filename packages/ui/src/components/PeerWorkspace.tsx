@@ -9,10 +9,9 @@ import { EditComposer } from './EditComposer.tsx';
 type Props = {
   session: PeerSession;
   peerColor: string;
+  peerColorMap: Map<string, string>;
   onEdit: () => void;
 };
-
-const PEER_COLORS = ['#0078d4', '#107c10', '#d83b01', '#8764b8', '#00b7c3', '#ca5010'];
 
 function EventDetails({ event }: { event: EventSnapshot }) {
   return (
@@ -27,9 +26,7 @@ function EventDetails({ event }: { event: EventSnapshot }) {
   );
 }
 
-export { PEER_COLORS };
-
-export function PeerWorkspace({ session, peerColor, onEdit }: Props) {
+export function PeerWorkspace({ session, peerColor, peerColorMap, onEdit }: Props) {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const snapshot = session.snapshot();
   const selectedEvent = snapshot.events.find(e => e.id === selectedEventId) ?? null;
@@ -65,6 +62,7 @@ export function PeerWorkspace({ session, peerColor, onEdit }: Props) {
           events={snapshot.events}
           selectedId={selectedEventId}
           onSelect={setSelectedEventId}
+          peerColorMap={peerColorMap}
         />
 
         {/* Event Details */}
