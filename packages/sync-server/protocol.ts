@@ -1,4 +1,4 @@
-import type { Denicek, PlainNode, PrimitiveValue } from '../core/mod.ts';
+import type { Denicek, PlainNode, PrimitiveValue } from '@mydenicek/core';
 import {
   CopyEdit,
   Event,
@@ -18,8 +18,8 @@ import {
   VectorClock,
   WrapListEdit,
   WrapRecordEdit,
-} from '../core/internal.ts';
-import type { Edit } from '../core/internal.ts';
+} from '@mydenicek/core/internal.ts';
+import type { Edit } from '@mydenicek/core/internal.ts';
 import { collectAndValidateInternalEventsSince } from './internal-events.ts';
 
 export interface EncodedEventId {

@@ -1,4 +1,4 @@
-import { Denicek } from '../core/mod.ts';
+import { Denicek } from '@mydenicek/core';
 import {
   type EncodedEvent,
   type EncodedSyncRequest,

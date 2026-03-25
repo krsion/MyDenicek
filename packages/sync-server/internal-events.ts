@@ -1,5 +1,5 @@
-import { Denicek } from '../core/mod.ts';
-import { Event } from '../core/internal.ts';
+import { Denicek } from '@mydenicek/core';
+import { Event } from '@mydenicek/core/internal.ts';
 
 export function collectAndValidateInternalEventsSince(document: Denicek, frontiers: string[]): Event[] {
   const events = document.eventsSince(frontiers);

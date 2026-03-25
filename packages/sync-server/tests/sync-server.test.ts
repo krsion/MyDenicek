@@ -1,6 +1,6 @@
 import { assertEquals } from '@std/assert';
 
-import { Denicek } from '../../core/mod.ts';
+import { Denicek } from '@mydenicek/core';
 import { collectAndValidateInternalEventsSince } from '../internal-events.ts';
 import { applySyncResponse, createSyncRequest, decodeEvent, encodeEvent, SyncRoom } from '../mod.ts';
 

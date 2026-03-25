@@ -1,4 +1,4 @@
-import type { Denicek } from '../core/mod.ts';
+import type { Denicek } from '@mydenicek/core';
 import {
   applySyncResponse,
   createSyncRequest,
