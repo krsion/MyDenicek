@@ -16,6 +16,28 @@ Environment variables:
 - `HOSTNAME` — bind address (default `0.0.0.0`)
 - `PERSISTENCE_PATH` — directory for JSON event logs (default `./data`)
 
+## Run the container
+
+Build from the repository root so the Docker build context includes both
+`packages/sync-server` and `packages/core`.
+
+```sh
+docker build -f packages/sync-server/Dockerfile -t mydenicek-sync-server .
+docker run --rm -p 8787:8080 mydenicek-sync-server
+```
+
+Useful container environment variables:
+
+- `PORT` — container port (defaults to `8080` in the Docker image)
+- `HOSTNAME` — bind address (defaults to `0.0.0.0`)
+- `PERSISTENCE_PATH` — persisted data path (defaults to `/home/site/data` in the Docker image)
+
+## Deploy to Azure App Service
+
+Use `.github\workflows\infra-setup.yml` with GitHub OIDC. See
+`infra\azure\sync-server\README.md` for the short reference, one-time Azure OIDC
+setup, required GitHub variables, and the derived Azure naming defaults.
+
 ## Use the client helper
 
 ```ts

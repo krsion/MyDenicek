@@ -1,0 +1,140 @@
+name: Azure sync-server infra
+
+on:
+  workflow_dispatch:
+    inputs:
+      name_prefix:
+        description: Prefix used for derived Azure resource names
+        required: true
+        default: mydenicek-core-dev
+        type: string
+      location:
+        description: Azure region
+        required: true
+        default: westeurope
+        type: string
+      image_tag:
+        description: Container image tag
+        required: true
+        default: latest
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      NAME_PREFIX: ${{ inputs.name_prefix }}
+      LOCATION: ${{ inputs.location }}
+      IMAGE_TAG: ${{ inputs.image_tag }}
+      IMAGE_REPOSITORY: sync-server
+      APP_SERVICE_SKU_NAME: F1
+      APP_SERVICE_SKU_TIER: Free
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Resolve deployment names
+        shell: bash
+        run: |
+          set -euo pipefail
+          NORMALIZED_PREFIX="$(echo "$NAME_PREFIX" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')"
+          if [ -z "$NORMALIZED_PREFIX" ]; then
+            echo "Name prefix must contain at least one alphanumeric character." >&2
+            exit 1
+          fi
+
+          ACR_BASENAME="$(echo "$NORMALIZED_PREFIX" | tr -cd 'a-z0-9')"
+          ACR_NAME="${ACR_BASENAME}acr"
+          ACR_NAME="${ACR_NAME:0:50}"
+          if [ "${#ACR_NAME}" -lt 5 ]; then
+            echo "Derived ACR name '$ACR_NAME' is too short. Use a longer name_prefix." >&2
+            exit 1
+          fi
+
+          WEB_APP_NAME="${NORMALIZED_PREFIX}-sync"
+          WEB_APP_NAME="${WEB_APP_NAME:0:60}"
+          PLAN_NAME="asp-$NORMALIZED_PREFIX"
+          RESOURCE_GROUP="rg-$NORMALIZED_PREFIX"
+
+          echo "RESOURCE_GROUP=$RESOURCE_GROUP" >> "$GITHUB_ENV"
+          echo "ACR_NAME=$ACR_NAME" >> "$GITHUB_ENV"
+          echo "WEB_APP_NAME=$WEB_APP_NAME" >> "$GITHUB_ENV"
+          echo "PLAN_NAME=$PLAN_NAME" >> "$GITHUB_ENV"
+          echo "DEPLOYMENT_NAME=sync-server-infra-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
+
+          echo "Resource group: $RESOURCE_GROUP"
+          echo "ACR name: $ACR_NAME"
+          echo "Web app name: $WEB_APP_NAME"
+          echo "Plan name: $PLAN_NAME"
+
+      - name: Create or reuse Azure resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          az group create \
+            --name "$RESOURCE_GROUP" \
+            --location "$LOCATION" \
+            --only-show-errors \
+            --output table
+
+          if az acr show --resource-group "$RESOURCE_GROUP" --name "$ACR_NAME" --only-show-errors --output none; then
+            echo "Using existing ACR $ACR_NAME."
+          else
+            az acr create \
+              --resource-group "$RESOURCE_GROUP" \
+              --name "$ACR_NAME" \
+              --sku Basic \
+              --admin-enabled false \
+              --only-show-errors \
+              --output table
+          fi
+
+      - name: Build sync-server image in ACR
+        shell: bash
+        run: |
+          set -euo pipefail
+          az acr build \
+            --resource-group "$RESOURCE_GROUP" \
+            --registry "$ACR_NAME" \
+            --image "$IMAGE_REPOSITORY:$IMAGE_TAG" \
+            --file packages/sync-server/Dockerfile \
+            .
+
+      - name: Deploy sync-server infrastructure
+        shell: bash
+        run: |
+          set -euo pipefail
+          az deployment group create \
+            --name "$DEPLOYMENT_NAME" \
+              --resource-group "$RESOURCE_GROUP" \
+              --template-file infra/azure/sync-server/main.bicep \
+              --parameters \
+              appServicePlanName="$PLAN_NAME" \
+              webAppName="$WEB_APP_NAME" \
+              appServiceSkuName="$APP_SERVICE_SKU_NAME" \
+              appServiceSkuTier="$APP_SERVICE_SKU_TIER" \
+              containerRegistryName="$ACR_NAME" \
+              containerImageRepository="$IMAGE_REPOSITORY" \
+              containerImageTag="$IMAGE_TAG" \
+            --only-show-errors \
+            --output table
+
+      - name: Print deployment outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Web app: $(az deployment group show --name "$DEPLOYMENT_NAME" --resource-group "$RESOURCE_GROUP" --query properties.outputs.webAppUrl.value -o tsv)"
+          echo "Health check: $(az deployment group show --name "$DEPLOYMENT_NAME" --resource-group "$RESOURCE_GROUP" --query properties.outputs.healthCheckUrl.value -o tsv)"
+          echo "WebSocket sync: $(az deployment group show --name "$DEPLOYMENT_NAME" --resource-group "$RESOURCE_GROUP" --query properties.outputs.webSocketSyncUrl.value -o tsv)"
