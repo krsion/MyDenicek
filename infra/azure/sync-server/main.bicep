@@ -55,11 +55,7 @@ var containerImageName = '${containerRegistry.properties.loginServer}/${containe
 resource containerAppEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' = {
   name: containerAppEnvironmentName
   location: location
-  properties: {
-    appLogsConfiguration: {
-      destination: 'none'
-    }
-  }
+  properties: {}
   tags: tags
 }
 
