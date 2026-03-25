@@ -90,7 +90,7 @@ while (true) {
     }
     const plain = document.toPlain();
     const items = typeof plain === 'object' && plain !== null && 'items' in plain
-      ? (plain.items as { $items: Array<{ done?: boolean }> }).$items
+      ? (plain.items as { $items: ReadonlyArray<{ done?: boolean }> }).$items
       : [];
     const currentItem = items[index];
     if (currentItem === undefined) {

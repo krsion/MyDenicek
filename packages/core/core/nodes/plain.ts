@@ -13,8 +13,8 @@ export interface PlainRef {
 export interface PlainList {
   /** Structural tag describing the list node. */
   $tag: string;
-  /** Ordered child items contained in the list. */
-  $items: PlainNode[];
+  /** Ordered child items contained in the list. Accepts readonly arrays from const fixtures. */
+  $items: readonly PlainNode[];
 }
 
 /** A plain record node with a structural tag and named child fields. */

@@ -1,5 +1,6 @@
 {
   "name": "sync-sample",
+  "exports": "./main.ts",
   "tasks": {
     "start": "deno run --allow-net main.ts"
   }
