@@ -1,0 +1,42 @@
+import { Denicek } from '../core/mod.ts';
+import {
+  type EncodedEvent,
+  type EncodedSyncRequest,
+  type EncodedSyncResponse,
+  decodeEvent,
+  encodeEvent,
+} from './protocol.ts';
+
+export class SyncRoom {
+  readonly id: string;
+  private roomPeer: Denicek;
+
+  constructor(id: string) {
+    this.id = id;
+    this.roomPeer = new Denicek(`room:${id}`);
+  }
+
+  get frontiers(): string[] {
+    return this.roomPeer.frontiers;
+  }
+
+  ingestEncodedEvents(events: EncodedEvent[]): void {
+    for (const encodedEvent of events) {
+      this.roomPeer.applyRemote(decodeEvent(encodedEvent));
+    }
+  }
+
+  computeSyncResponse(request: EncodedSyncRequest): EncodedSyncResponse {
+    this.ingestEncodedEvents(request.events);
+    return {
+      type: 'sync',
+      roomId: this.id,
+      frontiers: this.roomPeer.frontiers,
+      events: this.roomPeer.eventsSince(request.frontiers).map(encodeEvent),
+    };
+  }
+
+  listEncodedEvents(): EncodedEvent[] {
+    return this.roomPeer.eventsSince([]).map(encodeEvent);
+  }
+}
