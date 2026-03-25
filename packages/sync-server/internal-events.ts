@@ -1,4 +1,4 @@
-import { Denicek } from '@mydenicek/core';
+import type { Denicek } from '@mydenicek/core';
 import { Event } from '@mydenicek/core/internal.ts';
 
 export function collectAndValidateInternalEventsSince(document: Denicek, frontiers: string[]): Event[] {
