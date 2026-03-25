@@ -152,7 +152,7 @@ export function createSyncServer(options: SyncServerOptions = {}): SyncServerHan
         }
         socket.send(JSON.stringify(responseMessage));
         await enqueueRoomPersistence(room);
-        await broadcastRoomState(socket, room);
+        broadcastRoomState(socket, room);
       } catch (error) {
         socket.send(JSON.stringify({
           type: 'error',
@@ -171,6 +171,16 @@ export function createSyncServer(options: SyncServerOptions = {}): SyncServerHan
 
   return {
     server,
-    close: () => server.shutdown(),
+    close: async () => {
+      await server.shutdown();
+      if (options.persistencePath !== undefined && pendingRoomWrites.size > 0) {
+        const writes = Array.from(pendingRoomWrites.values());
+        try {
+          await Promise.all(writes);
+        } catch (error) {
+          console.error('Error while flushing pending room writes during server close:', error);
+        }
+      }
+    },
   };
 }

@@ -6,6 +6,7 @@ import {
   decodeEvent,
   encodeEvent,
 } from './protocol.ts';
+import { collectAndValidateInternalEventsSince } from './internal-events.ts';
 
 export class SyncRoom {
   readonly id: string;
@@ -32,11 +33,11 @@ export class SyncRoom {
       type: 'sync',
       roomId: this.id,
       frontiers: this.roomPeer.frontiers,
-      events: this.roomPeer.eventsSince(request.frontiers).map(encodeEvent),
+      events: collectAndValidateInternalEventsSince(this.roomPeer, request.frontiers).map(encodeEvent),
     };
   }
 
   listEncodedEvents(): EncodedEvent[] {
-    return this.roomPeer.eventsSince([]).map(encodeEvent);
+    return collectAndValidateInternalEventsSince(this.roomPeer, []).map(encodeEvent);
   }
 }

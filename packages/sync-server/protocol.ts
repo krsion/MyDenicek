@@ -20,6 +20,7 @@ import {
   WrapRecordEdit,
 } from '../core/internal.ts';
 import type { Edit } from '../core/internal.ts';
+import { collectAndValidateInternalEventsSince } from './internal-events.ts';
 
 export interface EncodedEventId {
   peer: string;
@@ -158,6 +159,8 @@ function decodeEdit(encodedEdit: EncodedEdit): Edit {
       return new CopyEdit(Selector.parse(encodedEdit.target), Selector.parse(encodedEdit.source));
     case 'NoOpEdit':
       return new NoOpEdit(Selector.parse(encodedEdit.target), encodedEdit.reason);
+    default:
+      throw new Error(`decodeEdit: unknown edit kind "${(encodedEdit as { kind: string }).kind}".`);
   }
 }
 
@@ -184,7 +187,7 @@ export function createSyncRequest(document: Denicek, roomId: string, knownServer
     type: 'sync',
     roomId,
     frontiers: document.frontiers,
-    events: document.eventsSince(knownServerFrontiers).map(encodeEvent),
+    events: collectAndValidateInternalEventsSince(document, knownServerFrontiers).map(encodeEvent),
   };
 }
 

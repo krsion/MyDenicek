@@ -19,8 +19,8 @@ Environment variables:
 ## Use the client helper
 
 ```ts
-import { Denicek } from "../core/mod.ts";
-import { SyncClient } from "./mod.ts";
+import { Denicek } from "jsr:@mydenicek/core";
+import { SyncClient } from "jsr:@mydenicek/sync-server";
 
 const peer = new Denicek("alice", {
   $tag: "root",
@@ -28,7 +28,7 @@ const peer = new Denicek("alice", {
 });
 
 const client = new SyncClient({
-  url: "ws://127.0.0.1:8787/sync?room=demo",
+  url: "ws://127.0.0.1:8787/sync",
   roomId: "demo",
   document: peer,
 });
