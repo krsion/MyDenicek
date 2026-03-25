@@ -8,6 +8,16 @@ import { VectorClock } from './vector-clock.ts';
 // ── EventGraph ──────────────────────────────────────────────────────
 
 export type MaterializeResult = { doc: Node; conflicts: Node[] };
+
+/** A serializable snapshot of a single event for UI inspection. */
+export type EventSnapshot = {
+  id: string;
+  peer: string;
+  seq: number;
+  parents: string[];
+  editKind: string;
+  target: string;
+};
 type PendingEventsByKey = Record<string, Event>;
 type MissingParentCountsByKey = Record<string, number>;
 type ChildKeysByMissingParent = Record<string, string[]>;
@@ -274,5 +284,17 @@ export class EventGraph {
     this.events = new Map();
     this._frontierIds = [];
     this.cachedOrder = null;
+  }
+
+  /** Returns a serializable snapshot of all known events for UI inspection. */
+  snapshotEvents(): EventSnapshot[] {
+    return [...this.events.values()].map((ev) => ({
+      id: ev.id.format(),
+      peer: ev.id.peer,
+      seq: ev.id.seq,
+      parents: ev.parents.map((p) => p.format()),
+      editKind: ev.edit.constructor.name,
+      target: ev.edit.target.format(),
+    }));
   }
 }
