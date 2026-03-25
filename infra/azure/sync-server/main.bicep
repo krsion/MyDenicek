@@ -27,16 +27,23 @@ param containerImageRepository string = 'sync-server'
 @description('Container image tag to deploy.')
 param containerImageTag string = 'latest'
 
+@description('Optional fully qualified container image name. When empty, the image is resolved from the registry, repository, and tag parameters.')
+param containerImageName string = ''
+
+@description('Container port exposed through Azure Container Apps ingress.')
+param containerPort int = 8080
+
+@description('HTTP path used for readiness and liveness probes, and for the health-check output.')
+param healthCheckPath string = '/healthz'
+
+@description('Whether to configure readiness and liveness probes for the container.')
+param enableHealthProbes bool = true
+
 @description('Path inside the container where the Azure Files share is mounted.')
 param persistencePath string = '/mnt/sync-data'
 
 @description('Optional tags applied to Azure resources.')
 param tags object = {}
-
-var acrPullRoleDefinitionId = subscriptionResourceId(
-  'Microsoft.Authorization/roleDefinitions',
-  '7f951dda-4ed3-4680-a7ca-43fe172d538d'
-)
 
 resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   name: containerRegistryName
@@ -50,7 +57,9 @@ resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' =
   tags: tags
 }
 
-var containerImageName = '${containerRegistry.properties.loginServer}/${containerImageRepository}:${containerImageTag}'
+var resolvedContainerImageName = empty(containerImageName)
+  ? '${containerRegistry.properties.loginServer}/${containerImageRepository}:${containerImageTag}'
+  : containerImageName
 
 resource containerAppEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' = {
   name: containerAppEnvironmentName
@@ -116,7 +125,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
       ingress: {
         allowInsecure: false
         external: true
-        targetPort: 8080
+        targetPort: containerPort
         transport: 'auto'
       }
       registries: [
@@ -130,7 +139,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'sync-server'
-          image: containerImageName
+          image: resolvedContainerImageName
           env: [
             {
               name: 'HOSTNAME'
@@ -142,29 +151,31 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             }
             {
               name: 'PORT'
-              value: '8080'
+              value: '${containerPort}'
             }
           ]
-          probes: [
-            {
-              type: 'Liveness'
-              httpGet: {
-                path: '/healthz'
-                port: 8080
-              }
-              initialDelaySeconds: 10
-              periodSeconds: 30
-            }
-            {
-              type: 'Readiness'
-              httpGet: {
-                path: '/healthz'
-                port: 8080
-              }
-              initialDelaySeconds: 5
-              periodSeconds: 15
-            }
-          ]
+          probes: enableHealthProbes
+            ? [
+                {
+                  type: 'Liveness'
+                  httpGet: {
+                    path: healthCheckPath
+                    port: containerPort
+                  }
+                  initialDelaySeconds: 10
+                  periodSeconds: 30
+                }
+                {
+                  type: 'Readiness'
+                  httpGet: {
+                    path: healthCheckPath
+                    port: containerPort
+                  }
+                  initialDelaySeconds: 5
+                  periodSeconds: 15
+                }
+              ]
+            : []
           resources: {
             cpu: json('0.25')
             memory: '0.5Gi'
@@ -193,16 +204,6 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   tags: tags
 }
 
-resource containerRegistryPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(containerRegistry.id, containerApp.id, 'acr-pull')
-  scope: containerRegistry
-  properties: {
-    principalId: containerApp.identity.principalId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: acrPullRoleDefinitionId
-  }
-}
-
 resource staticWebApp 'Microsoft.Web/staticSites@2025-03-01' = {
   name: staticWebAppName
   location: location
@@ -220,9 +221,9 @@ resource staticWebApp 'Microsoft.Web/staticSites@2025-03-01' = {
 
 output containerAppEnvironmentId string = containerAppEnvironment.id
 output containerAppUrl string = 'https://${containerApp.properties.latestRevisionFqdn}'
-output containerImage string = containerImageName
+output containerImage string = resolvedContainerImageName
 output containerRegistryLoginServer string = containerRegistry.properties.loginServer
-output healthCheckUrl string = 'https://${containerApp.properties.latestRevisionFqdn}/healthz'
+output healthCheckUrl string = 'https://${containerApp.properties.latestRevisionFqdn}${healthCheckPath}'
 output persistenceShareName string = persistenceShare.name
 output persistenceStorageAccountName string = persistenceStorage.name
 output staticWebAppDefaultHostname string = staticWebApp.properties.defaultHostname

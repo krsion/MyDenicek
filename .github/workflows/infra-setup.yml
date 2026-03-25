@@ -125,11 +125,15 @@ jobs:
             --resource-group "$RESOURCE_GROUP" \
             --template-file infra/azure/sync-server/main.bicep \
             --parameters \
+              containerImageName=mcr.microsoft.com/k8se/quickstart:latest \
               containerAppEnvironmentName="$CONTAINER_APP_ENVIRONMENT_NAME" \
               containerAppName="$CONTAINER_APP_NAME" \
+              containerPort=80 \
               containerImageRepository="$IMAGE_REPOSITORY" \
               containerImageTag=latest \
               containerRegistryName="$ACR_NAME" \
+              enableHealthProbes=false \
+              healthCheckPath=/ \
               persistenceStorageAccountName="$PERSISTENCE_STORAGE_ACCOUNT_NAME" \
               staticWebAppName="$STATIC_WEB_APP_NAME" \
             --only-show-errors \
