@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { PeerSession } from '../peer-session.ts';
-import type { PlainNode } from '@core';
+import type { PlainNode } from '@mydenicek/core';
 
 type Props = { session: PeerSession; onEdit: () => void };
 

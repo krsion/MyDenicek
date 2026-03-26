@@ -1,4 +1,4 @@
-import type { PlainNode } from '@core';
+import type { PlainNode } from '@mydenicek/core';
 
 type Props = { conflicts: PlainNode[] };
 

@@ -1,5 +1,5 @@
-import { Denicek } from '@core';
-import type { PlainNode, PrimitiveValue, EventSnapshot } from '@core';
+import { Denicek } from '@mydenicek/core';
+import type { PlainNode, PrimitiveValue, EventSnapshot } from '@mydenicek/core';
 
 /** Snapshot of a peer's visible state, safe to pass as React props. */
 export type PeerSnapshot = {

@@ -17,7 +17,7 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
-      "@core": ["../core/core.ts"],
+      "@mydenicek/core": ["../core/mod.ts"],
       "@std/data-structures/binary-heap": ["src/shims/binary-heap.ts"]
     }
   },
