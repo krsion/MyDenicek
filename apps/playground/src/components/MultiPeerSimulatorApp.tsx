@@ -80,7 +80,7 @@ export function MultiPeerSimulatorApp() {
         background: '#0078d4', color: '#fff', padding: '10px 16px',
         display: 'flex', alignItems: 'center', gap: 12,
       }}>
-        <span style={{ fontWeight: 700, fontSize: 16 }}>Mydenicek CRDT Inspector</span>
+        <span style={{ fontWeight: 700, fontSize: 16 }}>Mydenicek Playground</span>
         <span style={{ opacity: 0.7, fontSize: 12 }}>revision {revision}</span>
       </div>
 
@@ -91,26 +91,26 @@ export function MultiPeerSimulatorApp() {
         display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6,
       }}>
         <span style={{ fontSize: 12, color: '#555', fontWeight: 600, marginRight: 4 }}>Sync:</span>
-        <button style={btnStyle('#107c10')} onClick={() => handleSync('sync-all')}>Sync All</button>
+        <button type="button" style={btnStyle('#107c10')} onClick={() => handleSync('sync-all')}>Sync All</button>
         {sessions.length >= 2 && (
           <>
-            <button style={btnStyle('#555')} onClick={() => handleSync('ab')}>
+            <button type="button" style={btnStyle('#555')} onClick={() => handleSync('ab')}>
               {sessions[0]!.peerId} ↔ {sessions[1]!.peerId}
             </button>
-            <button style={btnStyle('#444')} onClick={() => handleSync('a-to-b')}>
+            <button type="button" style={btnStyle('#444')} onClick={() => handleSync('a-to-b')}>
               {sessions[0]!.peerId} → {sessions[1]!.peerId}
             </button>
-            <button style={btnStyle('#444')} onClick={() => handleSync('b-to-a')}>
+            <button type="button" style={btnStyle('#444')} onClick={() => handleSync('b-to-a')}>
               {sessions[1]!.peerId} → {sessions[0]!.peerId}
             </button>
           </>
         )}
         {sessions.length >= 3 && (
           <>
-            <button style={btnStyle('#555')} onClick={() => handleSync('bc')}>
+            <button type="button" style={btnStyle('#555')} onClick={() => handleSync('bc')}>
               {sessions[1]!.peerId} ↔ {sessions[2]!.peerId}
             </button>
-            <button style={btnStyle('#555')} onClick={() => handleSync('ac')}>
+            <button type="button" style={btnStyle('#555')} onClick={() => handleSync('ac')}>
               {sessions[0]!.peerId} ↔ {sessions[2]!.peerId}
             </button>
           </>
@@ -129,8 +129,8 @@ export function MultiPeerSimulatorApp() {
             border: '1px solid #ccc', borderRadius: 3, width: 80,
           }}
         />
-        <button style={btnStyle('#0078d4')} onClick={handleAddPeer}>Add</button>
-        <button style={{ ...btnStyle('#c50f1f'), marginLeft: 8 }} onClick={handleReset}>Reset</button>
+        <button type="button" style={btnStyle('#0078d4')} onClick={handleAddPeer}>Add</button>
+        <button type="button" style={{ ...btnStyle('#c50f1f'), marginLeft: 8 }} onClick={handleReset}>Reset</button>
       </div>
 
       {/* Peer workspaces */}

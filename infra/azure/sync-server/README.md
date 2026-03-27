@@ -1,14 +1,14 @@
-# Azure deployment for `packages\sync-server` and `packages\ui`
+# Azure deployment for `apps\sync-server`, `apps\playground`, and `apps\mywebnicek`
 
 This repo now targets:
 
 - **Azure Container Apps Consumption** for the sync server
-- **Azure Static Web Apps Free** for the frontend
+- **Azure Static Web Apps Free** for both browser apps
 
 The supported workflows are:
 
 - `.github\workflows\infra-setup.yml` — provisions Azure resources with GitHub OIDC
-- `.github\workflows\deploy-app.yml` — builds and deploys the sync server image and frontend app
+- `.github\workflows\deploy-app.yml` — builds and deploys the sync server image, playground, and mywebnicek
 
 ## What the infra workflow creates
 
@@ -19,7 +19,8 @@ From a single `name_prefix`, the workflow derives:
 - Container Apps environment = `cae-<name_prefix>`
 - sync server container app = `<name_prefix>-sync`
 - persistence storage account = `<name_prefix-without-symbols>sync`
-- Static Web App = `<name_prefix>-web`
+- playground Static Web App = `<name_prefix>-playground`
+- mywebnicek Static Web App = `<name_prefix>-mywebnicek`
 
 The Bicep template also creates an Azure Files share mounted into the sync-server container. The app is configured with:
 
@@ -91,30 +92,38 @@ Run **Azure infra setup** from the Actions tab with:
 - `name_prefix` — defaults to `mydenicek-core-krsion-dev`
 - `location` — defaults to `westeurope`
 
-After the workflow finishes, store the Static Web Apps deployment token as a GitHub repository secret named `AZURE_STATIC_WEB_APPS_API_TOKEN`.
+After the workflow finishes, store both Static Web Apps deployment tokens as GitHub repository secrets.
 
 From your machine, use:
 
 ```powershell
 $NamePrefix = "mydenicek-core-krsion-dev"
 $NormalizedPrefix = $NamePrefix.ToLower() -replace "[^a-z0-9]+", "-"
-$StaticWebAppName = "$NormalizedPrefix-web"
+$PlaygroundStaticWebAppName = "$NormalizedPrefix-playground"
+$MyWebnicekStaticWebAppName = "$NormalizedPrefix-mywebnicek"
 $ResourceGroup = "rg-$NormalizedPrefix"
 
 az staticwebapp secrets list `
-  --name $StaticWebAppName `
+  --name $PlaygroundStaticWebAppName `
+  --resource-group $ResourceGroup `
+  --query properties.apiKey `
+  -o tsv
+
+az staticwebapp secrets list `
+  --name $MyWebnicekStaticWebAppName `
   --resource-group $ResourceGroup `
   --query properties.apiKey `
   -o tsv
 ```
 
-Paste that value into the repository secret:
+Paste the values into these repository secrets:
 
-- `AZURE_STATIC_WEB_APPS_API_TOKEN`
+- `AZURE_STATIC_WEB_APPS_API_TOKEN_PLAYGROUND`
+- `AZURE_STATIC_WEB_APPS_API_TOKEN_MYWEBNICEK`
 
 ## Run the app deploy workflow
 
-Run **Deploy sync server and frontend** with:
+Run **Deploy sync server, playground, and mywebnicek** with:
 
 - `name_prefix` — defaults to `mydenicek-core-krsion-dev`
 - `image_tag` — defaults to `latest`
@@ -123,5 +132,6 @@ It will:
 
 - build the sync-server image in ACR
 - redeploy the Container App to the requested image tag
-- build `packages\ui`
-- upload the built frontend to Azure Static Web Apps
+- build `apps\playground`
+- build `apps\mywebnicek`
+- upload both browser apps to Azure Static Web Apps
