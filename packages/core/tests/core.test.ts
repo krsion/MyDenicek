@@ -423,16 +423,16 @@ Deno.test("throws when registering a primitive edit with an empty name", () => {
   );
 });
 
-Deno.test("get returns a single plain node without materializing the whole document in caller code", () => {
+Deno.test("get returns all matched plain nodes without materializing the whole document in caller code", () => {
   const core = new Denicek("alice", {
     $tag: "root",
     items: { $tag: "ul", $items: ["first", "second"] },
   });
 
-  assertEquals(core.get("items/0"), "first");
-  assertEquals(core.get("items/1"), "second");
-  assertEquals(core.get("items/2"), undefined);
-  assertThrows(() => core.get("items/*"), Error, "expected a single node");
+  assertEquals(core.get("items/0"), ["first"]);
+  assertEquals(core.get("items/1"), ["second"]);
+  assertEquals(core.get("items/2"), []);
+  assertEquals(core.get("items/*"), ["first", "second"]);
 });
 
 Deno.test("replays registered primitive edit against a different primitive value", () => {
@@ -462,7 +462,7 @@ Deno.test("replays registered primitive edit against a different primitive value
   });
 });
 
-Deno.test("replays a primitive edit selected by event id onto another target", () => {
+Deno.test("replays an edit selected by event id onto another target", () => {
   Denicek.registerPrimitiveEdit("test-capitalize-from-event", (value) => {
     if (typeof value !== "string") {
       throw new Error("test-capitalize-from-event expects a string.");
@@ -489,8 +489,8 @@ Deno.test("replays a primitive edit selected by event id onto another target", (
     throw new Error("Expected a primitive edit event.");
   }
 
-  target.replayPrimitiveEditFromEvent(capitalizeEvent.id, "items/1");
-  target.replayPrimitiveEditFromEvent(capitalizeEvent.id, "items/2");
+  target.replayEditFromEvent(capitalizeEvent.id, "items/1");
+  target.replayEditFromEvent(capitalizeEvent.id, "items/2");
 
   assertEquals(target.toPlain(), {
     $tag: "root",
@@ -498,34 +498,46 @@ Deno.test("replays a primitive edit selected by event id onto another target", (
   });
 });
 
-Deno.test("throws when replaying a primitive edit from an unknown or incompatible event id", () => {
-  Denicek.registerPrimitiveEdit("test-capitalize-from-event-errors", (value) => {
-    if (typeof value !== "string") {
-      throw new Error("test-capitalize-from-event-errors expects a string.");
-    }
-    return `${value.slice(0, 1).toUpperCase()}${value.slice(1).toLowerCase()}`;
+Deno.test("replays a non-primitive edit selected by event id onto another target", () => {
+  const source = new Denicek("source", {
+    $tag: "root",
+    items: { $tag: "ul", $items: ["first", "second"] },
+  });
+  const target = new Denicek("target", {
+    $tag: "root",
+    items: { $tag: "ul", $items: ["first", "second"] },
   });
 
+  source.set("items/0", "updated");
+  const setValueEvent = source.inspectEvents().find((event) =>
+    event.editKind === "SetValue" && event.target === "items/0"
+  );
+  for (const event of source.drain()) {
+    target.applyRemote(event);
+  }
+
+  if (setValueEvent === undefined) {
+    throw new Error("Expected a set-value event.");
+  }
+
+  target.replayEditFromEvent(setValueEvent.id, "items/1");
+
+  assertEquals(target.toPlain(), {
+    $tag: "root",
+    items: { $tag: "ul", $items: ["updated", "updated"] },
+  });
+});
+
+Deno.test("throws when replaying an edit from an unknown event id", () => {
   const core = new Denicek("alice", {
     $tag: "root",
     name: "bob",
   });
 
   assertThrows(
-    () => core.replayPrimitiveEditFromEvent("alice:99", "name"),
+    () => core.replayEditFromEvent("alice:99", "name"),
     Error,
     "Unknown event",
-  );
-
-  core.set("name", "alice");
-  const [setValueEvent] = core.inspectEvents();
-  if (setValueEvent === undefined) {
-    throw new Error("Expected a set-value event.");
-  }
-  assertThrows(
-    () => core.replayPrimitiveEditFromEvent(setValueEvent.id, "name"),
-    Error,
-    "does not carry a primitive edit",
   );
 });
 

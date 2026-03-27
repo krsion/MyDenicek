@@ -94,18 +94,17 @@ export class Denicek {
     this.commit(new SetValueEdit(Selector.parse(target), value));
   }
 
-  /** Returns the plain node at a single matched path, or undefined when the path is absent. */
-  get(target: string): PlainNode | undefined {
+  /**
+   * Returns the plain nodes matched by `target` in the current materialized document.
+   *
+   * Missing paths return an empty array, while wildcard selectors naturally return
+   * multiple concrete matches. Callers can pick one match or iterate all of them
+   * without converting the whole document to plain first.
+   */
+  get(target: string): PlainNode[] {
     const doc = this.cachedDoc ?? this.rematerialize();
     this.cachedDoc = doc;
-    const nodes = doc.navigate(Selector.parse(target));
-    if (nodes.length === 0) {
-      return undefined;
-    }
-    if (nodes.length > 1) {
-      throw new Error(`Denicek.get expected a single node at '${target}', but matched ${nodes.length} nodes.`);
-    }
-    return nodes[0]!.toPlain() as PlainNode;
+    return doc.navigate(Selector.parse(target)).map((node) => node.toPlain() as PlainNode);
   }
 
   /** Applies a registered named primitive edit to every primitive node matched by `target`. */
@@ -114,20 +113,19 @@ export class Denicek {
   }
 
   /**
-   * Replays the named primitive edit carried by an existing event onto a new target.
+   * Replays the edit carried by an existing event onto a different target.
    *
-   * Useful when a UI selects an event from the graph by id and reuses that semantic edit.
+   * This keeps the UI-facing API simple: the caller selects an event from the
+   * graph by id, chooses a new target, and this method reuses the event's edit
+   * payload by retargeting its primary selector through `Edit.withTarget(...)`.
    */
-  replayPrimitiveEditFromEvent(eventId: string, target: string): void {
+  replayEditFromEvent(eventId: string, target: string): void {
     const normalizedEventId = EventId.parse(eventId).format();
     const event = this.graph.getEvent(normalizedEventId);
     if (event === undefined) {
       throw new Error(`Unknown event '${normalizedEventId}'.`);
     }
-    if (!(event.edit instanceof ApplyPrimitiveEdit)) {
-      throw new Error(`Event '${normalizedEventId}' does not carry a primitive edit.`);
-    }
-    this.commit(new ApplyPrimitiveEdit(Selector.parse(target), event.edit.editName));
+    this.commit(event.edit.withTarget(Selector.parse(target)));
   }
 
   /** Appends `value` to every list matched by `target`. */
