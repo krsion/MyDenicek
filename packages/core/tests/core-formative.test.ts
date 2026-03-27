@@ -56,7 +56,7 @@ function splitConferenceContacts(peer: Denicek): void {
   };
 
   for (const [rowIndex, row] of plainDocument.speakers.$items.entries()) {
-    const [name, email] = row.$items[0]!.name.split(",").map((part) => part.trim());
+    const [name, email = ""] = row.$items[0]!.name.split(",").map((part) => part.trim());
     peer.set(`speakers/${rowIndex}/0/name`, name);
     peer.set(`speakers/${rowIndex}/0/email`, email);
   }
@@ -105,17 +105,17 @@ function normalizeTwoWordMessage(message: string): string {
     .toLowerCase()
     .split(" ")
     .filter((word) => word.length > 0)
-    .map((word) => `${word[0]!.toUpperCase()}${word.slice(1)}`)
+    .map((word) => `${word.slice(0, 1).toUpperCase()}${word.slice(1)}`)
     .join(" ");
 }
 
 function applyRecordedHelloWorldNormalization(peer: Denicek): void {
   const plainDocument = peer.toPlain() as { messages: { $items: string[] } };
   peer.set("messages/0", normalizeTwoWordMessage(plainDocument.messages.$items[0]!));
-
-  const replayDocument = peer.toPlain() as { messages: { $items: string[] } };
-  for (const [messageIndex, message] of replayDocument.messages.$items.entries()) {
-    if (messageIndex === 0) continue;
+  for (const [messageIndex, message] of plainDocument.messages.$items.entries()) {
+    if (messageIndex === 0) {
+      continue;
+    }
     peer.set(`messages/${messageIndex}`, normalizeTwoWordMessage(message));
   }
 }
