@@ -35,8 +35,8 @@ Useful container environment variables:
 ## Deploy to Azure Container Apps
 
 Use `.github\workflows\infra-setup.yml` to provision Azure Container Apps, Azure
-Container Registry, and Azure Static Web Apps. Then use
-`.github\workflows\deploy-app.yml` to deploy the sync-server image and frontend.
+Container Registry, and both Azure Static Web Apps. Then use
+`.github\workflows\deploy-app.yml` to deploy the sync-server image, playground, and mywebnicek.
 
 See `../../infra/azure/sync-server/README.md` for the OIDC setup, GitHub variables,
 Static Web Apps deployment token step, and workflow usage.

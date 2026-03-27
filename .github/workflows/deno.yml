@@ -35,7 +35,7 @@ jobs:
       #   run: deno fmt --check
 
       - name: Run linter
-        run: deno lint packages/core packages/sync-server apps/sync-server
+        run: deno lint packages/core packages/sync-server apps/sync-server apps/playground apps/mywebnicek
 
       - name: Type-check packages and apps
         run: |
@@ -47,6 +47,26 @@ jobs:
         run: |
           deno test --allow-all --no-check packages/core/tests
           deno test --allow-read --allow-write packages/sync-server/tests
+
+      - name: Install playground dependencies
+        working-directory: apps/playground
+        run: deno install
+
+      - name: Build and test playground
+        working-directory: apps/playground
+        run: |
+          deno task build
+          deno task test
+
+      - name: Install mywebnicek dependencies
+        working-directory: apps/mywebnicek
+        run: deno install
+
+      - name: Build and test mywebnicek
+        working-directory: apps/mywebnicek
+        run: |
+          deno task build
+          deno task test
 
       - name: Lint package docs
         working-directory: packages/core
