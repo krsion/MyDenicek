@@ -37,7 +37,7 @@ Deno.test("Formative: Counter App", () => {
       };
     };
     for (const step of plainDocument.btn.script.steps.$items) {
-      peer.repeatEditFromEventId(step.eventId);
+      peer.replayEditFromEventId(step.eventId);
     }
   };
 

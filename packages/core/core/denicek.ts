@@ -39,8 +39,7 @@ export class Denicek {
    *
    * The returned string is the formatted stable event identifier (`${peer}:${seq}`)
    * assigned to the newly created local event. It can later be passed to
-   * {@link replayEditFromEventId}, {@link repeatEditFromEventId}, or persisted
-   * in application data.
+   * {@link replayEditFromEventId} or persisted in application data.
    */
   private commit(edit: Edit): string {
     const doc = this.cachedDoc ?? this.rematerialize();
@@ -141,28 +140,12 @@ export class Denicek {
   }
 
   /**
-   * Replays the edit carried by an existing event onto a different target.
-   *
-   * This is the explicit retargeting variant: callers choose both the source
-   * event id and the new target selector. It reuses the stored edit through
-   * `Edit.withTarget(...)`, so callers should use it only when replaying that
-   * edit against a different selector is the behavior they want and the new
-   * selector is compatible with that edit kind.
-   * Returns the formatted id (`${peer}:${seq}`) of the newly recorded replay event.
-   */
-  replayEditFromEventId(eventId: string, target: string): string {
-    const event = this.resolveReplaySourceEvent(eventId);
-    return this.commit(event.edit.withTarget(Selector.parse(target)));
-  }
-
-  /**
    * Replays the edit carried by an existing event at its original target.
    *
-   * This is the simplest replay path when the caller wants to repeat the
-   * recorded edit semantics without choosing a new selector manually.
+   * This repeats the recorded edit semantics exactly as originally captured.
    * Returns the formatted id (`${peer}:${seq}`) of the newly recorded replay event.
    */
-  repeatEditFromEventId(eventId: string): string {
+  replayEditFromEventId(eventId: string): string {
     const event = this.resolveReplaySourceEvent(eventId);
     return this.commit(event.edit);
   }

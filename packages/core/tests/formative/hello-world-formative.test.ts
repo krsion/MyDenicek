@@ -32,14 +32,14 @@ Deno.test("Formative: Hello World", () => {
       replayPeer.applyRemote(event);
     }
 
-    replayPeer.replayEditFromEventId(capitalizeEventId, "messages/*");
+    replayPeer.replayEditFromEventId(capitalizeEventId);
   }
 
   const expected = {
     $tag: "app",
     messages: {
       $tag: "ul",
-      $items: ["Hello World", "Good Morning", "Denicek Formative"],
+      $items: ["Hello World", "gOOD mORning", "denICEk FORmative"],
     },
   };
   assertEquals(recordedPeer.toPlain(), {
