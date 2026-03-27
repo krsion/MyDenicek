@@ -148,6 +148,9 @@ export class WrapListEdit extends NoOpOnRemovedTargetEdit {
 
   transformSelector(sel: Selector): SelectorTransform {
     const m = this.target.matchPrefix(sel);
+    // Wrapping a wildcard-selected child (for example `items/*`) produces a
+    // concrete single-item list at index 0 for each matched child, while
+    // wrapping a concrete target keeps wildcard semantics for future lookups.
     const insertedSegment = this.target.lastSegment === "*" ? 0 : "*";
     return m.kind === "no-match"
       ? mapSelector(sel)

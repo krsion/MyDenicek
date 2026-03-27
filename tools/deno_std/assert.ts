@@ -40,26 +40,28 @@ export function assertThrows(
     if (!(error instanceof Error)) {
       fail(`Expected function to throw an Error, but threw ${formatValue(error)}.`);
     }
+    const actualError = error as Error;
+    const actualErrorName = Object.getPrototypeOf(actualError)?.constructor?.name ?? "Error";
 
-    if (ErrorClass !== undefined && !(error instanceof ErrorClass)) {
+    if (ErrorClass !== undefined && !(actualError instanceof ErrorClass)) {
       fail(
-        `Expected function to throw ${ErrorClass.name}, but threw ${error.constructor.name}.`,
+        `Expected function to throw ${ErrorClass.name}, but threw ${actualErrorName}.`,
       );
     }
 
-    if (typeof msgIncludes === "string" && !error.message.includes(msgIncludes)) {
+    if (typeof msgIncludes === "string" && !actualError.message.includes(msgIncludes)) {
       fail(
-        `Expected error message to include ${formatValue(msgIncludes)}, but got ${formatValue(error.message)}.`,
+        `Expected error message to include ${formatValue(msgIncludes)}, but got ${formatValue(actualError.message)}.`,
       );
     }
 
-    if (msgIncludes instanceof RegExp && !msgIncludes.test(error.message)) {
+    if (msgIncludes instanceof RegExp && !msgIncludes.test(actualError.message)) {
       fail(
-        `Expected error message to match ${String(msgIncludes)}, but got ${formatValue(error.message)}.`,
+        `Expected error message to match ${String(msgIncludes)}, but got ${formatValue(actualError.message)}.`,
       );
     }
 
-    return error;
+    return actualError;
   }
 
   fail("Expected function to throw.");
