@@ -38,8 +38,7 @@ Deno.test("Formative: Hello World", () => {
       throw new Error("Expected the replay peer to contain a capitalize event.");
     }
 
-    replayPeer.replayEditFromEvent(capitalizeEvent.id, "messages/1");
-    replayPeer.replayEditFromEvent(capitalizeEvent.id, "messages/2");
+    replayPeer.replayEditFromEvent(capitalizeEvent.id, "messages/*");
   }
 
   const expected = {
