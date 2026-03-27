@@ -3,9 +3,9 @@
 TypeScript/Deno workspace for experimenting with the Denicek document model:
 
 - `packages/core` — the OT-based Denicek CRDT implementation
-- `packages/sync-server` — a WebSocket sync server and client helper
+- `packages/sync-server` — sync protocol, sync room, and server/client helpers
+- `apps/sync-server` — the runnable WebSocket sync server
 - `apps/ui` — a browser UI for exploring the event DAG and document state
-- `apps/sync-sample` — a tiny terminal sample app
 
 ## Links
 
@@ -52,6 +52,12 @@ deno task sync-server
 
 The server listens on `http://127.0.0.1:8787` by default and exposes WebSocket sync at `ws://127.0.0.1:8787/sync`.
 
+Environment variables:
+
+- `PORT` — WebSocket port (default `8787`)
+- `HOSTNAME` — bind address (default `0.0.0.0`)
+- `PERSISTENCE_PATH` — directory for JSON event logs (default `./data`)
+
 ### Run the UI locally
 
 In a second terminal:
@@ -69,21 +75,12 @@ From the repository root you can also use:
 deno task ui:dev
 ```
 
-### Run the sample terminal app
-
-With the sync server running, start peers in separate terminals:
-
-```sh
-deno run --allow-net apps/sync-sample/main.ts --peer alice
-deno run --allow-net apps/sync-sample/main.ts --peer bob
-```
-
 ### Useful validation commands
 
 From the repository root:
 
 ```sh
-deno lint packages/core packages/sync-server apps/sync-sample
+deno lint packages/core packages/sync-server apps/sync-server
 deno task check
 deno task test
 cd apps/ui && deno install && deno task build && deno task test
@@ -93,6 +90,6 @@ cd apps/ui && deno install && deno task build && deno task test
 
 - [Core package README](./packages/core/README.md)
 - [Sync server README](./packages/sync-server/README.md)
+- [Sync server app README](./apps/sync-server/README.md)
 - [UI README](./apps/ui/README.md)
-- [Sync sample README](./apps/sync-sample/README.md)
 - [Azure deployment README](./infra/azure/sync-server/README.md)
