@@ -1,7 +1,4 @@
 {
-  "name": "@mydenicek/playground",
-  "version": "0.1.0",
-  "nodeModulesDir": "auto",
   "tasks": {
     "dev": "vite",
     "build": "vite build",

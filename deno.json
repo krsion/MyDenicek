@@ -1,4 +1,5 @@
 {
+  "nodeModulesDir": "auto",
   "workspace": ["./packages/core", "./packages/sync-server", "./apps/sync-server", "./apps/playground", "./apps/mywebnicek"],
   "tasks": {
     "check": "deno check packages/core/mod.ts && deno check packages/sync-server/mod.ts && deno check apps/sync-server/main.ts",

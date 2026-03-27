@@ -28,30 +28,30 @@ export function computeInitialSyncServerUrl(options: InitialSyncServerUrlOptions
 }
 
 export function readInitialSyncServerUrl(): string {
-  if (typeof window === 'undefined') {
+  if (typeof globalThis.window === 'undefined') {
     return DEFAULT_SYNC_SERVER_URL;
   }
 
   let storedSyncServerUrl: string | null = null;
   try {
-    storedSyncServerUrl = window.localStorage.getItem(SYNC_SERVER_URL_STORAGE_KEY);
+    storedSyncServerUrl = globalThis.localStorage.getItem(SYNC_SERVER_URL_STORAGE_KEY);
   } catch {
     storedSyncServerUrl = null;
   }
 
   return computeInitialSyncServerUrl({
-    search: window.location.search,
+    search: globalThis.location.search,
     storedSyncServerUrl,
   });
 }
 
 export function persistSyncServerUrl(syncServerUrl: string): void {
-  if (typeof window === 'undefined') {
+  if (typeof globalThis.window === 'undefined') {
     return;
   }
 
   try {
-    window.localStorage.setItem(SYNC_SERVER_URL_STORAGE_KEY, syncServerUrl);
+    globalThis.localStorage.setItem(SYNC_SERVER_URL_STORAGE_KEY, syncServerUrl);
   } catch {
     // Ignore storage failures so the app still works in locked-down browsers.
   }
