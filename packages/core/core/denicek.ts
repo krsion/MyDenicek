@@ -94,9 +94,40 @@ export class Denicek {
     this.commit(new SetValueEdit(Selector.parse(target), value));
   }
 
+  /** Returns the plain node at a single matched path, or undefined when the path is absent. */
+  get(target: string): PlainNode | undefined {
+    const doc = this.cachedDoc ?? this.rematerialize();
+    this.cachedDoc = doc;
+    const nodes = doc.navigate(Selector.parse(target));
+    if (nodes.length === 0) {
+      return undefined;
+    }
+    if (nodes.length > 1) {
+      throw new Error(`Denicek.get expected a single node at '${target}', but matched ${nodes.length} nodes.`);
+    }
+    return nodes[0]!.toPlain() as PlainNode;
+  }
+
   /** Applies a registered named primitive edit to every primitive node matched by `target`. */
   applyPrimitiveEdit(target: string, editName: string): void {
     this.commit(new ApplyPrimitiveEdit(Selector.parse(target), editName));
+  }
+
+  /**
+   * Replays the named primitive edit carried by an existing event onto a new target.
+   *
+   * Useful when a UI selects an event from the graph by id and reuses that semantic edit.
+   */
+  replayPrimitiveEditFromEvent(eventId: string, target: string): void {
+    const normalizedEventId = EventId.parse(eventId).format();
+    const event = this.graph.getEvent(normalizedEventId);
+    if (event === undefined) {
+      throw new Error(`Unknown event '${normalizedEventId}'.`);
+    }
+    if (!(event.edit instanceof ApplyPrimitiveEdit)) {
+      throw new Error(`Event '${normalizedEventId}' does not carry a primitive edit.`);
+    }
+    this.commit(new ApplyPrimitiveEdit(Selector.parse(target), event.edit.editName));
   }
 
   /** Appends `value` to every list matched by `target`. */
