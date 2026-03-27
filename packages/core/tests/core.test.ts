@@ -484,8 +484,8 @@ Deno.test("replays an edit selected by event id onto another target", () => {
     target.applyRemote(event);
   }
 
-  target.replayEditFromEvent(capitalizeEventId, "items/1");
-  target.replayEditFromEvent(capitalizeEventId, "items/2");
+  target.replayEditFromEventId(capitalizeEventId, "items/1");
+  target.replayEditFromEventId(capitalizeEventId, "items/2");
 
   assertEquals(target.toPlain(), {
     $tag: "root",
@@ -493,7 +493,7 @@ Deno.test("replays an edit selected by event id onto another target", () => {
   });
 });
 
-Deno.test("replays a non-primitive edit selected by event id onto another target", () => {
+Deno.test("repeats a non-primitive edit selected by event id at its original target", () => {
   const source = new Denicek("source", {
     $tag: "root",
     items: { $tag: "ul", $items: ["first", "second"] },
@@ -508,11 +508,11 @@ Deno.test("replays a non-primitive edit selected by event id onto another target
     target.applyRemote(event);
   }
 
-  target.replayEditFromEvent(setValueEventId, "items/1");
+  target.repeatEditFromEventId(setValueEventId);
 
   assertEquals(target.toPlain(), {
     $tag: "root",
-    items: { $tag: "ul", $items: ["updated", "updated"] },
+    items: { $tag: "ul", $items: ["updated", "second"] },
   });
 });
 
@@ -523,7 +523,12 @@ Deno.test("throws when replaying an edit from an unknown event id", () => {
   });
 
   assertThrows(
-    () => core.replayEditFromEvent("alice:99", "name"),
+    () => core.replayEditFromEventId("alice:99", "name"),
+    Error,
+    "Unknown event",
+  );
+  assertThrows(
+    () => core.repeatEditFromEventId("alice:99"),
     Error,
     "Unknown event",
   );

@@ -31,13 +31,13 @@ Deno.test("Formative: Counter App", () => {
       btn: {
         script: {
           steps: {
-            $items: Array<{ eventId: string; target: string }>;
+            $items: Array<{ eventId: string }>;
           };
         };
       };
     };
     for (const step of plainDocument.btn.script.steps.$items) {
-      peer.replayEditFromEvent(step.eventId, step.target);
+      peer.repeatEditFromEventId(step.eventId);
     }
   };
 
@@ -45,19 +45,19 @@ Deno.test("Formative: Counter App", () => {
   const renameEventId = peer.rename("formula", "formula", "left");
   const addRightEventId = peer.add("formula", "right", 1);
 
-  peer.pushBack("btn/script/steps", { $tag: "replay-step", eventId: wrapEventId, target: "formula" });
-  peer.pushBack("btn/script/steps", { $tag: "replay-step", eventId: renameEventId, target: "formula/formula" });
-  peer.pushBack("btn/script/steps", { $tag: "replay-step", eventId: addRightEventId, target: "formula/right" });
+  peer.pushBack("btn/script/steps", { $tag: "replay-step", eventId: wrapEventId });
+  peer.pushBack("btn/script/steps", { $tag: "replay-step", eventId: renameEventId });
+  peer.pushBack("btn/script/steps", { $tag: "replay-step", eventId: addRightEventId });
 
   {
     const plainDocument = peer.toPlain() as {
       formula: FormulaNode;
-      btn: { script: { steps: { $items: Array<{ target: string }> } } };
+      btn: { script: { steps: { $items: Array<{ eventId: string }> } } };
     };
-    assertEquals(plainDocument.btn.script.steps.$items.map((step) => step.target), [
-      "formula",
-      "formula/formula",
-      "formula/right",
+    assertEquals(plainDocument.btn.script.steps.$items.map((step) => step.eventId), [
+      wrapEventId,
+      renameEventId,
+      addRightEventId,
     ]);
     assertEquals(evaluateFormula(plainDocument.formula), 2);
   }
@@ -66,12 +66,12 @@ Deno.test("Formative: Counter App", () => {
   {
     const plainDocument = peer.toPlain() as {
       formula: FormulaNode;
-      btn: { script: { steps: { $items: Array<{ target: string }> } } };
+      btn: { script: { steps: { $items: Array<{ eventId: string }> } } };
     };
-    assertEquals(plainDocument.btn.script.steps.$items.map((step) => step.target), [
-      "formula",
-      "formula/formula",
-      "formula/right",
+    assertEquals(plainDocument.btn.script.steps.$items.map((step) => step.eventId), [
+      wrapEventId,
+      renameEventId,
+      addRightEventId,
     ]);
     assertEquals(evaluateFormula(plainDocument.formula), 3);
   }
@@ -101,9 +101,9 @@ Deno.test("Formative: Counter App", () => {
         steps: {
           $tag: "event-steps",
           $items: [
-            { $tag: "replay-step", eventId: wrapEventId, target: "formula" },
-            { $tag: "replay-step", eventId: renameEventId, target: "formula/formula" },
-            { $tag: "replay-step", eventId: addRightEventId, target: "formula/right" },
+            { $tag: "replay-step", eventId: wrapEventId },
+            { $tag: "replay-step", eventId: renameEventId },
+            { $tag: "replay-step", eventId: addRightEventId },
           ],
         },
       },

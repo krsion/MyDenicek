@@ -32,7 +32,7 @@ Deno.test("Formative: Hello World", () => {
       replayPeer.applyRemote(event);
     }
 
-    replayPeer.replayEditFromEvent(capitalizeEventId, "messages/*");
+    replayPeer.replayEditFromEventId(capitalizeEventId, "messages/*");
   }
 
   const expected = {

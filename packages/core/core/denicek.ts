@@ -39,7 +39,8 @@ export class Denicek {
    *
    * The returned string is the formatted stable event identifier (`${peer}:${seq}`)
    * assigned to the newly created local event. It can later be passed to
-   * {@link replayEditFromEvent} or persisted in application data.
+   * {@link replayEditFromEventId}, {@link repeatEditFromEventId}, or persisted
+   * in application data.
    */
   private commit(edit: Edit): string {
     const doc = this.cachedDoc ?? this.rematerialize();
@@ -142,18 +143,25 @@ export class Denicek {
   /**
    * Replays the edit carried by an existing event onto a different target.
    *
-   * This keeps the UI-facing API simple: the caller selects an event from the
-   * graph by id, chooses a new target, and this method reuses the event's edit
-   * payload by retargeting its primary selector through `Edit.withTarget(...)`.
+   * This is the explicit retargeting variant: callers choose both the source
+   * event id and the new target selector.
    * Returns the formatted id (`${peer}:${seq}`) of the newly recorded replay event.
    */
-  replayEditFromEvent(eventId: string, target: string): string {
-    const normalizedEventId = EventId.parse(eventId).format();
-    const event = this.graph.getEvent(normalizedEventId);
-    if (event === undefined) {
-      throw new Error(`Unknown event '${normalizedEventId}'.`);
-    }
+  replayEditFromEventId(eventId: string, target: string): string {
+    const event = this.getReplaySourceEvent(eventId);
     return this.commit(event.edit.withTarget(Selector.parse(target)));
+  }
+
+  /**
+   * Replays the edit carried by an existing event at its original target.
+   *
+   * This is the simplest replay path when the caller wants to repeat the
+   * recorded edit semantics without choosing a new selector manually.
+   * Returns the formatted id (`${peer}:${seq}`) of the newly recorded replay event.
+   */
+  repeatEditFromEventId(eventId: string): string {
+    const event = this.getReplaySourceEvent(eventId);
+    return this.commit(event.edit);
   }
 
   /**
@@ -267,5 +275,15 @@ export class Denicek {
   /** Returns a serializable snapshot of all known events for UI inspection. */
   inspectEvents(): EventSnapshot[] {
     return this.graph.snapshotEvents();
+  }
+
+  /** Resolves and validates an event id before replaying its edit payload. */
+  private getReplaySourceEvent(eventId: string): Event {
+    const normalizedEventId = EventId.parse(eventId).format();
+    const event = this.graph.getEvent(normalizedEventId);
+    if (event === undefined) {
+      throw new Error(`Unknown event '${normalizedEventId}'.`);
+    }
+    return event;
   }
 }
