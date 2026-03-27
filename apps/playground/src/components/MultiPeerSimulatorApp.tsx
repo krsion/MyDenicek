@@ -80,7 +80,7 @@ export function MultiPeerSimulatorApp() {
         background: '#0078d4', color: '#fff', padding: '10px 16px',
         display: 'flex', alignItems: 'center', gap: 12,
       }}>
-        <span style={{ fontWeight: 700, fontSize: 16 }}>MyDenicek Playground</span>
+        <span style={{ fontWeight: 700, fontSize: 16 }}>Mydenicek Playground</span>
         <span style={{ opacity: 0.7, fontSize: 12 }}>revision {revision}</span>
       </div>
 
