@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { Denicek } from "../../mod.ts";
+import { Denicek, registerPrimitiveEdit } from "../../mod.ts";
 
 Deno.test("Formative: Hello World", () => {
   const initialDocument = {
@@ -11,7 +11,8 @@ Deno.test("Formative: Hello World", () => {
   };
   const recordedPeer = new Denicek("recorded", initialDocument);
   const directPeer = new Denicek("direct", initialDocument);
-  const normalizeTwoWordMessage = (message: string): string =>
+  const replayPeer = new Denicek("replay", initialDocument);
+  const capitalizeMessageWords = (message: string): string =>
     message
       .toLowerCase()
       .split(" ")
@@ -19,21 +20,29 @@ Deno.test("Formative: Hello World", () => {
       .map((word) => `${word.slice(0, 1).toUpperCase()}${word.slice(1)}`)
       .join(" ");
 
+  registerPrimitiveEdit("capitalize", (value) => {
+    if (typeof value !== "string") {
+      throw new Error("capitalize expects a string.");
+    }
+    return capitalizeMessageWords(value);
+  });
+
   {
-    const plainDocument = recordedPeer.toPlain() as { messages: { $items: string[] } };
-    recordedPeer.set("messages/0", normalizeTwoWordMessage(plainDocument.messages.$items[0]!));
-    for (const [messageIndex, message] of plainDocument.messages.$items.entries()) {
-      if (messageIndex === 0) {
-        continue;
-      }
-      recordedPeer.set(`messages/${messageIndex}`, normalizeTwoWordMessage(message));
+    recordedPeer.applyPrimitiveEdit("messages/0", "capitalize");
+    for (const event of recordedPeer.drain()) {
+      replayPeer.applyRemote(event);
+    }
+
+    const replayDocument = replayPeer.toPlain() as { messages: { $items: string[] } };
+    for (const [messageIndex] of replayDocument.messages.$items.slice(1).entries()) {
+      replayPeer.applyPrimitiveEdit(`messages/${messageIndex + 1}`, "capitalize");
     }
   }
 
   {
     const plainDocument = directPeer.toPlain() as { messages: { $items: string[] } };
     for (const [messageIndex, message] of plainDocument.messages.$items.entries()) {
-      directPeer.set(`messages/${messageIndex}`, normalizeTwoWordMessage(message));
+      directPeer.set(`messages/${messageIndex}`, capitalizeMessageWords(message));
     }
   }
 
@@ -44,6 +53,13 @@ Deno.test("Formative: Hello World", () => {
       $items: ["Hello World", "Good Morning", "Denicek Formative"],
     },
   };
-  assertEquals(recordedPeer.toPlain(), expected);
+  assertEquals(recordedPeer.toPlain(), {
+    $tag: "app",
+    messages: {
+      $tag: "ul",
+      $items: ["Hello World", "gOOD mORning", "denICEk FORmative"],
+    },
+  });
+  assertEquals(replayPeer.toPlain(), expected);
   assertEquals(directPeer.toPlain(), expected);
 });
