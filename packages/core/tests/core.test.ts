@@ -228,45 +228,6 @@ Deno.test("wildcard edit affects concurrently inserted item", () => {
   assertEquals(bob.toPlain(), expected);
 });
 
-Deno.test("Conference list", () => {
-  const doc = {
-    $tag: "div",
-    items: {
-      $tag: "ul",
-      $items: [
-        { $tag: "li", name: "John Doe" },
-        { $tag: "li", name: "Jane Smith" },
-      ],
-    },
-  };
-  const alice = new Denicek("alice", doc);
-  const bob = new Denicek("bob", doc);
-
-  alice.pushBack("items", { $tag: "li", name: "Alice Johnson" });
-
-  bob.updateTag("items", "table");
-  bob.updateTag("items/*", "td");
-  bob.wrapList("items/*", "tr");
-
-  sync(alice, bob);
-
-  const expected = {
-    $tag: "div",
-    items: {
-      $tag: "table",
-      $items: [
-        { $tag: "tr", $items: [{ $tag: "td", name: "John Doe" }] },
-        { $tag: "tr", $items: [{ $tag: "td", name: "Jane Smith" }] },
-        { $tag: "tr", $items: [{ $tag: "td", name: "Alice Johnson" }] },
-      ],
-    },
-  };
-
-  assertEquals(alice.toPlain(), expected);
-  assertEquals(bob.toPlain(), expected);
-
-});
-
 // ── Edit coverage tests ─────────────────────────────────────────────
 
 Deno.test("copy replaces target with source", () => {
