@@ -1,5 +1,9 @@
+/// <reference types="vite/client" />
+
 // Update this fallback when the default Azure sync-server deployment hostname changes.
 export const DEFAULT_DEPLOYED_SYNC_SERVER_URL = 'wss://mydenicek-core-krsion-dev-sync--9mvjnr2.happyisland-d6dda219.westeurope.azurecontainerapps.io/sync';
+const CONFIGURED_DEFAULT_SYNC_SERVER_URL = import.meta.env.VITE_DEFAULT_SYNC_SERVER_URL?.trim();
+export const DEFAULT_SYNC_SERVER_URL = CONFIGURED_DEFAULT_SYNC_SERVER_URL || DEFAULT_DEPLOYED_SYNC_SERVER_URL;
 
 const SYNC_SERVER_URL_QUERY_PARAM = 'syncServerUrl';
 const SYNC_SERVER_URL_STORAGE_KEY = 'mywebnicek.syncServerUrl';
@@ -20,12 +24,12 @@ export function computeInitialSyncServerUrl(options: InitialSyncServerUrlOptions
     return storedSyncServerUrl;
   }
 
-  return DEFAULT_DEPLOYED_SYNC_SERVER_URL;
+  return DEFAULT_SYNC_SERVER_URL;
 }
 
 export function readInitialSyncServerUrl(): string {
   if (typeof window === 'undefined') {
-    return DEFAULT_DEPLOYED_SYNC_SERVER_URL;
+    return DEFAULT_SYNC_SERVER_URL;
   }
 
   let storedSyncServerUrl: string | null = null;

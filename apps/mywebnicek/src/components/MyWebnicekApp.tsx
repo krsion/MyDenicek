@@ -34,7 +34,7 @@ function createPeerColorMap(events: EventSnapshot[], localPeerId: string): Map<s
   return new Map(orderedPeers.map((peerId, index) => [peerId, PEER_COLORS[index % PEER_COLORS.length] ?? '#0078d4']));
 }
 
-function computeAutoSyncInterval(rawValue: string): number {
+function parseAutoSyncIntervalMs(rawValue: string): number {
   const parsed = Number.parseInt(rawValue, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1000;
 }
@@ -109,7 +109,7 @@ export function MyWebnicekApp() {
     const peerId = peerIdInput.trim() || DEFAULT_PEER_ID;
     const nextRoomId = roomId.trim() || DEFAULT_ROOM_ID;
     const nextSyncServerUrl = syncServerUrl.trim() || readInitialSyncServerUrl();
-    const autoSyncIntervalMs = computeAutoSyncInterval(autoSyncIntervalMsInput);
+    const autoSyncIntervalMs = parseAutoSyncIntervalMs(autoSyncIntervalMsInput);
 
     let nextSession = session;
     if (peerId !== session.peerId) {
