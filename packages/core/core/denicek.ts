@@ -146,7 +146,8 @@ export class Denicek {
    * This is the explicit retargeting variant: callers choose both the source
    * event id and the new target selector. It reuses the stored edit through
    * `Edit.withTarget(...)`, so callers should use it only when replaying that
-   * edit against a different selector is the behavior they want.
+   * edit against a different selector is the behavior they want and the new
+   * selector is compatible with that edit kind.
    * Returns the formatted id (`${peer}:${seq}`) of the newly recorded replay event.
    */
   replayEditFromEventId(eventId: string, target: string): string {
