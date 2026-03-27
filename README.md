@@ -1,11 +1,12 @@
 # mydenicek-core
 
-TypeScript/Deno workspace for experimenting with the Denicek document model:
+TypeScript/Deno workspace for experimenting with the Denicek document model and building browser clients around it:
 
 - `packages/core` — the OT-based Denicek CRDT implementation
 - `packages/sync-server` — sync protocol, sync room, and server/client helpers
 - `apps/sync-server` — the runnable WebSocket sync server
-- `apps/ui` — a browser UI for exploring the event DAG and document state
+- `apps/playground` — the experimental playground for multi-peer DAG and sync exploration
+- `apps/mywebnicek` — the production-oriented browser UI that syncs through the deployed sync server
 
 ## Links
 
@@ -20,12 +21,15 @@ TypeScript/Deno workspace for experimenting with the Denicek document model:
 
 ### Live deployment
 
-The latest successful Azure deployment workflow published these public endpoints:
+The Azure deployment workflows publish these public endpoints:
 
-- [Deployed UI](https://happy-bay-0c7b2c903.4.azurestaticapps.net)
-- [Deployed sync server](https://mydenicek-core-krsion-dev-sync--9mvjnr2.happyisland-d6dda219.westeurope.azurecontainerapps.io)
-- [Sync server health check](https://mydenicek-core-krsion-dev-sync--9mvjnr2.happyisland-d6dda219.westeurope.azurecontainerapps.io/healthz)
-- WebSocket endpoint: `wss://mydenicek-core-krsion-dev-sync--9mvjnr2.happyisland-d6dda219.westeurope.azurecontainerapps.io/sync`
+- playground static web app URL
+- mywebnicek static web app URL
+- sync server URL
+- sync server health check URL
+- WebSocket sync URL
+
+The exact values are printed by `.github/workflows/infra-setup.yml` and `.github/workflows/deploy-app.yml`.
 
 ## Local setup
 
@@ -33,14 +37,16 @@ The latest successful Azure deployment workflow published these public endpoints
 
 - Deno 2.x
 
-### Install UI dependencies
+### Install browser app dependencies
 
-Most of the workspace uses standard Deno module resolution. The UI also needs its npm dependencies installed:
+Most of the workspace uses standard Deno module resolution. The browser apps also need their npm dependencies installed:
 
 ```sh
-cd apps/ui
+cd apps/playground
 deno install
 ```
+
+Repeat the same command in `apps/mywebnicek` when working on that app.
 
 ### Run the sync server locally
 
@@ -58,12 +64,12 @@ Environment variables:
 - `HOSTNAME` — bind address (default `0.0.0.0`)
 - `PERSISTENCE_PATH` — directory for JSON event logs (default `./data`)
 
-### Run the UI locally
+### Run the playground locally
 
 In a second terminal:
 
 ```sh
-cd apps/ui
+cd apps/playground
 deno task dev
 ```
 
@@ -72,7 +78,24 @@ Then open <http://localhost:5173>.
 From the repository root you can also use:
 
 ```sh
-deno task ui:dev
+deno task playground:dev
+```
+
+### Run mywebnicek locally
+
+In another terminal:
+
+```sh
+cd apps/mywebnicek
+deno task dev
+```
+
+Then open <http://localhost:5173> and connect to the default deployed sync server or change the URL in the app.
+
+From the repository root you can also use:
+
+```sh
+deno task mywebnicek:dev
 ```
 
 ### Useful validation commands
@@ -83,7 +106,8 @@ From the repository root:
 deno lint packages/core packages/sync-server apps/sync-server
 deno task check
 deno task test
-cd apps/ui && deno install && deno task build && deno task test
+cd apps/playground && deno install && deno task build && deno task test
+cd apps/mywebnicek && deno install && deno task build && deno task test
 ```
 
 ## Workspace README files
@@ -91,5 +115,6 @@ cd apps/ui && deno install && deno task build && deno task test
 - [Core package README](./packages/core/README.md)
 - [Sync server README](./packages/sync-server/README.md)
 - [Sync server app README](./apps/sync-server/README.md)
-- [UI README](./apps/ui/README.md)
+- [Playground README](./apps/playground/README.md)
+- [MyWebnicek README](./apps/mywebnicek/README.md)
 - [Azure deployment README](./infra/azure/sync-server/README.md)

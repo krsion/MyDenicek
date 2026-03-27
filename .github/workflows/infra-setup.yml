@@ -66,8 +66,10 @@ jobs:
           CONTAINER_APP_ENVIRONMENT_NAME="${CONTAINER_APP_ENVIRONMENT_NAME:0:60}"
           CONTAINER_APP_NAME="${NORMALIZED_PREFIX}-sync"
           CONTAINER_APP_NAME="${CONTAINER_APP_NAME:0:32}"
-          STATIC_WEB_APP_NAME="${NORMALIZED_PREFIX}-web"
-          STATIC_WEB_APP_NAME="${STATIC_WEB_APP_NAME:0:40}"
+          PLAYGROUND_STATIC_WEB_APP_NAME="${NORMALIZED_PREFIX}-playground"
+          PLAYGROUND_STATIC_WEB_APP_NAME="${PLAYGROUND_STATIC_WEB_APP_NAME:0:40}"
+          MYWEBNICEK_STATIC_WEB_APP_NAME="${NORMALIZED_PREFIX}-mywebnicek"
+          MYWEBNICEK_STATIC_WEB_APP_NAME="${MYWEBNICEK_STATIC_WEB_APP_NAME:0:40}"
           RESOURCE_GROUP="rg-$NORMALIZED_PREFIX"
 
           echo "RESOURCE_GROUP=$RESOURCE_GROUP" >> "$GITHUB_ENV"
@@ -76,7 +78,8 @@ jobs:
           echo "CONTAINER_APP_NAME=$CONTAINER_APP_NAME" >> "$GITHUB_ENV"
           echo "DEPLOYMENT_NAME=azure-infra-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
           echo "PERSISTENCE_STORAGE_ACCOUNT_NAME=$PERSISTENCE_STORAGE_ACCOUNT_NAME" >> "$GITHUB_ENV"
-          echo "STATIC_WEB_APP_NAME=$STATIC_WEB_APP_NAME" >> "$GITHUB_ENV"
+          echo "PLAYGROUND_STATIC_WEB_APP_NAME=$PLAYGROUND_STATIC_WEB_APP_NAME" >> "$GITHUB_ENV"
+          echo "MYWEBNICEK_STATIC_WEB_APP_NAME=$MYWEBNICEK_STATIC_WEB_APP_NAME" >> "$GITHUB_ENV"
 
       - name: Register Azure resource providers
         shell: bash
@@ -131,7 +134,8 @@ jobs:
               containerImageTag=latest \
               containerRegistryName="$ACR_NAME" \
               persistenceStorageAccountName="$PERSISTENCE_STORAGE_ACCOUNT_NAME" \
-              staticWebAppName="$STATIC_WEB_APP_NAME" \
+              playgroundStaticWebAppName="$PLAYGROUND_STATIC_WEB_APP_NAME" \
+              mywebnicekStaticWebAppName="$MYWEBNICEK_STATIC_WEB_APP_NAME" \
             --only-show-errors \
             --output table
 
@@ -166,12 +170,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "Static Web App: $(az deployment group show --name "$DEPLOYMENT_NAME" --resource-group "$RESOURCE_GROUP" --query properties.outputs.staticWebAppUrl.value -o tsv)"
+          echo "Playground: $(az deployment group show --name "$DEPLOYMENT_NAME" --resource-group "$RESOURCE_GROUP" --query properties.outputs.playgroundStaticWebAppUrl.value -o tsv)"
+          echo "MyWebnicek: $(az deployment group show --name "$DEPLOYMENT_NAME" --resource-group "$RESOURCE_GROUP" --query properties.outputs.mywebnicekStaticWebAppUrl.value -o tsv)"
           echo "Sync server: $(az deployment group show --name "$DEPLOYMENT_NAME" --resource-group "$RESOURCE_GROUP" --query properties.outputs.containerAppUrl.value -o tsv)"
           echo "Health check: $(az deployment group show --name "$DEPLOYMENT_NAME" --resource-group "$RESOURCE_GROUP" --query properties.outputs.healthCheckUrl.value -o tsv)"
           echo "WebSocket sync: $(az deployment group show --name "$DEPLOYMENT_NAME" --resource-group "$RESOURCE_GROUP" --query properties.outputs.webSocketSyncUrl.value -o tsv)"
           echo "ACR login server: $(az deployment group show --name "$DEPLOYMENT_NAME" --resource-group "$RESOURCE_GROUP" --query properties.outputs.containerRegistryLoginServer.value -o tsv)"
           echo ""
-          echo "Next: store the Static Web Apps deployment token as the GitHub secret AZURE_STATIC_WEB_APPS_API_TOKEN."
-          echo "Command:"
-          echo "az staticwebapp secrets list --name $STATIC_WEB_APP_NAME --resource-group $RESOURCE_GROUP --query properties.apiKey -o tsv"
+          echo "Next: store the Static Web Apps deployment tokens as GitHub secrets."
+          echo "Playground command:"
+          echo "az staticwebapp secrets list --name $PLAYGROUND_STATIC_WEB_APP_NAME --resource-group $RESOURCE_GROUP --query properties.apiKey -o tsv"
+          echo "MyWebnicek command:"
+          echo "az staticwebapp secrets list --name $MYWEBNICEK_STATIC_WEB_APP_NAME --resource-group $RESOURCE_GROUP --query properties.apiKey -o tsv"

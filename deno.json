@@ -1,14 +1,18 @@
 {
-  "workspace": ["./packages/core", "./packages/sync-server", "./apps/sync-server", "./apps/ui"],
+  "workspace": ["./packages/core", "./packages/sync-server", "./apps/sync-server", "./apps/playground", "./apps/mywebnicek"],
   "tasks": {
     "check": "deno check packages/core/mod.ts && deno check packages/sync-server/mod.ts && deno check apps/sync-server/main.ts",
     "test": "deno test --allow-all --no-check packages/core/tests && deno test --allow-read --allow-write packages/sync-server/tests",
     "property-test": "deno test packages/core/tests/core-properties.test.ts --allow-all",
     "random-fuzzer": "deno run packages/core/tools/core-random-fuzzer.ts",
     "sync-server": "deno run --allow-net --allow-read --allow-write --allow-env apps/sync-server/main.ts",
-    "ui:install": "cd apps/ui && deno install",
-    "ui:dev": "cd apps/ui && deno task dev",
-    "ui:build": "cd apps/ui && deno task build",
-    "ui:test": "cd apps/ui && deno task test"
+    "playground:install": "cd apps/playground && deno install",
+    "playground:dev": "cd apps/playground && deno task dev",
+    "playground:build": "cd apps/playground && deno task build",
+    "playground:test": "cd apps/playground && deno task test",
+    "mywebnicek:install": "cd apps/mywebnicek && deno install",
+    "mywebnicek:dev": "cd apps/mywebnicek && deno task dev",
+    "mywebnicek:build": "cd apps/mywebnicek && deno task build",
+    "mywebnicek:test": "cd apps/mywebnicek && deno task test"
   }
 }
