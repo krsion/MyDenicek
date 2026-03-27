@@ -1,5 +1,9 @@
 {
   "workspace": ["./packages/core", "./packages/sync-server", "./apps/sync-sample", "./apps/ui"],
+  "imports": {
+    "@std/assert": "./tools/deno_std/assert.ts",
+    "@std/data-structures/binary-heap": "./tools/deno_std/binary-heap.ts"
+  },
   "tasks": {
     "check": "deno check packages/core/mod.ts && deno check packages/sync-server/mod.ts && deno check packages/sync-server/main.ts && deno check apps/sync-sample/main.ts",
     "test": "deno test --allow-all --no-check packages/core/tests && deno test --allow-read --allow-write packages/sync-server/tests",
