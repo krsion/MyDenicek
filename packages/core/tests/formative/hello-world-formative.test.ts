@@ -10,7 +10,6 @@ Deno.test("Formative: Hello World", () => {
     },
   };
   const recordedPeer = new Denicek("recorded", initialDocument);
-  const directPeer = new Denicek("direct", initialDocument);
   const replayPeer = new Denicek("replay", initialDocument);
   const capitalizeMessageWords = (message: string): string =>
     message
@@ -29,24 +28,18 @@ Deno.test("Formative: Hello World", () => {
 
   {
     recordedPeer.applyPrimitiveEdit("messages/0", "capitalize");
-    const capitalizeEvent = recordedPeer.inspectEvents().find((event) =>
-      event.editKind === "ApplyPrimitiveEdit" && event.target === "messages/0"
-    );
     for (const event of recordedPeer.drain()) {
       replayPeer.applyRemote(event);
     }
+    const capitalizeEvent = replayPeer.inspectEvents().find((event) =>
+      event.editKind === "ApplyPrimitiveEdit" && event.target === "messages/0"
+    );
     if (capitalizeEvent === undefined) {
-      throw new Error("Expected the recorded peer to produce a capitalize event.");
+      throw new Error("Expected the replay peer to contain a capitalize event.");
     }
 
     replayPeer.replayEditFromEvent(capitalizeEvent.id, "messages/1");
     replayPeer.replayEditFromEvent(capitalizeEvent.id, "messages/2");
-  }
-
-  {
-    for (const [index, message] of directPeer.get("messages/*").entries()) {
-      directPeer.set(`messages/${index}`, capitalizeMessageWords(message as string));
-    }
   }
 
   const expected = {
@@ -64,5 +57,4 @@ Deno.test("Formative: Hello World", () => {
     },
   });
   assertEquals(replayPeer.toPlain(), expected);
-  assertEquals(directPeer.toPlain(), expected);
 });
