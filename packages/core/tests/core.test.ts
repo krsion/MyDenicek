@@ -1,6 +1,7 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import {
   Denicek,
+  registerPrimitiveEdit,
 } from "../mod.ts";
 import { Edit, RecordAddEdit, RecordDeleteEdit } from "../core/edits.ts";
 import { Event } from "../core/event.ts";
@@ -393,9 +394,72 @@ Deno.test("fromPlain rejects null", () => {
   assertThrows(() => Node.fromPlain(JSON.parse("null")), Error, "Null is not a valid PlainNode.");
 });
 
+Deno.test("applies registered primitive edit locally", () => {
+  registerPrimitiveEdit("test-capitalize-local", (value) => {
+    if (typeof value !== "string") {
+      throw new Error("test-capitalize-local expects a string.");
+    }
+    return `${value.slice(0, 1).toUpperCase()}${value.slice(1).toLowerCase()}`;
+  });
+
+  const core = new Denicek("alice", {
+    $tag: "root",
+    name: "bob",
+  });
+
+  core.applyPrimitiveEdit("name", "test-capitalize-local");
+
+  assertEquals(core.toPlain(), {
+    $tag: "root",
+    name: "Bob",
+  });
+});
+
+Deno.test("replays registered primitive edit against a different primitive value", () => {
+  Denicek.registerPrimitiveEdit("test-capitalize-remote", (value) => {
+    if (typeof value !== "string") {
+      throw new Error("test-capitalize-remote expects a string.");
+    }
+    return `${value.slice(0, 1).toUpperCase()}${value.slice(1).toLowerCase()}`;
+  });
+
+  const source = new Denicek("source", {
+    $tag: "root",
+    name: "bob",
+  });
+  const target = new Denicek("target", {
+    $tag: "root",
+    name: "alice",
+  });
+
+  source.applyPrimitiveEdit("name", "test-capitalize-remote");
+  const [event] = source.drain();
+  target.applyRemote(event);
+
+  assertEquals(target.toPlain(), {
+    $tag: "root",
+    name: "Alice",
+  });
+});
+
+Deno.test("throws when applying an unknown primitive edit", () => {
+  const core = new Denicek("alice", {
+    $tag: "root",
+    name: "bob",
+  });
+
+  assertThrows(
+    () => core.applyPrimitiveEdit("name", "missing-primitive-edit"),
+    Error,
+    "Unknown primitive edit",
+  );
+});
+
 Deno.test("default edit transform throws unless removal handling is explicit", () => {
   class DummyEdit extends Edit {
     readonly isStructural = false;
+    // Edit subclasses must expose a stable kind string.
+    readonly kind = "DummyEdit";
 
     constructor(readonly target: Selector) { super(); }
 

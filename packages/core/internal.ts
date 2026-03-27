@@ -8,6 +8,7 @@ export {
   ListPushBackEdit,
   ListPushFrontEdit,
   NoOpEdit,
+  ApplyPrimitiveEdit,
   RecordAddEdit,
   RecordDeleteEdit,
   RecordRenameFieldEdit,
@@ -19,5 +20,6 @@ export {
 export { Event } from './core/event.ts';
 export { EventId } from './core/event-id.ts';
 export { Node } from './core/nodes.ts';
+export { applyRegisteredPrimitiveEdit, registerPrimitiveEdit } from './core/primitive-edits.ts';
 export { Selector } from './core/selector.ts';
 export { VectorClock } from './core/vector-clock.ts';

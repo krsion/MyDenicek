@@ -1,8 +1,9 @@
-import { CopyEdit, type Edit, ListPopBackEdit, ListPopFrontEdit, ListPushBackEdit, ListPushFrontEdit, RecordAddEdit, RecordDeleteEdit, RecordRenameFieldEdit, SetValueEdit, UpdateTagEdit, WrapListEdit, WrapRecordEdit } from './edits.ts';
+import { ApplyPrimitiveEdit, CopyEdit, type Edit, ListPopBackEdit, ListPopFrontEdit, ListPushBackEdit, ListPushFrontEdit, RecordAddEdit, RecordDeleteEdit, RecordRenameFieldEdit, SetValueEdit, UpdateTagEdit, WrapListEdit, WrapRecordEdit } from './edits.ts';
 import type { Event } from './event.ts';
 import { EventGraph, type EventSnapshot } from './event-graph.ts';
 import { EventId } from './event-id.ts';
 import { Node, type PlainNode } from './nodes.ts';
+import { registerPrimitiveEdit, type PrimitiveEditImplementation } from './primitive-edits.ts';
 import { type PrimitiveValue, Selector } from './selector.ts';
 
 // ── Denicek (collaborative document peer) ───────────────────────────
@@ -26,6 +27,11 @@ export class Denicek {
   constructor(peer: string, arg?: PlainNode) {
     this.peer = peer;
     this.graph = new EventGraph(Node.fromPlain(arg ?? { $tag: "root" }));
+  }
+
+  /** Registers a named primitive edit implementation used by local and remote replay. */
+  static registerPrimitiveEdit(name: string, implementation: PrimitiveEditImplementation): void {
+    registerPrimitiveEdit(name, implementation);
   }
 
   /** Applies a validated local edit and records the resulting event. */
@@ -86,6 +92,11 @@ export class Denicek {
   /** Replaces every primitive node matched by `target` with `value`. */
   set(target: string, value: PrimitiveValue): void {
     this.commit(new SetValueEdit(Selector.parse(target), value));
+  }
+
+  /** Applies a registered named primitive edit to every primitive node matched by `target`. */
+  applyPrimitiveEdit(target: string, editName: string): void {
+    this.commit(new ApplyPrimitiveEdit(Selector.parse(target), editName));
   }
 
   /** Appends `value` to every list matched by `target`. */
