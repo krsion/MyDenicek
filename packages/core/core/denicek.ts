@@ -144,7 +144,9 @@ export class Denicek {
    * Replays the edit carried by an existing event onto a different target.
    *
    * This is the explicit retargeting variant: callers choose both the source
-   * event id and the new target selector.
+   * event id and the new target selector. It reuses the stored edit through
+   * `Edit.withTarget(...)`, so callers should use it only when replaying that
+   * edit against a different selector is the behavior they want.
    * Returns the formatted id (`${peer}:${seq}`) of the newly recorded replay event.
    */
   replayEditFromEventId(eventId: string, target: string): string {
@@ -282,7 +284,9 @@ export class Denicek {
     const normalizedEventId = EventId.parse(eventId).format();
     const event = this.graph.getEvent(normalizedEventId);
     if (event === undefined) {
-      throw new Error(`Unknown event '${normalizedEventId}' in the local graph.`);
+      throw new Error(
+        `Unknown event '${normalizedEventId}' in the local graph. Events enter the graph when this peer records them locally or receives them via applyRemote().`,
+      );
     }
     return event;
   }
