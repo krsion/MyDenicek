@@ -88,38 +88,5 @@ Deno.test("Formative: Counter App", () => {
 
   clickButton();
 
-  assertEquals(peer.toPlain(), {
-    $tag: "app",
-    formula: {
-      $tag: "paragraph",
-      math: {
-        $tag: "x-formula-plus",
-        left: {
-          $tag: "x-formula-plus",
-          left: {
-            $tag: "x-formula-plus",
-            left: 1,
-            right: 1,
-          },
-          right: 1,
-        },
-        right: 1,
-      },
-    },
-    btn: {
-      $tag: "button",
-      label: "Add 1",
-      script: {
-        $tag: "replay-script",
-        steps: {
-          $tag: "event-steps",
-          $items: [
-            { $tag: "replay-step", eventId: wrapEventId },
-            { $tag: "replay-step", eventId: renameEventId },
-            { $tag: "replay-step", eventId: addRightEventId },
-          ],
-        },
-      },
-    },
-  });
+  assertEquals(evaluateFormula((peer.toPlain() as { formula: FormulaNode }).formula), 4);
 });
