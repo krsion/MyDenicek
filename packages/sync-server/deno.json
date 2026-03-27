@@ -8,9 +8,8 @@
     "exclude": ["tests/"]
   },
   "tasks": {
-    "check": "deno check mod.ts main.ts",
-    "test": "deno test --allow-read --allow-write tests",
-    "start": "deno run --allow-net --allow-read --allow-write --allow-env main.ts"
+    "check": "deno check mod.ts",
+    "test": "deno test --allow-read --allow-write tests"
   },
   "imports": {
     "@std/assert": "jsr:@std/assert@1"

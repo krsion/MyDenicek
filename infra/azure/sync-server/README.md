@@ -1,4 +1,4 @@
-# Azure deployment for `packages\sync-server` and `packages\ui`
+# Azure deployment for `apps\sync-server` and `apps\ui`
 
 This repo now targets:
 
@@ -123,5 +123,5 @@ It will:
 
 - build the sync-server image in ACR
 - redeploy the Container App to the requested image tag
-- build `packages\ui`
+- build `apps\ui`
 - upload the built frontend to Azure Static Web Apps

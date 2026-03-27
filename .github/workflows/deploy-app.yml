@@ -85,7 +85,7 @@ jobs:
             --resource-group "$RESOURCE_GROUP" \
             --registry "$ACR_NAME" \
             --image "$IMAGE_REPOSITORY:$IMAGE_TAG" \
-            --file packages/sync-server/Dockerfile \
+            --file apps/sync-server/Dockerfile \
             .
 
       - name: Ensure AcrPull role assignment
