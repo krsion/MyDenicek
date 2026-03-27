@@ -44,11 +44,11 @@ function refactorConferenceListToTable(peer: Denicek): void {
   peer.updateTag("speakers", "table");
   peer.updateTag("speakers/*", "td");
   peer.wrapList("speakers/*", "tr");
-  peer.rename("speakers/*/*", "contact", "name");
-  peer.add("speakers/*/*", "email", "");
 }
 
-function splitConferenceContacts(peer: Denicek): void {
+function splitConferenceContactsAtomically(peer: Denicek): void {
+  peer.rename("speakers/*/*", "contact", "name");
+  peer.add("speakers/*/*", "email", "");
   const plainDocument = peer.toPlain() as {
     speakers: {
       $items: Array<{ $items: Array<{ name: string }> }>;
@@ -229,11 +229,8 @@ Deno.test("Formative: Conference List", () => {
 
   alice.pushBack("speakers", { $tag: "li", contact: "Barbara Liskov, barbara@example.com" });
   refactorConferenceListToTable(bob);
+  splitConferenceContactsAtomically(bob);
 
-  syncPeers(alice, bob);
-
-  splitConferenceContacts(alice);
-  splitConferenceContacts(bob);
   syncPeers(alice, bob);
 
   const expected = {
