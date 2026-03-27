@@ -2,7 +2,17 @@
 
 // Update this fallback when the default Azure sync-server deployment hostname changes.
 export const DEFAULT_DEPLOYED_SYNC_SERVER_URL = 'wss://mydenicek-core-krsion-dev-sync--9mvjnr2.happyisland-d6dda219.westeurope.azurecontainerapps.io/sync';
-const CONFIGURED_DEFAULT_SYNC_SERVER_URL = import.meta.env.VITE_DEFAULT_SYNC_SERVER_URL?.trim();
+type ImportMetaWithOptionalEnv = ImportMeta & {
+  readonly env?: {
+    readonly VITE_DEFAULT_SYNC_SERVER_URL?: string;
+  };
+};
+
+function readConfiguredDefaultSyncServerUrl(): string | undefined {
+  return (import.meta as ImportMetaWithOptionalEnv).env?.VITE_DEFAULT_SYNC_SERVER_URL?.trim();
+}
+
+const CONFIGURED_DEFAULT_SYNC_SERVER_URL = readConfiguredDefaultSyncServerUrl();
 export const DEFAULT_SYNC_SERVER_URL = CONFIGURED_DEFAULT_SYNC_SERVER_URL || DEFAULT_DEPLOYED_SYNC_SERVER_URL;
 
 const SYNC_SERVER_URL_QUERY_PARAM = 'syncServerUrl';
