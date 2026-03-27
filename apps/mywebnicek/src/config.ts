@@ -1,3 +1,4 @@
+// Update this fallback when the default Azure sync-server deployment hostname changes.
 export const DEFAULT_DEPLOYED_SYNC_SERVER_URL = 'wss://mydenicek-core-krsion-dev-sync--9mvjnr2.happyisland-d6dda219.westeurope.azurecontainerapps.io/sync';
 
 const SYNC_SERVER_URL_QUERY_PARAM = 'syncServerUrl';
