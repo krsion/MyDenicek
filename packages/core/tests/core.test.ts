@@ -462,7 +462,7 @@ Deno.test("replays registered primitive edit against a different primitive value
   });
 });
 
-Deno.test("replays a primitive edit selected by event id at its original target", () => {
+Deno.test("replays a primitive edit selected by event id onto another target", () => {
   Denicek.registerPrimitiveEdit("test-capitalize-from-event", (value) => {
     if (typeof value !== "string") {
       throw new Error("test-capitalize-from-event expects a string.");
@@ -484,12 +484,12 @@ Deno.test("replays a primitive edit selected by event id at its original target"
     target.applyRemote(event);
   }
 
-  target.replayEditFromEventId(capitalizeEventId);
-  target.replayEditFromEventId(capitalizeEventId);
+  target.replayEditFromEventId(capitalizeEventId, "items/1");
+  target.replayEditFromEventId(capitalizeEventId, "items/2");
 
   assertEquals(target.toPlain(), {
     $tag: "root",
-    items: { $tag: "ul", $items: ["Alpha", "bRAVO", "cHARLIE"] },
+    items: { $tag: "ul", $items: ["Alpha", "Bravo", "Charlie"] },
   });
 });
 
@@ -508,7 +508,7 @@ Deno.test("replays a non-primitive edit selected by event id at its original tar
     target.applyRemote(event);
   }
 
-  target.replayEditFromEventId(setValueEventId);
+  target.repeatEditFromEventId(setValueEventId);
 
   assertEquals(target.toPlain(), {
     $tag: "root",
@@ -523,7 +523,12 @@ Deno.test("throws when replaying an edit from an unknown event id", () => {
   });
 
   assertThrows(
-    () => core.replayEditFromEventId("alice:99"),
+    () => core.replayEditFromEventId("alice:99", "name"),
+    Error,
+    "Unknown event",
+  );
+  assertThrows(
+    () => core.repeatEditFromEventId("alice:99"),
     Error,
     "Unknown event",
   );
