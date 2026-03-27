@@ -40,34 +40,6 @@ function rebuildTodoListWithoutCompleted(peer: Denicek): void {
   peer.delete("", "__scratchItems");
 }
 
-function refactorConferenceListToTable(peer: Denicek): void {
-  peer.updateTag("speakers", "table");
-  peer.updateTag("speakers/*", "td");
-  peer.wrapList("speakers/*", "tr");
-}
-
-function splitConferenceContactsAtomically(peer: Denicek): void {
-  peer.rename("speakers/*/*", "contact", "name");
-  peer.add("speakers/*/*", "email", "");
-  const plainDocument = peer.toPlain() as {
-    speakers: {
-      $items: Array<{ $items: Array<{ name: string }> }>;
-    };
-  };
-
-  for (const [rowIndex, row] of plainDocument.speakers.$items.entries()) {
-    const [name, email = ""] = row.$items[0]!.name.split(",").map((part) => part.trim());
-    peer.set(`speakers/${rowIndex}/0/name`, name);
-    peer.set(`speakers/${rowIndex}/0/email`, email);
-  }
-}
-
-function refactorSpeakerBudgetTable(peer: Denicek): void {
-  peer.updateTag("speakers", "table");
-  peer.updateTag("speakers/*", "td");
-  peer.wrapList("speakers/*", "tr");
-}
-
 function resolveValueAtPath(root: unknown, path: string): unknown {
   const segments = path.replace(/^\//, "").split("/").filter((segment) => segment.length > 0);
   let current: unknown = root;
@@ -228,8 +200,23 @@ Deno.test("Formative: Conference List", () => {
   const bob = new Denicek("bob", initialDocument);
 
   alice.pushBack("speakers", { $tag: "li", contact: "Barbara Liskov, barbara@example.com" });
-  refactorConferenceListToTable(bob);
-  splitConferenceContactsAtomically(bob);
+  bob.updateTag("speakers", "table");
+  bob.updateTag("speakers/*", "td");
+  bob.wrapList("speakers/*", "tr");
+  bob.rename("speakers/*/*", "contact", "name");
+  bob.add("speakers/*/*", "email", "");
+
+  const plainConferenceDocument = bob.toPlain() as {
+    speakers: {
+      $items: Array<{ $items: Array<{ name: string }> }>;
+    };
+  };
+
+  for (const [rowIndex, row] of plainConferenceDocument.speakers.$items.entries()) {
+    const [name, email = ""] = row.$items[0]!.name.split(",").map((part) => part.trim());
+    bob.set(`speakers/${rowIndex}/0/name`, name);
+    bob.set(`speakers/${rowIndex}/0/email`, email);
+  }
 
   syncPeers(alice, bob);
 
@@ -274,7 +261,9 @@ Deno.test("Formative: Conference Budget", () => {
   const bob = new Denicek("bob", initialDocument);
 
   alice.set("speakers/1/fee", 250);
-  refactorSpeakerBudgetTable(bob);
+  bob.updateTag("speakers", "table");
+  bob.updateTag("speakers/*", "td");
+  bob.wrapList("speakers/*", "tr");
 
   syncPeers(alice, bob);
 
