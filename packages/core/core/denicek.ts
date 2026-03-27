@@ -282,7 +282,7 @@ export class Denicek {
     const normalizedEventId = EventId.parse(eventId).format();
     const event = this.graph.getEvent(normalizedEventId);
     if (event === undefined) {
-      throw new Error(`Unknown event '${normalizedEventId}'.`);
+      throw new Error(`Unknown event '${normalizedEventId}' in the local graph.`);
     }
     return event;
   }
