@@ -150,7 +150,7 @@ export class Denicek {
    * Returns the formatted id (`${peer}:${seq}`) of the newly recorded replay event.
    */
   replayEditFromEventId(eventId: string, target: string): string {
-    const event = this.getReplaySourceEvent(eventId);
+    const event = this.resolveReplaySourceEvent(eventId);
     return this.commit(event.edit.withTarget(Selector.parse(target)));
   }
 
@@ -162,7 +162,7 @@ export class Denicek {
    * Returns the formatted id (`${peer}:${seq}`) of the newly recorded replay event.
    */
   repeatEditFromEventId(eventId: string): string {
-    const event = this.getReplaySourceEvent(eventId);
+    const event = this.resolveReplaySourceEvent(eventId);
     return this.commit(event.edit);
   }
 
@@ -280,12 +280,12 @@ export class Denicek {
   }
 
   /** Resolves and validates an event id before replaying its edit payload. */
-  private getReplaySourceEvent(eventId: string): Event {
+  private resolveReplaySourceEvent(eventId: string): Event {
     const normalizedEventId = EventId.parse(eventId).format();
     const event = this.graph.getEvent(normalizedEventId);
     if (event === undefined) {
       throw new Error(
-        `Unknown event '${normalizedEventId}' in the local graph. Events enter the graph when this peer records them locally or receives them via applyRemote().`,
+        `Unknown event '${normalizedEventId}'. Events must be recorded locally or received via applyRemote() before they can be replayed.`,
       );
     }
     return event;
