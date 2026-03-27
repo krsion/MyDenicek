@@ -25,6 +25,6 @@ describe('DocumentSession', () => {
     const snapshot = session.createSnapshot();
     expect(snapshot.events).toHaveLength(1);
     expect(snapshot.events[0]!.editKind).toBe('SetValue');
-    expect((snapshot.doc as { title: string }).title).toBe('Updated');
+    expect((snapshot.doc as unknown as { title: string }).title).toBe('Updated');
   });
 });
