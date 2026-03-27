@@ -38,7 +38,7 @@ The latest successful Azure deployment workflow published these public endpoints
 Most of the workspace uses standard Deno module resolution. The UI also needs its npm dependencies installed:
 
 ```sh
-cd /home/runner/work/mydenicek-core/mydenicek-core/apps/ui
+cd apps/ui
 deno install
 ```
 
@@ -47,7 +47,6 @@ deno install
 From the repository root:
 
 ```sh
-cd /home/runner/work/mydenicek-core/mydenicek-core
 deno task sync-server
 ```
 
@@ -58,7 +57,7 @@ The server listens on `http://127.0.0.1:8787` by default and exposes WebSocket s
 In a second terminal:
 
 ```sh
-cd /home/runner/work/mydenicek-core/mydenicek-core/apps/ui
+cd apps/ui
 deno task dev
 ```
 
@@ -67,7 +66,6 @@ Then open <http://localhost:5173>.
 From the repository root you can also use:
 
 ```sh
-cd /home/runner/work/mydenicek-core/mydenicek-core
 deno task ui:dev
 ```
 
@@ -76,7 +74,6 @@ deno task ui:dev
 With the sync server running, start peers in separate terminals:
 
 ```sh
-cd /home/runner/work/mydenicek-core/mydenicek-core
 deno run --allow-net apps/sync-sample/main.ts --peer alice
 deno run --allow-net apps/sync-sample/main.ts --peer bob
 ```
