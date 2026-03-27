@@ -18,7 +18,7 @@ edits and simulate multi-peer collaboration.
 ## Quick start
 
 ```sh
-cd packages/ui
+cd apps/ui
 deno install        # installs npm dependencies into node_modules/
 deno task dev
 ```
@@ -35,7 +35,7 @@ deno task ui:dev
 ## Running tests
 
 ```sh
-cd packages/ui
+cd apps/ui
 deno task test
 ```
 

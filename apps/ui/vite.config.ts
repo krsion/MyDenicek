@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      '@mydenicek/core': fileURLToPath(new URL('../core/mod.ts', import.meta.url)),
+      '@mydenicek/core': fileURLToPath(new URL('../../packages/core/mod.ts', import.meta.url)),
       '@std/data-structures/binary-heap': fileURLToPath(new URL('src/shims/binary-heap.ts', import.meta.url)),
     },
     // Allow importing .ts files from the core package
