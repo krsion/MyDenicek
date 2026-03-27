@@ -7,12 +7,20 @@ import type { PlainNode } from '@mydenicek/core';
 
 const INITIAL_DOC: PlainNode = {
   $tag: 'root',
-  title: 'Shared Document',
-  items: {
-    $tag: 'ul',
+  title: 'Shared Questions',
+  questions: {
+    $tag: 'question-list',
     $items: [
-      { $tag: 'item', name: 'First item' },
-      { $tag: 'item', name: 'Second item' },
+      {
+        $tag: 'question',
+        prompt: 'What should we build next?',
+        answer: 'A collaborative survey editor.',
+      },
+      {
+        $tag: 'question',
+        prompt: 'Which conflict resolution rule should we demo?',
+        answer: 'Concurrent edits to the same answer.',
+      },
     ],
   },
 };

@@ -89,7 +89,7 @@ export function EditComposer({ session, onEdit }: Props) {
 
       <div style={fieldWrapper}>
         <label style={labelStyle}>target (selector)</label>
-        <input style={inputStyle} value={target} onChange={e => setTarget(e.target.value)} placeholder="e.g. items/0/name" />
+        <input style={inputStyle} value={target} onChange={e => setTarget(e.target.value)} placeholder="e.g. questions/0/prompt" />
       </div>
 
       {(op === 'add' || op === 'delete' || op === 'wrapRecord') && (
