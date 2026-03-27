@@ -516,6 +516,38 @@ Deno.test("replays a non-primitive edit selected by event id at its original tar
   });
 });
 
+Deno.test("repeats a recorded structural edit through later local wrap and rename changes", () => {
+  const core = new Denicek("alice", {
+    $tag: "app",
+    formula: 1,
+  });
+
+  const wrapEventId = core.wrapRecord("formula", "formula", "x-formula-plus");
+  const renameEventId = core.rename("formula", "formula", "left");
+  const addRightEventId = core.add("formula", "right", 1);
+
+  core.wrapRecord("formula", "formula", "x-formula-plus");
+  core.rename("formula", "formula", "left");
+  core.add("formula", "right", 1);
+
+  core.repeatEditFromEventId(wrapEventId);
+  core.repeatEditFromEventId(renameEventId);
+  core.repeatEditFromEventId(addRightEventId);
+
+  assertEquals(core.toPlain(), {
+    $tag: "app",
+    formula: {
+      $tag: "x-formula-plus",
+      left: {
+        $tag: "x-formula-plus",
+        left: 1,
+        right: 1,
+      },
+      right: 1,
+    },
+  });
+});
+
 Deno.test("throws when replaying an edit from an unknown event id", () => {
   const core = new Denicek("alice", {
     $tag: "root",

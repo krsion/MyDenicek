@@ -150,24 +150,27 @@ export class Denicek {
    * selector is compatible with that edit kind. In practice that means the
    * target must resolve to the same kind of nodes the original edit expects,
    * such as replaying a primitive edit onto primitive nodes or a list edit
-   * onto list nodes.
+   * onto list nodes. Use {@link repeatEditFromEventId} when you want the same
+   * event to follow later wraps, renames, or reindexing automatically instead
+   * of choosing a new selector yourself.
    * Returns the formatted id (`${peer}:${seq}`) of the newly recorded replay event.
    */
   replayEditFromEventId(eventId: string, target: string): string {
-    const event = this.resolveReplaySourceEvent(eventId);
-    return this.commit(event.edit.withTarget(Selector.parse(target)));
+    const edit = this.resolveReplaySourceEdit(eventId);
+    return this.commit(edit.withTarget(Selector.parse(target)));
   }
 
   /**
    * Replays the edit carried by an existing event at its original target.
    *
    * This is the simplest replay path when the caller wants to repeat the
-   * recorded edit semantics without choosing a new selector manually.
+   * recorded edit semantics without choosing a new selector manually. Unlike
+   * {@link replayEditFromEventId}, this keeps the source event's own selector
+   * intent and retargets it through later structural history before replaying.
    * Returns the formatted id (`${peer}:${seq}`) of the newly recorded replay event.
    */
   repeatEditFromEventId(eventId: string): string {
-    const event = this.resolveReplaySourceEvent(eventId);
-    return this.commit(event.edit);
+    return this.commit(this.resolveReplaySourceEdit(eventId));
   }
 
   /**
@@ -283,15 +286,8 @@ export class Denicek {
     return this.graph.snapshotEvents();
   }
 
-  /** Resolves and validates an event id before replaying its edit payload. */
-  private resolveReplaySourceEvent(eventId: string): Event {
-    const normalizedEventId = EventId.parse(eventId).format();
-    const event = this.graph.getEvent(normalizedEventId);
-    if (event === undefined) {
-      throw new Error(
-        `Unknown event '${normalizedEventId}'. Events must be recorded locally or received via applyRemote() before they can be replayed.`,
-      );
-    }
-    return event;
+  /** Resolves and validates an event id before replaying its retargeted edit payload. */
+  private resolveReplaySourceEdit(eventId: string): Edit {
+    return this.graph.resolveReplayEdit(EventId.parse(eventId).format());
   }
 }
