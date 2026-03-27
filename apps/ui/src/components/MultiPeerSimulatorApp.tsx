@@ -3,7 +3,7 @@ import { PeerSession } from '../peer-session.ts';
 import { InMemorySyncService } from '../sync-service.ts';
 import { PeerWorkspace } from './PeerWorkspace.tsx';
 import { PEER_COLORS } from './EventGraphView.tsx';
-import type { PlainNode } from '@core';
+import type { PlainNode } from '@mydenicek/core';
 
 const INITIAL_DOC: PlainNode = {
   $tag: 'root',

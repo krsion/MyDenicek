@@ -1,4 +1,4 @@
-import type { PlainNode, PlainRecord, PlainList, PlainRef } from '@core';
+import type { PlainNode, PlainRecord, PlainList, PlainRef } from '@mydenicek/core';
 
 type Props = { node: PlainNode; path?: string };
 

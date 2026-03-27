@@ -9,27 +9,34 @@ edits and simulate multi-peer collaboration.
 - React 18
 - D3 v7 (event graph visualization)
 - Vite (build / dev server)
-- Vitest (tests)
+- Deno (runtime, task runner, package manager)
 
 ## Prerequisites
 
-- Node.js ≥ 20.19 (npm ≥ 9)
+- Deno ≥ 2.x
 
 ## Quick start
 
 ```sh
-cd packages/ui
-npm install
-npm run dev
+cd apps/ui
+deno install        # installs npm dependencies into node_modules/
+deno task dev
 ```
 
 Then open <http://localhost:5173> in your browser.
 
+Alternatively, from the workspace root:
+
+```sh
+deno task ui:install
+deno task ui:dev
+```
+
 ## Running tests
 
 ```sh
-cd packages/ui
-npm test
+cd apps/ui
+deno task test
 ```
 
 ## Architecture

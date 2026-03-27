@@ -1,5 +1,5 @@
 {
-  "workspace": ["./packages/core", "./packages/sync-server", "./apps/sync-sample"],
+  "workspace": ["./packages/core", "./packages/sync-server", "./apps/sync-sample", "./apps/ui"],
   "tasks": {
     "check": "deno check packages/core/mod.ts && deno check packages/sync-server/mod.ts && deno check packages/sync-server/main.ts && deno check apps/sync-sample/main.ts",
     "test": "deno test --allow-all --no-check packages/core/tests && deno test --allow-read --allow-write packages/sync-server/tests",
@@ -7,9 +7,9 @@
     "random-fuzzer": "deno run packages/core/tools/core-random-fuzzer.ts",
     "sync-server": "deno run --allow-net --allow-read --allow-write --allow-env packages/sync-server/main.ts",
     "sample-app": "deno run --allow-net apps/sync-sample/main.ts",
-    "ui:install": "cd packages/ui && npm install",
-    "ui:dev": "cd packages/ui && npm run dev",
-    "ui:build": "cd packages/ui && npm run build",
-    "ui:test": "cd packages/ui && npm test"
+    "ui:install": "cd apps/ui && deno install",
+    "ui:dev": "cd apps/ui && deno task dev",
+    "ui:build": "cd apps/ui && deno task build",
+    "ui:test": "cd apps/ui && deno task test"
   }
 }

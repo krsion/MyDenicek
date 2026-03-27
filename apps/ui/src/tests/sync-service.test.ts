@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it } from '@std/testing/bdd';
+import { expect } from '@std/expect';
 import { PeerSession } from '../peer-session.ts';
 import { InMemorySyncService } from '../sync-service.ts';
-import type { PlainNode } from '@core';
+import type { PlainNode } from '@mydenicek/core';
 
 const INITIAL_DOC: PlainNode = { $tag: 'root', value: 'init' };
 

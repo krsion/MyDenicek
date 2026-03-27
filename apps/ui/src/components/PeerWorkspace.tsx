@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { PeerSession } from '../peer-session.ts';
-import type { EventSnapshot } from '@core';
+import type { EventSnapshot } from '@mydenicek/core';
 import { EventGraphView } from './EventGraphView.tsx';
 import { MaterializedTree } from './MaterializedTree.tsx';
 import { ConflictsPanel } from './ConflictsPanel.tsx';
