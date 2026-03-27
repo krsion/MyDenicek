@@ -34,8 +34,14 @@ export class Denicek {
     registerPrimitiveEdit(name, implementation);
   }
 
-  /** Applies a validated local edit and records the resulting event. */
-  private commit(edit: Edit): void {
+  /**
+   * Applies a validated local edit, records the resulting event, and returns its id.
+   *
+   * The returned string is the formatted stable event identifier (`${peer}:${seq}`)
+   * assigned to the newly created local event. It can later be passed to
+   * {@link replayEditFromEvent} or persisted in application data.
+   */
+  private commit(edit: Edit): string {
     const doc = this.cachedDoc ?? this.rematerialize();
     try {
       edit.apply(doc);
@@ -46,6 +52,7 @@ export class Denicek {
     const event = this.graph.createEvent(this.peer, edit);
     this.pendingEvents.push(event);
     this.cachedDoc = doc;
+    return event.id.format();
   }
 
   /** Returns and clears opaque event payloads produced by local edits since the last drain. */
@@ -71,27 +78,43 @@ export class Denicek {
     this.cachedDoc = null;
   }
 
-  /** Adds a named field to every record matched by `target`. */
-  add(target: string, field: string, value: PlainNode): void {
+  /**
+   * Adds a named field to every record matched by `target`.
+   *
+   * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
+   */
+  add(target: string, field: string, value: PlainNode): string {
     const path = target === "" ? field : `${target}/${field}`;
-    this.commit(new RecordAddEdit(Selector.parse(path), Node.fromPlain(value)));
+    return this.commit(new RecordAddEdit(Selector.parse(path), Node.fromPlain(value)));
   }
 
-  /** Deletes a named field from every record matched by `target`. */
-  delete(target: string, field: string): void {
+  /**
+   * Deletes a named field from every record matched by `target`.
+   *
+   * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
+   */
+  delete(target: string, field: string): string {
     const path = target === "" ? field : `${target}/${field}`;
-    this.commit(new RecordDeleteEdit(Selector.parse(path)));
+    return this.commit(new RecordDeleteEdit(Selector.parse(path)));
   }
 
-  /** Renames a field on every record matched by `target`. */
-  rename(target: string, from: string, to: string): void {
+  /**
+   * Renames a field on every record matched by `target`.
+   *
+   * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
+   */
+  rename(target: string, from: string, to: string): string {
     const path = target === "" ? from : `${target}/${from}`;
-    this.commit(new RecordRenameFieldEdit(Selector.parse(path), to));
+    return this.commit(new RecordRenameFieldEdit(Selector.parse(path), to));
   }
 
-  /** Replaces every primitive node matched by `target` with `value`. */
-  set(target: string, value: PrimitiveValue): void {
-    this.commit(new SetValueEdit(Selector.parse(target), value));
+  /**
+   * Replaces every primitive node matched by `target` with `value`.
+   *
+   * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
+   */
+  set(target: string, value: PrimitiveValue): string {
+    return this.commit(new SetValueEdit(Selector.parse(target), value));
   }
 
   /**
@@ -107,9 +130,13 @@ export class Denicek {
     return doc.navigate(Selector.parse(target)).map((node) => node.toPlain() as PlainNode);
   }
 
-  /** Applies a registered named primitive edit to every primitive node matched by `target`. */
-  applyPrimitiveEdit(target: string, editName: string): void {
-    this.commit(new ApplyPrimitiveEdit(Selector.parse(target), editName));
+  /**
+   * Applies a registered named primitive edit to every primitive node matched by `target`.
+   *
+   * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
+   */
+  applyPrimitiveEdit(target: string, editName: string): string {
+    return this.commit(new ApplyPrimitiveEdit(Selector.parse(target), editName));
   }
 
   /**
@@ -118,54 +145,87 @@ export class Denicek {
    * This keeps the UI-facing API simple: the caller selects an event from the
    * graph by id, chooses a new target, and this method reuses the event's edit
    * payload by retargeting its primary selector through `Edit.withTarget(...)`.
+   * Returns the formatted id (`${peer}:${seq}`) of the newly recorded replay event.
    */
-  replayEditFromEvent(eventId: string, target: string): void {
+  replayEditFromEvent(eventId: string, target: string): string {
     const normalizedEventId = EventId.parse(eventId).format();
     const event = this.graph.getEvent(normalizedEventId);
     if (event === undefined) {
       throw new Error(`Unknown event '${normalizedEventId}'.`);
     }
-    this.commit(event.edit.withTarget(Selector.parse(target)));
+    return this.commit(event.edit.withTarget(Selector.parse(target)));
   }
 
-  /** Appends `value` to every list matched by `target`. */
-  pushBack(target: string, value: PlainNode): void {
-    this.commit(new ListPushBackEdit(Selector.parse(target), Node.fromPlain(value)));
+  /**
+   * Appends `value` to every list matched by `target`.
+   *
+   * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
+   */
+  pushBack(target: string, value: PlainNode): string {
+    return this.commit(new ListPushBackEdit(Selector.parse(target), Node.fromPlain(value)));
   }
 
-  /** Prepends `value` to every list matched by `target`. */
-  pushFront(target: string, value: PlainNode): void {
-    this.commit(new ListPushFrontEdit(Selector.parse(target), Node.fromPlain(value)));
+  /**
+   * Prepends `value` to every list matched by `target`.
+   *
+   * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
+   */
+  pushFront(target: string, value: PlainNode): string {
+    return this.commit(new ListPushFrontEdit(Selector.parse(target), Node.fromPlain(value)));
   }
 
-  /** Removes the last item from every list matched by `target`. */
-  popBack(target: string): void {
-    this.commit(new ListPopBackEdit(Selector.parse(target)));
+  /**
+   * Removes the last item from every list matched by `target`.
+   *
+   * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
+   */
+  popBack(target: string): string {
+    return this.commit(new ListPopBackEdit(Selector.parse(target)));
   }
 
-  /** Removes the first item from every list matched by `target`. */
-  popFront(target: string): void {
-    this.commit(new ListPopFrontEdit(Selector.parse(target)));
+  /**
+   * Removes the first item from every list matched by `target`.
+   *
+   * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
+   */
+  popFront(target: string): string {
+    return this.commit(new ListPopFrontEdit(Selector.parse(target)));
   }
 
-  /** Updates the structural tag on every matched record or list node. */
-  updateTag(target: string, tag: string): void {
-    this.commit(new UpdateTagEdit(Selector.parse(target), tag));
+  /**
+   * Updates the structural tag on every matched record or list node.
+   *
+   * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
+   */
+  updateTag(target: string, tag: string): string {
+    return this.commit(new UpdateTagEdit(Selector.parse(target), tag));
   }
 
-  /** Wraps every node matched by `target` in a record with the given field and tag. */
-  wrapRecord(target: string, field: string, tag: string): void {
-    this.commit(new WrapRecordEdit(Selector.parse(target), field, tag));
+  /**
+   * Wraps every node matched by `target` in a record with the given field and tag.
+   *
+   * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
+   */
+  wrapRecord(target: string, field: string, tag: string): string {
+    return this.commit(new WrapRecordEdit(Selector.parse(target), field, tag));
   }
 
-  /** Wraps every node matched by `target` in a single-item list with the given tag. */
-  wrapList(target: string, tag: string): void {
-    this.commit(new WrapListEdit(Selector.parse(target), tag));
+  /**
+   * Wraps every node matched by `target` in a single-item list with the given tag.
+   *
+   * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
+   */
+  wrapList(target: string, tag: string): string {
+    return this.commit(new WrapListEdit(Selector.parse(target), tag));
   }
 
-  /** Copies nodes from `source` into `target` following the package copy semantics. */
-  copy(target: string, source: string): void {
-    this.commit(new CopyEdit(Selector.parse(target), Selector.parse(source)));
+  /**
+   * Copies nodes from `source` into `target` following the package copy semantics.
+   *
+   * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
+   */
+  copy(target: string, source: string): string {
+    return this.commit(new CopyEdit(Selector.parse(target), Selector.parse(source)));
   }
 
   /** Materializes the current document into a plain serializable tree. */

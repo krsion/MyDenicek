@@ -479,18 +479,13 @@ Deno.test("replays an edit selected by event id onto another target", () => {
     items: { $tag: "ul", $items: ["aLPHA", "bRAVO", "cHARLIE"] },
   });
 
-  source.applyPrimitiveEdit("items/0", "test-capitalize-from-event");
-  const [capitalizeEvent] = source.inspectEvents();
+  const capitalizeEventId = source.applyPrimitiveEdit("items/0", "test-capitalize-from-event");
   for (const event of source.drain()) {
     target.applyRemote(event);
   }
 
-  if (capitalizeEvent === undefined) {
-    throw new Error("Expected a primitive edit event.");
-  }
-
-  target.replayEditFromEvent(capitalizeEvent.id, "items/1");
-  target.replayEditFromEvent(capitalizeEvent.id, "items/2");
+  target.replayEditFromEvent(capitalizeEventId, "items/1");
+  target.replayEditFromEvent(capitalizeEventId, "items/2");
 
   assertEquals(target.toPlain(), {
     $tag: "root",
@@ -508,19 +503,12 @@ Deno.test("replays a non-primitive edit selected by event id onto another target
     items: { $tag: "ul", $items: ["first", "second"] },
   });
 
-  source.set("items/0", "updated");
-  const setValueEvent = source.inspectEvents().find((event) =>
-    event.editKind === "SetValue" && event.target === "items/0"
-  );
+  const setValueEventId = source.set("items/0", "updated");
   for (const event of source.drain()) {
     target.applyRemote(event);
   }
 
-  if (setValueEvent === undefined) {
-    throw new Error("Expected a set-value event.");
-  }
-
-  target.replayEditFromEvent(setValueEvent.id, "items/1");
+  target.replayEditFromEvent(setValueEventId, "items/1");
 
   assertEquals(target.toPlain(), {
     $tag: "root",

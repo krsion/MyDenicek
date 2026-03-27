@@ -27,18 +27,12 @@ Deno.test("Formative: Hello World", () => {
   });
 
   {
-    recordedPeer.applyPrimitiveEdit("messages/0", "capitalize");
+    const capitalizeEventId = recordedPeer.applyPrimitiveEdit("messages/0", "capitalize");
     for (const event of recordedPeer.drain()) {
       replayPeer.applyRemote(event);
     }
-    const capitalizeEvent = replayPeer.inspectEvents().find((event) =>
-      event.editKind === "ApplyPrimitiveEdit" && event.target === "messages/0"
-    );
-    if (capitalizeEvent === undefined) {
-      throw new Error("Expected the replay peer to contain a capitalize event.");
-    }
 
-    replayPeer.replayEditFromEvent(capitalizeEvent.id, "messages/*");
+    replayPeer.replayEditFromEvent(capitalizeEventId, "messages/*");
   }
 
   const expected = {
