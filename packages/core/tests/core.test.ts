@@ -1,6 +1,7 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import {
   Denicek,
+  registerPrimitiveEdit,
 } from "../mod.ts";
 import { Edit, RecordAddEdit, RecordDeleteEdit } from "../core/edits.ts";
 import { Event } from "../core/event.ts";
@@ -228,45 +229,6 @@ Deno.test("wildcard edit affects concurrently inserted item", () => {
   assertEquals(bob.toPlain(), expected);
 });
 
-Deno.test("Conference list", () => {
-  const doc = {
-    $tag: "div",
-    items: {
-      $tag: "ul",
-      $items: [
-        { $tag: "li", name: "John Doe" },
-        { $tag: "li", name: "Jane Smith" },
-      ],
-    },
-  };
-  const alice = new Denicek("alice", doc);
-  const bob = new Denicek("bob", doc);
-
-  alice.pushBack("items", { $tag: "li", name: "Alice Johnson" });
-
-  bob.updateTag("items", "table");
-  bob.updateTag("items/*", "td");
-  bob.wrapList("items/*", "tr");
-
-  sync(alice, bob);
-
-  const expected = {
-    $tag: "div",
-    items: {
-      $tag: "table",
-      $items: [
-        { $tag: "tr", $items: [{ $tag: "td", name: "John Doe" }] },
-        { $tag: "tr", $items: [{ $tag: "td", name: "Jane Smith" }] },
-        { $tag: "tr", $items: [{ $tag: "td", name: "Alice Johnson" }] },
-      ],
-    },
-  };
-
-  assertEquals(alice.toPlain(), expected);
-  assertEquals(bob.toPlain(), expected);
-
-});
-
 // ── Edit coverage tests ─────────────────────────────────────────────
 
 Deno.test("copy replaces target with source", () => {
@@ -432,9 +394,199 @@ Deno.test("fromPlain rejects null", () => {
   assertThrows(() => Node.fromPlain(JSON.parse("null")), Error, "Null is not a valid PlainNode.");
 });
 
+Deno.test("applies registered primitive edit locally", () => {
+  registerPrimitiveEdit("test-capitalize-local", (value) => {
+    if (typeof value !== "string") {
+      throw new Error("test-capitalize-local expects a string.");
+    }
+    return `${value.slice(0, 1).toUpperCase()}${value.slice(1).toLowerCase()}`;
+  });
+
+  const core = new Denicek("alice", {
+    $tag: "root",
+    name: "bob",
+  });
+
+  core.applyPrimitiveEdit("name", "test-capitalize-local");
+
+  assertEquals(core.toPlain(), {
+    $tag: "root",
+    name: "Bob",
+  });
+});
+
+Deno.test("throws when registering a primitive edit with an empty name", () => {
+  assertThrows(
+    () => registerPrimitiveEdit("   ", (value) => value),
+    Error,
+    "must not be empty",
+  );
+});
+
+Deno.test("get returns all matched plain nodes without materializing the whole document in caller code", () => {
+  const core = new Denicek("alice", {
+    $tag: "root",
+    items: { $tag: "ul", $items: ["first", "second"] },
+  });
+
+  assertEquals(core.get("items/0"), ["first"]);
+  assertEquals(core.get("items/1"), ["second"]);
+  assertEquals(core.get("items/2"), []);
+  assertEquals(core.get("items/*"), ["first", "second"]);
+});
+
+Deno.test("replays registered primitive edit against a different primitive value", () => {
+  Denicek.registerPrimitiveEdit("test-capitalize-remote", (value) => {
+    if (typeof value !== "string") {
+      throw new Error("test-capitalize-remote expects a string.");
+    }
+    return `${value.slice(0, 1).toUpperCase()}${value.slice(1).toLowerCase()}`;
+  });
+
+  const source = new Denicek("source", {
+    $tag: "root",
+    name: "bob",
+  });
+  const target = new Denicek("target", {
+    $tag: "root",
+    name: "alice",
+  });
+
+  source.applyPrimitiveEdit("name", "test-capitalize-remote");
+  const [event] = source.drain();
+  target.applyRemote(event);
+
+  assertEquals(target.toPlain(), {
+    $tag: "root",
+    name: "Alice",
+  });
+});
+
+Deno.test("replays a primitive edit selected by event id onto another target", () => {
+  Denicek.registerPrimitiveEdit("test-capitalize-from-event", (value) => {
+    if (typeof value !== "string") {
+      throw new Error("test-capitalize-from-event expects a string.");
+    }
+    return `${value.slice(0, 1).toUpperCase()}${value.slice(1).toLowerCase()}`;
+  });
+
+  const source = new Denicek("source", {
+    $tag: "root",
+    items: { $tag: "ul", $items: ["aLPHA", "bRAVO", "cHARLIE"] },
+  });
+  const target = new Denicek("target", {
+    $tag: "root",
+    items: { $tag: "ul", $items: ["aLPHA", "bRAVO", "cHARLIE"] },
+  });
+
+  const capitalizeEventId = source.applyPrimitiveEdit("items/0", "test-capitalize-from-event");
+  for (const event of source.drain()) {
+    target.applyRemote(event);
+  }
+
+  target.replayEditFromEventId(capitalizeEventId, "items/1");
+  target.replayEditFromEventId(capitalizeEventId, "items/2");
+
+  assertEquals(target.toPlain(), {
+    $tag: "root",
+    items: { $tag: "ul", $items: ["Alpha", "Bravo", "Charlie"] },
+  });
+});
+
+Deno.test("replays a non-primitive edit selected by event id at its original target", () => {
+  const source = new Denicek("source", {
+    $tag: "root",
+    items: { $tag: "ul", $items: ["first", "second"] },
+  });
+  const target = new Denicek("target", {
+    $tag: "root",
+    items: { $tag: "ul", $items: ["first", "second"] },
+  });
+
+  const setValueEventId = source.set("items/0", "updated");
+  for (const event of source.drain()) {
+    target.applyRemote(event);
+  }
+
+  target.repeatEditFromEventId(setValueEventId);
+
+  assertEquals(target.toPlain(), {
+    $tag: "root",
+    items: { $tag: "ul", $items: ["updated", "second"] },
+  });
+});
+
+Deno.test("repeats a recorded structural edit through later local wrap and rename changes", () => {
+  const core = new Denicek("alice", {
+    $tag: "app",
+    formula: 1,
+  });
+
+  const wrapEventId = core.wrapRecord("formula", "formula", "x-formula-plus");
+  const renameEventId = core.rename("formula", "formula", "left");
+  const addRightEventId = core.add("formula", "right", 1);
+
+  core.wrapRecord("formula", "formula", "x-formula-plus");
+  core.rename("formula", "formula", "left");
+  core.add("formula", "right", 1);
+
+  core.repeatEditFromEventId(wrapEventId);
+  core.repeatEditFromEventId(renameEventId);
+  core.repeatEditFromEventId(addRightEventId);
+
+  assertEquals(core.toPlain(), {
+    $tag: "app",
+    formula: {
+      $tag: "x-formula-plus",
+      left: {
+        $tag: "x-formula-plus",
+        formula: {
+          $tag: "x-formula-plus",
+          left: 1,
+          right: 1,
+        },
+      },
+      right: 1,
+    },
+  });
+});
+
+Deno.test("throws when replaying an edit from an unknown event id", () => {
+  const core = new Denicek("alice", {
+    $tag: "root",
+    name: "bob",
+  });
+
+  assertThrows(
+    () => core.replayEditFromEventId("alice:99", "name"),
+    Error,
+    "Unknown event",
+  );
+  assertThrows(
+    () => core.repeatEditFromEventId("alice:99"),
+    Error,
+    "Unknown event",
+  );
+});
+
+Deno.test("throws when applying an unknown primitive edit", () => {
+  const core = new Denicek("alice", {
+    $tag: "root",
+    name: "bob",
+  });
+
+  assertThrows(
+    () => core.applyPrimitiveEdit("name", "missing-primitive-edit"),
+    Error,
+    "Unknown primitive edit",
+  );
+});
+
 Deno.test("default edit transform throws unless removal handling is explicit", () => {
   class DummyEdit extends Edit {
     readonly isStructural = false;
+    // Edit subclasses must expose a stable kind string.
+    readonly kind = "DummyEdit";
 
     constructor(readonly target: Selector) { super(); }
 

@@ -52,6 +52,52 @@ export class EventGraph {
     return this.events.get(key);
   }
 
+  /**
+   * Resolves an event into the edit shape it should replay against the current
+   * graph state.
+   *
+   * The returned edit first reuses the same conflict-resolution path as normal
+   * materialization, then it is transformed through every later structural edit
+   * that changed the document shape after the source event was recorded. This
+   * lets replay follow renamed, wrapped, or reindexed targets instead of using
+   * the source event's stale original selectors.
+   *
+   * Throws when the source event is unknown, already resolves to a conflict, or
+   * later structural history has removed the replay target entirely.
+   */
+  resolveReplayEdit(key: string): Edit {
+    const sourceEvent = this.events.get(key);
+    if (sourceEvent === undefined) {
+      throw new Error(
+        `Unknown event '${key}'. Events must be recorded locally or received before they can be replayed.`,
+      );
+    }
+    const ordered = this.cachedOrder ??= this.computeTopologicalOrder();
+    const doc = this.initial.clone();
+    const applied: { ev: Event; edit: Edit }[] = [];
+    let replayEdit: Edit | null = null;
+    for (const orderedKey of ordered) {
+      const event = this.events.get(orderedKey) as Event;
+      const edit = event.resolveAgainst(applied, doc);
+      if (orderedKey === key) {
+        if (edit instanceof NoOpEdit) throw new Error(`Cannot replay event '${key}' because it currently resolves to a conflict.`);
+        replayEdit = edit;
+      } else if (replayEdit !== null && edit.isStructural) {
+        replayEdit = replayEdit.transform(edit);
+        if (replayEdit instanceof NoOpEdit) throw new Error(`Cannot replay event '${key}' because later structural edits removed its target.`);
+      }
+      if (edit instanceof NoOpEdit) {
+        continue;
+      }
+      edit.apply(doc);
+      applied.push({ ev: event, edit });
+    }
+    if (replayEdit === null) {
+      throw new Error(`Unknown event '${key}'. Events must be recorded locally or received before they can be replayed.`);
+    }
+    return replayEdit;
+  }
+
   insertEvent(event: Event): void {
     event.validate(this.events);
     this.events.set(event.id.format(), event);

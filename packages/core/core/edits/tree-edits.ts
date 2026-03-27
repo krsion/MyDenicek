@@ -114,6 +114,14 @@ export class WrapRecordEdit extends NoOpOnRemovedTargetEdit {
       : mapSelector(new Selector([...m.specificPrefix.segments, this.field, ...m.rest.segments]));
   }
 
+  override transform(prior: Edit): Edit {
+    const transformedTarget = prior.transformSelector(this.target);
+    if (transformedTarget.kind === "removed") {
+      return this.handleRemovedTarget(prior);
+    }
+    return new WrapRecordEdit(transformedTarget.selector, this.field, this.tag);
+  }
+
   equals(other: Edit): boolean {
     return other instanceof WrapRecordEdit && this.target.equals(other.target) &&
       this.field === other.field && this.tag === other.tag;
@@ -140,9 +148,13 @@ export class WrapListEdit extends NoOpOnRemovedTargetEdit {
 
   transformSelector(sel: Selector): SelectorTransform {
     const m = this.target.matchPrefix(sel);
+    // Wrapping a wildcard-selected child (for example `items/*`) produces a
+    // concrete single-item list at index 0 for each matched child, while
+    // wrapping a concrete target keeps wildcard semantics for future lookups.
+    const insertedSegment = this.target.lastSegment === "*" ? 0 : "*";
     return m.kind === "no-match"
       ? mapSelector(sel)
-      : mapSelector(new Selector([...m.specificPrefix.segments, "*", ...m.rest.segments]));
+      : mapSelector(new Selector([...m.specificPrefix.segments, insertedSegment, ...m.rest.segments]));
   }
 
   equals(other: Edit): boolean {
