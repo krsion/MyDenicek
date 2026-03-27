@@ -18,7 +18,6 @@ Deno.test("Formative: Counter App", () => {
       label: "Add 1",
       script: {
         $tag: "replay-script",
-        target: { $ref: "/formula" },
         steps: { $tag: "event-steps", $items: [] },
       },
     },
@@ -31,42 +30,48 @@ Deno.test("Formative: Counter App", () => {
     const plainDocument = peer.toPlain() as {
       btn: {
         script: {
-          target: string;
           steps: {
-            $items: Array<{ eventId: string; targetField: string }>;
+            $items: Array<{ eventId: string; target: string }>;
           };
         };
       };
     };
-    const baseTarget = plainDocument.btn.script.target;
     for (const step of plainDocument.btn.script.steps.$items) {
-      const replayTarget = step.targetField === "self" ? baseTarget : `${baseTarget}/${step.targetField}`;
-      peer.replayEditFromEvent(step.eventId, replayTarget);
+      peer.replayEditFromEvent(step.eventId, step.target);
     }
   };
 
-  peer.wrapRecord("formula", "left", "x-formula-plus");
+  peer.wrapRecord("formula", "formula", "x-formula-plus");
+  peer.rename("formula", "formula", "left");
   peer.add("formula", "right", 1);
 
   const wrapEvent = peer.inspectEvents().find((event) =>
     event.editKind === "WrapRecord" && event.target === "formula"
   );
+  const renameEvent = peer.inspectEvents().find((event) =>
+    event.editKind === "RecordRenameField" && event.target === "formula/formula"
+  );
   const addRightEvent = peer.inspectEvents().find((event) =>
     event.editKind === "RecordAdd" && event.target === "formula/right"
   );
-  if (wrapEvent === undefined || addRightEvent === undefined) {
-    throw new Error("Expected wrap and add events for the initial 1 -> 1 + 1 transformation.");
+  if (wrapEvent === undefined || renameEvent === undefined || addRightEvent === undefined) {
+    throw new Error("Expected wrap, rename, and add events for the initial 1 -> 1 + 1 transformation.");
   }
 
-  peer.pushBack("btn/script/steps", { $tag: "replay-step", eventId: wrapEvent.id, targetField: "self" });
-  peer.pushBack("btn/script/steps", { $tag: "replay-step", eventId: addRightEvent.id, targetField: "right" });
+  peer.pushBack("btn/script/steps", { $tag: "replay-step", eventId: wrapEvent.id, target: "formula" });
+  peer.pushBack("btn/script/steps", { $tag: "replay-step", eventId: renameEvent.id, target: "formula/formula" });
+  peer.pushBack("btn/script/steps", { $tag: "replay-step", eventId: addRightEvent.id, target: "formula/right" });
 
   {
     const plainDocument = peer.toPlain() as {
       formula: FormulaNode;
-      btn: { script: { target: string } };
+      btn: { script: { steps: { $items: Array<{ target: string }> } } };
     };
-    assertEquals(plainDocument.btn.script.target, "/formula/left");
+    assertEquals(plainDocument.btn.script.steps.$items.map((step) => step.target), [
+      "formula",
+      "formula/formula",
+      "formula/right",
+    ]);
     assertEquals(evaluateFormula(plainDocument.formula), 2);
   }
 
@@ -74,9 +79,13 @@ Deno.test("Formative: Counter App", () => {
   {
     const plainDocument = peer.toPlain() as {
       formula: FormulaNode;
-      btn: { script: { target: string } };
+      btn: { script: { steps: { $items: Array<{ target: string }> } } };
     };
-    assertEquals(plainDocument.btn.script.target, "/formula/left/left");
+    assertEquals(plainDocument.btn.script.steps.$items.map((step) => step.target), [
+      "formula",
+      "formula/formula",
+      "formula/right",
+    ]);
     assertEquals(evaluateFormula(plainDocument.formula), 3);
   }
 
@@ -102,12 +111,12 @@ Deno.test("Formative: Counter App", () => {
       label: "Add 1",
       script: {
         $tag: "replay-script",
-        target: "/formula/left/left/left",
         steps: {
           $tag: "event-steps",
           $items: [
-            { $tag: "replay-step", eventId: wrapEvent.id, targetField: "self" },
-            { $tag: "replay-step", eventId: addRightEvent.id, targetField: "right" },
+            { $tag: "replay-step", eventId: wrapEvent.id, target: "formula" },
+            { $tag: "replay-step", eventId: renameEvent.id, target: "formula/formula" },
+            { $tag: "replay-step", eventId: addRightEvent.id, target: "formula/right" },
           ],
         },
       },
