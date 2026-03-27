@@ -32,5 +32,6 @@ deno task test
 
 - The sync server URL is configurable in the UI.
 - The default URL points at the deployed Azure sync server.
+- You can override the initial sync server URL with `?syncServerUrl=wss://...` and the latest URL is remembered locally in the browser.
 - The local document starts from the same initial shape as the playground so
   rooms can be explored with a consistent baseline.

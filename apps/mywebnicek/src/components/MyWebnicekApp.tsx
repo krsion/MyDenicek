@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { EventSnapshot, PlainNode } from '@mydenicek/core';
 import { SyncClient } from '@mydenicek/sync-server';
+import { persistSyncServerUrl, readInitialSyncServerUrl } from '../config.ts';
 import { DocumentSession } from '../document-session.ts';
 import { ConflictsPanel } from './ConflictsPanel.tsx';
 import { EditComposer } from './EditComposer.tsx';
 import { EventGraphView, PEER_COLORS } from './EventGraphView.tsx';
 import { MaterializedTree } from './MaterializedTree.tsx';
 
-const DEFAULT_SYNC_SERVER_URL = 'wss://mydenicek-core-krsion-dev-sync--9mvjnr2.happyisland-d6dda219.westeurope.azurecontainerapps.io/sync';
 const DEFAULT_ROOM_ID = 'demo';
 const DEFAULT_PEER_ID = 'alice';
 const DEFAULT_AUTO_SYNC_INTERVAL_MS = '1000';
@@ -55,7 +55,7 @@ function EventDetails({ event }: { event: EventSnapshot }) {
 export function MyWebnicekApp() {
   const [peerIdInput, setPeerIdInput] = useState(DEFAULT_PEER_ID);
   const [roomId, setRoomId] = useState(DEFAULT_ROOM_ID);
-  const [syncServerUrl, setSyncServerUrl] = useState(DEFAULT_SYNC_SERVER_URL);
+  const [syncServerUrl, setSyncServerUrl] = useState(() => readInitialSyncServerUrl());
   const [autoSyncIntervalMsInput, setAutoSyncIntervalMsInput] = useState(DEFAULT_AUTO_SYNC_INTERVAL_MS);
   const [session, setSession] = useState(() => createDocumentSession(DEFAULT_PEER_ID));
   const [syncClient, setSyncClient] = useState<SyncClient | null>(null);
@@ -69,6 +69,10 @@ export function MyWebnicekApp() {
       syncClient?.close();
     };
   }, [syncClient]);
+
+  useEffect(() => {
+    persistSyncServerUrl(syncServerUrl);
+  }, [syncServerUrl]);
 
   const snapshot = session.createSnapshot();
   const selectedEvent = snapshot.events.find((event) => event.id === selectedEventId) ?? null;
@@ -104,7 +108,7 @@ export function MyWebnicekApp() {
   async function connectToSyncServer(): Promise<void> {
     const peerId = peerIdInput.trim() || DEFAULT_PEER_ID;
     const nextRoomId = roomId.trim() || DEFAULT_ROOM_ID;
-    const nextSyncServerUrl = syncServerUrl.trim() || DEFAULT_SYNC_SERVER_URL;
+    const nextSyncServerUrl = syncServerUrl.trim() || readInitialSyncServerUrl();
     const autoSyncIntervalMs = computeAutoSyncInterval(autoSyncIntervalMsInput);
 
     let nextSession = session;
