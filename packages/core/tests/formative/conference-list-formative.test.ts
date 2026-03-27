@@ -29,6 +29,8 @@ Deno.test("Formative: Conference List", () => {
   bob.rename("speakers/*/*", "contact", "name");
   bob.add("speakers/*/*", "email", "");
 
+  syncPeers();
+
   const plainConferenceDocument = bob.toPlain() as {
     speakers: {
       $items: Array<{ $items: Array<{ name: string }> }>;

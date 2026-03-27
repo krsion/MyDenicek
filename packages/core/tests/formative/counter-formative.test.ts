@@ -39,13 +39,13 @@ Deno.test("Formative: Counter App", () => {
       btn: {
         script: {
           steps: {
-            $items: Array<{ eventId: string }>;
+            $items: Array<{ eventId: string; target: string }>;
           };
         };
       };
     };
     for (const step of plainDocument.btn.script.steps.$items) {
-      peer.repeatEditFromEventId(step.eventId);
+      peer.replayEditFromEventId(step.eventId, step.target);
     }
   };
 
@@ -53,9 +53,17 @@ Deno.test("Formative: Counter App", () => {
   const renameEventId = peer.rename("formula", "formula", "left");
   const addRightEventId = peer.add("formula", "right", 1);
 
-  peer.pushBack("btn/script/steps", { $tag: "replay-step", eventId: wrapEventId });
-  peer.pushBack("btn/script/steps", { $tag: "replay-step", eventId: renameEventId });
-  peer.pushBack("btn/script/steps", { $tag: "replay-step", eventId: addRightEventId });
+  peer.pushBack("btn/script/steps", { $tag: "replay-step", eventId: wrapEventId, target: "formula" });
+  peer.pushBack("btn/script/steps", {
+    $tag: "replay-step",
+    eventId: renameEventId,
+    target: "formula/formula",
+  });
+  peer.pushBack("btn/script/steps", {
+    $tag: "replay-step",
+    eventId: addRightEventId,
+    target: "formula/right",
+  });
 
   {
     const plainDocument = peer.toPlain() as {
@@ -85,6 +93,9 @@ Deno.test("Formative: Counter App", () => {
   }
 
   peer.wrapRecord("formula", "math", "paragraph");
+  peer.set("btn/script/steps/0/target", "formula/math");
+  peer.set("btn/script/steps/1/target", "formula/math/formula");
+  peer.set("btn/script/steps/2/target", "formula/math/right");
 
   clickButton();
 

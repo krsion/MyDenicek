@@ -540,8 +540,11 @@ Deno.test("repeats a recorded structural edit through later local wrap and renam
       $tag: "x-formula-plus",
       left: {
         $tag: "x-formula-plus",
-        left: 1,
-        right: 1,
+        formula: {
+          $tag: "x-formula-plus",
+          left: 1,
+          right: 1,
+        },
       },
       right: 1,
     },
