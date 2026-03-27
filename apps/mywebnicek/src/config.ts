@@ -8,11 +8,12 @@ type ImportMetaWithOptionalEnv = ImportMeta & {
   };
 };
 
-function readConfiguredDefaultSyncServerUrl(): string | undefined {
+// Deno test runs this module outside the Vite runtime, so import.meta.env can be absent there.
+function getConfiguredDefaultSyncServerUrl(): string | undefined {
   return (import.meta as ImportMetaWithOptionalEnv).env?.VITE_DEFAULT_SYNC_SERVER_URL?.trim();
 }
 
-const CONFIGURED_DEFAULT_SYNC_SERVER_URL = readConfiguredDefaultSyncServerUrl();
+const CONFIGURED_DEFAULT_SYNC_SERVER_URL = getConfiguredDefaultSyncServerUrl();
 export const DEFAULT_SYNC_SERVER_URL = CONFIGURED_DEFAULT_SYNC_SERVER_URL || DEFAULT_DEPLOYED_SYNC_SERVER_URL;
 
 const SYNC_SERVER_URL_QUERY_PARAM = 'syncServerUrl';

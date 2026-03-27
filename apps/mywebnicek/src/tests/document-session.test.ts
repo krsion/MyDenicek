@@ -1,6 +1,6 @@
 import { describe, it } from '@std/testing/bdd';
 import { expect } from '@std/expect';
-import type { PlainNode } from '@mydenicek/core';
+import type { PlainNode, PlainRecord } from '@mydenicek/core';
 import { DocumentSession } from '../document-session.ts';
 
 const INITIAL_DOC: PlainNode = {
@@ -8,6 +8,19 @@ const INITIAL_DOC: PlainNode = {
   title: 'Hello',
   items: { $tag: 'list', $items: ['a', 'b'] },
 };
+
+function readTitleField(node: PlainNode): string {
+  if (typeof node !== 'object' || node === null || !('$tag' in node) || '$items' in node || '$ref' in node) {
+    throw new Error('Expected snapshot.doc to be a record');
+  }
+
+  const title = (node as PlainRecord).title;
+  if (typeof title !== 'string') {
+    throw new Error('Expected snapshot.doc.title to be a string');
+  }
+
+  return title;
+}
 
 describe('DocumentSession', () => {
   it('creates a snapshot for a fresh document', () => {
@@ -25,6 +38,6 @@ describe('DocumentSession', () => {
     const snapshot = session.createSnapshot();
     expect(snapshot.events).toHaveLength(1);
     expect(snapshot.events[0]!.editKind).toBe('SetValue');
-    expect((snapshot.doc as unknown as { title: string }).title).toBe('Updated');
+    expect(readTitleField(snapshot.doc)).toBe('Updated');
   });
 });
