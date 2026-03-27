@@ -19,7 +19,7 @@ Deno.test("Formative: Counter App", () => {
       script: {
         $tag: "replay-script",
         target: { $ref: "/formula" },
-        steps: { $tag: "event-steps", $items: [] as Array<{ $tag: string; eventId: string; targetField: string }> },
+        steps: { $tag: "event-steps", $items: [] },
       },
     },
   });
