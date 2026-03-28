@@ -954,7 +954,18 @@
   },
   "workspace": {
     "members": {
-      "apps/ui": {
+      "apps/mywebnicek": {
+        "dependencies": [
+          "jsr:@std/expect@1",
+          "jsr:@std/testing@1",
+          "npm:@vitejs/plugin-react@^4.3.0",
+          "npm:d3@^7.9.0",
+          "npm:react-dom@^18.3.0",
+          "npm:react@^18.3.0",
+          "npm:vite@6"
+        ]
+      },
+      "apps/playground": {
         "dependencies": [
           "jsr:@std/expect@1",
           "jsr:@std/testing@1",

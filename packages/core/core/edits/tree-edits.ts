@@ -139,7 +139,7 @@ export class WrapListEdit extends NoOpOnRemovedTargetEdit {
   apply(doc: Node): void {
     this.navigateOrThrow(doc, this.target);
     doc.wrapAtPath(this.target, (child) => new ListNode(this.tag, [child]));
-    doc.updateReferences((abs) => this.transformSelectorOrThrow(abs));
+    doc.updateReferences((abs) => this.transformReferenceSelector(abs));
   }
 
   canApply(doc: Node): boolean {
@@ -155,6 +155,12 @@ export class WrapListEdit extends NoOpOnRemovedTargetEdit {
     return m.kind === "no-match"
       ? mapSelector(sel)
       : mapSelector(new Selector([...m.specificPrefix.segments, insertedSegment, ...m.rest.segments]));
+  }
+
+  private transformReferenceSelector(sel: Selector): Selector {
+    const m = this.target.matchPrefix(sel);
+    if (m.kind === "no-match") return sel;
+    return new Selector([...m.specificPrefix.segments, "*", ...m.rest.segments]);
   }
 
   equals(other: Edit): boolean {

@@ -100,6 +100,7 @@ export class EventGraph {
 
   insertEvent(event: Event): void {
     event.validate(this.events);
+    this.validateEventAgainstCausalState(event);
     this.events.set(event.id.format(), event);
     const parentKeys = new Set(event.parents.map((p) => p.format()));
     this._frontierIds = [
@@ -107,6 +108,11 @@ export class EventGraph {
       event.id,
     ].sort((a, b) => a.compareTo(b));
     this.cachedOrder = null;
+  }
+
+  private validateEventAgainstCausalState(event: Event): void {
+    const { doc } = this.materialize(event.parents);
+    event.edit.validate(doc);
   }
 
   /** Creates a new event from a local edit, inserts it, and returns it. */

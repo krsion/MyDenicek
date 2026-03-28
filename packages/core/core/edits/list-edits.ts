@@ -1,5 +1,5 @@
 import { type Edit, NoOpEdit, NoOpOnRemovedTargetEdit } from './base.ts';
-import { mapSelector, REMOVED_SELECTOR, type SelectorTransform, type Selector } from '../selector.ts';
+import { mapSelector, REMOVED_SELECTOR, type SelectorTransform, Selector } from '../selector.ts';
 import { ListNode, type Node } from '../nodes.ts';
 
 export class ListPushBackEdit extends NoOpOnRemovedTargetEdit {
@@ -8,7 +8,17 @@ export class ListPushBackEdit extends NoOpOnRemovedTargetEdit {
 
   constructor(readonly target: Selector, readonly node: Node) { super(); }
 
+  override validate(doc: Node): void {
+    const insertions = doc.navigateWithPaths(this.target)
+      .map(({ path, node }) => {
+        const list = this.assertList(node);
+        return { path: new Selector([...path.segments, list.items.length]), node: this.node };
+      });
+    this.assertInsertedReferencesResolve(doc, insertions);
+  }
+
   apply(doc: Node): void {
+    this.validate(doc);
     const nodes = this.navigateOrThrow(doc, this.target);
     for (const n of nodes) {
       if (!n.pushBack(this.node.clone())) this.assertList(n);
@@ -34,7 +44,17 @@ export class ListPushFrontEdit extends NoOpOnRemovedTargetEdit {
 
   constructor(readonly target: Selector, readonly node: Node) { super(); }
 
+  override validate(doc: Node): void {
+    const insertions = doc.navigateWithPaths(this.target)
+      .map(({ path, node }) => {
+        this.assertList(node);
+        return { path: new Selector([...path.segments, 0]), node: this.node };
+      });
+    this.assertInsertedReferencesResolve(doc, insertions);
+  }
+
   apply(doc: Node): void {
+    this.validate(doc);
     const nodes = this.navigateOrThrow(doc, this.target);
     for (const n of nodes) {
       if (!n.pushFront(this.node.clone())) this.assertList(n);
@@ -62,7 +82,17 @@ export class ListPopBackEdit extends NoOpOnRemovedTargetEdit {
 
   constructor(readonly target: Selector) { super(); }
 
+  override validate(doc: Node): void {
+    const removedPaths = doc.navigateWithPaths(this.target)
+      .flatMap(({ path, node }) => {
+        const list = this.assertList(node);
+        return list.items.length === 0 ? [] : [new Selector([...path.segments, list.items.length - 1])];
+      });
+    this.assertRemovedPathsAreUnreferenced(doc, removedPaths);
+  }
+
   apply(doc: Node): void {
+    this.validate(doc);
     const nodes = this.navigateOrThrow(doc, this.target);
     for (const n of nodes) {
       if (!n.popBack()) this.assertList(n);
@@ -99,7 +129,17 @@ export class ListPopFrontEdit extends NoOpOnRemovedTargetEdit {
 
   constructor(readonly target: Selector) { super(); }
 
+  override validate(doc: Node): void {
+    const removedPaths = doc.navigateWithPaths(this.target)
+      .flatMap(({ path, node }) => {
+        const list = this.assertList(node);
+        return list.items.length === 0 ? [] : [new Selector([...path.segments, 0])];
+      });
+    this.assertRemovedPathsAreUnreferenced(doc, removedPaths);
+  }
+
   apply(doc: Node): void {
+    this.validate(doc);
     const nodes = this.navigateOrThrow(doc, this.target);
     for (const n of nodes) {
       if (!n.popFront()) this.assertList(n);
