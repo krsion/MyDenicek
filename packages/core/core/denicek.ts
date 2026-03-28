@@ -1,11 +1,10 @@
 import { ApplyPrimitiveEdit, CopyEdit, type Edit, ListPopBackEdit, ListPopFrontEdit, ListPushBackEdit, ListPushFrontEdit, RecordAddEdit, RecordDeleteEdit, RecordRenameFieldEdit, SetValueEdit, UpdateTagEdit, WrapListEdit, WrapRecordEdit } from './edits.ts';
-import type { Event } from './event.ts';
+import type { Event, RemoteEvent } from './event.ts';
 import { EventGraph, type EventSnapshot } from './event-graph.ts';
 import { EventId } from './event-id.ts';
 import { Node, type PlainNode, RecordNode } from './nodes.ts';
 import { registerPrimitiveEdit, type PrimitiveEditImplementation } from './primitive-edits.ts';
 import { type PrimitiveValue, Selector, validateFieldName } from './selector.ts';
-import type { RemoteEvent } from './event.ts';
 
 // ── Denicek (collaborative document peer) ───────────────────────────
 

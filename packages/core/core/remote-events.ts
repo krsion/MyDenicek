@@ -133,6 +133,8 @@ function decodeRemoteEdit(encodedEdit: EncodedRemoteEdit): Edit {
       return new CopyEdit(Selector.parse(encodedEdit.target), Selector.parse(encodedEdit.source));
     case 'NoOpEdit':
       return new NoOpEdit(Selector.parse(encodedEdit.target), encodedEdit.reason);
+    default:
+      throw new Error(`decodeRemoteEdit: unknown edit kind "${(encodedEdit as { kind: string }).kind}".`);
   }
 }
 

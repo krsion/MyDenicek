@@ -3,13 +3,12 @@ import {
   encodeRemoteEvent,
   type Denicek,
   type EncodedRemoteEvent,
+  type EncodedRemoteEventId,
+  type RemoteEvent,
 } from '@mydenicek/core';
 import { collectRemoteEventsSince } from './internal-events.ts';
 
-export interface EncodedEventId {
-  peer: string;
-  seq: number;
-}
+export type EncodedEventId = EncodedRemoteEventId;
 
 export interface EncodedSyncRequest {
   type: 'sync';
@@ -38,13 +37,9 @@ export interface EncodedErrorMessage {
 
 export type EncodedSyncMessage = EncodedSyncRequest | EncodedSyncResponse | EncodedHelloMessage | EncodedErrorMessage;
 
-export interface EncodedEvent {
-  id: EncodedEventId;
-  parents: EncodedEventId[];
-  edit: EncodedRemoteEvent['edit'];
-  clock: Record<string, number>;
-}
-export function encodeEvent(event: Parameters<typeof encodeRemoteEvent>[0]): EncodedEvent {
+export type EncodedEvent = EncodedRemoteEvent;
+
+export function encodeEvent(event: RemoteEvent): EncodedEvent {
   return encodeRemoteEvent(event);
 }
 
