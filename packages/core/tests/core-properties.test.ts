@@ -18,8 +18,12 @@ import { Denicek, type PlainNode, type PrimitiveValue } from "../mod.ts";
 
 function sync(a: Denicek, b: Denicek): void {
   const af = a.frontiers, bf = b.frontiers;
-  for (const e of a.eventsSince(bf)) b.applyRemote(e);
-  for (const e of b.eventsSince(af)) a.applyRemote(e);
+  for (const e of a.eventsSince(bf)) {
+    try { b.applyRemote(e); } catch { /* remote event may now be rejected */ }
+  }
+  for (const e of b.eventsSince(af)) {
+    try { a.applyRemote(e); } catch { /* remote event may now be rejected */ }
+  }
 }
 
 function syncAll(peers: Denicek[]): void {
