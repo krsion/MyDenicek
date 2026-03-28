@@ -130,7 +130,8 @@ export abstract class Node {
   /** Rewrites all reference nodes in the tree after a structural edit. Mutates in place. */
   updateReferences(
     transform: (abs: Selector) => Selector,
-    targets: ReferenceTransformTarget[] = this.captureReferenceTransformTargets(),
+    targets: ReferenceTransformTarget[] = this
+      .captureReferenceTransformTargets(),
   ): void {
     for (const { basePath, referenceNode } of targets) {
       referenceNode.applyReferenceTransform(basePath, transform);
