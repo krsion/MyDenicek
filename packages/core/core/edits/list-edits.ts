@@ -62,7 +62,17 @@ export class ListPopBackEdit extends NoOpOnRemovedTargetEdit {
 
   constructor(readonly target: Selector) { super(); }
 
+  override validate(doc: Node): void {
+    const removedPaths = doc.navigateWithPaths(this.target)
+      .map(({ path, node }) => {
+        const list = this.assertList(node);
+        return new Selector([...path.segments, list.items.length - 1]);
+      });
+    this.assertRemovedPathsAreUnreferenced(doc, removedPaths);
+  }
+
   apply(doc: Node): void {
+    this.validate(doc);
     const nodes = this.navigateOrThrow(doc, this.target);
     for (const n of nodes) {
       if (!n.popBack()) this.assertList(n);
@@ -99,7 +109,14 @@ export class ListPopFrontEdit extends NoOpOnRemovedTargetEdit {
 
   constructor(readonly target: Selector) { super(); }
 
+  override validate(doc: Node): void {
+    const removedPaths = doc.navigateWithPaths(this.target)
+      .map(({ path }) => new Selector([...path.segments, 0]));
+    this.assertRemovedPathsAreUnreferenced(doc, removedPaths);
+  }
+
   apply(doc: Node): void {
+    this.validate(doc);
     const nodes = this.navigateOrThrow(doc, this.target);
     for (const n of nodes) {
       if (!n.popFront()) this.assertList(n);

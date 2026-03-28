@@ -14,6 +14,7 @@ export abstract class Edit {
    */
   abstract apply(doc: Node): void;
   abstract canApply(doc: Node): boolean;
+  validate(_doc: Node): void {}
 
   /** Transforms another selector through the structural change made by this edit. */
   abstract transformSelector(sel: Selector): SelectorTransform;
@@ -91,6 +92,16 @@ export abstract class Edit {
       throw new Error(`${this.constructor.name}: unexpectedly removed selector '${sel.format()}' while updating references.`);
     }
     return result.selector;
+  }
+
+  protected assertRemovedPathsAreUnreferenced(doc: Node, removedPaths: Selector[]): void {
+    const blockingReference = doc.findBlockingReference(removedPaths);
+    if (blockingReference !== null) {
+      throw new Error(
+        `${this.constructor.name}: cannot remove '${blockingReference.removedPath.format()}' because reference ` +
+          `'${blockingReference.referencePath.format()}' targets '${blockingReference.targetPath.format()}'.`,
+      );
+    }
   }
 }
 

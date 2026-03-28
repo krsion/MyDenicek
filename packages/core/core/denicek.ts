@@ -46,14 +46,14 @@ export class Denicek {
     const doc = this.cachedDoc ?? this.rematerialize();
     try {
       edit.apply(doc);
+      const event = this.graph.createEvent(this.peer, edit);
+      this.pendingEvents.push(event);
+      this.cachedDoc = doc;
+      return event.id.format();
     } catch (e) {
       this.cachedDoc = null;
       throw e;
     }
-    const event = this.graph.createEvent(this.peer, edit);
-    this.pendingEvents.push(event);
-    this.cachedDoc = doc;
-    return event.id.format();
   }
 
   /** Returns and clears opaque event payloads produced by local edits since the last drain. */

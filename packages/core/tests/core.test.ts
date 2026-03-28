@@ -65,17 +65,57 @@ Deno.test("updates absolute references on structural rename", () => {
   });
 });
 
-Deno.test("applies deletes even when references target the deleted field", () => {
+Deno.test("rejects deletes that would remove a referenced subtree", () => {
   const core = new Denicek("alice", {
     $tag: "root",
     person: { $tag: "person", name: "Ada Lovelace" },
     focus: { $ref: "/person/name" },
   });
 
-  core.delete("person", "name");
+  assertThrows(() => core.delete("", "person"), Error, "cannot remove 'person'");
+  assertEquals(core.toPlain(), {
+    $tag: "root",
+    person: { $tag: "person", name: "Ada Lovelace" },
+    focus: "/person/name",
+  });
+});
 
-  const plain = core.toPlain() as Record<string, unknown>;
-  assertEquals(plain.person, { $tag: "person" });
+Deno.test("rejects list pops that would remove referenced items", () => {
+  const front = new Denicek("alice", {
+    $tag: "root",
+    items: { $tag: "ul", $items: [{ $tag: "item", name: "a" }, { $tag: "item", name: "b" }] },
+    focus: { $ref: "/items/0/name" },
+  });
+  const back = new Denicek("bob", {
+    $tag: "root",
+    items: { $tag: "ul", $items: [{ $tag: "item", name: "a" }, { $tag: "item", name: "b" }] },
+    focus: { $ref: "/items/1/name" },
+  });
+
+  assertThrows(() => front.popFront("items"), Error, "cannot remove 'items/0'");
+  assertThrows(() => back.popBack("items"), Error, "cannot remove 'items/1'");
+});
+
+Deno.test("rejects remote delete events that would remove referenced nodes", () => {
+  const core = new Denicek("alice", {
+    $tag: "root",
+    person: { $tag: "person", name: "Ada Lovelace" },
+    focus: { $ref: "/person/name" },
+  });
+  const invalidDelete = new Event(
+    new EventId("bob", 1),
+    [],
+    new RecordDeleteEdit(Selector.parse("person")),
+    new VectorClock({ bob: 1 }),
+  );
+
+  assertThrows(() => core.applyRemote(invalidDelete), Error, "cannot remove 'person'");
+  assertEquals(core.eventsSince([]), []);
+  assertEquals(core.toPlain(), {
+    $tag: "root",
+    person: { $tag: "person", name: "Ada Lovelace" },
+    focus: "/person/name",
+  });
 });
 
 Deno.test("keeps concurrent list push-backs from both peers", () => {

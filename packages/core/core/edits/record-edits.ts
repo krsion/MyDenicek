@@ -36,7 +36,12 @@ export class RecordDeleteEdit extends NoOpOnRemovedTargetEdit {
 
   constructor(readonly target: Selector) { super(); }
 
+  override validate(doc: Node): void {
+    this.assertRemovedPathsAreUnreferenced(doc, doc.navigateWithPaths(this.target).map((entry) => entry.path));
+  }
+
   apply(doc: Node): void {
+    this.validate(doc);
     const parentSel = this.target.parent;
     const field = String(this.target.lastSegment);
     const parents = this.navigateOrThrow(doc, parentSel);

@@ -25,6 +25,16 @@ export class ReferenceNode extends Node {
     }
   }
 
+  protected override collectResolvedReferences(
+    basePath: Selector,
+    references: { referencePath: Selector; targetPath: Selector }[],
+  ): void {
+    const resolved = ReferenceNode.resolveReference(basePath, this.selector);
+    if (resolved !== null) {
+      references.push({ referencePath: basePath, targetPath: resolved });
+    }
+  }
+
   clone(): ReferenceNode {
     return new ReferenceNode(new Selector([...this.selector.segments]));
   }
