@@ -11,6 +11,7 @@
 import fc from "fast-check";
 import { assertEquals, assert } from "@std/assert";
 import { Denicek, type PlainNode, type PrimitiveValue } from "../mod.ts";
+import { ProtectedTargetError } from "../core/edits.ts";
 
 // ══════════════════════════════════════════════════════════════════════
 // HELPERS
@@ -19,10 +20,14 @@ import { Denicek, type PlainNode, type PrimitiveValue } from "../mod.ts";
 function sync(a: Denicek, b: Denicek): void {
   const af = a.frontiers, bf = b.frontiers;
   for (const e of a.eventsSince(bf)) {
-    try { b.applyRemote(e); } catch { /* remote event may now be rejected */ }
+    try { b.applyRemote(e); } catch (error) {
+      if (!(error instanceof ProtectedTargetError)) throw error;
+    }
   }
   for (const e of b.eventsSince(af)) {
-    try { a.applyRemote(e); } catch { /* remote event may now be rejected */ }
+    try { a.applyRemote(e); } catch (error) {
+      if (!(error instanceof ProtectedTargetError)) throw error;
+    }
   }
 }
 

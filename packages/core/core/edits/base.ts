@@ -1,6 +1,8 @@
 import { mapSelector, type SelectorTransform, type Selector } from '../selector.ts';
 import { ListNode, type Node, PrimitiveNode, RecordNode } from '../nodes.ts';
 
+export class ProtectedTargetError extends Error {}
+
 export abstract class Edit {
   abstract readonly target: Selector;
   abstract readonly isStructural: boolean;
@@ -97,7 +99,7 @@ export abstract class Edit {
   protected assertRemovedPathsAreUnreferenced(doc: Node, removedPaths: Selector[]): void {
     const blockingReference = doc.findBlockingReference(removedPaths);
     if (blockingReference !== null) {
-      throw new Error(
+      throw new ProtectedTargetError(
         `${this.constructor.name}: cannot remove '${blockingReference.removedPath.format()}' because reference ` +
           `'${blockingReference.referencePath.format()}' targets '${blockingReference.targetPath.format()}'.`,
       );

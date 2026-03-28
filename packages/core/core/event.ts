@@ -1,4 +1,4 @@
-import { type Edit, NoOpEdit } from './edits.ts';
+import { type Edit, NoOpEdit, ProtectedTargetError } from './edits.ts';
 import type { EventId } from './event-id.ts';
 import type { Node } from './nodes.ts';
 import type { VectorClock } from './vector-clock.ts';
@@ -68,7 +68,8 @@ export class Event {
     if (sawConcurrentStructuralEdit) {
       try {
         edit.validate(doc);
-      } catch {
+      } catch (error) {
+        if (!(error instanceof ProtectedTargetError)) throw error;
         return new NoOpEdit(
           edit.target,
           `Concurrent replay left '${edit.target.format()}' protected before ${this.edit.constructor.name} could replay.`,
