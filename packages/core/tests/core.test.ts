@@ -242,6 +242,62 @@ Deno.test("transforms selector after concurrent wrap-list", () => {
   assertEquals(bob.toPlain(), expected);
 });
 
+Deno.test("updates absolute references with wildcard when wrapping wildcard targets in a list", () => {
+  const core = new Denicek("alice", {
+    $tag: "root",
+    items: {
+      $tag: "items",
+      $items: [
+        { $tag: "task", name: "Ada" },
+        { $tag: "task", name: "Grace" },
+      ],
+    },
+    focus: { $ref: "/items/0/name" },
+  });
+
+  core.wrapList("items/*", "wrapped");
+
+  assertEquals(core.toPlain(), {
+    $tag: "root",
+    items: {
+      $tag: "items",
+      $items: [
+        { $tag: "wrapped", $items: [{ $tag: "task", name: "Ada" }] },
+        { $tag: "wrapped", $items: [{ $tag: "task", name: "Grace" }] },
+      ],
+    },
+    focus: "/items/0/*/name",
+  });
+});
+
+Deno.test("updates relative references with wildcard when wrapping wildcard targets in a list", () => {
+  const core = new Denicek("alice", {
+    $tag: "root",
+    items: {
+      $tag: "items",
+      $items: [
+        { $tag: "task", name: "Ada" },
+        { $tag: "task", name: "Grace" },
+      ],
+    },
+    focus: { $ref: "../items/0/name" },
+  });
+
+  core.wrapList("items/*", "wrapped");
+
+  assertEquals(core.toPlain(), {
+    $tag: "root",
+    items: {
+      $tag: "items",
+      $items: [
+        { $tag: "wrapped", $items: [{ $tag: "task", name: "Ada" }] },
+        { $tag: "wrapped", $items: [{ $tag: "task", name: "Grace" }] },
+      ],
+    },
+    focus: "../items/0/*/name",
+  });
+});
+
 Deno.test("wildcard edit affects concurrently inserted item", () => {
   const doc = {
     $tag: "root",
