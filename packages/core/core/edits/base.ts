@@ -5,6 +5,9 @@ import type { EncodedRemoteEdit } from '../remote-edit-codec.ts';
 export class ProtectedTargetError extends Error {}
 export class MissingReferenceTargetError extends Error {}
 
+export class ProtectedTargetError extends Error {}
+export class MissingReferenceTargetError extends Error {}
+
 export abstract class Edit {
   abstract readonly target: Selector;
   abstract readonly isStructural: boolean;

@@ -56,6 +56,9 @@ Deno.test("Formative: Conference Budget", () => {
     if (Array.isArray(value)) {
       return value.reduce((sum, item) => sum + Number(resolveReferencedValue(root, item)), 0);
     }
+    if (Array.isArray(value)) {
+      return value.reduce((sum, item) => sum + Number(resolveReferencedValue(root, item)), 0);
+    }
     return value;
   };
 
