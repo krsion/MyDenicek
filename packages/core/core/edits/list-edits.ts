@@ -1,5 +1,5 @@
 import { type Edit, NoOpEdit, NoOpOnRemovedTargetEdit } from './base.ts';
-import { mapSelector, REMOVED_SELECTOR, type SelectorTransform, type Selector } from '../selector.ts';
+import { mapSelector, REMOVED_SELECTOR, type SelectorTransform, Selector } from '../selector.ts';
 import { ListNode, type Node } from '../nodes.ts';
 
 export class ListPushBackEdit extends NoOpOnRemovedTargetEdit {
