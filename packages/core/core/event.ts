@@ -65,6 +65,16 @@ export class Event {
         `Concurrent replay left '${edit.target.format()}' unavailable before ${this.edit.constructor.name} could replay.`,
       );
     }
+    if (sawConcurrentStructuralEdit) {
+      try {
+        edit.validate(doc);
+      } catch {
+        return new NoOpEdit(
+          edit.target,
+          `Concurrent replay left '${edit.target.format()}' protected before ${this.edit.constructor.name} could replay.`,
+        );
+      }
+    }
     return edit;
   }
 }
