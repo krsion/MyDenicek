@@ -100,7 +100,7 @@ export class EventGraph {
 
   insertEvent(event: Event): void {
     event.validate(this.events);
-    this.validateEventSemantics(event);
+    this.validateEventAgainstCurrentState(event);
     this.events.set(event.id.format(), event);
     const parentKeys = new Set(event.parents.map((p) => p.format()));
     this._frontierIds = [
@@ -110,7 +110,7 @@ export class EventGraph {
     this.cachedOrder = null;
   }
 
-  private validateEventSemantics(event: Event): void {
+  private validateEventAgainstCurrentState(event: Event): void {
     const ordered = this.cachedOrder ??= this.computeTopologicalOrder();
     const doc = this.initial.clone();
     const applied: { ev: Event; edit: Edit }[] = [];

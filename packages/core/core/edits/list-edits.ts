@@ -111,7 +111,10 @@ export class ListPopFrontEdit extends NoOpOnRemovedTargetEdit {
 
   override validate(doc: Node): void {
     const removedPaths = doc.navigateWithPaths(this.target)
-      .map(({ path }) => new Selector([...path.segments, 0]));
+      .flatMap(({ path, node }) => {
+        const list = this.assertList(node);
+        return list.items.length === 0 ? [] : [new Selector([...path.segments, 0])];
+      });
     this.assertRemovedPathsAreUnreferenced(doc, removedPaths);
   }
 
