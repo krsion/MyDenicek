@@ -65,6 +65,10 @@ export class Event {
         `Concurrent replay left '${edit.target.format()}' unavailable before ${this.edit.constructor.name} could replay.`,
       );
     }
+    // Only transformed edits need the extra protected-target check here: local
+    // validation already blocked removals against the issuer's current state,
+    // while concurrent structural rewrites can retarget a previously valid
+    // removal onto a referenced subtree during deterministic replay.
     if (sawConcurrentStructuralEdit) {
       try {
         edit.validate(doc);

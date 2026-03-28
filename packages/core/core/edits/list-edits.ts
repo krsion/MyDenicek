@@ -64,9 +64,9 @@ export class ListPopBackEdit extends NoOpOnRemovedTargetEdit {
 
   override validate(doc: Node): void {
     const removedPaths = doc.navigateWithPaths(this.target)
-      .map(({ path, node }) => {
+      .flatMap(({ path, node }) => {
         const list = this.assertList(node);
-        return new Selector([...path.segments, list.items.length - 1]);
+        return list.items.length === 0 ? [] : [new Selector([...path.segments, list.items.length - 1])];
       });
     this.assertRemovedPathsAreUnreferenced(doc, removedPaths);
   }
