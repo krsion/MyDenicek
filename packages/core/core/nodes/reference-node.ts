@@ -1,5 +1,5 @@
-import { type SelectorSegment, Selector } from '../selector.ts';
-import { Node } from './base.ts';
+import { Selector, type SelectorSegment } from "../selector.ts";
+import { Node } from "./base.ts";
 
 export class ReferenceNode extends Node {
   selector: Selector;
@@ -9,11 +9,16 @@ export class ReferenceNode extends Node {
     this.selector = selector;
   }
 
-  protected resolveSegment(): { key: SelectorSegment; child: Node }[] { return []; }
+  protected resolveSegment(): { key: SelectorSegment; child: Node }[] {
+    return [];
+  }
   replaceChild(): void {}
   wrapChild(): void {}
 
-  protected override applyReferenceTransform(basePath: Selector, transform: (abs: Selector) => Selector): void {
+  protected override applyReferenceTransform(
+    basePath: Selector,
+    transform: (abs: Selector) => Selector,
+  ): void {
     const resolved = ReferenceNode.resolveReference(basePath, this.selector);
     if (resolved === null) return;
     const mappedBase = transform(basePath);
@@ -44,11 +49,15 @@ export class ReferenceNode extends Node {
   }
 
   equals(other: Node): boolean {
-    return other instanceof ReferenceNode && this.selector.equals(other.selector);
+    return other instanceof ReferenceNode &&
+      this.selector.equals(other.selector);
   }
 
   /** Resolves a (possibly relative) reference to an absolute path. */
-  static resolveReference(basePath: Selector, refSel: Selector): Selector | null {
+  static resolveReference(
+    basePath: Selector,
+    refSel: Selector,
+  ): Selector | null {
     const combined = refSel.isAbsolute
       ? refSel.segments.slice(1)
       : [...basePath.segments, ...refSel.segments];
@@ -76,7 +85,9 @@ export class ReferenceNode extends Node {
       if (!compatible) break;
       common++;
     }
-    const ups: SelectorSegment[] = basePath.slice(common).segments.map(() => "..");
+    const ups: SelectorSegment[] = basePath.slice(common).segments.map(() =>
+      ".."
+    );
     return new Selector([...ups, ...absolutePath.slice(common).segments]);
   }
 }

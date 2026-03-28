@@ -1,5 +1,5 @@
-import type { SelectorSegment, Selector } from '../selector.ts';
-import { Node } from './base.ts';
+import type { Selector, SelectorSegment } from "../selector.ts";
+import { Node } from "./base.ts";
 
 export class ListNode extends Node {
   tag: string;
@@ -22,13 +22,17 @@ export class ListNode extends Node {
   }
 
   override popBack(): boolean {
-    if (this.items.length === 0) throw new Error("list-pop-back: list is empty");
+    if (this.items.length === 0) {
+      throw new Error("list-pop-back: list is empty");
+    }
     this.items.pop();
     return true;
   }
 
   override popFront(): boolean {
-    if (this.items.length === 0) throw new Error("list-pop-front: list is empty");
+    if (this.items.length === 0) {
+      throw new Error("list-pop-front: list is empty");
+    }
     this.items.shift();
     return true;
   }
@@ -43,7 +47,9 @@ export class ListNode extends Node {
     return true;
   }
 
-  protected resolveSegment(seg: SelectorSegment): { key: SelectorSegment; child: Node }[] {
+  protected resolveSegment(
+    seg: SelectorSegment,
+  ): { key: SelectorSegment; child: Node }[] {
     if (seg === "*") {
       return this.items.map((child, i) => ({ key: i, child }));
     }
@@ -69,7 +75,10 @@ export class ListNode extends Node {
     }
   }
 
-  protected override forEachChild(visitor: (path: Selector, node: Node) => void, path: SelectorSegment[]): void {
+  protected override forEachChild(
+    visitor: (path: Selector, node: Node) => void,
+    path: SelectorSegment[],
+  ): void {
     for (let i = 0; i < this.items.length; i++) {
       path.push(i);
       this.items[i]!.forEach(visitor, path);
@@ -87,7 +96,9 @@ export class ListNode extends Node {
 
   equals(other: Node): boolean {
     if (!(other instanceof ListNode)) return false;
-    if (this.tag !== other.tag || this.items.length !== other.items.length) return false;
+    if (this.tag !== other.tag || this.items.length !== other.items.length) {
+      return false;
+    }
     return this.items.every((item, i) => item.equals(other.items[i]!));
   }
 }

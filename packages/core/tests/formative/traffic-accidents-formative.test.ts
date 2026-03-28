@@ -40,11 +40,16 @@ Deno.test("Formative: Traffic Accidents", () => {
   });
 
   const resolveValueAtPath = (root: unknown, path: string): unknown => {
-    const segments = path.replace(/^\//, "").split("/").filter((segment) => segment.length > 0);
+    const segments = path.replace(/^\//, "").split("/").filter((segment) =>
+      segment.length > 0
+    );
     let current: unknown = root;
     for (const segment of segments) {
       if (typeof current !== "object" || current === null) return undefined;
-      if ("$items" in current && Array.isArray((current as { $items?: unknown[] }).$items)) {
+      if (
+        "$items" in current &&
+        Array.isArray((current as { $items?: unknown[] }).$items)
+      ) {
         current = (current as { $items: unknown[] }).$items[Number(segment)];
         continue;
       }
@@ -53,7 +58,10 @@ Deno.test("Formative: Traffic Accidents", () => {
     return current;
   };
   const resolveReferencedValue = (root: unknown, value: unknown): unknown => {
-    if (typeof value === "object" && value !== null && "$ref" in value && typeof value.$ref === "string") {
+    if (
+      typeof value === "object" && value !== null && "$ref" in value &&
+      typeof value.$ref === "string"
+    ) {
       return resolveReferencedValue(root, resolveValueAtPath(root, value.$ref));
     }
     return value;
@@ -67,9 +75,13 @@ Deno.test("Formative: Traffic Accidents", () => {
       $items: Array<{ injuries: number }>;
     };
     const minimumInjuries = Number(
-      resolveReferencedValue(plainDocument, resolveValueAtPath(plainDocument, `${statisticPath}/minInjuries`)),
+      resolveReferencedValue(
+        plainDocument,
+        resolveValueAtPath(plainDocument, `${statisticPath}/minInjuries`),
+      ),
     );
-    const nextResult = sourceRows.$items.filter((row) => row.injuries >= minimumInjuries).length;
+    const nextResult =
+      sourceRows.$items.filter((row) => row.injuries >= minimumInjuries).length;
     peer.set(`${statisticPath}/result`, nextResult);
   };
 
@@ -77,7 +89,9 @@ Deno.test("Formative: Traffic Accidents", () => {
   peer.delete("stats/secondary", "source");
   peer.add("stats/secondary", "source", { $ref: "/dataSources/south" });
   peer.delete("stats/secondary", "minInjuries");
-  peer.add("stats/secondary", "minInjuries", { $ref: "/stats/primary/minInjuries" });
+  peer.add("stats/secondary", "minInjuries", {
+    $ref: "/stats/primary/minInjuries",
+  });
   recomputeTrafficStatistic("stats/primary");
   recomputeTrafficStatistic("stats/secondary");
 

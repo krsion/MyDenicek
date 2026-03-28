@@ -1,10 +1,32 @@
-import { ApplyPrimitiveEdit, CopyEdit, type Edit, ListPopBackEdit, ListPopFrontEdit, ListPushBackEdit, ListPushFrontEdit, RecordAddEdit, RecordDeleteEdit, RecordRenameFieldEdit, SetValueEdit, UpdateTagEdit, WrapListEdit, WrapRecordEdit } from './edits.ts';
-import type { Event, RemoteEvent } from './event.ts';
-import { EventGraph, type EventSnapshot } from './event-graph.ts';
-import { EventId } from './event-id.ts';
-import { Node, type PlainNode, RecordNode } from './nodes.ts';
-import { registerPrimitiveEdit, type PrimitiveEditImplementation } from './primitive-edits.ts';
-import { type PrimitiveValue, Selector, validateFieldName } from './selector.ts';
+import {
+  ApplyPrimitiveEdit,
+  CopyEdit,
+  type Edit,
+  ListPopBackEdit,
+  ListPopFrontEdit,
+  ListPushBackEdit,
+  ListPushFrontEdit,
+  RecordAddEdit,
+  RecordDeleteEdit,
+  RecordRenameFieldEdit,
+  SetValueEdit,
+  UpdateTagEdit,
+  WrapListEdit,
+  WrapRecordEdit,
+} from "./edits.ts";
+import type { Event, RemoteEvent } from "./event.ts";
+import { EventGraph, type EventSnapshot } from "./event-graph.ts";
+import { EventId } from "./event-id.ts";
+import { Node, type PlainNode, RecordNode } from "./nodes.ts";
+import {
+  type PrimitiveEditImplementation,
+  registerPrimitiveEdit,
+} from "./primitive-edits.ts";
+import {
+  type PrimitiveValue,
+  Selector,
+  validateFieldName,
+} from "./selector.ts";
 
 // ── Denicek (collaborative document peer) ───────────────────────────
 
@@ -30,7 +52,10 @@ export class Denicek {
   }
 
   /** Registers a named primitive edit implementation used by local and remote replay. */
-  static registerPrimitiveEdit(name: string, implementation: PrimitiveEditImplementation): void {
+  static registerPrimitiveEdit(
+    name: string,
+    implementation: PrimitiveEditImplementation,
+  ): void {
     registerPrimitiveEdit(name, implementation);
   }
 
@@ -70,12 +95,14 @@ export class Denicek {
 
   /** Returns opaque event payloads unknown to a peer with the given frontier strings. */
   eventsSince(remoteFrontiers: string[]): RemoteEvent[] {
-    return this.graph.eventsSince(remoteFrontiers.map((frontier) => EventId.parse(frontier)));
+    return this.graph.eventsSince(
+      remoteFrontiers.map((frontier) => EventId.parse(frontier)),
+    );
   }
 
   /** Ingests an opaque event payload produced by another peer. Buffers out-of-order events. */
   applyRemote(event: RemoteEvent): void {
-    this.graph.ingestEvents([event]);
+    this.graph.ingestEvents([event as Event]);
     this.cachedDoc = null;
   }
 
@@ -88,7 +115,9 @@ export class Denicek {
     validateFieldName(field);
     this.validateLocalAddTarget(target, field);
     const path = target === "" ? field : `${target}/${field}`;
-    return this.commit(new RecordAddEdit(Selector.parse(path), Node.fromPlain(value)));
+    return this.commit(
+      new RecordAddEdit(Selector.parse(path), Node.fromPlain(value)),
+    );
   }
 
   /**
@@ -134,7 +163,9 @@ export class Denicek {
   get(target: string): PlainNode[] {
     const doc = this.cachedDoc ?? this.rematerialize();
     this.cachedDoc = doc;
-    return doc.navigate(Selector.parse(target)).map((node) => node.toPlain() as PlainNode);
+    return doc.navigate(Selector.parse(target)).map((node) =>
+      node.toPlain() as PlainNode
+    );
   }
 
   /**
@@ -143,7 +174,9 @@ export class Denicek {
    * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
    */
   applyPrimitiveEdit(target: string, editName: string): string {
-    return this.commit(new ApplyPrimitiveEdit(Selector.parse(target), editName));
+    return this.commit(
+      new ApplyPrimitiveEdit(Selector.parse(target), editName),
+    );
   }
 
   /**
@@ -185,7 +218,9 @@ export class Denicek {
    * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
    */
   pushBack(target: string, value: PlainNode): string {
-    return this.commit(new ListPushBackEdit(Selector.parse(target), Node.fromPlain(value)));
+    return this.commit(
+      new ListPushBackEdit(Selector.parse(target), Node.fromPlain(value)),
+    );
   }
 
   /**
@@ -194,7 +229,9 @@ export class Denicek {
    * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
    */
   pushFront(target: string, value: PlainNode): string {
-    return this.commit(new ListPushFrontEdit(Selector.parse(target), Node.fromPlain(value)));
+    return this.commit(
+      new ListPushFrontEdit(Selector.parse(target), Node.fromPlain(value)),
+    );
   }
 
   /**
@@ -249,7 +286,9 @@ export class Denicek {
    * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
    */
   copy(target: string, source: string): string {
-    return this.commit(new CopyEdit(Selector.parse(target), Selector.parse(source)));
+    return this.commit(
+      new CopyEdit(Selector.parse(target), Selector.parse(source)),
+    );
   }
 
   /** Materializes the current document into a plain serializable tree. */
@@ -262,7 +301,9 @@ export class Denicek {
 
   /** Returns the plain conflict nodes produced during the last materialization. */
   get conflicts(): PlainNode[] {
-    return this.lastConflicts.map((conflict) => conflict.toPlain() as PlainNode);
+    return this.lastConflicts.map((conflict) =>
+      conflict.toPlain() as PlainNode
+    );
   }
 
   private lastConflicts: Node[] = [];
@@ -279,7 +320,9 @@ export class Denicek {
    * acknowledged frontier set. This refuses stale frontiers and buffered events.
    */
   compact(acknowledgedFrontiers: string[]): void {
-    this.graph.compact(acknowledgedFrontiers.map((frontier) => EventId.parse(frontier)));
+    this.graph.compact(
+      acknowledgedFrontiers.map((frontier) => EventId.parse(frontier)),
+    );
     this.cachedDoc = null;
   }
 
@@ -298,23 +341,39 @@ export class Denicek {
     return this.graph.resolveReplayEdit(EventId.parse(eventId).format());
   }
 
+  /** Rejects local adds that would overwrite an existing record field. */
   private validateLocalAddTarget(target: string, field: string): void {
     const doc = this.cachedDoc ?? this.rematerialize();
     this.cachedDoc = doc;
     for (const node of doc.navigate(Selector.parse(target))) {
       if (node instanceof RecordNode && field in node.fields) {
-        throw new Error(`Cannot add field '${field}' because it already exists at '${target || "/"}'.`);
+        throw new Error(
+          `Cannot add field '${field}' because it already exists at '${
+            target || "/"
+          }'.`,
+        );
       }
     }
   }
 
-  private validateLocalRenameTarget(target: string, from: string, to: string): void {
+  /** Rejects local renames that would overwrite an existing sibling field. */
+  private validateLocalRenameTarget(
+    target: string,
+    from: string,
+    to: string,
+  ): void {
     if (from === to) return;
     const doc = this.cachedDoc ?? this.rematerialize();
     this.cachedDoc = doc;
     for (const node of doc.navigate(Selector.parse(target))) {
-      if (node instanceof RecordNode && from in node.fields && to in node.fields) {
-        throw new Error(`Cannot rename field '${from}' to '${to}' at '${target || "/"}' because '${to}' already exists.`);
+      if (
+        node instanceof RecordNode && from in node.fields && to in node.fields
+      ) {
+        throw new Error(
+          `Cannot rename field '${from}' to '${to}' at '${
+            target || "/"
+          }' because '${to}' already exists.`,
+        );
       }
     }
   }

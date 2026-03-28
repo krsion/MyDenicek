@@ -4,12 +4,16 @@
   "description": "CRDT for collaborative editing of tagged document trees.",
   "license": "MIT",
   "exports": {
-    ".": "./mod.ts"
+    ".": "./mod.ts",
+    "./internal": "./internal.ts"
   },
   "publish": {
     "exclude": ["tests/", "tools/"]
   },
   "tasks": {
+    "fmt": "deno fmt mod.ts internal.ts core tests tools deno.json",
+    "fmt:check": "deno fmt --check mod.ts internal.ts core tests tools deno.json",
+    "lint": "deno lint . && deno doc --lint mod.ts",
     "check": "deno check mod.ts",
     "test": "deno test --allow-all --no-check tests",
     "property-test": "deno test tests/core-properties.test.ts --allow-all",

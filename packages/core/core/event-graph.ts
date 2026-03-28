@@ -1,9 +1,9 @@
-import { BinaryHeap } from '@std/data-structures/binary-heap';
-import { type Edit, NoOpEdit } from './edits.ts';
-import { Event } from './event.ts';
-import { EventId } from './event-id.ts';
-import type { Node } from './nodes.ts';
-import { VectorClock } from './vector-clock.ts';
+import { BinaryHeap } from "@std/data-structures/binary-heap";
+import { type Edit, NoOpEdit } from "./edits.ts";
+import { Event } from "./event.ts";
+import { EventId } from "./event-id.ts";
+import type { Node } from "./nodes.ts";
+import { VectorClock } from "./vector-clock.ts";
 
 // ── EventGraph ──────────────────────────────────────────────────────
 
@@ -34,7 +34,11 @@ export class EventGraph {
   private cachedOrder: string[] | null = null;
   private bufferedEvents: Event[] = [];
 
-  constructor(initial: Node, events?: Map<string, Event>, frontiers?: EventId[]) {
+  constructor(
+    initial: Node,
+    events?: Map<string, Event>,
+    frontiers?: EventId[],
+  ) {
     this.initial = initial;
     this.events = events ?? new Map();
     this._frontierIds = frontiers ?? [];
@@ -80,11 +84,19 @@ export class EventGraph {
       const event = this.events.get(orderedKey) as Event;
       const edit = event.resolveAgainst(applied, doc);
       if (orderedKey === key) {
-        if (edit instanceof NoOpEdit) throw new Error(`Cannot replay event '${key}' because it currently resolves to a conflict.`);
+        if (edit instanceof NoOpEdit) {
+          throw new Error(
+            `Cannot replay event '${key}' because it currently resolves to a conflict.`,
+          );
+        }
         replayEdit = edit;
       } else if (replayEdit !== null && edit.isStructural) {
         replayEdit = replayEdit.transform(edit);
-        if (replayEdit instanceof NoOpEdit) throw new Error(`Cannot replay event '${key}' because later structural edits removed its target.`);
+        if (replayEdit instanceof NoOpEdit) {
+          throw new Error(
+            `Cannot replay event '${key}' because later structural edits removed its target.`,
+          );
+        }
       }
       if (edit instanceof NoOpEdit) {
         continue;
@@ -93,7 +105,9 @@ export class EventGraph {
       applied.push({ ev: event, edit });
     }
     if (replayEdit === null) {
-      throw new Error(`Unknown event '${key}'. Events must be recorded locally or received before they can be replayed.`);
+      throw new Error(
+        `Unknown event '${key}'. Events must be recorded locally or received before they can be replayed.`,
+      );
     }
     return replayEdit;
   }
@@ -149,7 +163,9 @@ export class EventGraph {
     return pendingByKey;
   }
 
-  private computePendingDependencyIndex(pendingByKey: PendingEventsByKey): PendingDependencyIndex {
+  private computePendingDependencyIndex(
+    pendingByKey: PendingEventsByKey,
+  ): PendingDependencyIndex {
     const missingParentCountsByKey: MissingParentCountsByKey = {};
     const childKeysByMissingParent: ChildKeysByMissingParent = {};
     const readyKeys: string[] = [];
@@ -189,7 +205,9 @@ export class EventGraph {
         for (const childKey of childKeys) {
           const newMissingParentCount = missingParentCountsByKey[childKey]! - 1;
           missingParentCountsByKey[childKey] = newMissingParentCount;
-          if (newMissingParentCount === 0 && pendingByKey[childKey] !== undefined) {
+          if (
+            newMissingParentCount === 0 && pendingByKey[childKey] !== undefined
+          ) {
             readyKeys.push(childKey);
           }
         }
@@ -271,8 +289,10 @@ export class EventGraph {
     }
     const events = this.events;
     const compareEvents = (leftKey: string, rightKey: string) => {
-      const leftEvent = events.get(leftKey) as Event, rightEvent = events.get(rightKey) as Event;
-      const leftTarget = leftEvent.edit.target, rightTarget = rightEvent.edit.target;
+      const leftEvent = events.get(leftKey) as Event,
+        rightEvent = events.get(rightKey) as Event;
+      const leftTarget = leftEvent.edit.target,
+        rightTarget = rightEvent.edit.target;
       const minLength = Math.min(leftTarget.length, rightTarget.length);
       for (let i = 0; i < minLength; i++) {
         const leftIsAll = leftTarget.segments[i] === "*";
@@ -280,7 +300,9 @@ export class EventGraph {
         if (leftIsAll && !rightIsAll) return -1;
         if (!leftIsAll && rightIsAll) return 1;
       }
-      if (leftTarget.length !== rightTarget.length) return leftTarget.length - rightTarget.length;
+      if (leftTarget.length !== rightTarget.length) {
+        return leftTarget.length - rightTarget.length;
+      }
       return leftEvent.id.compareTo(rightEvent.id);
     };
     const queue = new BinaryHeap<string>(compareEvents);
@@ -331,14 +353,26 @@ export class EventGraph {
    * state becomes the new initial document.
    */
   compact(acknowledgedFrontiers: EventId[]): void {
-    const expectedFrontiers = [...this._frontierIds].map((eventId) => eventId.format()).sort();
-    const providedFrontiers = acknowledgedFrontiers.map((eventId) => eventId.format()).sort();
-    if (expectedFrontiers.length !== providedFrontiers.length ||
-      expectedFrontiers.some((frontier, index) => frontier !== providedFrontiers[index])) {
-      throw new Error("Cannot compact with stale frontiers. Pass the current acknowledged frontiers.");
+    const expectedFrontiers = [...this._frontierIds].map((eventId) =>
+      eventId.format()
+    ).sort();
+    const providedFrontiers = acknowledgedFrontiers.map((eventId) =>
+      eventId.format()
+    ).sort();
+    if (
+      expectedFrontiers.length !== providedFrontiers.length ||
+      expectedFrontiers.some((frontier, index) =>
+        frontier !== providedFrontiers[index]
+      )
+    ) {
+      throw new Error(
+        "Cannot compact with stale frontiers. Pass the current acknowledged frontiers.",
+      );
     }
     if (this.bufferedEvents.length > 0) {
-      throw new Error("Cannot compact while out-of-order remote events are still buffered.");
+      throw new Error(
+        "Cannot compact while out-of-order remote events are still buffered.",
+      );
     }
     const { doc } = this.materialize();
     this.initial = doc;

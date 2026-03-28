@@ -30,44 +30,25 @@ jobs:
         with:
           deno-version: v2.x
 
-      # Uncomment this step to verify the use of 'deno fmt' on each commit.
-      # - name: Verify formatting
-      #   run: deno fmt --check
+      - name: Verify formatting
+        run: deno task fmt:check
 
-      - name: Run linter
-        run: deno lint packages/core packages/sync-server apps/sync-server apps/playground apps/mywebnicek
+      - name: Run monorepo linter
+        run: deno task lint
 
-      - name: Type-check packages and apps
-        run: |
-          deno check packages/core/mod.ts
-          deno check packages/sync-server/mod.ts
-          deno check apps/sync-server/main.ts
+      - name: Type-check monorepo
+        run: deno task check
 
-      - name: Run package tests
-        run: |
-          deno test --allow-all --no-check packages/core/tests
-          deno test --allow-read --allow-write packages/sync-server/tests
+      - name: Run monorepo tests
+        run: deno task test
 
       - name: Install playground dependencies
         working-directory: apps/playground
         run: deno install
 
-      - name: Build and test playground
-        working-directory: apps/playground
-        run: |
-          deno task build
-          deno task test
-
       - name: Install mywebnicek dependencies
         working-directory: apps/mywebnicek
         run: deno install
 
-      - name: Build and test mywebnicek
-        working-directory: apps/mywebnicek
-        run: |
-          deno task build
-          deno task test
-
-      - name: Lint package docs
-        working-directory: packages/core
-        run: deno doc --lint mod.ts
+      - name: Build monorepo apps
+        run: deno task build

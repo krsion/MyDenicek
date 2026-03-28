@@ -1,6 +1,9 @@
-import type { PrimitiveValue } from './selector.ts';
+import type { PrimitiveValue } from "./selector.ts";
 
-export type PrimitiveEditImplementation = (value: PrimitiveValue) => PrimitiveValue;
+/** Function signature for a named primitive edit replayed against a primitive value. */
+export type PrimitiveEditImplementation = (
+  value: PrimitiveValue,
+) => PrimitiveValue;
 
 const registeredPrimitiveEdits = new Map<string, PrimitiveEditImplementation>();
 
@@ -10,7 +13,10 @@ const registeredPrimitiveEdits = new Map<string, PrimitiveEditImplementation>();
  * Every peer that replays events using this edit name must register the same
  * implementation in its own runtime before materializing those events.
  */
-export function registerPrimitiveEdit(name: string, implementation: PrimitiveEditImplementation): void {
+export function registerPrimitiveEdit(
+  name: string,
+  implementation: PrimitiveEditImplementation,
+): void {
   if (name.trim().length === 0) {
     throw new Error("Primitive edit name must not be empty.");
   }
@@ -26,10 +32,15 @@ export function registerPrimitiveEdit(name: string, implementation: PrimitiveEdi
   registeredPrimitiveEdits.set(name, implementation);
 }
 
-export function applyRegisteredPrimitiveEdit(name: string, value: PrimitiveValue): PrimitiveValue {
+export function applyRegisteredPrimitiveEdit(
+  name: string,
+  value: PrimitiveValue,
+): PrimitiveValue {
   const implementation = registeredPrimitiveEdits.get(name);
   if (implementation === undefined) {
-    throw new Error(`Unknown primitive edit '${name}'. Register it before replaying events that use it.`);
+    throw new Error(
+      `Unknown primitive edit '${name}'. Register it before replaying events that use it.`,
+    );
   }
   return implementation(value);
 }

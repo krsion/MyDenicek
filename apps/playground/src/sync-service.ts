@@ -1,4 +1,4 @@
-import type { PeerSession } from './peer-session.ts';
+import type { PeerSession } from "./peer-session.ts";
 
 /** Transfers events between peers. Swap in a server-backed version later. */
 export interface SyncService {

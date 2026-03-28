@@ -2,7 +2,9 @@
 
 The runnable WebSocket sync server for `@mydenicek/core`.
 
-The server stores Denicek events per room and forwards missing events to connected peers. Clients in the same room must start from the same initial document, just like direct peer-to-peer sync with `Denicek`.
+The server stores Denicek events per room and forwards missing events to
+connected peers. Clients in the same room must start from the same initial
+document, just like direct peer-to-peer sync with `Denicek`.
 
 ## Run the server
 
@@ -30,13 +32,15 @@ Useful container environment variables:
 
 - `PORT` — container port (defaults to `8080` in the Docker image)
 - `HOSTNAME` — bind address (defaults to `0.0.0.0`)
-- `PERSISTENCE_PATH` — persisted data path (defaults to `/home/site/data` in the Docker image)
+- `PERSISTENCE_PATH` — persisted data path (defaults to `/home/site/data` in the
+  Docker image)
 
 ## Deploy to Azure Container Apps
 
 Use `.github\workflows\infra-setup.yml` to provision Azure Container Apps, Azure
 Container Registry, and both Azure Static Web Apps. Then use
-`.github\workflows\deploy-app.yml` to deploy the sync-server image, playground, and mywebnicek.
+`.github\workflows\deploy-app.yml` to deploy the sync-server image, playground,
+and mywebnicek.
 
-See `../../infra/azure/sync-server/README.md` for the OIDC setup, GitHub variables,
-Static Web Apps deployment token step, and workflow usage.
+See `../../infra/azure/sync-server/README.md` for the OIDC setup, GitHub
+variables, Static Web Apps deployment token step, and workflow usage.

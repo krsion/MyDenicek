@@ -1,5 +1,5 @@
-import { Denicek } from '@mydenicek/core';
-import type { EventSnapshot, PlainNode, PrimitiveValue } from '@mydenicek/core';
+import { Denicek } from "@mydenicek/core";
+import type { EventSnapshot, PlainNode, PrimitiveValue } from "@mydenicek/core";
 
 export type DocumentSnapshot = {
   readonly peerId: string;

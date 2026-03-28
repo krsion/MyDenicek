@@ -1,7 +1,12 @@
-import { type Edit, MissingReferenceTargetError, NoOpEdit, ProtectedTargetError } from './edits.ts';
-import type { EventId } from './event-id.ts';
-import type { Node } from './nodes.ts';
-import type { VectorClock } from './vector-clock.ts';
+import {
+  type Edit,
+  MissingReferenceTargetError,
+  NoOpEdit,
+  ProtectedTargetError,
+} from "./edits.ts";
+import type { EventId } from "./event-id.ts";
+import type { Node } from "./nodes.ts";
+import type { VectorClock } from "./vector-clock.ts";
 
 // ── Event ───────────────────────────────────────────────────────────
 
@@ -24,7 +29,8 @@ export class Event {
   }
 
   isConcurrentWith(other: Event): boolean {
-    return this !== other && !this.clock.dominates(other.clock) && !other.clock.dominates(this.clock);
+    return this !== other && !this.clock.dominates(other.clock) &&
+      !other.clock.dominates(this.clock);
   }
 
   validate(known: Map<string, Event>): void {
@@ -75,7 +81,10 @@ export class Event {
       try {
         edit.validate(doc);
       } catch (error) {
-        if (!(error instanceof ProtectedTargetError) && !(error instanceof MissingReferenceTargetError)) throw error;
+        if (
+          !(error instanceof ProtectedTargetError) &&
+          !(error instanceof MissingReferenceTargetError)
+        ) throw error;
         return new NoOpEdit(
           edit.target,
           error instanceof ProtectedTargetError
@@ -88,4 +97,5 @@ export class Event {
   }
 }
 
-export type RemoteEvent = Event;
+/** Opaque event payload exchanged between peers via {@link Denicek.eventsSince}, {@link Denicek.drain}, and {@link Denicek.applyRemote}. */
+export type RemoteEvent = unknown;

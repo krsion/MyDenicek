@@ -1,12 +1,15 @@
 # mydenicek-core
 
-TypeScript/Deno workspace for experimenting with the Denicek document model and building browser clients around it:
+TypeScript/Deno workspace for experimenting with the Denicek document model and
+building browser clients around it:
 
 - `packages/core` — the OT-based Denicek CRDT implementation
 - `packages/sync-server` — sync protocol, sync room, and server/client helpers
 - `apps/sync-server` — the runnable WebSocket sync server
-- `apps/playground` — the experimental playground for multi-peer DAG and sync exploration
-- `apps/mywebnicek` — the production-oriented browser UI that syncs through the deployed sync server
+- `apps/playground` — the experimental playground for multi-peer DAG and sync
+  exploration
+- `apps/mywebnicek` — the production-oriented browser UI that syncs through the
+  deployed sync server
 
 ## Links
 
@@ -17,7 +20,8 @@ TypeScript/Deno workspace for experimenting with the Denicek document model and 
 
 ### Related repository
 
-- [MyDenicek](https://github.com/krsion/MyDenicek) — the related local-first project built on Loro CRDTs
+- [MyDenicek](https://github.com/krsion/MyDenicek) — the related local-first
+  project built on Loro CRDTs
 
 ### Live deployment
 
@@ -29,7 +33,8 @@ The Azure deployment workflows publish these public endpoints:
 - sync server health check URL
 - WebSocket sync URL
 
-The exact values are printed by `.github/workflows/infra-setup.yml` and `.github/workflows/deploy-app.yml`.
+The exact values are printed by `.github/workflows/infra-setup.yml` and
+`.github/workflows/deploy-app.yml`.
 
 ## Local setup
 
@@ -39,7 +44,8 @@ The exact values are printed by `.github/workflows/infra-setup.yml` and `.github
 
 ### Install browser app dependencies
 
-Most of the workspace uses standard Deno module resolution. The browser apps also need their npm dependencies installed:
+Most of the workspace uses standard Deno module resolution. The browser apps
+also need their npm dependencies installed:
 
 ```sh
 cd apps/playground
@@ -56,7 +62,8 @@ From the repository root:
 deno task sync-server
 ```
 
-The server listens on `http://127.0.0.1:8787` by default and exposes WebSocket sync at `ws://127.0.0.1:8787/sync`.
+The server listens on `http://127.0.0.1:8787` by default and exposes WebSocket
+sync at `ws://127.0.0.1:8787/sync`.
 
 Environment variables:
 
@@ -90,7 +97,8 @@ cd apps/mywebnicek
 deno task dev
 ```
 
-Then open <http://localhost:5173> and connect to the default deployed sync server or change the URL in the app.
+Then open <http://localhost:5173> and connect to the default deployed sync
+server or change the URL in the app.
 
 From the repository root you can also use:
 

@@ -1,5 +1,5 @@
-import type { SelectorSegment, Selector } from '../selector.ts';
-import { Node } from './base.ts';
+import type { Selector, SelectorSegment } from "../selector.ts";
+import { Node } from "./base.ts";
 
 export class RecordNode extends Node {
   tag: string;
@@ -42,7 +42,9 @@ export class RecordNode extends Node {
     return true;
   }
 
-  protected resolveSegment(seg: SelectorSegment): { key: SelectorSegment; child: Node }[] {
+  protected resolveSegment(
+    seg: SelectorSegment,
+  ): { key: SelectorSegment; child: Node }[] {
     if (typeof seg === "string" && seg in this.fields) {
       return [{ key: seg, child: this.fields[seg]! }];
     }
@@ -59,7 +61,10 @@ export class RecordNode extends Node {
     }
   }
 
-  protected override forEachChild(visitor: (path: Selector, node: Node) => void, path: SelectorSegment[]): void {
+  protected override forEachChild(
+    visitor: (path: Selector, node: Node) => void,
+    path: SelectorSegment[],
+  ): void {
     for (const k in this.fields) {
       path.push(k);
       this.fields[k]!.forEach(visitor, path);
@@ -84,6 +89,8 @@ export class RecordNode extends Node {
     if (this.tag !== other.tag) return false;
     const aKeys = Object.keys(this.fields);
     if (aKeys.length !== Object.keys(other.fields).length) return false;
-    return aKeys.every((k) => k in other.fields && this.fields[k]!.equals(other.fields[k]!));
+    return aKeys.every((k) =>
+      k in other.fields && this.fields[k]!.equals(other.fields[k]!)
+    );
   }
 }

@@ -22,7 +22,9 @@ export class VectorClock {
   }
 
   dominates(other: VectorClock): boolean {
-    return Object.entries(other.entries).every(([peer, seq]) => this.get(peer) >= seq);
+    return Object.entries(other.entries).every(([peer, seq]) =>
+      this.get(peer) >= seq
+    );
   }
 
   merge(other: VectorClock): void {

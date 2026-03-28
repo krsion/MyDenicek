@@ -1,9 +1,19 @@
 {
   "nodeModulesDir": "auto",
-  "workspace": ["./packages/core", "./packages/sync-server", "./apps/sync-server", "./apps/playground", "./apps/mywebnicek"],
+  "workspace": [
+    "./packages/core",
+    "./packages/sync-server",
+    "./apps/sync-server",
+    "./apps/playground",
+    "./apps/mywebnicek"
+  ],
   "tasks": {
-    "check": "deno check packages/core/mod.ts && deno check packages/sync-server/mod.ts && deno check apps/sync-server/main.ts",
-    "test": "deno test --allow-all --no-check packages/core/tests && deno test --allow-read --allow-write packages/sync-server/tests",
+    "fmt": "deno fmt deno.json README.md main.ts && cd packages/core && deno task fmt && cd ../sync-server && deno task fmt && cd ../../apps/sync-server && deno task fmt && cd ../playground && deno task fmt && cd ../mywebnicek && deno task fmt",
+    "fmt:check": "deno fmt --check deno.json README.md main.ts && cd packages/core && deno task fmt:check && cd ../sync-server && deno task fmt:check && cd ../../apps/sync-server && deno task fmt:check && cd ../playground && deno task fmt:check && cd ../mywebnicek && deno task fmt:check",
+    "lint": "cd packages/core && deno task lint && cd ../sync-server && deno task lint && cd ../../apps/sync-server && deno task lint && cd ../playground && deno task lint && cd ../mywebnicek && deno task lint",
+    "check": "cd packages/core && deno task check && cd ../sync-server && deno task check && cd ../../apps/sync-server && deno task check && cd ../playground && deno task check && cd ../mywebnicek && deno task check",
+    "test": "cd packages/core && deno task test && cd ../sync-server && deno task test && cd ../../apps/playground && deno task test && cd ../mywebnicek && deno task test",
+    "build": "cd apps/playground && deno task build && cd ../mywebnicek && deno task build",
     "property-test": "deno test packages/core/tests/core-properties.test.ts --allow-all",
     "random-fuzzer": "deno run packages/core/tools/core-random-fuzzer.ts",
     "sync-server": "deno run --allow-net --allow-read --allow-write --allow-env apps/sync-server/main.ts",

@@ -1,5 +1,5 @@
-import type { EncodedHelloMessage, EncodedSyncRequest } from './protocol.ts';
-import { SyncRoom } from './room.ts';
+import type { EncodedHelloMessage, EncodedSyncRequest } from "./protocol.ts";
+import { SyncRoom } from "./room.ts";
 
 export interface SyncServerOptions {
   port?: number;
@@ -23,7 +23,10 @@ function buildRoomFilePath(persistencePath: string, roomId: string): string {
   return `${persistencePath}/${safeRoomId}.json`;
 }
 
-async function loadRoomEvents(persistencePath: string, roomId: string): Promise<SyncRoom> {
+async function loadRoomEvents(
+  persistencePath: string,
+  roomId: string,
+): Promise<SyncRoom> {
   const room = new SyncRoom(roomId);
   const roomFilePath = buildRoomFilePath(persistencePath, roomId);
   try {
@@ -37,18 +40,26 @@ async function loadRoomEvents(persistencePath: string, roomId: string): Promise<
   return room;
 }
 
-async function persistRoomEvents(persistencePath: string, room: SyncRoom): Promise<void> {
+async function persistRoomEvents(
+  persistencePath: string,
+  room: SyncRoom,
+): Promise<void> {
   await Deno.mkdir(persistencePath, { recursive: true });
   const roomFilePath = buildRoomFilePath(persistencePath, room.id);
   const temporaryRoomFilePath = `${roomFilePath}.${crypto.randomUUID()}.tmp`;
-  await Deno.writeTextFile(temporaryRoomFilePath, JSON.stringify(room.listEncodedEvents(), null, 2));
+  await Deno.writeTextFile(
+    temporaryRoomFilePath,
+    JSON.stringify(room.listEncodedEvents(), null, 2),
+  );
   await Deno.rename(temporaryRoomFilePath, roomFilePath);
 }
 
-export function createSyncServer(options: SyncServerOptions = {}): SyncServerHandle {
+export function createSyncServer(
+  options: SyncServerOptions = {},
+): SyncServerHandle {
   const port = options.port ?? 8787;
-  const hostname = options.hostname ?? '0.0.0.0';
-  const path = options.path ?? '/sync';
+  const hostname = options.hostname ?? "0.0.0.0";
+  const path = options.path ?? "/sync";
   const rooms = new Map<string, SyncRoom>();
   const clients = new Map<WebSocket, ClientState>();
   const pendingRoomWrites = new Map<string, Promise<void>>();
@@ -70,11 +81,14 @@ export function createSyncServer(options: SyncServerOptions = {}): SyncServerHan
       // The originating socket already receives its direct sync response in the
       // request handler below, so broadcasting only forwards the merged state
       // to the other sockets in the same room.
-      if (socket === changedSocket || state.roomId !== room.id || socket.readyState !== WebSocket.OPEN) {
+      if (
+        socket === changedSocket || state.roomId !== room.id ||
+        socket.readyState !== WebSocket.OPEN
+      ) {
         continue;
       }
       const response = room.computeSyncResponse({
-        type: 'sync',
+        type: "sync",
         roomId: room.id,
         frontiers: state.frontiers,
         events: [],
@@ -107,39 +121,47 @@ export function createSyncServer(options: SyncServerOptions = {}): SyncServerHan
 
   const server = Deno.serve({ port, hostname }, (request) => {
     const url = new URL(request.url);
-    if (request.method === 'GET' && url.pathname === '/healthz') {
-      return new Response('ok');
+    if (request.method === "GET" && url.pathname === "/healthz") {
+      return new Response("ok");
     }
-    if (request.method !== 'GET' || url.pathname !== path) {
-      return new Response('Not found', { status: 404 });
+    if (request.method !== "GET" || url.pathname !== path) {
+      return new Response("Not found", { status: 404 });
     }
 
-    const roomId = url.searchParams.get('room');
-    if (roomId === null || roomId.trim() === '') {
-      return new Response('Missing room query parameter.', { status: 400 });
+    const roomId = url.searchParams.get("room");
+    if (roomId === null || roomId.trim() === "") {
+      return new Response("Missing room query parameter.", { status: 400 });
     }
-    if (request.headers.get('upgrade')?.toLowerCase() !== 'websocket') {
-      return new Response('Expected WebSocket upgrade request.', { status: 400 });
+    if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
+      return new Response("Expected WebSocket upgrade request.", {
+        status: 400,
+      });
     }
 
     const { socket, response } = Deno.upgradeWebSocket(request);
 
     socket.onopen = () => {
       clients.set(socket, { roomId, frontiers: [] });
-      const helloMessage: EncodedHelloMessage = { type: 'hello', roomId };
+      const helloMessage: EncodedHelloMessage = { type: "hello", roomId };
       socket.send(JSON.stringify(helloMessage));
     };
 
     socket.onmessage = async (event) => {
       try {
         const message = JSON.parse(String(event.data)) as EncodedSyncRequest;
-        if (message.type !== 'sync') {
-          throw new Error(`Unsupported sync message type '${String((message as { type?: string }).type)}'.`);
+        if (message.type !== "sync") {
+          throw new Error(
+            `Unsupported sync message type '${
+              String((message as { type?: string }).type)
+            }'.`,
+          );
         }
         const clientState = clients.get(socket);
         const clientRoomId = clientState?.roomId ?? roomId;
         if (message.roomId !== clientRoomId) {
-          throw new Error(`Socket for room '${clientRoomId}' cannot sync room '${message.roomId}'.`);
+          throw new Error(
+            `Socket for room '${clientRoomId}' cannot sync room '${message.roomId}'.`,
+          );
         }
         const room = await ensureRoomLoaded(clientRoomId);
         const responseMessage = room.computeSyncResponse({
@@ -155,7 +177,7 @@ export function createSyncServer(options: SyncServerOptions = {}): SyncServerHan
         broadcastRoomState(socket, room);
       } catch (error) {
         socket.send(JSON.stringify({
-          type: 'error',
+          type: "error",
           roomId,
           message: error instanceof Error ? error.message : String(error),
         }));
@@ -178,7 +200,10 @@ export function createSyncServer(options: SyncServerOptions = {}): SyncServerHan
         try {
           await Promise.all(writes);
         } catch (error) {
-          console.error('Error while flushing pending room writes during server close:', error);
+          console.error(
+            "Error while flushing pending room writes during server close:",
+            error,
+          );
         }
       }
     },

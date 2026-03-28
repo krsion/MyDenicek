@@ -38,10 +38,17 @@ export class BinaryHeap<T> {
     while (true) {
       let smallest = i;
       const left = 2 * i + 1, right = 2 * i + 2;
-      if (left < n && this.compare(this.data[left]!, this.data[smallest]!) < 0) smallest = left;
-      if (right < n && this.compare(this.data[right]!, this.data[smallest]!) < 0) smallest = right;
+      if (
+        left < n && this.compare(this.data[left]!, this.data[smallest]!) < 0
+      ) smallest = left;
+      if (
+        right < n && this.compare(this.data[right]!, this.data[smallest]!) < 0
+      ) smallest = right;
       if (smallest === i) break;
-      [this.data[i], this.data[smallest]] = [this.data[smallest]!, this.data[i]!];
+      [this.data[i], this.data[smallest]] = [
+        this.data[smallest]!,
+        this.data[i]!,
+      ];
       i = smallest;
     }
   }

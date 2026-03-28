@@ -1,5 +1,5 @@
-import type { PrimitiveValue, SelectorSegment } from '../selector.ts';
-import { Node } from './base.ts';
+import type { PrimitiveValue, SelectorSegment } from "../selector.ts";
+import { Node } from "./base.ts";
 
 export class PrimitiveNode extends Node {
   value: PrimitiveValue;
@@ -14,7 +14,9 @@ export class PrimitiveNode extends Node {
     return true;
   }
 
-  protected resolveSegment(): { key: SelectorSegment; child: Node }[] { return []; }
+  protected resolveSegment(): { key: SelectorSegment; child: Node }[] {
+    return [];
+  }
   replaceChild(): void {}
   wrapChild(): void {}
 

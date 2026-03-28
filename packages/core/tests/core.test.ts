@@ -1,8 +1,5 @@
 import { assertEquals, assertThrows } from "@std/assert";
-import {
-  Denicek,
-  registerPrimitiveEdit,
-} from "../mod.ts";
+import { Denicek, registerPrimitiveEdit } from "../mod.ts";
 import { Edit, RecordAddEdit, RecordDeleteEdit } from "../core/edits.ts";
 import { Event } from "../core/event.ts";
 import { EventGraph } from "../core/event-graph.ts";
@@ -24,7 +21,12 @@ function materializedConflicts(peer: Denicek): unknown[] {
   return peer.conflicts;
 }
 
-function createRecordAddEvent(peer: string, seq: number, parentSeqs: number[], field: string): Event {
+function createRecordAddEvent(
+  peer: string,
+  seq: number,
+  parentSeqs: number[],
+  field: string,
+): Event {
   return new Event(
     new EventId(peer, seq),
     parentSeqs.map((parentSeq) => new EventId(peer, parentSeq)),
@@ -72,7 +74,11 @@ Deno.test("rejects deletes that would remove a referenced subtree", () => {
     focus: { $ref: "/person/name" },
   });
 
-  assertThrows(() => core.delete("", "person"), Error, "cannot remove 'person'");
+  assertThrows(
+    () => core.delete("", "person"),
+    Error,
+    "cannot remove 'person'",
+  );
   assertEquals(core.toPlain(), {
     $tag: "root",
     person: { $tag: "person", name: "Ada Lovelace" },
@@ -83,12 +89,18 @@ Deno.test("rejects deletes that would remove a referenced subtree", () => {
 Deno.test("rejects list pops that would remove referenced items", () => {
   const front = new Denicek("alice", {
     $tag: "root",
-    items: { $tag: "ul", $items: [{ $tag: "item", name: "a" }, { $tag: "item", name: "b" }] },
+    items: {
+      $tag: "ul",
+      $items: [{ $tag: "item", name: "a" }, { $tag: "item", name: "b" }],
+    },
     focus: { $ref: "/items/0/name" },
   });
   const back = new Denicek("bob", {
     $tag: "root",
-    items: { $tag: "ul", $items: [{ $tag: "item", name: "a" }, { $tag: "item", name: "b" }] },
+    items: {
+      $tag: "ul",
+      $items: [{ $tag: "item", name: "a" }, { $tag: "item", name: "b" }],
+    },
     focus: { $ref: "/items/1/name" },
   });
 
@@ -109,7 +121,11 @@ Deno.test("rejects remote delete events that would remove referenced nodes", () 
     new VectorClock({ bob: 1 }),
   );
 
-  assertThrows(() => core.applyRemote(invalidDelete), Error, "cannot remove 'person'");
+  assertThrows(
+    () => core.applyRemote(invalidDelete),
+    Error,
+    "cannot remove 'person'",
+  );
   assertEquals(core.eventsSince([]), []);
   assertEquals(core.toPlain(), {
     $tag: "root",
@@ -139,7 +155,8 @@ Deno.test("ingests concurrent delete of a newly referenced node and no-ops the d
     $tag: "conflict",
     kind: "NoOpEdit",
     target: "person",
-    data: "Concurrent replay left 'person' protected before RecordDeleteEdit could replay.",
+    data:
+      "Concurrent replay left 'person' protected before RecordDeleteEdit could replay.",
   }];
   const expectedEventIds = ["alice:0", "bob:0"];
 
@@ -147,8 +164,14 @@ Deno.test("ingests concurrent delete of a newly referenced node and no-ops the d
   assertEquals(bob.toPlain(), expected);
   assertEquals(materializedConflicts(alice), expectedConflicts);
   assertEquals(materializedConflicts(bob), expectedConflicts);
-  assertEquals(alice.inspectEvents().map((event) => event.id).sort(), expectedEventIds);
-  assertEquals(bob.inspectEvents().map((event) => event.id).sort(), expectedEventIds);
+  assertEquals(
+    alice.inspectEvents().map((event) => event.id).sort(),
+    expectedEventIds,
+  );
+  assertEquals(
+    bob.inspectEvents().map((event) => event.id).sort(),
+    expectedEventIds,
+  );
 });
 
 Deno.test("ingests concurrent reference creation and no-ops it when the delete replays first", () => {
@@ -168,7 +191,8 @@ Deno.test("ingests concurrent reference creation and no-ops it when the delete r
     $tag: "conflict",
     kind: "NoOpEdit",
     target: "focus",
-    data: "Concurrent replay left 'focus' referencing a missing target before RecordAddEdit could replay.",
+    data:
+      "Concurrent replay left 'focus' referencing a missing target before RecordAddEdit could replay.",
   }];
   const expectedEventIds = ["alice:0", "bob:0"];
 
@@ -176,8 +200,14 @@ Deno.test("ingests concurrent reference creation and no-ops it when the delete r
   assertEquals(bob.toPlain(), expected);
   assertEquals(materializedConflicts(alice), expectedConflicts);
   assertEquals(materializedConflicts(bob), expectedConflicts);
-  assertEquals(alice.inspectEvents().map((event) => event.id).sort(), expectedEventIds);
-  assertEquals(bob.inspectEvents().map((event) => event.id).sort(), expectedEventIds);
+  assertEquals(
+    alice.inspectEvents().map((event) => event.id).sort(),
+    expectedEventIds,
+  );
+  assertEquals(
+    bob.inspectEvents().map((event) => event.id).sort(),
+    expectedEventIds,
+  );
 });
 
 Deno.test("keeps concurrent list push-backs from both peers", () => {
@@ -192,7 +222,10 @@ Deno.test("keeps concurrent list push-backs from both peers", () => {
 
   // Both items present, order determined by hash tiebreak
   assertEquals(alice.toPlain(), bob.toPlain());
-  const items = ((alice.toPlain() as Record<string, unknown>).items as Record<string, unknown>).$items as string[];
+  const items = ((alice.toPlain() as Record<string, unknown>).items as Record<
+    string,
+    unknown
+  >).$items as string[];
   assertEquals(items.sort(), ["A", "B"]);
 });
 
@@ -623,7 +656,11 @@ Deno.test("ingestEvents keeps children blocked until buffered parents are insert
 
 Deno.test("commit throws on edit targeting non-existent path", () => {
   const core = new Denicek("alice");
-  assertThrows(() => core.add("nonexistent", "x", "a"), Error, "No nodes match selector");
+  assertThrows(
+    () => core.add("nonexistent", "x", "a"),
+    Error,
+    "No nodes match selector",
+  );
 });
 
 Deno.test("commit throws on kind mismatch", () => {
@@ -631,11 +668,19 @@ Deno.test("commit throws on kind mismatch", () => {
     $tag: "root",
     items: { $tag: "ul", $items: [] as string[] },
   });
-  assertThrows(() => core.add("items", "x", "a"), Error, "expected record, found 'ListNode'");
+  assertThrows(
+    () => core.add("items", "x", "a"),
+    Error,
+    "expected record, found 'ListNode'",
+  );
 });
 
 Deno.test("fromPlain rejects null", () => {
-  assertThrows(() => Node.fromPlain(JSON.parse("null")), Error, "Null is not a valid PlainNode.");
+  assertThrows(
+    () => Node.fromPlain(JSON.parse("null")),
+    Error,
+    "Null is not a valid PlainNode.",
+  );
 });
 
 Deno.test("applies registered primitive edit locally", () => {
@@ -723,7 +768,10 @@ Deno.test("replays a primitive edit selected by event id onto another target", (
     items: { $tag: "ul", $items: ["aLPHA", "bRAVO", "cHARLIE"] },
   });
 
-  const capitalizeEventId = source.applyPrimitiveEdit("items/0", "test-capitalize-from-event");
+  const capitalizeEventId = source.applyPrimitiveEdit(
+    "items/0",
+    "test-capitalize-from-event",
+  );
   for (const event of source.drain()) {
     target.applyRemote(event);
   }
@@ -832,7 +880,9 @@ Deno.test("default edit transform throws unless removal handling is explicit", (
     // Edit subclasses must expose a stable kind string.
     readonly kind = "DummyEdit";
 
-    constructor(readonly target: Selector) { super(); }
+    constructor(readonly target: Selector) {
+      super();
+    }
 
     apply(_doc: Node): void {}
 
@@ -865,18 +915,24 @@ Deno.test("default edit transform throws unless removal handling is explicit", (
 
 Deno.test("materialize throws on cycle", () => {
   const events = new Map<string, Event>();
-  events.set("a:0", new Event(
-    new EventId("a", 0),
-    [new EventId("b", 0)],
-    new RecordAddEdit(Selector.parse("x"), new PrimitiveNode("a")),
-    new VectorClock({ a: 0 }),
-  ));
-  events.set("b:0", new Event(
-    new EventId("b", 0),
-    [new EventId("a", 0)],
-    new RecordAddEdit(Selector.parse("y"), new PrimitiveNode("b")),
-    new VectorClock({ b: 0 }),
-  ));
+  events.set(
+    "a:0",
+    new Event(
+      new EventId("a", 0),
+      [new EventId("b", 0)],
+      new RecordAddEdit(Selector.parse("x"), new PrimitiveNode("a")),
+      new VectorClock({ a: 0 }),
+    ),
+  );
+  events.set(
+    "b:0",
+    new Event(
+      new EventId("b", 0),
+      [new EventId("a", 0)],
+      new RecordAddEdit(Selector.parse("y"), new PrimitiveNode("b")),
+      new VectorClock({ b: 0 }),
+    ),
+  );
   const graph = new EventGraph(
     new RecordNode("root", {}),
     events,
@@ -894,7 +950,10 @@ Deno.test("materialize throws on invalid replay state", () => {
         new Event(
           new EventId("alice", 0),
           [],
-          new RecordAddEdit(Selector.parse("missing/x"), new PrimitiveNode("a")),
+          new RecordAddEdit(
+            Selector.parse("missing/x"),
+            new PrimitiveNode("a"),
+          ),
           new VectorClock({ alice: 0 }),
         ),
       ],
@@ -938,7 +997,8 @@ Deno.test("concurrent delete + edit: delete wins, edit is no-op", () => {
     $tag: "conflict",
     kind: "NoOpEdit",
     target: "items/*/val",
-    data: "RecordDeleteEdit removed 'items/*/val' before SetValueEdit could apply.",
+    data:
+      "RecordDeleteEdit removed 'items/*/val' before SetValueEdit could apply.",
   }];
   assertEquals(alice.toPlain(), expected);
   assertEquals(bob.toPlain(), expected);
@@ -966,7 +1026,8 @@ Deno.test("concurrent wildcard edit on emptied list becomes no-op", () => {
     $tag: "conflict",
     kind: "NoOpEdit",
     target: "items/*",
-    data: "Concurrent replay left 'items/*' unavailable before SetValueEdit could replay.",
+    data:
+      "Concurrent replay left 'items/*' unavailable before SetValueEdit could replay.",
   }];
   assertEquals(alice.toPlain(), expected);
   assertEquals(bob.toPlain(), expected);
@@ -996,7 +1057,8 @@ Deno.test("concurrent copy overwrite makes nested record edit a no-op", () => {
     $tag: "conflict",
     kind: "NoOpEdit",
     target: "data/b/a",
-    data: "Concurrent replay left 'data/b/a' unavailable before RecordDeleteEdit could replay.",
+    data:
+      "Concurrent replay left 'data/b/a' unavailable before RecordDeleteEdit could replay.",
   }];
   assertEquals(alice.toPlain(), expected);
   assertEquals(bob.toPlain(), expected);
@@ -1049,7 +1111,10 @@ Deno.test("concurrent double pop-back on single-item list converges", () => {
   sync(alice, bob);
 
   // Both peers saw the same last item, so the shared intent is one removal.
-  const expected = { $tag: "root", items: { $tag: "ul", $items: [] as unknown[] } };
+  const expected = {
+    $tag: "root",
+    items: { $tag: "ul", $items: [] as unknown[] },
+  };
   assertEquals(alice.toPlain(), expected);
   assertEquals(bob.toPlain(), expected);
 });
@@ -1175,9 +1240,11 @@ Deno.test("concurrent pop-front + push-front + rename", () => {
     }
     return events;
   });
-  for (let i = 0; i < 3; i++)
-    for (let j = 0; j < 3; j++)
-      if (i !== j) for (const e of diffs[j]!) peers[i]!.applyRemote(e);
+  for (let i = 0; i < 3; i++) {
+    for (let j = 0; j < 3; j++) {
+      if (i !== j) { for (const e of diffs[j]!) peers[i]!.applyRemote(e); }
+    }
+  }
 
   assertEquals(alice.toPlain(), bob.toPlain());
   assertEquals(bob.toPlain(), carol.toPlain());
@@ -1207,9 +1274,11 @@ Deno.test("3 concurrent wraps on same target", () => {
     }
     return events;
   });
-  for (let i = 0; i < 3; i++)
-    for (let j = 0; j < 3; j++)
-      if (i !== j) for (const e of diffs[j]!) peers[i]!.applyRemote(e);
+  for (let i = 0; i < 3; i++) {
+    for (let j = 0; j < 3; j++) {
+      if (i !== j) { for (const e of diffs[j]!) peers[i]!.applyRemote(e); }
+    }
+  }
 
   assertEquals(alice.toPlain(), bob.toPlain());
   assertEquals(bob.toPlain(), carol.toPlain());
@@ -1263,9 +1332,11 @@ Deno.test("concurrent rename to same name + edit on that field", () => {
     }
     return events;
   });
-  for (let i = 0; i < 3; i++)
-    for (let j = 0; j < 3; j++)
-      if (i !== j) for (const e of diffs[j]!) peers[i]!.applyRemote(e);
+  for (let i = 0; i < 3; i++) {
+    for (let j = 0; j < 3; j++) {
+      if (i !== j) { for (const e of diffs[j]!) peers[i]!.applyRemote(e); }
+    }
+  }
 
   assertEquals(alice.toPlain(), bob.toPlain());
   assertEquals(bob.toPlain(), carol.toPlain());
@@ -1288,7 +1359,10 @@ Deno.test("nested list: concurrent push + pop at different levels", () => {
   const bob = new Denicek("bob", doc);
 
   alice.popFront("items/0/sub");
-  alice.pushBack("items", { $tag: "group", sub: { $tag: "sl", $items: ["new"] } });
+  alice.pushBack("items", {
+    $tag: "group",
+    sub: { $tag: "sl", $items: ["new"] },
+  });
   bob.popBack("items/0/sub");
   bob.pushFront("items/0/sub", "front");
 

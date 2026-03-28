@@ -4,14 +4,14 @@ import { Denicek } from "../../mod.ts";
 type FormulaNode =
   | number
   | {
-      $tag: "x-formula-plus";
-      left: FormulaNode;
-      right: FormulaNode;
-    }
+    $tag: "x-formula-plus";
+    left: FormulaNode;
+    right: FormulaNode;
+  }
   | {
-      $tag: "paragraph";
-      math: FormulaNode;
-    };
+    $tag: "paragraph";
+    math: FormulaNode;
+  };
 
 Deno.test("Formative: Counter App", () => {
   const peer = new Denicek("alice", {
@@ -53,7 +53,11 @@ Deno.test("Formative: Counter App", () => {
   const renameEventId = peer.rename("formula", "formula", "left");
   const addRightEventId = peer.add("formula", "right", 1);
 
-  peer.pushBack("btn/script/steps", { $tag: "replay-step", eventId: wrapEventId, target: "formula" });
+  peer.pushBack("btn/script/steps", {
+    $tag: "replay-step",
+    eventId: wrapEventId,
+    target: "formula",
+  });
   peer.pushBack("btn/script/steps", {
     $tag: "replay-step",
     eventId: renameEventId,
@@ -70,11 +74,14 @@ Deno.test("Formative: Counter App", () => {
       formula: FormulaNode;
       btn: { script: { steps: { $items: Array<{ eventId: string }> } } };
     };
-    assertEquals(plainDocument.btn.script.steps.$items.map((step) => step.eventId), [
-      wrapEventId,
-      renameEventId,
-      addRightEventId,
-    ]);
+    assertEquals(
+      plainDocument.btn.script.steps.$items.map((step) => step.eventId),
+      [
+        wrapEventId,
+        renameEventId,
+        addRightEventId,
+      ],
+    );
     assertEquals(evaluateFormula(plainDocument.formula), 2);
   }
 
@@ -84,11 +91,14 @@ Deno.test("Formative: Counter App", () => {
       formula: FormulaNode;
       btn: { script: { steps: { $items: Array<{ eventId: string }> } } };
     };
-    assertEquals(plainDocument.btn.script.steps.$items.map((step) => step.eventId), [
-      wrapEventId,
-      renameEventId,
-      addRightEventId,
-    ]);
+    assertEquals(
+      plainDocument.btn.script.steps.$items.map((step) => step.eventId),
+      [
+        wrapEventId,
+        renameEventId,
+        addRightEventId,
+      ],
+    );
     assertEquals(evaluateFormula(plainDocument.formula), 3);
   }
 
@@ -99,5 +109,8 @@ Deno.test("Formative: Counter App", () => {
 
   clickButton();
 
-  assertEquals(evaluateFormula((peer.toPlain() as { formula: FormulaNode }).formula), 4);
+  assertEquals(
+    evaluateFormula((peer.toPlain() as { formula: FormulaNode }).formula),
+    4,
+  );
 });

@@ -8,6 +8,9 @@
     "exclude": ["tests/"]
   },
   "tasks": {
+    "fmt": "deno fmt .",
+    "fmt:check": "deno fmt --check .",
+    "lint": "deno lint .",
     "check": "deno check mod.ts",
     "test": "deno test --allow-read --allow-write tests"
   },

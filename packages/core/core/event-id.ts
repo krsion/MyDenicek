@@ -6,7 +6,10 @@ export class EventId {
   static parse(value: string): EventId {
     const [peer, seqText] = value.split(":");
     const seq = Number(seqText);
-    if (peer === undefined || seqText === undefined || !Number.isInteger(seq) || seq < 0) {
+    if (
+      peer === undefined || seqText === undefined || !Number.isInteger(seq) ||
+      seq < 0
+    ) {
       throw new Error(`Invalid event id '${value}'.`);
     }
     return new EventId(peer, seq);

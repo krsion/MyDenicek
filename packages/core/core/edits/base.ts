@@ -1,9 +1,6 @@
-import { mapSelector, type SelectorTransform, Selector } from '../selector.ts';
-import { ListNode, type Node, PrimitiveNode, RecordNode } from '../nodes.ts';
-import type { EncodedRemoteEdit } from '../remote-edit-codec.ts';
-
-export class ProtectedTargetError extends Error {}
-export class MissingReferenceTargetError extends Error {}
+import { mapSelector, Selector, type SelectorTransform } from "../selector.ts";
+import { ListNode, type Node, PrimitiveNode, RecordNode } from "../nodes.ts";
+import type { EncodedRemoteEdit } from "../remote-edit-codec.ts";
 
 export class ProtectedTargetError extends Error {}
 export class MissingReferenceTargetError extends Error {}
@@ -53,12 +50,20 @@ export abstract class Edit {
   }
 
   protected assertRecord(n: Node): RecordNode {
-    if (!(n instanceof RecordNode)) throw new Error(`${this.constructor.name}: expected record, found '${n.constructor.name}'`);
+    if (!(n instanceof RecordNode)) {
+      throw new Error(
+        `${this.constructor.name}: expected record, found '${n.constructor.name}'`,
+      );
+    }
     return n;
   }
 
   protected assertList(n: Node): ListNode {
-    if (!(n instanceof ListNode)) throw new Error(`${this.constructor.name}: expected list, found '${n.constructor.name}'`);
+    if (!(n instanceof ListNode)) {
+      throw new Error(
+        `${this.constructor.name}: expected list, found '${n.constructor.name}'`,
+      );
+    }
     return n;
   }
 
@@ -76,7 +81,11 @@ export abstract class Edit {
     return doc.navigate(target).length > 0;
   }
 
-  protected canFindNodesOfType(doc: Node, target: Selector, predicate: (node: Node) => boolean): boolean {
+  protected canFindNodesOfType(
+    doc: Node,
+    target: Selector,
+    predicate: (node: Node) => boolean,
+  ): boolean {
     const nodes = doc.navigate(target);
     return nodes.length > 0 && nodes.every(predicate);
   }
@@ -97,12 +106,17 @@ export abstract class Edit {
   protected transformSelectorOrThrow(sel: Selector): Selector {
     const result = this.transformSelector(sel);
     if (result.kind === "removed") {
-      throw new Error(`${this.constructor.name}: unexpectedly removed selector '${sel.format()}' while updating references.`);
+      throw new Error(
+        `${this.constructor.name}: unexpectedly removed selector '${sel.format()}' while updating references.`,
+      );
     }
     return result.selector;
   }
 
-  protected assertRemovedPathsAreUnreferenced(doc: Node, removedPaths: Selector[]): void {
+  protected assertRemovedPathsAreUnreferenced(
+    doc: Node,
+    removedPaths: Selector[],
+  ): void {
     const blockingReference = doc.findBlockingReference(removedPaths);
     if (blockingReference !== null) {
       throw new ProtectedTargetError(
@@ -117,12 +131,16 @@ export abstract class Edit {
     insertions: { path: Selector; node: Node }[],
   ): void {
     const insertedPaths = insertions.flatMap(({ path, node }) =>
-      node.navigateWithPaths(new Selector([])).map((entry) => new Selector([...path.segments, ...entry.path.segments]))
+      node.navigateWithPaths(new Selector([])).map((entry) =>
+        new Selector([...path.segments, ...entry.path.segments])
+      )
     );
     for (const { path, node } of insertions) {
       for (const reference of node.collectResolvedReferencePaths(path)) {
         const targetExists = doc.navigate(reference.targetPath).length > 0 ||
-          insertedPaths.some((insertedPath) => this.matchesConcretePath(reference.targetPath, insertedPath));
+          insertedPaths.some((insertedPath) =>
+            this.matchesConcretePath(reference.targetPath, insertedPath)
+          );
         if (!targetExists) {
           throw new MissingReferenceTargetError(
             `${this.constructor.name}: cannot create reference '${reference.referencePath.format()}' to missing target ` +
@@ -133,7 +151,10 @@ export abstract class Edit {
     }
   }
 
-  private matchesConcretePath(selector: Selector, concretePath: Selector): boolean {
+  private matchesConcretePath(
+    selector: Selector,
+    concretePath: Selector,
+  ): boolean {
     const match = selector.matchPrefix(concretePath);
     return match.kind === "matched" && match.rest.length === 0;
   }
@@ -151,12 +172,16 @@ export abstract class NoOpOnRemovedTargetEdit extends Edit {
  */
 export class NoOpEdit extends Edit {
   readonly isStructural = false;
-  readonly kind = 'NoOp';
+  readonly kind = "NoOp";
 
-  constructor(readonly target: Selector, readonly reason: string) { super(); }
+  constructor(readonly target: Selector, readonly reason: string) {
+    super();
+  }
 
   apply(_doc: Node): void {
-    throw new Error("NoOpEdit must be surfaced as a conflict during materialization.");
+    throw new Error(
+      "NoOpEdit must be surfaced as a conflict during materialization.",
+    );
   }
 
   toConflict(): RecordNode {
@@ -167,7 +192,9 @@ export class NoOpEdit extends Edit {
     return true;
   }
 
-  transformSelector(sel: Selector): SelectorTransform { return mapSelector(sel); }
+  transformSelector(sel: Selector): SelectorTransform {
+    return mapSelector(sel);
+  }
 
   override transform(_prior: Edit): Edit {
     return this;
@@ -179,8 +206,14 @@ export class NoOpEdit extends Edit {
       this.reason === other.reason;
   }
 
-  withTarget(target: Selector): NoOpEdit { return new NoOpEdit(target, this.reason); }
+  withTarget(target: Selector): NoOpEdit {
+    return new NoOpEdit(target, this.reason);
+  }
   encodeRemoteEdit(): EncodedRemoteEdit {
-    return { kind: 'NoOpEdit', target: this.target.format(), reason: this.reason };
+    return {
+      kind: "NoOpEdit",
+      target: this.target.format(),
+      reason: this.reason,
+    };
   }
 }

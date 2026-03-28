@@ -1,7 +1,5 @@
 export { Denicek } from './core/denicek.ts';
 export type { RemoteEvent } from './core/event.ts';
-export { decodeRemoteEvent, encodeRemoteEvent } from './core/remote-events.ts';
-export type { EncodedRemoteEvent, EncodedRemoteEventId } from './core/remote-events.ts';
 export type { PlainNode, PlainList, PlainRecord, PlainRef } from './core/nodes.ts';
 export { registerPrimitiveEdit } from './core/primitive-edits.ts';
 export type { PrimitiveEditImplementation } from './core/primitive-edits.ts';

@@ -12,8 +12,12 @@ export type SelectorSegment = string | number;
 
 // ── Selector ────────────────────────────────────────────────────────
 
-type PrefixMatch = { kind: "matched"; specificPrefix: Selector; rest: Selector } | { kind: "no-match" };
-export type SelectorTransform = { kind: "mapped"; selector: Selector } | { kind: "removed" };
+type PrefixMatch =
+  | { kind: "matched"; specificPrefix: Selector; rest: Selector }
+  | { kind: "no-match" };
+export type SelectorTransform = { kind: "mapped"; selector: Selector } | {
+  kind: "removed";
+};
 
 const NO_PREFIX_MATCH: PrefixMatch = { kind: "no-match" };
 export const REMOVED_SELECTOR: SelectorTransform = { kind: "removed" };
@@ -33,7 +37,10 @@ export function validateFieldName(field: string): void {
     throw new Error(`Field name '${field}' is reserved by selector syntax.`);
   }
   const numericField = Number(field);
-  if (numericField >= 0 && Number.isInteger(numericField) && String(numericField) === field) {
+  if (
+    numericField >= 0 && Number.isInteger(numericField) &&
+    String(numericField) === field
+  ) {
     throw new Error(`Field name '${field}' is reserved by selector syntax.`);
   }
 }
@@ -64,7 +71,9 @@ export class Selector {
 
   format(): string {
     if (this.segments.length === 0) return "/";
-    if (this.segments[0] === "/") return `/${this.segments.slice(1).map(String).join("/")}`;
+    if (this.segments[0] === "/") {
+      return `/${this.segments.slice(1).map(String).join("/")}`;
+    }
     return this.segments.map(String).join("/");
   }
 
@@ -115,11 +124,19 @@ export class Selector {
         return NO_PREFIX_MATCH;
       }
     }
-    return { kind: "matched", specificPrefix: new Selector(specificPrefix), rest: full.slice(this.segments.length) };
+    return {
+      kind: "matched",
+      specificPrefix: new Selector(specificPrefix),
+      rest: full.slice(this.segments.length),
+    };
   }
 
   /** Shifts numeric indices in `other` that traverse through this selector's list target. */
-  shiftIndex(other: Selector, threshold: number, delta: number): SelectorTransform {
+  shiftIndex(
+    other: Selector,
+    threshold: number,
+    delta: number,
+  ): SelectorTransform {
     const m = this.matchPrefix(other);
     if (m.kind === "no-match" || m.rest.length === 0) return mapSelector(other);
     const head = m.rest.segments[0]!;
@@ -127,6 +144,8 @@ export class Selector {
     if (typeof head !== "number") return mapSelector(other);
     const shifted = head + (head >= threshold ? delta : 0);
     if (shifted < 0) return REMOVED_SELECTOR;
-    return mapSelector(new Selector([...m.specificPrefix.segments, shifted, ...tail.segments]));
+    return mapSelector(
+      new Selector([...m.specificPrefix.segments, shifted, ...tail.segments]),
+    );
   }
 }

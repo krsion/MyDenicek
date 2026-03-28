@@ -3,13 +3,21 @@
 ## Commands
 
 ```sh
-deno check packages/core/mod.ts                                  # Type-check the package
-deno test --allow-all --no-check packages/core/tests             # Run all package tests
-deno test packages/core/tests/core.test.ts --no-check            # Unit tests only
-deno test packages/core/tests/core-properties.test.ts --no-check # Property-based tests (fast-check)
-deno run packages/core/tools/core-random-fuzzer.ts               # Standalone long-running random fuzzer
+deno task fmt        # Format the monorepo
+deno task fmt:check  # Verify formatting across the monorepo
+deno task lint       # Lint the monorepo (includes core doc lint)
+deno task check      # Type-check the monorepo
+deno task test       # Run monorepo tests
+deno task build      # Build the runnable apps
 deno test --filter "Converge" --no-check packages/core/tests/core-properties.test.ts  # Run a single property test by name
+deno run packages/core/tools/core-random-fuzzer.ts               # Standalone long-running random fuzzer
 ```
+
+## Validation
+
+- **Always run `deno task fmt`, `deno task check`, and `deno task build` before handing work back.**
+- Prefer the root monorepo tasks over ad hoc per-file commands so local validation stays aligned with CI.
+- When a change can affect behavior or tests, also run `deno task test`.
 
 ## Architecture
 

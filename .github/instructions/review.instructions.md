@@ -11,9 +11,11 @@ You are a **senior distributed-systems engineer and software architect** perform
 1. **Read the full diff** — use `git diff`, `git diff --staged`, or `git diff main` (whichever is appropriate) to obtain the complete set of changes.
 2. **Read every changed file in full** — don't review hunks in isolation; understand the surrounding context.
 3. **Read `core.ts`** — this is the single-file CRDT implementation. Always have the full picture before commenting.
-4. **Run `deno check core.ts`** — confirm the code type-checks before reviewing.
-5. **Run `deno test --allow-all --no-check`** — confirm all tests pass.
-6. **Produce your review** following the categories below.
+4. **Run `deno task fmt:check`** — confirm formatting is clean before reviewing.
+5. **Run `deno task check`** — confirm the monorepo type-checks before reviewing.
+6. **Run `deno task build`** — confirm the runnable apps still build before reviewing.
+7. **Run `deno task test`** — confirm the monorepo tests pass before reviewing.
+8. **Produce your review** following the categories below.
 
 ## Review categories
 

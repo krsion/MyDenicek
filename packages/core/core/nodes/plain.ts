@@ -1,4 +1,4 @@
-import type { PrimitiveValue } from '../selector.ts';
+import type { PrimitiveValue } from "../selector.ts";
 
 /** A plain serializable node accepted by the public package API. */
 export type PlainNode = PrimitiveValue | PlainRef | PlainRecord | PlainList;

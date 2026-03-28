@@ -2,7 +2,8 @@
 
 A reusable sync package for `@mydenicek/core`.
 
-It exports the protocol helpers, `SyncRoom`, `createSyncServer`, and `SyncClient`.
+It exports the protocol helpers, `SyncRoom`, `createSyncServer`, and
+`SyncClient`.
 
 ## Run the server app from this repository
 
@@ -10,7 +11,8 @@ It exports the protocol helpers, `SyncRoom`, `createSyncServer`, and `SyncClient
 deno run --allow-net --allow-read --allow-write --allow-env apps/sync-server/main.ts
 ```
 
-See `../../apps/sync-server/README.md` for the runnable app, Docker image, and Azure deployment workflow.
+See `../../apps/sync-server/README.md` for the runnable app, Docker image, and
+Azure deployment workflow.
 
 ## Use the client helper
 

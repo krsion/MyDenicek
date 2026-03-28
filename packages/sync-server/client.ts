@@ -1,11 +1,11 @@
-import type { Denicek } from '@mydenicek/core';
+import type { Denicek } from "@mydenicek/core";
 import {
   applySyncResponse,
   createSyncRequest,
   type EncodedHelloMessage,
   type EncodedSyncMessage,
   type EncodedSyncResponse,
-} from './protocol.ts';
+} from "./protocol.ts";
 
 export interface SyncClientOptions {
   url: string;
@@ -20,7 +20,10 @@ export class SyncClient {
   private readonly roomId: string;
   private readonly document: Denicek;
   private readonly autoSyncIntervalMs: number;
-  private readonly onRemoteChange?: (document: Denicek, response: EncodedSyncResponse) => void;
+  private readonly onRemoteChange?: (
+    document: Denicek,
+    response: EncodedSyncResponse,
+  ) => void;
   private socket: WebSocket | null = null;
   private autoSyncTimer: ReturnType<typeof setInterval> | null = null;
   private knownServerFrontiers: string[] = [];
@@ -35,7 +38,7 @@ export class SyncClient {
 
   private buildSyncUrl(baseUrl: string, roomId: string): string {
     const url = new URL(baseUrl);
-    url.searchParams.set('room', roomId);
+    url.searchParams.set("room", roomId);
     return url.toString();
   }
 
@@ -71,7 +74,11 @@ export class SyncClient {
     if (this.socket === null || this.socket.readyState !== WebSocket.OPEN) {
       return;
     }
-    const request = createSyncRequest(this.document, this.roomId, this.knownServerFrontiers);
+    const request = createSyncRequest(
+      this.document,
+      this.roomId,
+      this.knownServerFrontiers,
+    );
     this.socket.send(JSON.stringify(request));
   }
 
@@ -79,7 +86,10 @@ export class SyncClient {
     if (this.autoSyncTimer !== null) {
       return;
     }
-    this.autoSyncTimer = setInterval(() => this.syncNow(), this.autoSyncIntervalMs);
+    this.autoSyncTimer = setInterval(
+      () => this.syncNow(),
+      this.autoSyncIntervalMs,
+    );
   }
 
   private stopAutoSyncLoop(): void {
@@ -96,14 +106,16 @@ export class SyncClient {
       message = JSON.parse(rawMessage) as EncodedSyncMessage;
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
-      console.error(`Could not parse sync message (${reason}): ${rawMessage.slice(0, 200)}`);
+      console.error(
+        `Could not parse sync message (${reason}): ${rawMessage.slice(0, 200)}`,
+      );
       return;
     }
-    if (message.type === 'hello') {
+    if (message.type === "hello") {
       this.handleHelloMessage(message);
       return;
     }
-    if (message.type === 'error') {
+    if (message.type === "error") {
       console.error(message.message);
       return;
     }

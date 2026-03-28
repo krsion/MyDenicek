@@ -19,20 +19,34 @@ Deno.test("Formative: Todo App", () => {
     const aliceFrontiers = alice.frontiers;
     const bobFrontiers = bob.frontiers;
     for (const event of alice.eventsSince(bobFrontiers)) bob.applyRemote(event);
-    for (const event of bob.eventsSince(aliceFrontiers)) alice.applyRemote(event);
+    for (const event of bob.eventsSince(aliceFrontiers)) {
+      alice.applyRemote(event);
+    }
   };
 
-  alice.pushBack("items", { $tag: "task", text: "Review feedback", completed: false });
+  alice.pushBack("items", {
+    $tag: "task",
+    text: "Review feedback",
+    completed: false,
+  });
   bob.set("items/1/completed", true);
 
   syncPeers();
 
-  alice.pushBack("items", { $tag: "task", text: "Book venue", completed: false });
+  alice.pushBack("items", {
+    $tag: "task",
+    text: "Book venue",
+    completed: false,
+  });
   {
     const plainDocument = alice.toPlain() as {
-      items: { $items: Array<{ $tag: string; text: string; completed: boolean }> };
+      items: {
+        $items: Array<{ $tag: string; text: string; completed: boolean }>;
+      };
     };
-    const remainingItems = plainDocument.items.$items.filter((item) => !item.completed);
+    const remainingItems = plainDocument.items.$items.filter((item) =>
+      !item.completed
+    );
     alice.add("", "__scratchItems", { $tag: "ul", $items: [] });
     for (const item of remainingItems) {
       alice.pushBack("__scratchItems", item);
@@ -43,9 +57,13 @@ Deno.test("Formative: Todo App", () => {
   syncPeers();
   {
     const plainDocument = bob.toPlain() as {
-      items: { $items: Array<{ $tag: string; text: string; completed: boolean }> };
+      items: {
+        $items: Array<{ $tag: string; text: string; completed: boolean }>;
+      };
     };
-    const remainingItems = plainDocument.items.$items.filter((item) => !item.completed);
+    const remainingItems = plainDocument.items.$items.filter((item) =>
+      !item.completed
+    );
     bob.add("", "__scratchItems", { $tag: "ul", $items: [] });
     for (const item of remainingItems) {
       bob.pushBack("__scratchItems", item);

@@ -1,7 +1,10 @@
-import { Event, type RemoteEvent } from './event.ts';
-import { EventId } from './event-id.ts';
-import { decodeRemoteEdit, type EncodedRemoteEdit } from './remote-edit-codec.ts';
-import { VectorClock } from './vector-clock.ts';
+import { Event } from "./event.ts";
+import { EventId } from "./event-id.ts";
+import {
+  decodeRemoteEdit,
+  type EncodedRemoteEdit,
+} from "./remote-edit-codec.ts";
+import { VectorClock } from "./vector-clock.ts";
 
 export interface EncodedRemoteEventId {
   peer: string;
@@ -23,7 +26,7 @@ function decodeRemoteEventId(encodedEventId: EncodedRemoteEventId): EventId {
   return new EventId(encodedEventId.peer, encodedEventId.seq);
 }
 
-export function encodeRemoteEvent(event: RemoteEvent): EncodedRemoteEvent {
+export function encodeRemoteEvent(event: Event): EncodedRemoteEvent {
   return {
     id: encodeRemoteEventId(event.id),
     parents: event.parents.map(encodeRemoteEventId),
@@ -32,7 +35,7 @@ export function encodeRemoteEvent(event: RemoteEvent): EncodedRemoteEvent {
   };
 }
 
-export function decodeRemoteEvent(encodedEvent: EncodedRemoteEvent): RemoteEvent {
+export function decodeRemoteEvent(encodedEvent: EncodedRemoteEvent): Event {
   return new Event(
     decodeRemoteEventId(encodedEvent.id),
     encodedEvent.parents.map(decodeRemoteEventId),

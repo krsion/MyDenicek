@@ -1,12 +1,12 @@
-import { Denicek } from '@mydenicek/core';
+import { Denicek } from "@mydenicek/core";
 import {
+  decodeEvent,
   type EncodedEvent,
   type EncodedSyncRequest,
   type EncodedSyncResponse,
-  decodeEvent,
   encodeEvent,
-} from './protocol.ts';
-import { collectRemoteEventsSince } from './internal-events.ts';
+} from "./protocol.ts";
+import { collectRemoteEventsSince } from "./internal-events.ts";
 
 export class SyncRoom {
   readonly id: string;
@@ -30,10 +30,12 @@ export class SyncRoom {
   computeSyncResponse(request: EncodedSyncRequest): EncodedSyncResponse {
     this.ingestEncodedEvents(request.events);
     return {
-      type: 'sync',
+      type: "sync",
       roomId: this.id,
       frontiers: this.roomPeer.frontiers,
-      events: collectRemoteEventsSince(this.roomPeer, request.frontiers).map(encodeEvent),
+      events: collectRemoteEventsSince(this.roomPeer, request.frontiers).map(
+        encodeEvent,
+      ),
     };
   }
 
