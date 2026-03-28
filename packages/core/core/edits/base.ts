@@ -1,5 +1,6 @@
 import { mapSelector, type SelectorTransform, type Selector } from '../selector.ts';
 import { ListNode, type Node, PrimitiveNode, RecordNode } from '../nodes.ts';
+import type { EncodedRemoteEdit } from '../remote-edit-codec.ts';
 
 export abstract class Edit {
   abstract readonly target: Selector;
@@ -22,6 +23,7 @@ export abstract class Edit {
 
   /** Returns a copy of this edit with a different target. */
   abstract withTarget(target: Selector): Edit;
+  abstract encodeRemoteEdit(): EncodedRemoteEdit;
 
   get selectors(): Selector[] {
     return [this.target];
@@ -135,4 +137,7 @@ export class NoOpEdit extends Edit {
   }
 
   withTarget(target: Selector): NoOpEdit { return new NoOpEdit(target, this.reason); }
+  encodeRemoteEdit(): EncodedRemoteEdit {
+    return { kind: 'NoOpEdit', target: this.target.format(), reason: this.reason };
+  }
 }

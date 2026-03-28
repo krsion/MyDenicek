@@ -1,6 +1,12 @@
 import { Edit, NoOpEdit, NoOpOnRemovedTargetEdit } from './base.ts';
 import { mapSelector, type SelectorTransform, Selector } from '../selector.ts';
 import { ListNode, type Node, RecordNode } from '../nodes.ts';
+import { registerRemoteEditDecoder, type EncodedRemoteEdit } from '../remote-edit-codec.ts';
+
+type EncodedUpdateTagEdit = Extract<EncodedRemoteEdit, { kind: 'UpdateTagEdit' }>;
+type EncodedCopyEdit = Extract<EncodedRemoteEdit, { kind: 'CopyEdit' }>;
+type EncodedWrapRecordEdit = Extract<EncodedRemoteEdit, { kind: 'WrapRecordEdit' }>;
+type EncodedWrapListEdit = Extract<EncodedRemoteEdit, { kind: 'WrapListEdit' }>;
 
 export class UpdateTagEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = false;
@@ -28,7 +34,15 @@ export class UpdateTagEdit extends NoOpOnRemovedTargetEdit {
   }
 
   withTarget(target: Selector): UpdateTagEdit { return new UpdateTagEdit(target, this.tag); }
+  encodeRemoteEdit(): EncodedUpdateTagEdit {
+    return { kind: 'UpdateTagEdit', target: this.target.format(), tag: this.tag };
+  }
 }
+
+registerRemoteEditDecoder<EncodedUpdateTagEdit>(
+  'UpdateTagEdit',
+  (encodedEdit) => new UpdateTagEdit(Selector.parse(encodedEdit.target), encodedEdit.tag),
+);
 
 export class CopyEdit extends Edit {
   readonly isStructural = false;
@@ -89,7 +103,15 @@ export class CopyEdit extends Edit {
   }
 
   withTarget(target: Selector): CopyEdit { return new CopyEdit(target, this.source); }
+  encodeRemoteEdit(): EncodedCopyEdit {
+    return { kind: 'CopyEdit', target: this.target.format(), source: this.source.format() };
+  }
 }
+
+registerRemoteEditDecoder<EncodedCopyEdit>(
+  'CopyEdit',
+  (encodedEdit) => new CopyEdit(Selector.parse(encodedEdit.target), Selector.parse(encodedEdit.source)),
+);
 
 export class WrapRecordEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = true;
@@ -128,7 +150,15 @@ export class WrapRecordEdit extends NoOpOnRemovedTargetEdit {
   }
 
   withTarget(target: Selector): WrapRecordEdit { return new WrapRecordEdit(target, this.field, this.tag); }
+  encodeRemoteEdit(): EncodedWrapRecordEdit {
+    return { kind: 'WrapRecordEdit', target: this.target.format(), field: this.field, tag: this.tag };
+  }
 }
+
+registerRemoteEditDecoder<EncodedWrapRecordEdit>(
+  'WrapRecordEdit',
+  (encodedEdit) => new WrapRecordEdit(Selector.parse(encodedEdit.target), encodedEdit.field, encodedEdit.tag),
+);
 
 export class WrapListEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = true;
@@ -162,4 +192,12 @@ export class WrapListEdit extends NoOpOnRemovedTargetEdit {
   }
 
   withTarget(target: Selector): WrapListEdit { return new WrapListEdit(target, this.tag); }
+  encodeRemoteEdit(): EncodedWrapListEdit {
+    return { kind: 'WrapListEdit', target: this.target.format(), tag: this.tag };
+  }
 }
+
+registerRemoteEditDecoder<EncodedWrapListEdit>(
+  'WrapListEdit',
+  (encodedEdit) => new WrapListEdit(Selector.parse(encodedEdit.target), encodedEdit.tag),
+);

@@ -2,6 +2,10 @@ import { type Edit, NoOpOnRemovedTargetEdit } from './base.ts';
 import { mapSelector, type PrimitiveValue, type SelectorTransform, type Selector } from '../selector.ts';
 import { type Node, PrimitiveNode } from '../nodes.ts';
 import { applyRegisteredPrimitiveEdit } from '../primitive-edits.ts';
+import { registerRemoteEditDecoder, type EncodedRemoteEdit } from '../remote-edit-codec.ts';
+
+type EncodedSetValueEdit = Extract<EncodedRemoteEdit, { kind: 'SetValueEdit' }>;
+type EncodedApplyPrimitiveEdit = Extract<EncodedRemoteEdit, { kind: 'ApplyPrimitiveEdit' }>;
 
 export class SetValueEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = false;
@@ -29,7 +33,15 @@ export class SetValueEdit extends NoOpOnRemovedTargetEdit {
   }
 
   withTarget(target: Selector): SetValueEdit { return new SetValueEdit(target, this.value); }
+  encodeRemoteEdit(): EncodedSetValueEdit {
+    return { kind: 'SetValueEdit', target: this.target.format(), value: this.value };
+  }
 }
+
+registerRemoteEditDecoder<EncodedSetValueEdit>(
+  'SetValueEdit',
+  (encodedEdit) => new SetValueEdit(Selector.parse(encodedEdit.target), encodedEdit.value),
+);
 
 export class ApplyPrimitiveEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = false;
@@ -60,4 +72,12 @@ export class ApplyPrimitiveEdit extends NoOpOnRemovedTargetEdit {
   }
 
   withTarget(target: Selector): ApplyPrimitiveEdit { return new ApplyPrimitiveEdit(target, this.editName); }
+  encodeRemoteEdit(): EncodedApplyPrimitiveEdit {
+    return { kind: 'ApplyPrimitiveEdit', target: this.target.format(), editName: this.editName };
+  }
 }
+
+registerRemoteEditDecoder<EncodedApplyPrimitiveEdit>(
+  'ApplyPrimitiveEdit',
+  (encodedEdit) => new ApplyPrimitiveEdit(Selector.parse(encodedEdit.target), encodedEdit.editName),
+);
