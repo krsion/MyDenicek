@@ -5,6 +5,11 @@ import {
 } from "../selector.ts";
 import type { PlainNode } from "./plain.ts";
 
+type ReferenceTransformTarget = {
+  basePath: Selector;
+  referenceNode: Node;
+};
+
 export abstract class Node {
   abstract clone(): Node;
   abstract toPlain(): unknown;
@@ -71,6 +76,12 @@ export abstract class Node {
     _references: { referencePath: Selector; targetPath: Selector }[],
   ): void {}
 
+  /** Called during structural edits — only ReferenceNode overrides to preserve its original path. */
+  protected collectReferenceTransformTargets(
+    _basePath: Selector,
+    _targets: ReferenceTransformTarget[],
+  ): void {}
+
   /** Follows selector segments to collect matched nodes. */
   navigate(target: Selector, depth = 0): Node[] {
     if (depth === target.length) return [this];
@@ -117,10 +128,21 @@ export abstract class Node {
   ): void {}
 
   /** Rewrites all reference nodes in the tree after a structural edit. Mutates in place. */
-  updateReferences(transform: (abs: Selector) => Selector): void {
+  updateReferences(
+    transform: (abs: Selector) => Selector,
+    targets: ReferenceTransformTarget[] = this.captureReferenceTransformTargets(),
+  ): void {
+    for (const { basePath, referenceNode } of targets) {
+      referenceNode.applyReferenceTransform(basePath, transform);
+    }
+  }
+
+  captureReferenceTransformTargets(): ReferenceTransformTarget[] {
+    const targets: ReferenceTransformTarget[] = [];
     this.forEach((basePath, current) => {
-      current.applyReferenceTransform(basePath, transform);
+      current.collectReferenceTransformTargets(basePath, targets);
     });
+    return targets;
   }
 
   findBlockingReference(

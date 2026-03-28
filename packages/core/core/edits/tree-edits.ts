@@ -186,12 +186,16 @@ export class WrapRecordEdit extends NoOpOnRemovedTargetEdit {
   }
 
   apply(doc: Node): void {
+    const referenceTargets = doc.captureReferenceTransformTargets();
     this.navigateOrThrow(doc, this.target);
     doc.wrapAtPath(
       this.target,
       (child) => new RecordNode(this.tag, { [this.field]: child }),
     );
-    doc.updateReferences((abs) => this.transformSelectorOrThrow(abs));
+    doc.updateReferences(
+      (abs) => this.transformSelectorOrThrow(abs),
+      referenceTargets,
+    );
   }
 
   canApply(doc: Node): boolean {
@@ -255,9 +259,13 @@ export class WrapListEdit extends NoOpOnRemovedTargetEdit {
   }
 
   apply(doc: Node): void {
+    const referenceTargets = doc.captureReferenceTransformTargets();
     this.navigateOrThrow(doc, this.target);
     doc.wrapAtPath(this.target, (child) => new ListNode(this.tag, [child]));
-    doc.updateReferences((abs) => this.transformReferenceSelector(abs));
+    doc.updateReferences(
+      (abs) => this.transformReferenceSelector(abs),
+      referenceTargets,
+    );
   }
 
   canApply(doc: Node): boolean {
