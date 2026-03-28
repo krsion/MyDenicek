@@ -318,13 +318,22 @@ export class EventGraph {
 
   /**
    * Compacts the event graph by materializing the current state into a new
-   * initial document and discarding all events. Call this when all peers
-   * have synced and old history is no longer needed.
+   * initial document and discarding all events once the caller confirms the
+   * currently acknowledged frontier set.
    *
    * After compaction, the graph has zero events and the current materialized
    * state becomes the new initial document.
    */
-  compact(): void {
+  compact(acknowledgedFrontiers: EventId[]): void {
+    const expectedFrontiers = [...this._frontierIds].map((eventId) => eventId.format()).sort();
+    const providedFrontiers = acknowledgedFrontiers.map((eventId) => eventId.format()).sort();
+    if (expectedFrontiers.length !== providedFrontiers.length ||
+      expectedFrontiers.some((frontier, index) => frontier !== providedFrontiers[index])) {
+      throw new Error("Cannot compact with stale frontiers. Pass the current acknowledged frontiers.");
+    }
+    if (this.bufferedEvents.length > 0) {
+      throw new Error("Cannot compact while out-of-order remote events are still buffered.");
+    }
     const { doc } = this.materialize();
     this.initial = doc;
     this.events = new Map();

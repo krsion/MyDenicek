@@ -22,6 +22,22 @@ export function mapSelector(selector: Selector): SelectorTransform {
   return { kind: "mapped", selector };
 }
 
+export function validateFieldName(field: string): void {
+  if (field.length === 0) {
+    throw new Error("Field names cannot be empty.");
+  }
+  if (field.includes("/")) {
+    throw new Error(`Field name '${field}' cannot contain '/'.`);
+  }
+  if (field === "*" || field === "..") {
+    throw new Error(`Field name '${field}' is reserved by selector syntax.`);
+  }
+  const numericField = Number(field);
+  if (Number.isInteger(numericField) && String(numericField) === field) {
+    throw new Error(`Field name '${field}' is reserved by selector syntax.`);
+  }
+}
+
 /** An ordered path of segments addressing a node (or set of nodes) in the document tree. */
 export class Selector {
   readonly segments: SelectorSegment[];

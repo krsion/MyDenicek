@@ -29,7 +29,7 @@ console.log(doc.toPlain());
 
 ## Sync two peers
 
-The package exposes opaque event payloads for replication. You do not need to inspect their internals; you only need to move them between peers.
+The package exposes typed `RemoteEvent` payloads for replication. You do not need to inspect their internals; you only need to move them between peers.
 
 ```ts
 import { Denicek } from "jsr:@mydenicek/core";
@@ -52,13 +52,15 @@ console.log(bob.toPlain());
 - `PlainRecord`: a tagged object with named fields
 - `PlainList`: a tagged list of child nodes
 - `PrimitiveValue`: `string | number | boolean`
-- `PlainRef`: a selector string pointing at another node
+- `PlainRef`: an object `{ $ref: string }` pointing at another node
 
 Selectors use slash-separated paths such as:
 
 - `"title"`
 - `"items/0/name"`
 - `"items/*/status"`
+
+Record field names must be selector-addressable, so they cannot be empty, contain `/`, or equal selector-reserved segments such as `"*"`, `".."`, or canonical integers like `"0"`.
 
 ## Editing operations
 

@@ -1,7 +1,7 @@
 import { assertEquals } from '@std/assert';
 
 import { Denicek } from '@mydenicek/core';
-import { collectAndValidateInternalEventsSince } from '../internal-events.ts';
+import { collectRemoteEventsSince } from '../internal-events.ts';
 import { applySyncResponse, createSyncRequest, decodeEvent, encodeEvent, SyncRoom } from '../mod.ts';
 
 Deno.test('encodeEvent/decodeEvent preserves remote event behavior', () => {
@@ -16,7 +16,7 @@ Deno.test('encodeEvent/decodeEvent preserves remote event behavior', () => {
   alice.set('title', 'Published');
   alice.pushBack('items', { $tag: 'item', name: 'Ship sync server', done: false });
 
-  for (const event of collectAndValidateInternalEventsSince(alice, [])) {
+  for (const event of collectRemoteEventsSince(alice, [])) {
     bob.applyRemote(decodeEvent(encodeEvent(event)));
   }
 
