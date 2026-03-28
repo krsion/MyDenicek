@@ -33,6 +33,12 @@ export abstract class Node {
   /** Called during updateReferences — only ReferenceNode overrides to update its selector. */
   protected applyReferenceTransform(_basePath: Selector, _transform: (abs: Selector) => Selector): void {}
 
+  /** Called during reference scans — only ReferenceNode overrides to report its resolved target. */
+  protected collectResolvedReferences(
+    _basePath: Selector,
+    _references: { referencePath: Selector; targetPath: Selector }[],
+  ): void {}
+
   /** Follows selector segments to collect matched nodes. */
   navigate(target: Selector, depth = 0): Node[] {
     if (depth === target.length) return [this];
@@ -71,6 +77,31 @@ export abstract class Node {
     this.forEach((basePath, current) => {
       current.applyReferenceTransform(basePath, transform);
     });
+  }
+
+  findBlockingReference(
+    removedPaths: Selector[],
+  ): { referencePath: Selector; targetPath: Selector; removedPath: Selector } | null {
+    const references: { referencePath: Selector; targetPath: Selector }[] = [];
+    this.forEach((basePath, current) => {
+      current.collectResolvedReferences(basePath, references);
+    });
+    for (const reference of references) {
+      for (const removedPath of removedPaths) {
+        if (removedPath.matchPrefix(reference.targetPath).kind === "matched") {
+          return { ...reference, removedPath };
+        }
+      }
+    }
+    return null;
+  }
+
+  collectResolvedReferencePaths(basePath: Selector): { referencePath: Selector; targetPath: Selector }[] {
+    const references: { referencePath: Selector; targetPath: Selector }[] = [];
+    this.forEach((relativePath, current) => {
+      current.collectResolvedReferences(new Selector([...basePath.segments, ...relativePath.segments]), references);
+    });
+    return references;
   }
 
   /** Replaces the node at a concrete path within this tree. */

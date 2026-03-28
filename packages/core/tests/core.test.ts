@@ -65,17 +65,119 @@ Deno.test("updates absolute references on structural rename", () => {
   });
 });
 
-Deno.test("applies deletes even when references target the deleted field", () => {
+Deno.test("rejects deletes that would remove a referenced subtree", () => {
   const core = new Denicek("alice", {
     $tag: "root",
     person: { $tag: "person", name: "Ada Lovelace" },
     focus: { $ref: "/person/name" },
   });
 
-  core.delete("person", "name");
+  assertThrows(() => core.delete("", "person"), Error, "cannot remove 'person'");
+  assertEquals(core.toPlain(), {
+    $tag: "root",
+    person: { $tag: "person", name: "Ada Lovelace" },
+    focus: { $ref: "/person/name" },
+  });
+});
 
-  const plain = core.toPlain() as Record<string, unknown>;
-  assertEquals(plain.person, { $tag: "person" });
+Deno.test("rejects list pops that would remove referenced items", () => {
+  const front = new Denicek("alice", {
+    $tag: "root",
+    items: { $tag: "ul", $items: [{ $tag: "item", name: "a" }, { $tag: "item", name: "b" }] },
+    focus: { $ref: "/items/0/name" },
+  });
+  const back = new Denicek("bob", {
+    $tag: "root",
+    items: { $tag: "ul", $items: [{ $tag: "item", name: "a" }, { $tag: "item", name: "b" }] },
+    focus: { $ref: "/items/1/name" },
+  });
+
+  assertThrows(() => front.popFront("items"), Error, "cannot remove 'items/0'");
+  assertThrows(() => back.popBack("items"), Error, "cannot remove 'items/1'");
+});
+
+Deno.test("rejects remote delete events that would remove referenced nodes", () => {
+  const core = new Denicek("alice", {
+    $tag: "root",
+    person: { $tag: "person", name: "Ada Lovelace" },
+    focus: { $ref: "/person/name" },
+  });
+  const invalidDelete = new Event(
+    new EventId("bob", 1),
+    [],
+    new RecordDeleteEdit(Selector.parse("person")),
+    new VectorClock({ bob: 1 }),
+  );
+
+  assertThrows(() => core.applyRemote(invalidDelete), Error, "cannot remove 'person'");
+  assertEquals(core.eventsSince([]), []);
+  assertEquals(core.toPlain(), {
+    $tag: "root",
+    person: { $tag: "person", name: "Ada Lovelace" },
+    focus: { $ref: "/person/name" },
+  });
+});
+
+Deno.test("ingests concurrent delete of a newly referenced node and no-ops the delete", () => {
+  const doc = {
+    $tag: "root",
+    person: { $tag: "person", name: "Ada Lovelace" },
+  };
+  const alice = new Denicek("alice", doc);
+  const bob = new Denicek("bob", doc);
+
+  alice.add("", "focus", { $ref: "/person/name" });
+  bob.delete("", "person");
+  sync(alice, bob);
+
+  const expected = {
+    $tag: "root",
+    person: { $tag: "person", name: "Ada Lovelace" },
+    focus: { $ref: "/person/name" },
+  };
+  const expectedConflicts = [{
+    $tag: "conflict",
+    kind: "NoOpEdit",
+    target: "person",
+    data: "Concurrent replay left 'person' protected before RecordDeleteEdit could replay.",
+  }];
+  const expectedEventIds = ["alice:0", "bob:0"];
+
+  assertEquals(alice.toPlain(), expected);
+  assertEquals(bob.toPlain(), expected);
+  assertEquals(materializedConflicts(alice), expectedConflicts);
+  assertEquals(materializedConflicts(bob), expectedConflicts);
+  assertEquals(alice.inspectEvents().map((event) => event.id).sort(), expectedEventIds);
+  assertEquals(bob.inspectEvents().map((event) => event.id).sort(), expectedEventIds);
+});
+
+Deno.test("ingests concurrent reference creation and no-ops it when the delete replays first", () => {
+  const doc = {
+    $tag: "root",
+    person: { $tag: "person", name: "Ada Lovelace" },
+  };
+  const alice = new Denicek("alice", doc);
+  const bob = new Denicek("bob", doc);
+
+  alice.delete("", "person");
+  bob.add("", "focus", { $ref: "/person/name" });
+  sync(alice, bob);
+
+  const expected = { $tag: "root" };
+  const expectedConflicts = [{
+    $tag: "conflict",
+    kind: "NoOpEdit",
+    target: "focus",
+    data: "Concurrent replay left 'focus' referencing a missing target before RecordAddEdit could replay.",
+  }];
+  const expectedEventIds = ["alice:0", "bob:0"];
+
+  assertEquals(alice.toPlain(), expected);
+  assertEquals(bob.toPlain(), expected);
+  assertEquals(materializedConflicts(alice), expectedConflicts);
+  assertEquals(materializedConflicts(bob), expectedConflicts);
+  assertEquals(alice.inspectEvents().map((event) => event.id).sort(), expectedEventIds);
+  assertEquals(bob.inspectEvents().map((event) => event.id).sort(), expectedEventIds);
 });
 
 Deno.test("keeps concurrent list push-backs from both peers", () => {
@@ -200,6 +302,62 @@ Deno.test("transforms selector after concurrent wrap-list", () => {
   };
   assertEquals(alice.toPlain(), expected);
   assertEquals(bob.toPlain(), expected);
+});
+
+Deno.test("updates absolute references with wildcard when wrapping wildcard targets in a list", () => {
+  const core = new Denicek("alice", {
+    $tag: "root",
+    items: {
+      $tag: "items",
+      $items: [
+        { $tag: "task", name: "Ada" },
+        { $tag: "task", name: "Grace" },
+      ],
+    },
+    focus: { $ref: "/items/0/name" },
+  });
+
+  core.wrapList("items/*", "wrapped");
+
+  assertEquals(core.toPlain(), {
+    $tag: "root",
+    items: {
+      $tag: "items",
+      $items: [
+        { $tag: "wrapped", $items: [{ $tag: "task", name: "Ada" }] },
+        { $tag: "wrapped", $items: [{ $tag: "task", name: "Grace" }] },
+      ],
+    },
+    focus: { $ref: "/items/0/*/name" },
+  });
+});
+
+Deno.test("updates relative references with wildcard when wrapping wildcard targets in a list", () => {
+  const core = new Denicek("alice", {
+    $tag: "root",
+    items: {
+      $tag: "items",
+      $items: [
+        { $tag: "task", name: "Ada" },
+        { $tag: "task", name: "Grace" },
+      ],
+    },
+    focus: { $ref: "../items/0/name" },
+  });
+
+  core.wrapList("items/*", "wrapped");
+
+  assertEquals(core.toPlain(), {
+    $tag: "root",
+    items: {
+      $tag: "items",
+      $items: [
+        { $tag: "wrapped", $items: [{ $tag: "task", name: "Ada" }] },
+        { $tag: "wrapped", $items: [{ $tag: "task", name: "Grace" }] },
+      ],
+    },
+    focus: { $ref: "../items/0/*/name" },
+  });
 });
 
 Deno.test("wildcard edit affects concurrently inserted item", () => {

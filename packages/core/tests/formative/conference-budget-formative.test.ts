@@ -34,20 +34,27 @@ Deno.test("Formative: Conference Budget", () => {
   };
   const resolveValueAtPath = (root: unknown, path: string): unknown => {
     const segments = path.replace(/^\//, "").split("/").filter((segment) => segment.length > 0);
-    let current: unknown = root;
-    for (const segment of segments) {
+    const walk = (current: unknown, index: number): unknown => {
+      if (index >= segments.length) return current;
+      const segment = segments[index]!;
       if (typeof current !== "object" || current === null) return undefined;
       if ("$items" in current && Array.isArray((current as { $items?: unknown[] }).$items)) {
-        current = (current as { $items: unknown[] }).$items[Number(segment)];
-        continue;
+        const items = (current as { $items: unknown[] }).$items;
+        if (segment === "*") {
+          return items.map((item) => walk(item, index + 1));
+        }
+        return walk(items[Number(segment)], index + 1);
       }
-      current = (current as Record<string, unknown>)[segment];
-    }
-    return current;
+      return walk((current as Record<string, unknown>)[segment], index + 1);
+    };
+    return walk(root, 0);
   };
   const resolveReferencedValue = (root: unknown, value: unknown): unknown => {
-    if (typeof value === "string" && value.startsWith("/")) {
-      return resolveReferencedValue(root, resolveValueAtPath(root, value));
+    if (typeof value === "object" && value !== null && "$ref" in value && typeof value.$ref === "string") {
+      return resolveReferencedValue(root, resolveValueAtPath(root, value.$ref));
+    }
+    if (Array.isArray(value)) {
+      return value.reduce((sum, item) => sum + Number(resolveReferencedValue(root, item)), 0);
     }
     return value;
   };
@@ -61,7 +68,7 @@ Deno.test("Formative: Conference Budget", () => {
 
   {
     const plainDocument = alice.toPlain() as {
-      summary: { dependsOn: { $items: string[] } };
+      summary: { dependsOn: { $items: Array<{ $ref: string }> } };
     };
     const nextTotal = plainDocument.summary.dependsOn.$items.reduce((sum, dependencyPath) => {
       const value = resolveReferencedValue(plainDocument, dependencyPath);
@@ -71,7 +78,7 @@ Deno.test("Formative: Conference Budget", () => {
   }
   {
     const plainDocument = bob.toPlain() as {
-      summary: { dependsOn: { $items: string[] } };
+      summary: { dependsOn: { $items: Array<{ $ref: string }> } };
     };
     const nextTotal = plainDocument.summary.dependsOn.$items.reduce((sum, dependencyPath) => {
       const value = resolveReferencedValue(plainDocument, dependencyPath);
@@ -95,8 +102,8 @@ Deno.test("Formative: Conference Budget", () => {
       dependsOn: {
         $tag: "refs",
         $items: [
-          "/speakers/0/0/fee",
-          "/speakers/1/0/fee",
+          { $ref: "/speakers/0/*/fee" },
+          { $ref: "/speakers/1/*/fee" },
         ],
       },
     },

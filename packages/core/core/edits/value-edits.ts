@@ -1,5 +1,5 @@
 import { type Edit, NoOpOnRemovedTargetEdit } from './base.ts';
-import { mapSelector, type PrimitiveValue, type SelectorTransform, type Selector } from '../selector.ts';
+import { mapSelector, type PrimitiveValue, type SelectorTransform, Selector } from '../selector.ts';
 import { type Node, PrimitiveNode } from '../nodes.ts';
 import { applyRegisteredPrimitiveEdit } from '../primitive-edits.ts';
 import { registerRemoteEditDecoder, type EncodedRemoteEdit } from '../remote-edit-codec.ts';

@@ -1,6 +1,9 @@
-import { mapSelector, type SelectorTransform, type Selector } from '../selector.ts';
+import { mapSelector, type SelectorTransform, Selector } from '../selector.ts';
 import { ListNode, type Node, PrimitiveNode, RecordNode } from '../nodes.ts';
 import type { EncodedRemoteEdit } from '../remote-edit-codec.ts';
+
+export class ProtectedTargetError extends Error {}
+export class MissingReferenceTargetError extends Error {}
 
 export abstract class Edit {
   abstract readonly target: Selector;
@@ -15,6 +18,7 @@ export abstract class Edit {
    */
   abstract apply(doc: Node): void;
   abstract canApply(doc: Node): boolean;
+  validate(_doc: Node): void {}
 
   /** Transforms another selector through the structural change made by this edit. */
   abstract transformSelector(sel: Selector): SelectorTransform;
@@ -93,6 +97,42 @@ export abstract class Edit {
       throw new Error(`${this.constructor.name}: unexpectedly removed selector '${sel.format()}' while updating references.`);
     }
     return result.selector;
+  }
+
+  protected assertRemovedPathsAreUnreferenced(doc: Node, removedPaths: Selector[]): void {
+    const blockingReference = doc.findBlockingReference(removedPaths);
+    if (blockingReference !== null) {
+      throw new ProtectedTargetError(
+        `${this.constructor.name}: cannot remove '${blockingReference.removedPath.format()}' because reference ` +
+          `'${blockingReference.referencePath.format()}' targets '${blockingReference.targetPath.format()}'.`,
+      );
+    }
+  }
+
+  protected assertInsertedReferencesResolve(
+    doc: Node,
+    insertions: { path: Selector; node: Node }[],
+  ): void {
+    const insertedPaths = insertions.flatMap(({ path, node }) =>
+      node.navigateWithPaths(new Selector([])).map((entry) => new Selector([...path.segments, ...entry.path.segments]))
+    );
+    for (const { path, node } of insertions) {
+      for (const reference of node.collectResolvedReferencePaths(path)) {
+        const targetExists = doc.navigate(reference.targetPath).length > 0 ||
+          insertedPaths.some((insertedPath) => this.matchesConcretePath(reference.targetPath, insertedPath));
+        if (!targetExists) {
+          throw new MissingReferenceTargetError(
+            `${this.constructor.name}: cannot create reference '${reference.referencePath.format()}' to missing target ` +
+              `'${reference.targetPath.format()}'.`,
+          );
+        }
+      }
+    }
+  }
+
+  private matchesConcretePath(selector: Selector, concretePath: Selector): boolean {
+    const match = selector.matchPrefix(concretePath);
+    return match.kind === "matched" && match.rest.length === 0;
   }
 }
 
