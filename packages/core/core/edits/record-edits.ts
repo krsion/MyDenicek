@@ -8,7 +8,17 @@ export class RecordAddEdit extends NoOpOnRemovedTargetEdit {
 
   constructor(readonly target: Selector, readonly node: Node) { super(); }
 
+  override validate(doc: Node): void {
+    const insertions = doc.navigateWithPaths(this.target.parent)
+      .map(({ path, node }) => {
+        this.assertRecord(node);
+        return { path: new Selector([...path.segments, this.target.lastSegment]), node: this.node };
+      });
+    this.assertInsertedReferencesResolve(doc, insertions);
+  }
+
   apply(doc: Node): void {
+    this.validate(doc);
     const parentSel = this.target.parent;
     const field = String(this.target.lastSegment);
     const parents = this.navigateOrThrow(doc, parentSel);

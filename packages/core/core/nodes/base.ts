@@ -96,6 +96,14 @@ export abstract class Node {
     return null;
   }
 
+  collectResolvedReferencePaths(basePath: Selector): { referencePath: Selector; targetPath: Selector }[] {
+    const references: { referencePath: Selector; targetPath: Selector }[] = [];
+    this.forEach((relativePath, current) => {
+      current.collectResolvedReferences(new Selector([...basePath.segments, ...relativePath.segments]), references);
+    });
+    return references;
+  }
+
   /** Replaces the node at a concrete path within this tree. */
   replaceAtPath(path: Selector, replacement: Node): void {
     if (path.length === 0) return;

@@ -100,7 +100,7 @@ export class EventGraph {
 
   insertEvent(event: Event): void {
     event.validate(this.events);
-    this.validateEventAgainstCurrentState(event);
+    this.validateEventAgainstCausalState(event);
     this.events.set(event.id.format(), event);
     const parentKeys = new Set(event.parents.map((p) => p.format()));
     this._frontierIds = [
@@ -110,19 +110,9 @@ export class EventGraph {
     this.cachedOrder = null;
   }
 
-  private validateEventAgainstCurrentState(event: Event): void {
-    const ordered = this.cachedOrder ??= this.computeTopologicalOrder();
-    const doc = this.initial.clone();
-    const applied: { ev: Event; edit: Edit }[] = [];
-    for (const key of ordered) {
-      const existingEvent = this.events.get(key) as Event;
-      const resolvedEdit = existingEvent.resolveAgainst(applied, doc);
-      if (resolvedEdit instanceof NoOpEdit) continue;
-      resolvedEdit.apply(doc);
-      applied.push({ ev: existingEvent, edit: resolvedEdit });
-    }
-    const candidateEdit = event.resolveAgainst(applied, doc);
-    candidateEdit.validate(doc);
+  private validateEventAgainstCausalState(event: Event): void {
+    const { doc } = this.materialize(event.parents);
+    event.edit.validate(doc);
   }
 
   /** Creates a new event from a local edit, inserts it, and returns it. */

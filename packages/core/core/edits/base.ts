@@ -2,6 +2,7 @@ import { mapSelector, type SelectorTransform, type Selector } from '../selector.
 import { ListNode, type Node, PrimitiveNode, RecordNode } from '../nodes.ts';
 
 export class ProtectedTargetError extends Error {}
+export class MissingReferenceTargetError extends Error {}
 
 export abstract class Edit {
   abstract readonly target: Selector;
@@ -104,6 +105,32 @@ export abstract class Edit {
           `'${blockingReference.referencePath.format()}' targets '${blockingReference.targetPath.format()}'.`,
       );
     }
+  }
+
+  protected assertInsertedReferencesResolve(
+    doc: Node,
+    insertions: { path: Selector; node: Node }[],
+  ): void {
+    const insertedPaths = insertions.flatMap(({ path, node }) =>
+      node.navigateWithPaths(new Selector([])).map((entry) => new Selector([...path.segments, ...entry.path.segments]))
+    );
+    for (const { path, node } of insertions) {
+      for (const reference of node.collectResolvedReferencePaths(path)) {
+        const targetExists = doc.navigate(reference.targetPath).length > 0 ||
+          insertedPaths.some((insertedPath) => this.matchesConcretePath(reference.targetPath, insertedPath));
+        if (!targetExists) {
+          throw new MissingReferenceTargetError(
+            `${this.constructor.name}: cannot create reference '${reference.referencePath.format()}' to missing target ` +
+              `'${reference.targetPath.format()}'.`,
+          );
+        }
+      }
+    }
+  }
+
+  private matchesConcretePath(selector: Selector, concretePath: Selector): boolean {
+    const match = selector.matchPrefix(concretePath);
+    return match.kind === "matched" && match.rest.length === 0;
   }
 }
 

@@ -118,6 +118,68 @@ Deno.test("rejects remote delete events that would remove referenced nodes", () 
   });
 });
 
+Deno.test("ingests concurrent delete of a newly referenced node and no-ops the delete", () => {
+  const doc = {
+    $tag: "root",
+    person: { $tag: "person", name: "Ada Lovelace" },
+  };
+  const alice = new Denicek("alice", doc);
+  const bob = new Denicek("bob", doc);
+
+  alice.add("", "focus", { $ref: "/person/name" });
+  bob.delete("", "person");
+  sync(alice, bob);
+
+  const expected = {
+    $tag: "root",
+    person: { $tag: "person", name: "Ada Lovelace" },
+    focus: "/person/name",
+  };
+  const expectedConflicts = [{
+    $tag: "conflict",
+    kind: "NoOpEdit",
+    target: "person",
+    data: "Concurrent replay left 'person' protected before RecordDeleteEdit could replay.",
+  }];
+  const expectedEventIds = ["alice:1", "bob:1"];
+
+  assertEquals(alice.toPlain(), expected);
+  assertEquals(bob.toPlain(), expected);
+  assertEquals(materializedConflicts(alice), expectedConflicts);
+  assertEquals(materializedConflicts(bob), expectedConflicts);
+  assertEquals(alice.inspectEvents().map((event) => event.id).sort(), expectedEventIds);
+  assertEquals(bob.inspectEvents().map((event) => event.id).sort(), expectedEventIds);
+});
+
+Deno.test("ingests concurrent reference creation and no-ops it when the delete replays first", () => {
+  const doc = {
+    $tag: "root",
+    person: { $tag: "person", name: "Ada Lovelace" },
+  };
+  const alice = new Denicek("alice", doc);
+  const bob = new Denicek("bob", doc);
+
+  alice.delete("", "person");
+  bob.add("", "focus", { $ref: "/person/name" });
+  sync(alice, bob);
+
+  const expected = { $tag: "root" };
+  const expectedConflicts = [{
+    $tag: "conflict",
+    kind: "NoOpEdit",
+    target: "focus",
+    data: "Concurrent replay left 'focus' referencing a missing target before RecordAddEdit could replay.",
+  }];
+  const expectedEventIds = ["alice:1", "bob:1"];
+
+  assertEquals(alice.toPlain(), expected);
+  assertEquals(bob.toPlain(), expected);
+  assertEquals(materializedConflicts(alice), expectedConflicts);
+  assertEquals(materializedConflicts(bob), expectedConflicts);
+  assertEquals(alice.inspectEvents().map((event) => event.id).sort(), expectedEventIds);
+  assertEquals(bob.inspectEvents().map((event) => event.id).sort(), expectedEventIds);
+});
+
 Deno.test("keeps concurrent list push-backs from both peers", () => {
   const doc = { $tag: "root", items: { $tag: "ul", $items: [] as string[] } };
   const alice = new Denicek("alice", doc);

@@ -1,4 +1,4 @@
-import { type Edit, NoOpEdit, ProtectedTargetError } from './edits.ts';
+import { type Edit, MissingReferenceTargetError, NoOpEdit, ProtectedTargetError } from './edits.ts';
 import type { EventId } from './event-id.ts';
 import type { Node } from './nodes.ts';
 import type { VectorClock } from './vector-clock.ts';
@@ -49,10 +49,12 @@ export class Event {
    */
   resolveAgainst(applied: { ev: Event; edit: Edit }[], doc: Node): Edit {
     let edit: Edit = this.edit;
+    let sawConcurrentEdit = false;
     let sawConcurrentStructuralEdit = false;
     for (const prior of applied) {
       if (this.clock.dominates(prior.ev.clock)) continue;
       if (this.isConcurrentWith(prior.ev)) {
+        sawConcurrentEdit = true;
         if (prior.edit.isStructural) {
           sawConcurrentStructuralEdit = true;
           edit = edit.transform(prior.edit);
@@ -69,14 +71,16 @@ export class Event {
     // validation already blocked removals against the issuer's current state,
     // while concurrent structural rewrites can retarget a previously valid
     // removal onto a referenced subtree during deterministic replay.
-    if (sawConcurrentStructuralEdit) {
+    if (sawConcurrentEdit) {
       try {
         edit.validate(doc);
       } catch (error) {
-        if (!(error instanceof ProtectedTargetError)) throw error;
+        if (!(error instanceof ProtectedTargetError) && !(error instanceof MissingReferenceTargetError)) throw error;
         return new NoOpEdit(
           edit.target,
-          `Concurrent replay left '${edit.target.format()}' protected before ${this.edit.constructor.name} could replay.`,
+          error instanceof ProtectedTargetError
+            ? `Concurrent replay left '${edit.target.format()}' protected before ${this.edit.constructor.name} could replay.`
+            : `Concurrent replay left '${edit.target.format()}' referencing a missing target before ${this.edit.constructor.name} could replay.`,
         );
       }
     }
