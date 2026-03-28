@@ -33,7 +33,7 @@ export function validateFieldName(field: string): void {
     throw new Error(`Field name '${field}' is reserved by selector syntax.`);
   }
   const numericField = Number(field);
-  if (Number.isInteger(numericField) && String(numericField) === field) {
+  if (numericField >= 0 && Number.isInteger(numericField) && String(numericField) === field) {
     throw new Error(`Field name '${field}' is reserved by selector syntax.`);
   }
 }

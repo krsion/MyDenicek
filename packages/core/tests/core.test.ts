@@ -325,6 +325,17 @@ Deno.test("rejects reserved field names in local add", () => {
   );
 });
 
+Deno.test("allows negative-looking field names", () => {
+  const core = new Denicek("alice");
+
+  core.add("", "-1", "value");
+
+  assertEquals(core.toPlain(), {
+    $tag: "root",
+    "-1": "value",
+  });
+});
+
 Deno.test("rejects local add that would overwrite an existing field", () => {
   const core = new Denicek("alice", {
     $tag: "root",
