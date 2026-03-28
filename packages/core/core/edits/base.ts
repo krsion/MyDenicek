@@ -1,4 +1,4 @@
-import { mapSelector, type SelectorTransform, type Selector } from '../selector.ts';
+import { mapSelector, type SelectorTransform, Selector } from '../selector.ts';
 import { ListNode, type Node, PrimitiveNode, RecordNode } from '../nodes.ts';
 
 export class ProtectedTargetError extends Error {}

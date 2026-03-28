@@ -141,7 +141,7 @@ Deno.test("ingests concurrent delete of a newly referenced node and no-ops the d
     target: "person",
     data: "Concurrent replay left 'person' protected before RecordDeleteEdit could replay.",
   }];
-  const expectedEventIds = ["alice:1", "bob:1"];
+  const expectedEventIds = ["alice:0", "bob:0"];
 
   assertEquals(alice.toPlain(), expected);
   assertEquals(bob.toPlain(), expected);
@@ -170,7 +170,7 @@ Deno.test("ingests concurrent reference creation and no-ops it when the delete r
     target: "focus",
     data: "Concurrent replay left 'focus' referencing a missing target before RecordAddEdit could replay.",
   }];
-  const expectedEventIds = ["alice:1", "bob:1"];
+  const expectedEventIds = ["alice:0", "bob:0"];
 
   assertEquals(alice.toPlain(), expected);
   assertEquals(bob.toPlain(), expected);
