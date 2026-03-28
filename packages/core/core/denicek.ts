@@ -1,10 +1,10 @@
 import { ApplyPrimitiveEdit, CopyEdit, type Edit, ListPopBackEdit, ListPopFrontEdit, ListPushBackEdit, ListPushFrontEdit, RecordAddEdit, RecordDeleteEdit, RecordRenameFieldEdit, SetValueEdit, UpdateTagEdit, WrapListEdit, WrapRecordEdit } from './edits.ts';
-import type { Event } from './event.ts';
+import type { Event, RemoteEvent } from './event.ts';
 import { EventGraph, type EventSnapshot } from './event-graph.ts';
 import { EventId } from './event-id.ts';
-import { Node, type PlainNode } from './nodes.ts';
+import { Node, type PlainNode, RecordNode } from './nodes.ts';
 import { registerPrimitiveEdit, type PrimitiveEditImplementation } from './primitive-edits.ts';
-import { type PrimitiveValue, Selector } from './selector.ts';
+import { type PrimitiveValue, Selector, validateFieldName } from './selector.ts';
 
 // ── Denicek (collaborative document peer) ───────────────────────────
 
@@ -57,7 +57,7 @@ export class Denicek {
   }
 
   /** Returns and clears opaque event payloads produced by local edits since the last drain. */
-  drain(): unknown[] {
+  drain(): RemoteEvent[] {
     const events = this.pendingEvents;
     this.pendingEvents = [];
     return events;
@@ -69,13 +69,13 @@ export class Denicek {
   }
 
   /** Returns opaque event payloads unknown to a peer with the given frontier strings. */
-  eventsSince(remoteFrontiers: string[]): unknown[] {
+  eventsSince(remoteFrontiers: string[]): RemoteEvent[] {
     return this.graph.eventsSince(remoteFrontiers.map((frontier) => EventId.parse(frontier)));
   }
 
   /** Ingests an opaque event payload produced by another peer. Buffers out-of-order events. */
-  applyRemote(event: unknown): void {
-    this.graph.ingestEvents([event as Event]);
+  applyRemote(event: RemoteEvent): void {
+    this.graph.ingestEvents([event]);
     this.cachedDoc = null;
   }
 
@@ -85,6 +85,8 @@ export class Denicek {
    * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
    */
   add(target: string, field: string, value: PlainNode): string {
+    validateFieldName(field);
+    this.validateLocalAddTarget(target, field);
     const path = target === "" ? field : `${target}/${field}`;
     return this.commit(new RecordAddEdit(Selector.parse(path), Node.fromPlain(value)));
   }
@@ -95,6 +97,7 @@ export class Denicek {
    * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
    */
   delete(target: string, field: string): string {
+    validateFieldName(field);
     const path = target === "" ? field : `${target}/${field}`;
     return this.commit(new RecordDeleteEdit(Selector.parse(path)));
   }
@@ -105,6 +108,9 @@ export class Denicek {
    * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
    */
   rename(target: string, from: string, to: string): string {
+    validateFieldName(from);
+    validateFieldName(to);
+    this.validateLocalRenameTarget(target, from, to);
     const path = target === "" ? from : `${target}/${from}`;
     return this.commit(new RecordRenameFieldEdit(Selector.parse(path), to));
   }
@@ -224,6 +230,7 @@ export class Denicek {
    * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
    */
   wrapRecord(target: string, field: string, tag: string): string {
+    validateFieldName(field);
     return this.commit(new WrapRecordEdit(Selector.parse(target), field, tag));
   }
 
@@ -268,11 +275,11 @@ export class Denicek {
   }
 
   /**
-   * Compacts the event graph — materializes current state as the new baseline
-   * and discards all events. Call when all peers have synced.
+   * Compacts the event graph after the caller confirms the current globally
+   * acknowledged frontier set. This refuses stale frontiers and buffered events.
    */
-  compact(): void {
-    this.graph.compact();
+  compact(acknowledgedFrontiers: string[]): void {
+    this.graph.compact(acknowledgedFrontiers.map((frontier) => EventId.parse(frontier)));
     this.cachedDoc = null;
   }
 
@@ -289,5 +296,26 @@ export class Denicek {
   /** Resolves and validates an event id before replaying its retargeted edit payload. */
   private resolveReplaySourceEdit(eventId: string): Edit {
     return this.graph.resolveReplayEdit(EventId.parse(eventId).format());
+  }
+
+  private validateLocalAddTarget(target: string, field: string): void {
+    const doc = this.cachedDoc ?? this.rematerialize();
+    this.cachedDoc = doc;
+    for (const node of doc.navigate(Selector.parse(target))) {
+      if (node instanceof RecordNode && field in node.fields) {
+        throw new Error(`Cannot add field '${field}' because it already exists at '${target || "/"}'.`);
+      }
+    }
+  }
+
+  private validateLocalRenameTarget(target: string, from: string, to: string): void {
+    if (from === to) return;
+    const doc = this.cachedDoc ?? this.rematerialize();
+    this.cachedDoc = doc;
+    for (const node of doc.navigate(Selector.parse(target))) {
+      if (node instanceof RecordNode && from in node.fields && to in node.fields) {
+        throw new Error(`Cannot rename field '${from}' to '${to}' at '${target || "/"}' because '${to}' already exists.`);
+      }
+    }
   }
 }

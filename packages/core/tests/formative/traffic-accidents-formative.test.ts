@@ -53,8 +53,8 @@ Deno.test("Formative: Traffic Accidents", () => {
     return current;
   };
   const resolveReferencedValue = (root: unknown, value: unknown): unknown => {
-    if (typeof value === "string" && value.startsWith("/")) {
-      return resolveReferencedValue(root, resolveValueAtPath(root, value));
+    if (typeof value === "object" && value !== null && "$ref" in value && typeof value.$ref === "string") {
+      return resolveReferencedValue(root, resolveValueAtPath(root, value.$ref));
     }
     return value;
   };
@@ -105,14 +105,14 @@ Deno.test("Formative: Traffic Accidents", () => {
       $tag: "stats",
       primary: {
         $tag: "formula",
-        source: "/dataSources/north",
+        source: { $ref: "/dataSources/north" },
         minInjuries: 3,
         result: 2,
       },
       secondary: {
         $tag: "formula",
-        source: "/dataSources/south",
-        minInjuries: "/stats/primary/minInjuries",
+        source: { $ref: "/dataSources/south" },
+        minInjuries: { $ref: "/stats/primary/minInjuries" },
         result: 1,
       },
     },
@@ -146,14 +146,14 @@ Deno.test("Formative: Traffic Accidents", () => {
       $tag: "stats",
       primary: {
         $tag: "formula",
-        source: "/dataSources/north",
+        source: { $ref: "/dataSources/north" },
         minInjuries: 2,
         result: 2,
       },
       secondary: {
         $tag: "formula",
-        source: "/dataSources/south",
-        minInjuries: "/stats/primary/minInjuries",
+        source: { $ref: "/dataSources/south" },
+        minInjuries: { $ref: "/stats/primary/minInjuries" },
         result: 2,
       },
     },

@@ -1,6 +1,12 @@
 import { type Edit, NoOpEdit, NoOpOnRemovedTargetEdit } from './base.ts';
 import { mapSelector, REMOVED_SELECTOR, type SelectorTransform, Selector } from '../selector.ts';
-import { ListNode, type Node } from '../nodes.ts';
+import { ListNode, Node, type PlainNode } from '../nodes.ts';
+import { registerRemoteEditDecoder, type EncodedRemoteEdit } from '../remote-edit-codec.ts';
+
+type EncodedListPushBackEdit = Extract<EncodedRemoteEdit, { kind: 'ListPushBackEdit' }>;
+type EncodedListPushFrontEdit = Extract<EncodedRemoteEdit, { kind: 'ListPushFrontEdit' }>;
+type EncodedListPopBackEdit = Extract<EncodedRemoteEdit, { kind: 'ListPopBackEdit' }>;
+type EncodedListPopFrontEdit = Extract<EncodedRemoteEdit, { kind: 'ListPopFrontEdit' }>;
 
 export class ListPushBackEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = true;
@@ -36,7 +42,15 @@ export class ListPushBackEdit extends NoOpOnRemovedTargetEdit {
   }
 
   withTarget(target: Selector): ListPushBackEdit { return new ListPushBackEdit(target, this.node); }
+  encodeRemoteEdit(): EncodedListPushBackEdit {
+    return { kind: 'ListPushBackEdit', target: this.target.format(), node: this.node.toPlain() as PlainNode };
+  }
 }
+
+registerRemoteEditDecoder<EncodedListPushBackEdit>(
+  'ListPushBackEdit',
+  (encodedEdit) => new ListPushBackEdit(Selector.parse(encodedEdit.target), Node.fromPlain(encodedEdit.node)),
+);
 
 export class ListPushFrontEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = true;
@@ -74,7 +88,15 @@ export class ListPushFrontEdit extends NoOpOnRemovedTargetEdit {
   }
 
   withTarget(target: Selector): ListPushFrontEdit { return new ListPushFrontEdit(target, this.node); }
+  encodeRemoteEdit(): EncodedListPushFrontEdit {
+    return { kind: 'ListPushFrontEdit', target: this.target.format(), node: this.node.toPlain() as PlainNode };
+  }
 }
+
+registerRemoteEditDecoder<EncodedListPushFrontEdit>(
+  'ListPushFrontEdit',
+  (encodedEdit) => new ListPushFrontEdit(Selector.parse(encodedEdit.target), Node.fromPlain(encodedEdit.node)),
+);
 
 export class ListPopBackEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = true;
@@ -121,7 +143,15 @@ export class ListPopBackEdit extends NoOpOnRemovedTargetEdit {
   }
 
   withTarget(target: Selector): ListPopBackEdit { return new ListPopBackEdit(target); }
+  encodeRemoteEdit(): EncodedListPopBackEdit {
+    return { kind: 'ListPopBackEdit', target: this.target.format() };
+  }
 }
+
+registerRemoteEditDecoder<EncodedListPopBackEdit>(
+  'ListPopBackEdit',
+  (encodedEdit) => new ListPopBackEdit(Selector.parse(encodedEdit.target)),
+);
 
 export class ListPopFrontEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = true;
@@ -172,4 +202,12 @@ export class ListPopFrontEdit extends NoOpOnRemovedTargetEdit {
   }
 
   withTarget(target: Selector): ListPopFrontEdit { return new ListPopFrontEdit(target); }
+  encodeRemoteEdit(): EncodedListPopFrontEdit {
+    return { kind: 'ListPopFrontEdit', target: this.target.format() };
+  }
 }
+
+registerRemoteEditDecoder<EncodedListPopFrontEdit>(
+  'ListPopFrontEdit',
+  (encodedEdit) => new ListPopFrontEdit(Selector.parse(encodedEdit.target)),
+);

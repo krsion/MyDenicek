@@ -4,7 +4,7 @@ import { PrimitiveNode } from './primitive-node.ts';
 import { RecordNode } from './record-node.ts';
 import { ReferenceNode } from './reference-node.ts';
 import type { PlainList, PlainNode, PlainRecord, PlainRef } from './plain.ts';
-import { Selector } from '../selector.ts';
+import { Selector, validateFieldName } from '../selector.ts';
 
 export function createNodeFromPlain(plain: PlainNode): Node {
   if (plain === null) throw new Error('Null is not a valid PlainNode.');
@@ -17,7 +17,10 @@ export function createNodeFromPlain(plain: PlainNode): Node {
   const record = plain as PlainRecord;
   const fields: Record<string, Node> = {};
   for (const [key, value] of Object.entries(record)) {
-    if (key !== '$tag') fields[key] = createNodeFromPlain(value as PlainNode);
+    if (key !== '$tag') {
+      validateFieldName(key);
+      fields[key] = createNodeFromPlain(value as PlainNode);
+    }
   }
   return new RecordNode(record.$tag, fields);
 }

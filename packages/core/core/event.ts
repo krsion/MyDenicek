@@ -87,3 +87,5 @@ export class Event {
     return edit;
   }
 }
+
+export type RemoteEvent = Event;

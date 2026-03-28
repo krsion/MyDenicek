@@ -61,7 +61,7 @@ Deno.test("updates absolute references on structural rename", () => {
   assertEquals(core.toPlain(), {
     $tag: "root",
     person: { $tag: "person", fullName: "Ada Lovelace" },
-    focus: "/person/fullName",
+    focus: { $ref: "/person/fullName" },
   });
 });
 
@@ -76,7 +76,7 @@ Deno.test("rejects deletes that would remove a referenced subtree", () => {
   assertEquals(core.toPlain(), {
     $tag: "root",
     person: { $tag: "person", name: "Ada Lovelace" },
-    focus: "/person/name",
+    focus: { $ref: "/person/name" },
   });
 });
 
@@ -114,7 +114,7 @@ Deno.test("rejects remote delete events that would remove referenced nodes", () 
   assertEquals(core.toPlain(), {
     $tag: "root",
     person: { $tag: "person", name: "Ada Lovelace" },
-    focus: "/person/name",
+    focus: { $ref: "/person/name" },
   });
 });
 
@@ -133,7 +133,7 @@ Deno.test("ingests concurrent delete of a newly referenced node and no-ops the d
   const expected = {
     $tag: "root",
     person: { $tag: "person", name: "Ada Lovelace" },
-    focus: "/person/name",
+    focus: { $ref: "/person/name" },
   };
   const expectedConflicts = [{
     $tag: "conflict",
@@ -275,7 +275,7 @@ Deno.test("transforms selector after concurrent wrap-record", () => {
   const expected = {
     $tag: "root",
     person: { $tag: "wrapper", inner: { $tag: "person", name: "UPDATED" } },
-    focus: "/person/inner/name",
+    focus: { $ref: "/person/inner/name" },
   };
   assertEquals(alice.toPlain(), expected);
   assertEquals(bob.toPlain(), expected);
@@ -298,7 +298,7 @@ Deno.test("transforms selector after concurrent wrap-list", () => {
   const expected = {
     $tag: "root",
     person: { $tag: "people", $items: [{ $tag: "person", name: "UPDATED" }] },
-    focus: "/person/*/name",
+    focus: { $ref: "/person/*/name" },
   };
   assertEquals(alice.toPlain(), expected);
   assertEquals(bob.toPlain(), expected);
@@ -328,7 +328,7 @@ Deno.test("updates absolute references with wildcard when wrapping wildcard targ
         { $tag: "wrapped", $items: [{ $tag: "task", name: "Grace" }] },
       ],
     },
-    focus: "/items/0/*/name",
+    focus: { $ref: "/items/0/*/name" },
   });
 });
 
@@ -356,7 +356,7 @@ Deno.test("updates relative references with wildcard when wrapping wildcard targ
         { $tag: "wrapped", $items: [{ $tag: "task", name: "Grace" }] },
       ],
     },
-    focus: "../items/0/*/name",
+    focus: { $ref: "../items/0/*/name" },
   });
 });
 
@@ -451,6 +451,92 @@ Deno.test("applyRemote rejects conflicting payload", () => {
     Error,
     "Conflicting payload",
   );
+});
+
+Deno.test("toPlain preserves reference objects", () => {
+  const core = new Denicek("alice", {
+    $tag: "root",
+    focus: { $ref: "/person/name" },
+  });
+
+  assertEquals(core.toPlain(), {
+    $tag: "root",
+    focus: { $ref: "/person/name" },
+  });
+});
+
+Deno.test("rejects reserved field names in initial plain records", () => {
+  assertThrows(
+    () => new Denicek("alice", { $tag: "root", "*": "nope" }),
+    Error,
+    "reserved by selector syntax",
+  );
+});
+
+Deno.test("rejects reserved field names in local add", () => {
+  const core = new Denicek("alice");
+
+  assertThrows(
+    () => core.add("", "*", "value"),
+    Error,
+    "reserved by selector syntax",
+  );
+});
+
+Deno.test("allows negative-looking field names", () => {
+  const core = new Denicek("alice");
+
+  core.add("", "-1", "value");
+
+  assertEquals(core.toPlain(), {
+    $tag: "root",
+    "-1": "value",
+  });
+});
+
+Deno.test("rejects local add that would overwrite an existing field", () => {
+  const core = new Denicek("alice", {
+    $tag: "root",
+    title: "Original",
+  });
+
+  assertThrows(
+    () => core.add("", "title", "Replacement"),
+    Error,
+    "already exists",
+  );
+});
+
+Deno.test("rejects local rename that would overwrite an existing field", () => {
+  const core = new Denicek("alice", {
+    $tag: "root",
+    first: "Ada",
+    second: "Lovelace",
+  });
+
+  assertThrows(
+    () => core.rename("", "first", "second"),
+    Error,
+    "already exists",
+  );
+});
+
+Deno.test("compact requires the current acknowledged frontiers", () => {
+  const core = new Denicek("alice");
+  core.add("", "title", "Ada");
+
+  assertThrows(
+    () => core.compact([]),
+    Error,
+    "stale frontiers",
+  );
+
+  core.compact(core.frontiers);
+  assertEquals(core.toPlain(), {
+    $tag: "root",
+    title: "Ada",
+  });
+  assertEquals(core.frontiers, []);
 });
 
 Deno.test("ingestEvents rejects conflicting duplicate payload against buffered event", () => {

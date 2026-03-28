@@ -1,6 +1,11 @@
 import { type Edit, NoOpOnRemovedTargetEdit } from './base.ts';
 import { mapSelector, REMOVED_SELECTOR, type SelectorTransform, Selector } from '../selector.ts';
-import { type Node, RecordNode } from '../nodes.ts';
+import { Node, type PlainNode, RecordNode } from '../nodes.ts';
+import { registerRemoteEditDecoder, type EncodedRemoteEdit } from '../remote-edit-codec.ts';
+
+type EncodedRecordAddEdit = Extract<EncodedRemoteEdit, { kind: 'RecordAddEdit' }>;
+type EncodedRecordDeleteEdit = Extract<EncodedRemoteEdit, { kind: 'RecordDeleteEdit' }>;
+type EncodedRecordRenameFieldEdit = Extract<EncodedRemoteEdit, { kind: 'RecordRenameFieldEdit' }>;
 
 export class RecordAddEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = false;
@@ -38,7 +43,15 @@ export class RecordAddEdit extends NoOpOnRemovedTargetEdit {
   }
 
   withTarget(target: Selector): RecordAddEdit { return new RecordAddEdit(target, this.node); }
+  encodeRemoteEdit(): EncodedRecordAddEdit {
+    return { kind: 'RecordAddEdit', target: this.target.format(), node: this.node.toPlain() as PlainNode };
+  }
 }
+
+registerRemoteEditDecoder<EncodedRecordAddEdit>(
+  'RecordAddEdit',
+  (encodedEdit) => new RecordAddEdit(Selector.parse(encodedEdit.target), Node.fromPlain(encodedEdit.node)),
+);
 
 export class RecordDeleteEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = true;
@@ -75,7 +88,15 @@ export class RecordDeleteEdit extends NoOpOnRemovedTargetEdit {
   }
 
   withTarget(target: Selector): RecordDeleteEdit { return new RecordDeleteEdit(target); }
+  encodeRemoteEdit(): EncodedRecordDeleteEdit {
+    return { kind: 'RecordDeleteEdit', target: this.target.format() };
+  }
 }
+
+registerRemoteEditDecoder<EncodedRecordDeleteEdit>(
+  'RecordDeleteEdit',
+  (encodedEdit) => new RecordDeleteEdit(Selector.parse(encodedEdit.target)),
+);
 
 export class RecordRenameFieldEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = true;
@@ -108,4 +129,12 @@ export class RecordRenameFieldEdit extends NoOpOnRemovedTargetEdit {
   }
 
   withTarget(target: Selector): RecordRenameFieldEdit { return new RecordRenameFieldEdit(target, this.to); }
+  encodeRemoteEdit(): EncodedRecordRenameFieldEdit {
+    return { kind: 'RecordRenameFieldEdit', target: this.target.format(), to: this.to };
+  }
 }
+
+registerRemoteEditDecoder<EncodedRecordRenameFieldEdit>(
+  'RecordRenameFieldEdit',
+  (encodedEdit) => new RecordRenameFieldEdit(Selector.parse(encodedEdit.target), encodedEdit.to),
+);

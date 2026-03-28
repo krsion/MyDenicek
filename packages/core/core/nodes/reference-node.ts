@@ -39,8 +39,8 @@ export class ReferenceNode extends Node {
     return new ReferenceNode(new Selector([...this.selector.segments]));
   }
 
-  toPlain(): string {
-    return this.selector.format();
+  toPlain(): { $ref: string } {
+    return { $ref: this.selector.format() };
   }
 
   equals(other: Node): boolean {
