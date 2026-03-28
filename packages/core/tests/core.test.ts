@@ -393,6 +393,56 @@ Deno.test("updates relative references with wildcard when wrapping wildcard targ
   });
 });
 
+Deno.test("adds parent segment when wrapping a relative reference node in a record", () => {
+  const core = new Denicek("alice", {
+    $tag: "root",
+    items: {
+      $tag: "items",
+      $items: [{ $tag: "task", name: "Ada" }],
+    },
+    focus: { $ref: "../items/0/name" },
+  });
+
+  core.wrapRecord("focus", "inner", "wrapper");
+
+  assertEquals(core.toPlain(), {
+    $tag: "root",
+    items: {
+      $tag: "items",
+      $items: [{ $tag: "task", name: "Ada" }],
+    },
+    focus: {
+      $tag: "wrapper",
+      inner: { $ref: "../../items/0/name" },
+    },
+  });
+});
+
+Deno.test("adds parent segment when wrapping a relative reference node in a list", () => {
+  const core = new Denicek("alice", {
+    $tag: "root",
+    items: {
+      $tag: "items",
+      $items: [{ $tag: "task", name: "Ada" }],
+    },
+    focus: { $ref: "../items/0/name" },
+  });
+
+  core.wrapList("focus", "wrapper");
+
+  assertEquals(core.toPlain(), {
+    $tag: "root",
+    items: {
+      $tag: "items",
+      $items: [{ $tag: "task", name: "Ada" }],
+    },
+    focus: {
+      $tag: "wrapper",
+      $items: [{ $ref: "../../items/0/name" }],
+    },
+  });
+});
+
 Deno.test("wildcard edit affects concurrently inserted item", () => {
   const doc = {
     $tag: "root",

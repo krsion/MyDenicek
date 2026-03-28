@@ -158,13 +158,17 @@ export class RecordRenameFieldEdit extends NoOpOnRemovedTargetEdit {
   }
 
   apply(doc: Node): void {
+    const referenceTargets = doc.captureReferenceTransformTargets();
     const parentSel = this.target.parent;
     const from = String(this.target.lastSegment);
     const parents = this.navigateOrThrow(doc, parentSel);
     for (const parent of parents) {
       if (!parent.renameField(from, this.to)) this.assertRecord(parent);
     }
-    doc.updateReferences((abs) => this.transformSelectorOrThrow(abs));
+    doc.updateReferences(
+      (abs) => this.transformSelectorOrThrow(abs),
+      referenceTargets,
+    );
   }
 
   canApply(doc: Node): boolean {

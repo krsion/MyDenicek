@@ -40,6 +40,13 @@ export class ReferenceNode extends Node {
     }
   }
 
+  protected override collectReferenceTransformTargets(
+    basePath: Selector,
+    targets: { basePath: Selector; referenceNode: Node }[],
+  ): void {
+    targets.push({ basePath, referenceNode: this });
+  }
+
   clone(): ReferenceNode {
     return new ReferenceNode(new Selector([...this.selector.segments]));
   }
