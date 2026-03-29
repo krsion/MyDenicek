@@ -50,7 +50,7 @@ export class RecordAddEdit extends NoOpOnRemovedTargetEdit {
     const field = String(this.target.lastSegment);
     const parents = this.navigateOrThrow(doc, parentSel);
     for (const parent of parents) {
-      if (!parent.addField(field, this.node.clone())) this.assertRecord(parent);
+      parent.addField(field, this.node.clone());
     }
   }
 
@@ -113,7 +113,7 @@ export class RecordDeleteEdit extends NoOpOnRemovedTargetEdit {
     const field = String(this.target.lastSegment);
     const parents = this.navigateOrThrow(doc, parentSel);
     for (const parent of parents) {
-      if (!parent.deleteField(field)) this.assertRecord(parent);
+      parent.deleteField(field);
     }
   }
 
@@ -163,7 +163,7 @@ export class RecordRenameFieldEdit extends NoOpOnRemovedTargetEdit {
     const from = String(this.target.lastSegment);
     const parents = this.navigateOrThrow(doc, parentSel);
     for (const parent of parents) {
-      if (!parent.renameField(from, this.to)) this.assertRecord(parent);
+      parent.renameField(from, this.to);
     }
     doc.updateReferences(
       (abs) => this.transformSelectorOrThrow(abs),

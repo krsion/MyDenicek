@@ -4,7 +4,7 @@ import {
   NoOpEdit,
   ProtectedTargetError,
 } from "./edits.ts";
-import type { EventId } from "./event-id.ts";
+import { EventId } from "./event-id.ts";
 import type { Node } from "./nodes.ts";
 import type { VectorClock } from "./vector-clock.ts";
 
@@ -35,6 +35,7 @@ export class Event {
 
   validate(known: Map<string, Event>): void {
     const key = this.id.format();
+    EventId.validatePeer(this.id.peer);
     if (!Number.isInteger(this.id.seq) || this.id.seq < 0) {
       throw new Error(`Invalid seq for '${key}'.`);
     }
@@ -44,6 +45,38 @@ export class Event {
     for (const p of this.parents) {
       if (!known.has(p.format())) {
         throw new Error(`Unknown parent '${p.format()}' for event '${key}'.`);
+      }
+    }
+    for (const [peer, seq] of this.clock.entryRecords()) {
+      EventId.validatePeer(peer);
+      if (!Number.isInteger(seq) || seq < 0) {
+        throw new Error(
+          `Invalid vector clock entry '${peer}:${seq}' for '${key}'.`,
+        );
+      }
+    }
+    // Every event advances exactly one peer-local sequence number, so the event's
+    // own vector-clock component must match its stable id. Otherwise concurrency
+    // checks could treat the event as if it had happened before or after itself.
+    if (this.clock.get(this.id.peer) !== this.id.seq) {
+      throw new Error(
+        `Event '${key}' must have vector clock entry ${this.id.peer}=${this.id.seq}, ` +
+          `but found ${this.clock.get(this.id.peer)}.`,
+      );
+    }
+    for (const parent of this.parents) {
+      const parentEvent = known.get(parent.format())!;
+      // A child must happen after every parent in the causal DAG, so its vector
+      // clock has to dominate each parent clock component-wise.
+      if (!this.clock.dominates(parentEvent.clock)) {
+        throw new Error(
+          `Event '${key}' clock ${
+            JSON.stringify(this.clock.toRecord())
+          } must dominate parent ` +
+            `'${parent.format()}' clock ${
+              JSON.stringify(parentEvent.clock.toRecord())
+            }.`,
+        );
       }
     }
   }
@@ -96,6 +129,3 @@ export class Event {
     return edit;
   }
 }
-
-/** Opaque event payload exchanged between peers via {@link Denicek.eventsSince}, {@link Denicek.drain}, and {@link Denicek.applyRemote}. */
-export type RemoteEvent = unknown;

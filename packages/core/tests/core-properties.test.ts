@@ -11,7 +11,6 @@
 import fc from "fast-check";
 import { assert, assertEquals } from "@std/assert";
 import { Denicek, type PlainNode, type PrimitiveValue } from "../mod.ts";
-import { ProtectedTargetError } from "../core/edits.ts";
 
 // ══════════════════════════════════════════════════════════════════════
 // HELPERS
@@ -19,20 +18,8 @@ import { ProtectedTargetError } from "../core/edits.ts";
 
 function sync(a: Denicek, b: Denicek): void {
   const af = a.frontiers, bf = b.frontiers;
-  for (const e of a.eventsSince(bf)) {
-    try {
-      b.applyRemote(e);
-    } catch (error) {
-      if (!(error instanceof ProtectedTargetError)) throw error;
-    }
-  }
-  for (const e of b.eventsSince(af)) {
-    try {
-      a.applyRemote(e);
-    } catch (error) {
-      if (!(error instanceof ProtectedTargetError)) throw error;
-    }
-  }
+  for (const e of a.eventsSince(bf)) b.applyRemote(e);
+  for (const e of b.eventsSince(af)) a.applyRemote(e);
 }
 
 function syncAll(peers: Denicek[]): void {
@@ -117,6 +104,47 @@ function applyEditOp(peer: Denicek, op: EditOp): void {
   }
 }
 
+function shouldRejectEditOp(error: unknown): error is Error {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  return [
+    "No nodes match selector",
+    "list is empty",
+    "already exists",
+    "cannot remove",
+    "cannot create reference",
+    "expected record",
+    "expected list",
+    "does not support",
+    "copy:",
+  ].some((messagePart) => error.message.includes(messagePart));
+}
+
+function applyEditOpWithExplicitRejection(peer: Denicek, op: EditOp): void {
+  const beforeState = JSON.stringify(peer.toPlain());
+  const beforeEvents = peer.inspectEvents().length;
+  try {
+    applyEditOp(peer, op);
+  } catch (error) {
+    if (!shouldRejectEditOp(error)) {
+      throw error;
+    }
+    // Failed edits are allowed in the generated trace, but they must behave like
+    // atomic rejections: no event is recorded and no partial state survives.
+    assertEquals(
+      peer.inspectEvents().length,
+      beforeEvents,
+      "Rejected edit must not record a new event.",
+    );
+    assertEquals(
+      JSON.stringify(peer.toPlain()),
+      beforeState,
+      "Rejected edit must not mutate document state.",
+    );
+  }
+}
+
 function runOps(doc: PlainNode, ops: Op[]): Denicek[] {
   const peers = Array.from(
     { length: NUM_PEERS },
@@ -126,9 +154,7 @@ function runOps(doc: PlainNode, ops: Op[]): Denicek[] {
     if (op.kind === "sync") {
       sync(peers[op.a]!, peers[op.b]!);
     } else {
-      try {
-        applyEditOp(peers[op.peer]!, op.op);
-      } catch { /* edit may fail */ }
+      applyEditOpWithExplicitRejection(peers[op.peer]!, op.op);
     }
   }
   return peers;
@@ -787,9 +813,18 @@ function assertAllSyncOrdersConverge(
       (_, i) => new Denicek(`peer${i}`, doc),
     );
     for (let i = 0; i < edits.length; i++) {
+      const peer = peers[i]!;
+      const beforeState = JSON.stringify(peer.toPlain());
+      const beforeEvents = peer.inspectEvents().length;
       try {
-        edits[i]!(peers[i]!);
-      } catch { /* edit may fail */ }
+        edits[i]!(peer);
+      } catch (error) {
+        if (!shouldRejectEditOp(error)) {
+          throw error;
+        }
+        assertEquals(peer.inspectEvents().length, beforeEvents);
+        assertEquals(JSON.stringify(peer.toPlain()), beforeState);
+      }
     }
     for (const [a, b] of syncOrder) sync(peers[a]!, peers[b]!);
     for (const [a, b] of syncOrder) sync(peers[a]!, peers[b]!);
@@ -1146,7 +1181,9 @@ Deno.test("Intent: non-conflicting adds are all preserved", () => {
         syncAll(peers);
         assertConvergence(peers);
 
-        const result = peers[0]!.toPlain() as { data: Record<string, unknown> };
+        const result = peers[0]!.toPlain() as unknown as {
+          data: Record<string, unknown>;
+        };
         for (let i = 0; i < NUM_PEERS; i++) {
           assert(
             fields[i]! in result.data,
@@ -1177,7 +1214,9 @@ Deno.test("Intent: non-conflicting push-backs are all preserved", () => {
       syncAll(peers);
       assertConvergence(peers);
 
-      const result = peers[0]!.toPlain() as { items: { $items: unknown[] } };
+      const result = peers[0]!.toPlain() as unknown as {
+        items: { $items: unknown[] };
+      };
       for (let i = 0; i < NUM_PEERS; i++) {
         assert(
           result.items.$items.includes(values[i]!),
@@ -1205,7 +1244,9 @@ Deno.test("Intent: set on untouched field survives concurrent structural changes
       syncAll([alice, bob]);
       assertConvergence([alice, bob]);
 
-      const result = alice.toPlain() as { data: Record<string, unknown> };
+      const result = alice.toPlain() as unknown as {
+        data: Record<string, unknown>;
+      };
       assertEquals(result.data.name, value, "Alice's set was lost");
       assertEquals(result.data.extra, "value", "Bob's add was lost");
     }),

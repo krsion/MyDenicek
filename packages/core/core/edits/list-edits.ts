@@ -52,7 +52,7 @@ export class ListPushBackEdit extends NoOpOnRemovedTargetEdit {
     this.validate(doc);
     const nodes = this.navigateOrThrow(doc, this.target);
     for (const n of nodes) {
-      if (!n.pushBack(this.node.clone())) this.assertList(n);
+      n.pushBack(this.node.clone());
     }
   }
 
@@ -115,7 +115,7 @@ export class ListPushFrontEdit extends NoOpOnRemovedTargetEdit {
     this.validate(doc);
     const nodes = this.navigateOrThrow(doc, this.target);
     for (const n of nodes) {
-      if (!n.pushFront(this.node.clone())) this.assertList(n);
+      n.pushFront(this.node.clone());
     }
   }
 
@@ -180,7 +180,7 @@ export class ListPopBackEdit extends NoOpOnRemovedTargetEdit {
     this.validate(doc);
     const nodes = this.navigateOrThrow(doc, this.target);
     for (const n of nodes) {
-      if (!n.popBack()) this.assertList(n);
+      n.popBack();
     }
   }
 
@@ -250,7 +250,7 @@ export class ListPopFrontEdit extends NoOpOnRemovedTargetEdit {
     this.validate(doc);
     const nodes = this.navigateOrThrow(doc, this.target);
     for (const n of nodes) {
-      if (!n.popFront()) this.assertList(n);
+      n.popFront();
     }
   }
 

@@ -34,11 +34,7 @@ export class UpdateTagEdit extends NoOpOnRemovedTargetEdit {
   apply(doc: Node): void {
     const nodes = this.navigateOrThrow(doc, this.target);
     for (const n of nodes) {
-      if (!n.updateTag(this.tag)) {
-        throw new Error(
-          `${this.constructor.name}: expected RecordNode or ListNode, found '${n.constructor.name}'`,
-        );
-      }
+      n.updateTag(this.tag);
     }
   }
 
@@ -111,9 +107,9 @@ export class CopyEdit extends Edit {
       }
     } else if (
       targetEntries.length === 1 &&
-      targetEntries[0]!.node.setItems(sourceNodes.map((n) => n.clone()))
+      targetEntries[0]!.node instanceof ListNode
     ) {
-      // setItems succeeded — target was a ListNode
+      targetEntries[0]!.node.setItems(sourceNodes.map((n) => n.clone()));
     } else {
       throw new Error(
         `copy: source/target arity mismatch (source=${sourceNodes.length}, target=${targetEntries.length}). Need equal counts or one list target.`,

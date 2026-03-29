@@ -33,35 +33,35 @@ export abstract class Node {
   // Subclasses override the methods they support and return true.
   // Default: return false (not applicable to this node type).
 
-  setPrimitive(_value: PrimitiveValue): boolean {
-    return false;
+  setPrimitive(_value: PrimitiveValue): void {
+    throw this.createUnsupportedOperationError("setPrimitive");
   }
-  addField(_name: string, _value: Node): boolean {
-    return false;
+  addField(_name: string, _value: Node): void {
+    throw this.createUnsupportedOperationError("addField");
   }
-  deleteField(_name: string): boolean {
-    return false;
+  deleteField(_name: string): void {
+    throw this.createUnsupportedOperationError("deleteField");
   }
-  renameField(_from: string, _to: string): boolean {
-    return false;
+  renameField(_from: string, _to: string): void {
+    throw this.createUnsupportedOperationError("renameField");
   }
-  pushBack(_node: Node): boolean {
-    return false;
+  pushBack(_node: Node): void {
+    throw this.createUnsupportedOperationError("pushBack");
   }
-  pushFront(_node: Node): boolean {
-    return false;
+  pushFront(_node: Node): void {
+    throw this.createUnsupportedOperationError("pushFront");
   }
-  popBack(): boolean {
-    return false;
+  popBack(): void {
+    throw this.createUnsupportedOperationError("popBack");
   }
-  popFront(): boolean {
-    return false;
+  popFront(): void {
+    throw this.createUnsupportedOperationError("popFront");
   }
-  updateTag(_tag: string): boolean {
-    return false;
+  updateTag(_tag: string): void {
+    throw this.createUnsupportedOperationError("updateTag");
   }
-  setItems(_items: Node[]): boolean {
-    return false;
+  setItems(_items: Node[]): void {
+    throw this.createUnsupportedOperationError("setItems");
   }
 
   /** Called during updateReferences — only ReferenceNode overrides to update its selector. */
@@ -200,5 +200,11 @@ export abstract class Node {
 
   static fromPlain(_plain: PlainNode): Node {
     throw new Error("Node.fromPlain is not initialized.");
+  }
+
+  private createUnsupportedOperationError(operation: string): Error {
+    return new Error(
+      `${this.constructor.name} does not support '${operation}'.`,
+    );
   }
 }

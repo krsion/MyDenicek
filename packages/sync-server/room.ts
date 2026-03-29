@@ -14,7 +14,7 @@ export class SyncRoom {
 
   constructor(id: string) {
     this.id = id;
-    this.roomPeer = new Denicek(`room:${id}`);
+    this.roomPeer = new Denicek(`room-${id.replaceAll(":", "-")}`);
   }
 
   get frontiers(): string[] {

@@ -1,10 +1,5 @@
 import type { Denicek, RemoteEvent } from "@mydenicek/core";
-import {
-  decodeRemoteEvent,
-  type EncodedRemoteEvent,
-  type EncodedRemoteEventId,
-  encodeRemoteEvent,
-} from "@mydenicek/core/internal";
+import type { EncodedRemoteEvent, EncodedRemoteEventId } from "@mydenicek/core";
 import { collectRemoteEventsSince } from "./internal-events.ts";
 
 export type EncodedEventId = EncodedRemoteEventId;
@@ -43,13 +38,13 @@ export type EncodedSyncMessage =
 export type EncodedEvent = EncodedRemoteEvent;
 
 export function encodeEvent(event: RemoteEvent): EncodedEvent {
-  return encodeRemoteEvent(event as ReturnType<typeof decodeRemoteEvent>);
+  return event;
 }
 
 export function decodeEvent(
   encodedEvent: EncodedEvent,
-): ReturnType<typeof decodeRemoteEvent> {
-  return decodeRemoteEvent(encodedEvent);
+): RemoteEvent {
+  return encodedEvent;
 }
 
 export function createSyncRequest(

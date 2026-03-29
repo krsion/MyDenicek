@@ -1,7 +1,8 @@
-import type { Edit } from "./edits/base.ts";
 import type { PlainNode } from "./nodes.ts";
 import type { PrimitiveValue } from "./selector.ts";
+import type { Edit } from "./edits/base.ts";
 
+/** Serializable edit payload stored inside a public {@link RemoteEvent}. */
 export type EncodedRemoteEdit =
   | { kind: "RecordAddEdit"; target: string; node: PlainNode }
   | { kind: "RecordDeleteEdit"; target: string }
@@ -27,6 +28,10 @@ const remoteEditDecoders = new Map<
   RemoteEditDecoder
 >();
 
+function checkIsRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 export function registerRemoteEditDecoder<
   TEncodedEdit extends EncodedRemoteEdit,
 >(
@@ -40,6 +45,11 @@ export function registerRemoteEditDecoder<
 }
 
 export function decodeRemoteEdit(encodedEdit: EncodedRemoteEdit): Edit {
+  if (!checkIsRecord(encodedEdit) || typeof encodedEdit.kind !== "string") {
+    throw new Error(
+      "decodeRemoteEdit: encoded edit must be an object with a string kind.",
+    );
+  }
   const decoder = remoteEditDecoders.get(encodedEdit.kind);
   if (decoder === undefined) {
     throw new Error(

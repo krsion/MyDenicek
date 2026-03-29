@@ -21,6 +21,21 @@ export type SelectorTransform = { kind: "mapped"; selector: Selector } | {
 
 const NO_PREFIX_MATCH: PrefixMatch = { kind: "no-match" };
 export const REMOVED_SELECTOR: SelectorTransform = { kind: "removed" };
+// These bounds keep selector parsing cheap and predictable even for malformed
+// API inputs. They are intentionally far above normal document paths while still
+// cutting off memory-heavy or adversarial path payloads early.
+const MAX_SELECTOR_PATH_LENGTH = 4096;
+const MAX_SELECTOR_SEGMENTS = 512;
+
+function parseSelectorSegment(part: string): SelectorSegment {
+  if (part === "*" || part === "..") return part;
+  const n = Number(part);
+  return (
+      Number.isSafeInteger(n) && n >= 0 && String(n) === part
+    )
+    ? n
+    : part;
+}
 
 export function mapSelector(selector: Selector): SelectorTransform {
   return { kind: "mapped", selector };
@@ -54,19 +69,28 @@ export class Selector {
   }
 
   static parse(path: string): Selector {
+    if (typeof path !== "string") {
+      throw new Error("Selector paths must be strings.");
+    }
+    if (path.length > MAX_SELECTOR_PATH_LENGTH) {
+      throw new Error(
+        `Selector path is too long (${path.length} > ${MAX_SELECTOR_PATH_LENGTH}).`,
+      );
+    }
     const trimmed = path.trim();
     if (trimmed === "" || trimmed === "/") return new Selector([]);
     const isAbs = trimmed.startsWith("/");
     const parts = trimmed
       .replace(/^\//, "")
       .split("/")
-      .filter((p) => p.length > 0)
-      .map((part): SelectorSegment => {
-        if (part === "*" || part === "..") return part;
-        const n = Number(part);
-        return Number.isFinite(n) && String(n) === part ? n : part;
-      });
-    return new Selector(isAbs ? ["/", ...parts] : parts);
+      .filter((p) => p.length > 0);
+    if (parts.length > MAX_SELECTOR_SEGMENTS) {
+      throw new Error(
+        `Selector path has too many segments (${parts.length} > ${MAX_SELECTOR_SEGMENTS}).`,
+      );
+    }
+    const segments = parts.map(parseSelectorSegment);
+    return new Selector(isAbs ? ["/", ...segments] : segments);
   }
 
   format(): string {

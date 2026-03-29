@@ -14,7 +14,7 @@ import {
   WrapListEdit,
   WrapRecordEdit,
 } from "./edits.ts";
-import type { Event, RemoteEvent } from "./event.ts";
+import type { Event } from "./event.ts";
 import { EventGraph, type EventSnapshot } from "./event-graph.ts";
 import { EventId } from "./event-id.ts";
 import { Node, type PlainNode, RecordNode } from "./nodes.ts";
@@ -27,6 +27,11 @@ import {
   Selector,
   validateFieldName,
 } from "./selector.ts";
+import {
+  decodeRemoteEvent,
+  encodeRemoteEvent,
+  type RemoteEvent,
+} from "./remote-events.ts";
 
 // ── Denicek (collaborative document peer) ───────────────────────────
 
@@ -47,6 +52,7 @@ export class Denicek {
   /** Creates a peer with an optional initial plain document tree. */
   constructor(peer: string, initial?: PlainNode);
   constructor(peer: string, arg?: PlainNode) {
+    EventId.validatePeer(peer);
     this.peer = peer;
     this.graph = new EventGraph(Node.fromPlain(arg ?? { $tag: "root" }));
   }
@@ -76,6 +82,9 @@ export class Denicek {
       this.cachedDoc = doc;
       return event.id.format();
     } catch (e) {
+      // Failed local edits must be side-effect-free from the caller's point of
+      // view: they must not record events and must not keep a partially mutated
+      // cached document alive for future operations.
       this.cachedDoc = null;
       throw e;
     }
@@ -85,7 +94,7 @@ export class Denicek {
   drain(): RemoteEvent[] {
     const events = this.pendingEvents;
     this.pendingEvents = [];
-    return events;
+    return events.map(encodeRemoteEvent);
   }
 
   /** Returns the current frontier as formatted event id strings. */
@@ -97,12 +106,12 @@ export class Denicek {
   eventsSince(remoteFrontiers: string[]): RemoteEvent[] {
     return this.graph.eventsSince(
       remoteFrontiers.map((frontier) => EventId.parse(frontier)),
-    );
+    ).map(encodeRemoteEvent);
   }
 
   /** Ingests an opaque event payload produced by another peer. Buffers out-of-order events. */
   applyRemote(event: RemoteEvent): void {
-    this.graph.ingestEvents([event as Event]);
+    this.graph.ingestEvents([decodeRemoteEvent(event)]);
     this.cachedDoc = null;
   }
 
@@ -320,6 +329,18 @@ export class Denicek {
    * acknowledged frontier set. This refuses stale frontiers and buffered events.
    */
   compact(acknowledgedFrontiers: string[]): void {
+    if (!Array.isArray(acknowledgedFrontiers)) {
+      throw new Error(
+        "Compaction frontiers must be provided as an array of event ids.",
+      );
+    }
+    if (
+      acknowledgedFrontiers.some((frontier) => typeof frontier !== "string")
+    ) {
+      throw new Error(
+        "Compaction frontiers must only contain event id strings.",
+      );
+    }
     this.graph.compact(
       acknowledgedFrontiers.map((frontier) => EventId.parse(frontier)),
     );

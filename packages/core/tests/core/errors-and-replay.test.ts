@@ -4,6 +4,7 @@ import {
   createRecordAddEvent,
   Denicek,
   Edit,
+  encodeRemoteEvent,
   Event,
   EventGraph,
   EventId,
@@ -17,21 +18,89 @@ import {
   VectorClock,
 } from "./test-helpers.ts";
 
+Deno.test("rejects peer ids containing the event-id separator", () => {
+  assertThrows(
+    () => new Denicek("alice:west"),
+    Error,
+    "cannot contain ':'",
+  );
+});
+
+Deno.test("drain returns encoded remote events", () => {
+  const alice = new Denicek("alice");
+
+  alice.add("", "title", "Draft");
+
+  assertEquals(alice.drain(), [{
+    id: { peer: "alice", seq: 0 },
+    parents: [],
+    edit: {
+      kind: "RecordAddEdit",
+      target: "title",
+      node: "Draft",
+    },
+    clock: { alice: 0 },
+  }]);
+});
+
 Deno.test("applyRemote rejects conflicting payload", () => {
   const alice = new Denicek("alice");
   alice.add("", "x", "a");
   const [event] = alice.drain();
   // Same id but different edit content
-  const conflicting = new Event(
-    event.id,
-    event.parents,
-    new RecordAddEdit(Selector.parse("y"), new PrimitiveNode("b")),
-    event.clock,
-  );
+  const conflicting = {
+    ...event,
+    edit: { kind: "RecordAddEdit" as const, target: "y", node: "b" },
+  };
   assertThrows(
     () => alice.applyRemote(conflicting),
     Error,
     "Conflicting payload",
+  );
+});
+
+Deno.test("applyRemote rejects events whose vector clock does not match their id", () => {
+  const alice = new Denicek("alice");
+  const invalidClockEvent = encodeRemoteEvent(
+    new Event(
+      new EventId("bob", 1),
+      [],
+      new RecordAddEdit(Selector.parse("x"), new PrimitiveNode("b")),
+      new VectorClock({ bob: 0 }),
+    ),
+  );
+
+  assertThrows(
+    () => alice.applyRemote(invalidClockEvent),
+    Error,
+    "must have vector clock entry bob=1",
+  );
+});
+
+Deno.test("applyRemote rejects events whose vector clock does not dominate parents", () => {
+  const alice = new Denicek("alice");
+  const parentEvent = encodeRemoteEvent(
+    new Event(
+      new EventId("parent", 0),
+      [],
+      new RecordAddEdit(Selector.parse("x"), new PrimitiveNode("a")),
+      new VectorClock({ parent: 0 }),
+    ),
+  );
+  alice.applyRemote(parentEvent);
+  const childEvent = encodeRemoteEvent(
+    new Event(
+      new EventId("bob", 0),
+      [new EventId("parent", 0)],
+      new RecordAddEdit(Selector.parse("y"), new PrimitiveNode("b")),
+      new VectorClock({ bob: 0 }),
+    ),
+  );
+
+  assertThrows(
+    () => alice.applyRemote(childEvent),
+    Error,
+    "must dominate parent",
   );
 });
 
@@ -74,6 +143,33 @@ Deno.test("allows negative-looking field names", () => {
     $tag: "root",
     "-1": "value",
   });
+});
+
+Deno.test("rejects malformed plain-node arrays at the public API boundary", () => {
+  assertThrows(
+    () => new Denicek("alice", [] as unknown as never),
+    Error,
+    "Arrays are not valid PlainNode values",
+  );
+});
+
+Deno.test("rejects cyclic plain nodes before constructing the document", () => {
+  const root = { $tag: "root" } as { $tag: string; self?: unknown };
+  root.self = root;
+
+  assertThrows(
+    () => new Denicek("alice", root as unknown as never),
+    Error,
+    "must not contain cycles",
+  );
+});
+
+Deno.test("rejects malformed record tags before constructing the document", () => {
+  assertThrows(
+    () => new Denicek("alice", { $tag: "" } as unknown as never),
+    Error,
+    "non-empty string $tag",
+  );
 });
 
 Deno.test("rejects local add that would overwrite an existing field", () => {
@@ -121,6 +217,21 @@ Deno.test("compact requires the current acknowledged frontiers", () => {
   assertEquals(core.frontiers, []);
 });
 
+Deno.test("compact rejects malformed frontier inputs", () => {
+  const core = new Denicek("alice");
+
+  assertThrows(
+    () => core.compact("alice:0" as unknown as string[]),
+    Error,
+    "array of event ids",
+  );
+  assertThrows(
+    () => core.compact(["alice:0", 1] as unknown as string[]),
+    Error,
+    "only contain event id strings",
+  );
+});
+
 Deno.test("ingestEvents rejects conflicting duplicate payload against buffered event", () => {
   const graph = new EventGraph(new RecordNode("root", {}));
   const original = new Event(
@@ -160,6 +271,65 @@ Deno.test("applyRemote buffers out-of-order events", () => {
   alice.applyRemote(events[0]!);
   // Now both events flush in causal order
   assertEquals(alice.toPlain(), bob.toPlain());
+});
+
+Deno.test("applyRemote rejects malformed remote event envelopes", () => {
+  const alice = new Denicek("alice");
+
+  assertThrows(
+    () => alice.applyRemote(null as unknown as never),
+    Error,
+    "Remote events must be objects",
+  );
+  assertThrows(
+    () =>
+      alice.applyRemote({
+        id: { peer: "bob", seq: 0 },
+        parents: "nope",
+        edit: { kind: "RecordDeleteEdit", target: "x" },
+        clock: { bob: 0 },
+      } as unknown as never),
+    Error,
+    "parents must be an array",
+  );
+  assertThrows(
+    () =>
+      alice.applyRemote({
+        id: { peer: "bob", seq: 0 },
+        parents: [],
+        edit: { kind: "RecordDeleteEdit", target: "x" },
+        clock: null,
+      } as unknown as never),
+    Error,
+    "clock must be an object",
+  );
+});
+
+Deno.test("applyRemote rejects malformed remote event ids and edits", () => {
+  const alice = new Denicek("alice");
+
+  assertThrows(
+    () =>
+      alice.applyRemote({
+        id: { peer: "", seq: 0 },
+        parents: [],
+        edit: { kind: "RecordDeleteEdit", target: "x" },
+        clock: { bob: 0 },
+      } as unknown as never),
+    Error,
+    "must not be empty",
+  );
+  assertThrows(
+    () =>
+      alice.applyRemote({
+        id: { peer: "bob", seq: 0 },
+        parents: [],
+        edit: null,
+        clock: { bob: 0 },
+      } as unknown as never),
+    Error,
+    "encoded edit must be an object",
+  );
 });
 
 Deno.test("ingestEvents flushes a buffered dependency chain when the missing ancestor arrives", () => {
@@ -229,6 +399,36 @@ Deno.test("fromPlain rejects null", () => {
     () => Node.fromPlain(JSON.parse("null")),
     Error,
     "Null is not a valid PlainNode.",
+  );
+});
+
+Deno.test("Selector.parse rejects non-string, too-long, and unsafe numeric inputs", () => {
+  assertThrows(
+    () => Selector.parse(42 as unknown as string),
+    Error,
+    "must be strings",
+  );
+  assertThrows(
+    () => Selector.parse(`a/${"b/".repeat(3000)}`),
+    Error,
+    "too long",
+  );
+  assertEquals(
+    Selector.parse("items/9007199254740992").segments[1],
+    "9007199254740992",
+  );
+});
+
+Deno.test("VectorClock rejects invalid entries", () => {
+  assertThrows(
+    () => new VectorClock({ alice: Number.POSITIVE_INFINITY }),
+    Error,
+    "non-negative safe integer",
+  );
+  assertThrows(
+    () => new VectorClock({ "": 0 }),
+    Error,
+    "must not be empty",
   );
 });
 
@@ -449,6 +649,10 @@ Deno.test("default edit transform throws unless removal handling is explicit", (
 
     withTarget(target: Selector): DummyEdit {
       return new DummyEdit(target);
+    }
+
+    encodeRemoteEdit(): never {
+      throw new Error("DummyEdit should not be serialized in this test.");
     }
   }
 
