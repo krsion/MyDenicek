@@ -115,7 +115,9 @@ Deno.test(
     const synchronizePeers = (): void => {
       const aliceFrontiers = alice.frontiers;
       const bobFrontiers = bob.frontiers;
-      for (const event of alice.eventsSince(bobFrontiers)) bob.applyRemote(event);
+      for (const event of alice.eventsSince(bobFrontiers)) {
+        bob.applyRemote(event);
+      }
       for (const event of bob.eventsSince(aliceFrontiers)) {
         alice.applyRemote(event);
       }
