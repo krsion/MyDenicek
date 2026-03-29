@@ -63,7 +63,7 @@ export class Event {
         sawConcurrentEdit = true;
         if (prior.edit.isStructural) {
           sawConcurrentStructuralEdit = true;
-          edit = edit.transform(prior.edit);
+          edit = prior.edit.transformConcurrentEdit(edit);
         }
       }
     }

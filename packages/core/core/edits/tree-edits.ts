@@ -1,4 +1,10 @@
-import { Edit, NoOpEdit, NoOpOnRemovedTargetEdit } from "./base.ts";
+import {
+  CompositeEdit,
+  createCompositeEdit,
+  Edit,
+  NoOpEdit,
+  NoOpOnRemovedTargetEdit,
+} from "./base.ts";
 import { mapSelector, Selector, type SelectorTransform } from "../selector.ts";
 import { ListNode, type Node, RecordNode } from "../nodes.ts";
 import {
@@ -72,7 +78,7 @@ registerRemoteEditDecoder<EncodedUpdateTagEdit>(
 );
 
 export class CopyEdit extends Edit {
-  readonly isStructural = false;
+  readonly isStructural = true;
   readonly kind = "Copy";
 
   constructor(readonly target: Selector, readonly source: Selector) {
@@ -129,6 +135,26 @@ export class CopyEdit extends Edit {
     return mapSelector(sel);
   }
 
+  override transformConcurrentEdit(concurrent: Edit): Edit {
+    if (concurrent instanceof CompositeEdit) {
+      return concurrent.transform(this);
+    }
+    const transformed = concurrent.transform(this);
+    if (transformed instanceof NoOpEdit) {
+      return transformed;
+    }
+    if (this.source.equals(this.target)) {
+      return transformed;
+    }
+    const mirroredTarget = this.computeMirrorTargetSelector(transformed.target);
+    if (mirroredTarget === null || mirroredTarget.equals(transformed.target)) {
+      return transformed;
+    }
+    return createCompositeEdit(transformed, [
+      transformed.withTarget(mirroredTarget),
+    ]);
+  }
+
   override transform(prior: Edit): Edit {
     const t = prior.transformSelector(this.target);
     const s = prior.transformSelector(this.source);
@@ -145,6 +171,75 @@ export class CopyEdit extends Edit {
       );
     }
     return new CopyEdit(t.selector, s.selector);
+  }
+
+  /**
+   * Maps a concrete selector inside the copy source onto the corresponding
+   * managed-copy target path.
+   *
+   * Supported shapes:
+   * - direct subtree copies with no wildcards (for example `a/source` to `a/target`)
+   * - one-to-one wildcard copies (for example `rows/<index>/name` to `rows/<index>/email`)
+   * - copying a wildcard source collection into a single list target
+   *   (for example `scratch/<index>` to `items`), where the captured source index becomes the list
+   *   item index under the target list.
+   *
+   * More ambiguous source/target shape pairs currently opt out of mirroring and
+   * return `null` instead of guessing a selector that could diverge.
+   */
+  private computeMirrorTargetSelector(sel: Selector): Selector | null {
+    const matchedSource = this.source.matchPrefix(sel);
+    if (matchedSource.kind === "no-match") {
+      // Only selectors inside the copied source subtree should be mirrored onto
+      // the new copy target.
+      return null;
+    }
+    const wildcardCaptures = this.extractWildcardCaptures(
+      matchedSource.specificPrefix,
+    );
+    const targetWildcardCount = this.computeWildcardSegmentCount(this.target);
+    // Supported mirroring patterns:
+    // 1. Source and target expose the same number of wildcard slots, so captures
+    //    substitute one-to-one into the target selector.
+    // 2. A single wildcard-selected source collection is copied into one list
+    //    target, so the captured source index becomes the copied list item index.
+    if (
+      !(
+        wildcardCaptures.length === targetWildcardCount ||
+        (targetWildcardCount === 0 && wildcardCaptures.length === 1)
+      )
+    ) {
+      return null;
+    }
+    let captureIndex = 0;
+    const mirroredPrefix = this.target.segments.map((segment) =>
+      segment === "*" ? wildcardCaptures[captureIndex++]! : segment
+    );
+    return new Selector([
+      ...mirroredPrefix,
+      ...wildcardCaptures.slice(captureIndex),
+      ...matchedSource.rest.segments,
+    ]);
+  }
+
+  private extractWildcardCaptures(
+    specificSourcePrefix: Selector,
+  ): Selector["segments"] {
+    const captures: Selector["segments"] = [];
+    for (
+      let segmentIndex = 0;
+      segmentIndex < this.source.length;
+      segmentIndex++
+    ) {
+      if (this.source.segments[segmentIndex] === "*") {
+        captures.push(specificSourcePrefix.segments[segmentIndex]!);
+      }
+    }
+    return captures;
+  }
+
+  private computeWildcardSegmentCount(selector: Selector): number {
+    return selector.segments.filter((segment) => segment === "*").length;
   }
 
   equals(other: Edit): boolean {
