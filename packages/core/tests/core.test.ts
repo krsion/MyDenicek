@@ -488,6 +488,108 @@ Deno.test("copy replaces target with source", () => {
   });
 });
 
+Deno.test("concurrent source edit is mirrored onto the copied node", () => {
+  const doc = {
+    $tag: "root",
+    data: {
+      $tag: "data",
+      source: { $tag: "person", name: "Ada" },
+      target: { $tag: "person", name: "Grace" },
+    },
+  };
+  const alice = new Denicek("alice", doc);
+  const bob = new Denicek("bob", doc);
+
+  alice.copy("data/target", "data/source");
+  bob.set("data/source/name", "Updated");
+
+  sync(alice, bob);
+
+  const expected = {
+    $tag: "root",
+    data: {
+      $tag: "data",
+      source: { $tag: "person", name: "Updated" },
+      target: { $tag: "person", name: "Updated" },
+    },
+  };
+  assertEquals(alice.toPlain(), expected);
+  assertEquals(bob.toPlain(), expected);
+});
+
+Deno.test("concurrent structural source edit is mirrored onto the copied node", () => {
+  const doc = {
+    $tag: "root",
+    data: {
+      $tag: "data",
+      source: { $tag: "person", name: "Ada" },
+      target: { $tag: "person", name: "Grace" },
+    },
+  };
+  const alice = new Denicek("alice", doc);
+  const bob = new Denicek("bob", doc);
+
+  alice.copy("data/target", "data/source");
+  bob.rename("data/source", "name", "fullName");
+
+  sync(alice, bob);
+
+  const expected = {
+    $tag: "root",
+    data: {
+      $tag: "data",
+      source: { $tag: "person", fullName: "Ada" },
+      target: { $tag: "person", fullName: "Ada" },
+    },
+  };
+  assertEquals(alice.toPlain(), expected);
+  assertEquals(bob.toPlain(), expected);
+});
+
+Deno.test("concurrent edit to list-copy source item is mirrored onto copied list item", () => {
+  const doc = {
+    $tag: "root",
+    scratch: {
+      $tag: "scratch",
+      $items: [
+        { $tag: "task", title: "draft" },
+        { $tag: "task", title: "queued" },
+      ],
+    },
+    items: {
+      $tag: "items",
+      $items: [{ $tag: "task", title: "stale" }],
+    },
+  };
+  const alice = new Denicek("alice", doc);
+  const bob = new Denicek("bob", doc);
+
+  alice.copy("items", "scratch/*");
+  bob.set("scratch/1/title", "published");
+
+  sync(alice, bob);
+
+  const expected = {
+    $tag: "root",
+    scratch: {
+      $tag: "scratch",
+      $items: [
+        { $tag: "task", title: "draft" },
+        { $tag: "task", title: "published" },
+      ],
+    },
+    items: {
+      $tag: "items",
+      $items: [
+        { $tag: "task", title: "draft" },
+        { $tag: "task", title: "published" },
+      ],
+    },
+  };
+  assertEquals(alice.toPlain(), expected);
+  assertEquals(bob.toPlain(), expected);
+});
+
 Deno.test("update-tag changes tag on record", () => {
   const core = new Denicek("alice", {
     $tag: "root",

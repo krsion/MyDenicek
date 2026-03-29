@@ -91,7 +91,7 @@ export class EventGraph {
         }
         replayEdit = edit;
       } else if (replayEdit !== null && edit.isStructural) {
-        replayEdit = replayEdit.transform(edit);
+        replayEdit = edit.transformConcurrentEdit(replayEdit);
         if (replayEdit instanceof NoOpEdit) {
           throw new Error(
             `Cannot replay event '${key}' because later structural edits removed its target.`,

@@ -41,6 +41,15 @@ export abstract class Edit {
       : this.handleRemovedTarget(prior);
   }
 
+  /**
+   * Transforms a concurrent edit through the structural change made by this
+   * edit. Structural edits with richer semantics, such as managed copy, can
+   * override this to duplicate or otherwise rewrite the concurrent edit.
+   */
+  transformConcurrentEdit(concurrent: Edit): Edit {
+    return concurrent.transform(this);
+  }
+
   protected navigateOrThrow(doc: Node, target: Selector): Node[] {
     const nodes = doc.navigate(target);
     if (nodes.length === 0) {
@@ -200,6 +209,10 @@ export class NoOpEdit extends Edit {
     return this;
   }
 
+  override transformConcurrentEdit(_concurrent: Edit): Edit {
+    return this;
+  }
+
   equals(other: Edit): boolean {
     return other instanceof NoOpEdit &&
       this.target.equals(other.target) &&
@@ -216,4 +229,120 @@ export class NoOpEdit extends Edit {
       reason: this.reason,
     };
   }
+}
+
+export class CompositeEdit extends Edit {
+  readonly kind = "Composite";
+
+  constructor(readonly primary: Edit, readonly mirrors: Edit[]) {
+    super();
+  }
+
+  get target(): Selector {
+    return this.primary.target;
+  }
+
+  get isStructural(): boolean {
+    return this.primary.isStructural ||
+      this.mirrors.some((edit) => edit.isStructural);
+  }
+
+  override get selectors(): Selector[] {
+    return [
+      ...this.primary.selectors,
+      ...this.mirrors.flatMap((edit) => edit.selectors),
+    ];
+  }
+
+  apply(doc: Node): void {
+    this.primary.apply(doc);
+    for (const mirror of this.mirrors) {
+      if (!mirror.canApply(doc)) {
+        continue;
+      }
+      try {
+        mirror.validate(doc);
+      } catch (error) {
+        if (
+          error instanceof ProtectedTargetError ||
+          error instanceof MissingReferenceTargetError
+        ) {
+          continue;
+        }
+        throw error;
+      }
+      mirror.apply(doc);
+    }
+  }
+
+  canApply(doc: Node): boolean {
+    return this.primary.canApply(doc);
+  }
+
+  override validate(doc: Node): void {
+    this.primary.validate(doc);
+    for (const mirror of this.mirrors) {
+      if (!mirror.canApply(doc)) {
+        continue;
+      }
+      try {
+        mirror.validate(doc);
+      } catch (error) {
+        if (
+          error instanceof ProtectedTargetError ||
+          error instanceof MissingReferenceTargetError
+        ) {
+          continue;
+        }
+        throw error;
+      }
+    }
+  }
+
+  transformSelector(sel: Selector): SelectorTransform {
+    return this.primary.transformSelector(sel);
+  }
+
+  override transform(prior: Edit): Edit {
+    const transformedPrimary = prior.transformConcurrentEdit(this.primary);
+    if (transformedPrimary instanceof NoOpEdit) {
+      return transformedPrimary;
+    }
+    return createCompositeEdit(
+      transformedPrimary,
+      this.mirrors
+        .map((mirror) => prior.transformConcurrentEdit(mirror))
+        .filter((mirror): mirror is Edit => !(mirror instanceof NoOpEdit)),
+    );
+  }
+
+  override transformConcurrentEdit(concurrent: Edit): Edit {
+    let transformed = this.primary.transformConcurrentEdit(concurrent);
+    for (const mirror of this.mirrors) {
+      if (transformed instanceof NoOpEdit) {
+        return transformed;
+      }
+      transformed = mirror.transformConcurrentEdit(transformed);
+    }
+    return transformed;
+  }
+
+  equals(other: Edit): boolean {
+    return other instanceof CompositeEdit &&
+      this.primary.equals(other.primary) &&
+      this.mirrors.length === other.mirrors.length &&
+      this.mirrors.every((mirror, index) => mirror.equals(other.mirrors[index]!));
+  }
+
+  withTarget(target: Selector): Edit {
+    return createCompositeEdit(this.primary.withTarget(target), this.mirrors);
+  }
+
+  encodeRemoteEdit(): EncodedRemoteEdit {
+    throw new Error("CompositeEdit is an internal replay artifact.");
+  }
+}
+
+export function createCompositeEdit(primary: Edit, mirrors: Edit[]): Edit {
+  return mirrors.length === 0 ? primary : new CompositeEdit(primary, mirrors);
 }

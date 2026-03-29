@@ -1,4 +1,10 @@
-import { Edit, NoOpEdit, NoOpOnRemovedTargetEdit } from "./base.ts";
+import {
+  CompositeEdit,
+  createCompositeEdit,
+  Edit,
+  NoOpEdit,
+  NoOpOnRemovedTargetEdit,
+} from "./base.ts";
 import { mapSelector, Selector, type SelectorTransform } from "../selector.ts";
 import { ListNode, type Node, RecordNode } from "../nodes.ts";
 import {
@@ -72,7 +78,7 @@ registerRemoteEditDecoder<EncodedUpdateTagEdit>(
 );
 
 export class CopyEdit extends Edit {
-  readonly isStructural = false;
+  readonly isStructural = true;
   readonly kind = "Copy";
 
   constructor(readonly target: Selector, readonly source: Selector) {
@@ -129,6 +135,21 @@ export class CopyEdit extends Edit {
     return mapSelector(sel);
   }
 
+  override transformConcurrentEdit(concurrent: Edit): Edit {
+    if (concurrent instanceof CompositeEdit) {
+      return concurrent.transform(this);
+    }
+    const transformed = concurrent.transform(this);
+    if (transformed instanceof NoOpEdit) {
+      return transformed;
+    }
+    const mirroredTarget = this.computeMirroredTarget(transformed.target);
+    if (mirroredTarget === null || mirroredTarget.equals(transformed.target)) {
+      return transformed;
+    }
+    return createCompositeEdit(transformed, [transformed.withTarget(mirroredTarget)]);
+  }
+
   override transform(prior: Edit): Edit {
     const t = prior.transformSelector(this.target);
     const s = prior.transformSelector(this.source);
@@ -145,6 +166,24 @@ export class CopyEdit extends Edit {
       );
     }
     return new CopyEdit(t.selector, s.selector);
+  }
+
+  private computeMirroredTarget(sel: Selector): Selector | null {
+    const matchedSource = this.source.matchPrefix(sel);
+    if (matchedSource.kind === "no-match") {
+      return null;
+    }
+    const wildcardCaptures = this.source.segments.flatMap((segment, index) =>
+      segment === "*" ? [matchedSource.specificPrefix.segments[index]!] : []
+    );
+    const mirroredPrefix = this.target.segments.map((segment) =>
+      segment === "*" ? wildcardCaptures.shift() ?? "*" : segment
+    );
+    return new Selector([
+      ...mirroredPrefix,
+      ...wildcardCaptures,
+      ...matchedSource.rest.segments,
+    ]);
   }
 
   equals(other: Edit): boolean {
