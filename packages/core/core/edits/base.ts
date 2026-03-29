@@ -231,6 +231,17 @@ export class NoOpEdit extends Edit {
   }
 }
 
+/**
+ * Internal replay-only edit that bundles one primary transformed edit together
+ * with additional mirrored edits created by managed-copy OT.
+ *
+ * The primary edit preserves the original event intent and must succeed for the
+ * event to remain meaningful. Mirror edits are best-effort applications onto
+ * copy targets; they are never serialized onto the wire. The mirrors are
+ * expected to represent disjoint destinations produced by managed copy, so
+ * replay transforms them in the same deterministic causal order as the applied
+ * structural history.
+ */
 export class CompositeEdit extends Edit {
   readonly kind = "Composite";
 
@@ -256,21 +267,7 @@ export class CompositeEdit extends Edit {
 
   apply(doc: Node): void {
     this.primary.apply(doc);
-    for (const mirror of this.mirrors) {
-      if (!mirror.canApply(doc)) {
-        continue;
-      }
-      try {
-        mirror.validate(doc);
-      } catch (error) {
-        if (
-          error instanceof ProtectedTargetError ||
-          error instanceof MissingReferenceTargetError
-        ) {
-          continue;
-        }
-        throw error;
-      }
+    for (const mirror of this.collectApplicableMirrorEdits(doc)) {
       mirror.apply(doc);
     }
   }
@@ -281,22 +278,7 @@ export class CompositeEdit extends Edit {
 
   override validate(doc: Node): void {
     this.primary.validate(doc);
-    for (const mirror of this.mirrors) {
-      if (!mirror.canApply(doc)) {
-        continue;
-      }
-      try {
-        mirror.validate(doc);
-      } catch (error) {
-        if (
-          error instanceof ProtectedTargetError ||
-          error instanceof MissingReferenceTargetError
-        ) {
-          continue;
-        }
-        throw error;
-      }
-    }
+    this.collectApplicableMirrorEdits(doc);
   }
 
   transformSelector(sel: Selector): SelectorTransform {
@@ -317,6 +299,10 @@ export class CompositeEdit extends Edit {
   }
 
   override transformConcurrentEdit(concurrent: Edit): Edit {
+    // Replay applies structural edits in deterministic topological order, so a
+    // later concurrent edit must be transformed through the primary structural
+    // change first and then through each mirrored structural change in that
+    // same order.
     let transformed = this.primary.transformConcurrentEdit(concurrent);
     for (const mirror of this.mirrors) {
       if (transformed instanceof NoOpEdit) {
@@ -331,7 +317,9 @@ export class CompositeEdit extends Edit {
     return other instanceof CompositeEdit &&
       this.primary.equals(other.primary) &&
       this.mirrors.length === other.mirrors.length &&
-      this.mirrors.every((mirror, index) => mirror.equals(other.mirrors[index]!));
+      this.mirrors.every((mirror, index) =>
+        mirror.equals(other.mirrors[index]!)
+      );
   }
 
   withTarget(target: Selector): Edit {
@@ -339,7 +327,31 @@ export class CompositeEdit extends Edit {
   }
 
   encodeRemoteEdit(): EncodedRemoteEdit {
-    throw new Error("CompositeEdit is an internal replay artifact.");
+    throw new Error(
+      "CompositeEdit is an internal replay artifact and cannot be serialized for remote transmission.",
+    );
+  }
+
+  private collectApplicableMirrorEdits(doc: Node): Edit[] {
+    const applicableMirrors: Edit[] = [];
+    for (const mirror of this.mirrors) {
+      if (!mirror.canApply(doc)) {
+        continue;
+      }
+      try {
+        mirror.validate(doc);
+      } catch (error) {
+        if (
+          error instanceof ProtectedTargetError ||
+          error instanceof MissingReferenceTargetError
+        ) {
+          continue;
+        }
+        throw error;
+      }
+      applicableMirrors.push(mirror);
+    }
+    return applicableMirrors;
   }
 }
 

@@ -143,11 +143,16 @@ export class CopyEdit extends Edit {
     if (transformed instanceof NoOpEdit) {
       return transformed;
     }
-    const mirroredTarget = this.computeMirroredTarget(transformed.target);
+    if (this.source.equals(this.target)) {
+      return transformed;
+    }
+    const mirroredTarget = this.computeMirrorTargetSelector(transformed.target);
     if (mirroredTarget === null || mirroredTarget.equals(transformed.target)) {
       return transformed;
     }
-    return createCompositeEdit(transformed, [transformed.withTarget(mirroredTarget)]);
+    return createCompositeEdit(transformed, [
+      transformed.withTarget(mirroredTarget),
+    ]);
   }
 
   override transform(prior: Edit): Edit {
@@ -168,22 +173,73 @@ export class CopyEdit extends Edit {
     return new CopyEdit(t.selector, s.selector);
   }
 
-  private computeMirroredTarget(sel: Selector): Selector | null {
+  /**
+   * Maps a concrete selector inside the copy source onto the corresponding
+   * managed-copy target path.
+   *
+   * Supported shapes:
+   * - direct subtree copies with no wildcards (for example `a/source` to `a/target`)
+   * - one-to-one wildcard copies (for example `rows/<index>/name` to `rows/<index>/email`)
+   * - copying a wildcard source collection into a single list target
+   *   (for example `scratch/<index>` to `items`), where the captured source index becomes the list
+   *   item index under the target list.
+   *
+   * More ambiguous source/target shape pairs currently opt out of mirroring and
+   * return `null` instead of guessing a selector that could diverge.
+   */
+  private computeMirrorTargetSelector(sel: Selector): Selector | null {
     const matchedSource = this.source.matchPrefix(sel);
     if (matchedSource.kind === "no-match") {
+      // Only selectors inside the copied source subtree should be mirrored onto
+      // the new copy target.
       return null;
     }
-    const wildcardCaptures = this.source.segments.flatMap((segment, index) =>
-      segment === "*" ? [matchedSource.specificPrefix.segments[index]!] : []
+    const wildcardCaptures = this.extractWildcardCaptures(
+      matchedSource.specificPrefix,
     );
+    const targetWildcardCount = this.computeWildcardSegmentCount(this.target);
+    // Supported mirroring patterns:
+    // 1. Source and target expose the same number of wildcard slots, so captures
+    //    substitute one-to-one into the target selector.
+    // 2. A single wildcard-selected source collection is copied into one list
+    //    target, so the captured source index becomes the copied list item index.
+    if (
+      !(
+        wildcardCaptures.length === targetWildcardCount ||
+        (targetWildcardCount === 0 && wildcardCaptures.length === 1)
+      )
+    ) {
+      return null;
+    }
+    let captureIndex = 0;
     const mirroredPrefix = this.target.segments.map((segment) =>
-      segment === "*" ? wildcardCaptures.shift() ?? "*" : segment
+      segment === "*" ? wildcardCaptures[captureIndex++]! : segment
     );
     return new Selector([
       ...mirroredPrefix,
-      ...wildcardCaptures,
+      ...wildcardCaptures.slice(captureIndex),
       ...matchedSource.rest.segments,
     ]);
+  }
+
+  private extractWildcardCaptures(
+    specificSourcePrefix: Selector,
+  ): Selector["segments"] {
+    const captures: Selector["segments"] = [];
+    for (
+      let segmentIndex = 0;
+      segmentIndex < this.source.length;
+      segmentIndex++
+    ) {
+      if (this.source.segments[segmentIndex] === "*") {
+        captures.push(specificSourcePrefix.segments[segmentIndex]!);
+      }
+    }
+    return captures;
+  }
+
+  private computeWildcardSegmentCount(selector: Selector): number {
+    return selector.segments.filter((segment) => segment === "*").length;
   }
 
   equals(other: Edit): boolean {
