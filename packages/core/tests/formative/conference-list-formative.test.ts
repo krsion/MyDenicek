@@ -15,7 +15,7 @@ Deno.test("Formative: Conference List", () => {
   const alice = new Denicek("alice", initialDocument);
   const bob = new Denicek("bob", initialDocument);
 
-  const syncPeers = (): void => {
+  const synchronizePeers = (): void => {
     const aliceFrontiers = alice.frontiers;
     const bobFrontiers = bob.frontiers;
     for (const event of alice.eventsSince(bobFrontiers)) bob.applyRemote(event);
@@ -34,7 +34,7 @@ Deno.test("Formative: Conference List", () => {
   bob.rename("speakers/*/*", "contact", "name");
   bob.add("speakers/*/*", "email", "");
 
-  syncPeers();
+  synchronizePeers();
 
   const plainConferenceDocument = bob.toPlain() as {
     speakers: {
@@ -52,7 +52,7 @@ Deno.test("Formative: Conference List", () => {
     bob.set(`speakers/${rowIndex}/0/email`, email);
   }
 
-  syncPeers();
+  synchronizePeers();
 
   const expected = {
     $tag: "div",
@@ -89,3 +89,81 @@ Deno.test("Formative: Conference List", () => {
   assertEquals(alice.toPlain(), expected);
   assertEquals(bob.toPlain(), expected);
 });
+
+Deno.test(
+  "Formative: Conference List wildcard copy affects concurrently added speaker",
+  () => {
+    const initialDocument = {
+      $tag: "div",
+      speakers: {
+        $tag: "table",
+        $items: [
+          {
+            $tag: "tr",
+            $items: [{ $tag: "td", name: "Ada Lovelace", email: "" }],
+          },
+          {
+            $tag: "tr",
+            $items: [{ $tag: "td", name: "Grace Hopper", email: "" }],
+          },
+        ],
+      },
+    };
+    const alice = new Denicek("alice", initialDocument);
+    const bob = new Denicek("bob", initialDocument);
+
+    const synchronizePeers = (): void => {
+      const aliceFrontiers = alice.frontiers;
+      const bobFrontiers = bob.frontiers;
+      for (const event of alice.eventsSince(bobFrontiers)) {
+        bob.applyRemote(event);
+      }
+      for (const event of bob.eventsSince(aliceFrontiers)) {
+        alice.applyRemote(event);
+      }
+    };
+
+    alice.pushBack("speakers", {
+      $tag: "tr",
+      $items: [{ $tag: "td", name: "Barbara Liskov", email: "" }],
+    });
+    bob.copy("speakers/*/*/email", "speakers/*/*/name");
+
+    synchronizePeers();
+
+    const expected = {
+      $tag: "div",
+      speakers: {
+        $tag: "table",
+        $items: [
+          {
+            $tag: "tr",
+            $items: [{
+              $tag: "td",
+              name: "Ada Lovelace",
+              email: "Ada Lovelace",
+            }],
+          },
+          {
+            $tag: "tr",
+            $items: [{
+              $tag: "td",
+              name: "Grace Hopper",
+              email: "Grace Hopper",
+            }],
+          },
+          {
+            $tag: "tr",
+            $items: [{
+              $tag: "td",
+              name: "Barbara Liskov",
+              email: "Barbara Liskov",
+            }],
+          },
+        ],
+      },
+    };
+    assertEquals(alice.toPlain(), expected);
+    assertEquals(bob.toPlain(), expected);
+  },
+);
