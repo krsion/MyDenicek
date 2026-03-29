@@ -590,6 +590,89 @@ Deno.test("concurrent edit to list-copy source item is mirrored onto copied list
   assertEquals(bob.toPlain(), expected);
 });
 
+Deno.test("concurrent wildcard wrap on copy destination wraps copied list items", () => {
+  const doc = {
+    $tag: "root",
+    scratch: {
+      $tag: "scratch",
+      $items: [
+        { $tag: "task", title: "draft" },
+        { $tag: "task", title: "queued" },
+      ],
+    },
+    items: {
+      $tag: "items",
+      $items: [{ $tag: "task", title: "stale" }],
+    },
+  };
+  const alice = new Denicek("alice", doc);
+  const bob = new Denicek("bob", doc);
+
+  alice.copy("items", "scratch/*");
+  bob.wrapList("items/*", "wrapped");
+
+  sync(alice, bob);
+
+  const expected = {
+    $tag: "root",
+    scratch: {
+      $tag: "scratch",
+      $items: [
+        { $tag: "task", title: "draft" },
+        { $tag: "task", title: "queued" },
+      ],
+    },
+    items: {
+      $tag: "items",
+      $items: [
+        { $tag: "wrapped", $items: [{ $tag: "task", title: "draft" }] },
+        { $tag: "wrapped", $items: [{ $tag: "task", title: "queued" }] },
+      ],
+    },
+  };
+  assertEquals(alice.toPlain(), expected);
+  assertEquals(bob.toPlain(), expected);
+});
+
+Deno.test("same-list wildcard copy replays before concurrent wildcard wrap", () => {
+  const doc = {
+    $tag: "root",
+    items: {
+      $tag: "items",
+      $items: [{
+        $tag: "project",
+        subtasks: {
+          $tag: "subtasks",
+          $items: [
+            { $tag: "task", title: "draft" },
+            { $tag: "task", title: "queued" },
+          ],
+        },
+      }],
+    },
+  };
+  const alice = new Denicek("alice", doc);
+  const bob = new Denicek("bob", doc);
+
+  alice.copy("items", "items/0/subtasks/*");
+  bob.wrapList("items/*", "wrapped");
+
+  sync(alice, bob);
+
+  const expected = {
+    $tag: "root",
+    items: {
+      $tag: "items",
+      $items: [
+        { $tag: "wrapped", $items: [{ $tag: "task", title: "draft" }] },
+        { $tag: "wrapped", $items: [{ $tag: "task", title: "queued" }] },
+      ],
+    },
+  };
+  assertEquals(alice.toPlain(), expected);
+  assertEquals(bob.toPlain(), expected);
+});
+
 Deno.test("update-tag changes tag on record", () => {
   const core = new Denicek("alice", {
     $tag: "root",

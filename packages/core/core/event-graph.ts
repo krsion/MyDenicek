@@ -1,8 +1,9 @@
 import { BinaryHeap } from "@std/data-structures/binary-heap";
-import { type Edit, NoOpEdit } from "./edits.ts";
+import { CopyEdit, type Edit, NoOpEdit } from "./edits.ts";
 import { Event } from "./event.ts";
 import { EventId } from "./event-id.ts";
 import type { Node } from "./nodes.ts";
+import type { Selector } from "./selector.ts";
 import { VectorClock } from "./vector-clock.ts";
 
 // ── EventGraph ──────────────────────────────────────────────────────
@@ -291,6 +292,10 @@ export class EventGraph {
     const compareEvents = (leftKey: string, rightKey: string) => {
       const leftEvent = events.get(leftKey) as Event,
         rightEvent = events.get(rightKey) as Event;
+      const copyOrder = this.compareCopyReplayOrder(leftEvent, rightEvent);
+      if (copyOrder !== 0) {
+        return copyOrder;
+      }
       const leftTarget = leftEvent.edit.target,
         rightTarget = rightEvent.edit.target;
       const minLength = Math.min(leftTarget.length, rightTarget.length);
@@ -322,6 +327,65 @@ export class EventGraph {
       throw new Error("Event graph contains a cycle.");
     }
     return ordered;
+  }
+
+  private compareCopyReplayOrder(leftEvent: Event, rightEvent: Event): number {
+    if (
+      leftEvent.edit instanceof CopyEdit &&
+      !(rightEvent.edit instanceof CopyEdit)
+    ) {
+      return this.compareCopyEventAgainstEdit(leftEvent.edit, rightEvent.edit);
+    }
+    if (
+      rightEvent.edit instanceof CopyEdit &&
+      !(leftEvent.edit instanceof CopyEdit)
+    ) {
+      return -this.compareCopyEventAgainstEdit(rightEvent.edit, leftEvent.edit);
+    }
+    return 0;
+  }
+
+  private compareCopyEventAgainstEdit(
+    copyEdit: CopyEdit,
+    otherEdit: Edit,
+  ): number {
+    if (this.doesEditTouchSelectorAtOrBelow(otherEdit, copyEdit.target)) {
+      return -1;
+    }
+    if (this.doesEditTouchStrictAncestor(otherEdit, copyEdit.target)) {
+      return 1;
+    }
+    if (this.doesEditTouchSelector(otherEdit, copyEdit.source)) {
+      return 1;
+    }
+    return 0;
+  }
+
+  private doesEditTouchSelectorAtOrBelow(
+    edit: Edit,
+    selector: Selector,
+  ): boolean {
+    return edit.selectors.some((candidate) =>
+      selector.matchPrefix(candidate).kind === "matched"
+    );
+  }
+
+  private doesEditTouchStrictAncestor(edit: Edit, selector: Selector): boolean {
+    return edit.selectors.some((candidate) =>
+      candidate.length < selector.length &&
+      candidate.matchPrefix(selector).kind === "matched"
+    );
+  }
+
+  private doesEditTouchSelector(edit: Edit, selector: Selector): boolean {
+    return edit.selectors.some((candidate) =>
+      this.doSelectorsOverlap(candidate, selector)
+    );
+  }
+
+  private doSelectorsOverlap(left: Selector, right: Selector): boolean {
+    return left.matchPrefix(right).kind === "matched" ||
+      right.matchPrefix(left).kind === "matched";
   }
 
   materialize(frontier?: EventId[]): MaterializeResult {
