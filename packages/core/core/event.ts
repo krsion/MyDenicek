@@ -4,7 +4,7 @@ import {
   NoOpEdit,
   ProtectedTargetError,
 } from "./edits.ts";
-import type { EventId } from "./event-id.ts";
+import { EventId } from "./event-id.ts";
 import type { Node } from "./nodes.ts";
 import type { VectorClock } from "./vector-clock.ts";
 
@@ -35,6 +35,7 @@ export class Event {
 
   validate(known: Map<string, Event>): void {
     const key = this.id.format();
+    EventId.validatePeer(this.id.peer);
     if (!Number.isInteger(this.id.seq) || this.id.seq < 0) {
       throw new Error(`Invalid seq for '${key}'.`);
     }
@@ -44,6 +45,25 @@ export class Event {
     for (const p of this.parents) {
       if (!known.has(p.format())) {
         throw new Error(`Unknown parent '${p.format()}' for event '${key}'.`);
+      }
+    }
+    for (const [peer, seq] of this.clock.entryRecords()) {
+      EventId.validatePeer(peer);
+      if (!Number.isInteger(seq) || seq < 0) {
+        throw new Error(`Invalid vector clock entry '${peer}:${seq}' for '${key}'.`);
+      }
+    }
+    if (this.clock.get(this.id.peer) !== this.id.seq) {
+      throw new Error(
+        `Event '${key}' must carry vector clock entry '${this.id.peer}:${this.id.seq}'.`,
+      );
+    }
+    for (const parent of this.parents) {
+      const parentEvent = known.get(parent.format())!;
+      if (!this.clock.dominates(parentEvent.clock)) {
+        throw new Error(
+          `Event '${key}' must dominate parent clock '${parent.format()}'.`,
+        );
       }
     }
   }
@@ -96,6 +116,3 @@ export class Event {
     return edit;
   }
 }
-
-/** Opaque event payload exchanged between peers via {@link Denicek.eventsSince}, {@link Denicek.drain}, and {@link Denicek.applyRemote}. */
-export type RemoteEvent = unknown;

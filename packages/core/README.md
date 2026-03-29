@@ -29,7 +29,7 @@ console.log(doc.toPlain());
 
 ## Sync two peers
 
-The package exposes typed `RemoteEvent` payloads for replication. You do not need to inspect their internals; you only need to move them between peers.
+The package exposes typed `RemoteEvent` payloads for replication. They are plain serializable objects, so you can move them between peers without depending on internal `Event` classes.
 
 ```ts
 import { Denicek } from "jsr:@mydenicek/core";
@@ -84,8 +84,8 @@ Record field names must be selector-addressable, so they cannot be empty, contai
 From the repository root:
 
 ```sh
-deno check packages/core/mod.ts
-deno test --allow-all --no-check packages/core/tests
+deno task check
+deno task test
 deno test packages/core/tests/core-properties.test.ts --allow-all
 deno run packages/core/tools/core-random-fuzzer.ts
 ```

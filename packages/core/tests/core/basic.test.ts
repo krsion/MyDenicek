@@ -2,6 +2,7 @@ import {
   assertEquals,
   assertThrows,
   Denicek,
+  encodeRemoteEvent,
   Event,
   EventId,
   materializedConflicts,
@@ -98,7 +99,7 @@ Deno.test("rejects remote delete events that would remove referenced nodes", () 
   );
 
   assertThrows(
-    () => core.applyRemote(invalidDelete),
+    () => core.applyRemote(encodeRemoteEvent(invalidDelete)),
     Error,
     "cannot remove 'person'",
   );

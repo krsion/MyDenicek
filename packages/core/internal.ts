@@ -18,13 +18,13 @@ export {
   WrapRecordEdit,
 } from "./core/edits.ts";
 export { Event } from "./core/event.ts";
-export type { RemoteEvent } from "./core/event.ts";
 export { EventId } from "./core/event-id.ts";
 export { Node } from "./core/nodes.ts";
 export { decodeRemoteEvent, encodeRemoteEvent } from "./core/remote-events.ts";
 export type {
   EncodedRemoteEvent,
   EncodedRemoteEventId,
+  RemoteEvent,
 } from "./core/remote-events.ts";
 export {
   applyRegisteredPrimitiveEdit,

@@ -43,6 +43,10 @@ export class VectorClock {
     return new VectorClock(this.entries);
   }
 
+  entryRecords(): [string, number][] {
+    return Object.entries(this.entries);
+  }
+
   toRecord(): Record<string, number> {
     return { ...this.entries };
   }

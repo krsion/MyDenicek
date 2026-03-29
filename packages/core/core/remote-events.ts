@@ -18,6 +18,9 @@ export interface EncodedRemoteEvent {
   clock: Record<string, number>;
 }
 
+/** Public transport payload exchanged between peers. */
+export type RemoteEvent = EncodedRemoteEvent;
+
 function encodeRemoteEventId(eventId: EventId): EncodedRemoteEventId {
   return { peer: eventId.peer, seq: eventId.seq };
 }

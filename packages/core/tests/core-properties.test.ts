@@ -11,7 +11,6 @@
 import fc from "fast-check";
 import { assert, assertEquals } from "@std/assert";
 import { Denicek, type PlainNode, type PrimitiveValue } from "../mod.ts";
-import { ProtectedTargetError } from "../core/edits.ts";
 
 // ══════════════════════════════════════════════════════════════════════
 // HELPERS
@@ -19,20 +18,8 @@ import { ProtectedTargetError } from "../core/edits.ts";
 
 function sync(a: Denicek, b: Denicek): void {
   const af = a.frontiers, bf = b.frontiers;
-  for (const e of a.eventsSince(bf)) {
-    try {
-      b.applyRemote(e);
-    } catch (error) {
-      if (!(error instanceof ProtectedTargetError)) throw error;
-    }
-  }
-  for (const e of b.eventsSince(af)) {
-    try {
-      a.applyRemote(e);
-    } catch (error) {
-      if (!(error instanceof ProtectedTargetError)) throw error;
-    }
-  }
+  for (const e of a.eventsSince(bf)) b.applyRemote(e);
+  for (const e of b.eventsSince(af)) a.applyRemote(e);
 }
 
 function syncAll(peers: Denicek[]): void {
@@ -117,6 +104,43 @@ function applyEditOp(peer: Denicek, op: EditOp): void {
   }
 }
 
+function canRejectEditOp(error: unknown): error is Error {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  return [
+    "No nodes match selector",
+    "list is empty",
+    "already exists",
+    "cannot remove",
+    "cannot create reference",
+    "does not support",
+    "copy:",
+  ].some((messagePart) => error.message.includes(messagePart));
+}
+
+function applyEditOpWithExplicitRejection(peer: Denicek, op: EditOp): void {
+  const beforeState = JSON.stringify(peer.toPlain());
+  const beforeEvents = peer.inspectEvents().length;
+  try {
+    applyEditOp(peer, op);
+  } catch (error) {
+    if (!canRejectEditOp(error)) {
+      throw error;
+    }
+    assertEquals(
+      peer.inspectEvents().length,
+      beforeEvents,
+      "Rejected edit must not record a new event.",
+    );
+    assertEquals(
+      JSON.stringify(peer.toPlain()),
+      beforeState,
+      "Rejected edit must not mutate document state.",
+    );
+  }
+}
+
 function runOps(doc: PlainNode, ops: Op[]): Denicek[] {
   const peers = Array.from(
     { length: NUM_PEERS },
@@ -126,9 +150,7 @@ function runOps(doc: PlainNode, ops: Op[]): Denicek[] {
     if (op.kind === "sync") {
       sync(peers[op.a]!, peers[op.b]!);
     } else {
-      try {
-        applyEditOp(peers[op.peer]!, op.op);
-      } catch { /* edit may fail */ }
+      applyEditOpWithExplicitRejection(peers[op.peer]!, op.op);
     }
   }
   return peers;
@@ -787,9 +809,18 @@ function assertAllSyncOrdersConverge(
       (_, i) => new Denicek(`peer${i}`, doc),
     );
     for (let i = 0; i < edits.length; i++) {
+      const peer = peers[i]!;
+      const beforeState = JSON.stringify(peer.toPlain());
+      const beforeEvents = peer.inspectEvents().length;
       try {
-        edits[i]!(peers[i]!);
-      } catch { /* edit may fail */ }
+        edits[i]!(peer);
+      } catch (error) {
+        if (!canRejectEditOp(error)) {
+          throw error;
+        }
+        assertEquals(peer.inspectEvents().length, beforeEvents);
+        assertEquals(JSON.stringify(peer.toPlain()), beforeState);
+      }
     }
     for (const [a, b] of syncOrder) sync(peers[a]!, peers[b]!);
     for (const [a, b] of syncOrder) sync(peers[a]!, peers[b]!);

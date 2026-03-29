@@ -29,11 +29,7 @@ export class SetValueEdit extends NoOpOnRemovedTargetEdit {
   apply(doc: Node): void {
     const nodes = this.navigateOrThrow(doc, this.target);
     for (const node of nodes) {
-      if (!node.setPrimitive(this.value)) {
-        throw new Error(
-          `${this.constructor.name}: expected PrimitiveNode, found '${node.constructor.name}'`,
-        );
-      }
+      node.setPrimitive(this.value);
     }
   }
 

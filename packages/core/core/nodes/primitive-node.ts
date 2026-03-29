@@ -9,9 +9,8 @@ export class PrimitiveNode extends Node {
     this.value = value;
   }
 
-  override setPrimitive(value: PrimitiveValue): boolean {
+  override setPrimitive(value: PrimitiveValue): void {
     this.value = value;
-    return true;
   }
 
   protected resolveSegment(): { key: SelectorSegment; child: Node }[] {

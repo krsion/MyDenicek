@@ -11,22 +11,20 @@ export class RecordNode extends Node {
     this.fields = fields;
   }
 
-  override addField(name: string, value: Node): boolean {
+  override addField(name: string, value: Node): void {
     this.fields[name] = value;
-    return true;
   }
 
-  override deleteField(name: string): boolean {
+  override deleteField(name: string): void {
     const result: Record<string, Node> = {};
     for (const k in this.fields) {
       if (k !== name) result[k] = this.fields[k]!;
     }
     this.fields = result;
-    return true;
   }
 
-  override renameField(from: string, to: string): boolean {
-    if (from === to || !(from in this.fields)) return true;
+  override renameField(from: string, to: string): void {
+    if (from === to || !(from in this.fields)) return;
     const result: Record<string, Node> = {};
     for (const k in this.fields) {
       if (k === from) result[to] = this.fields[k]!;
@@ -34,12 +32,10 @@ export class RecordNode extends Node {
       else result[k] = this.fields[k]!;
     }
     this.fields = result;
-    return true;
   }
 
-  override updateTag(tag: string): boolean {
+  override updateTag(tag: string): void {
     this.tag = tag;
-    return true;
   }
 
   protected resolveSegment(

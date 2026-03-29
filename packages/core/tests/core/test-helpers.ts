@@ -5,6 +5,7 @@ import { Event } from "../../core/event.ts";
 import { EventGraph } from "../../core/event-graph.ts";
 import { EventId } from "../../core/event-id.ts";
 import { Node, PrimitiveNode, RecordNode } from "../../core/nodes.ts";
+import { encodeRemoteEvent } from "../../core/remote-events.ts";
 import { Selector } from "../../core/selector.ts";
 import { VectorClock } from "../../core/vector-clock.ts";
 
@@ -65,6 +66,7 @@ export {
   Event,
   EventGraph,
   EventId,
+  encodeRemoteEvent,
   materializedConflicts,
   Node,
   PrimitiveNode,

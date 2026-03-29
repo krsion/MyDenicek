@@ -12,26 +12,89 @@ import {
   RecordAddEdit,
   RecordDeleteEdit,
   RecordNode,
+  encodeRemoteEvent,
   registerPrimitiveEdit,
   Selector,
   VectorClock,
 } from "./test-helpers.ts";
+
+Deno.test("rejects peer ids containing the event-id separator", () => {
+  assertThrows(
+    () => new Denicek("alice:west"),
+    Error,
+    "cannot contain ':'",
+  );
+});
+
+Deno.test("drain returns encoded remote events", () => {
+  const alice = new Denicek("alice");
+
+  alice.add("", "title", "Draft");
+
+  assertEquals(alice.drain(), [{
+    id: { peer: "alice", seq: 0 },
+    parents: [],
+    edit: {
+      kind: "RecordAddEdit",
+      target: "title",
+      node: "Draft",
+    },
+    clock: { alice: 0 },
+  }]);
+});
 
 Deno.test("applyRemote rejects conflicting payload", () => {
   const alice = new Denicek("alice");
   alice.add("", "x", "a");
   const [event] = alice.drain();
   // Same id but different edit content
-  const conflicting = new Event(
-    event.id,
-    event.parents,
-    new RecordAddEdit(Selector.parse("y"), new PrimitiveNode("b")),
-    event.clock,
-  );
+  const conflicting = {
+    ...event,
+    edit: { kind: "RecordAddEdit" as const, target: "y", node: "b" },
+  };
   assertThrows(
     () => alice.applyRemote(conflicting),
     Error,
     "Conflicting payload",
+  );
+});
+
+Deno.test("applyRemote rejects events whose vector clock does not match their id", () => {
+  const alice = new Denicek("alice");
+  const invalidClockEvent = encodeRemoteEvent(new Event(
+    new EventId("bob", 1),
+    [],
+    new RecordAddEdit(Selector.parse("x"), new PrimitiveNode("b")),
+    new VectorClock({ bob: 0 }),
+  ));
+
+  assertThrows(
+    () => alice.applyRemote(invalidClockEvent),
+    Error,
+    "must carry vector clock entry 'bob:1'",
+  );
+});
+
+Deno.test("applyRemote rejects events whose vector clock does not dominate parents", () => {
+  const alice = new Denicek("alice");
+  const parentEvent = encodeRemoteEvent(new Event(
+    new EventId("bob", 0),
+    [],
+    new RecordAddEdit(Selector.parse("x"), new PrimitiveNode("a")),
+    new VectorClock({ bob: 0 }),
+  ));
+  alice.applyRemote(parentEvent);
+  const childEvent = encodeRemoteEvent(new Event(
+    new EventId("bob", 1),
+    [new EventId("bob", 0)],
+    new RecordAddEdit(Selector.parse("y"), new PrimitiveNode("b")),
+    new VectorClock({ bob: 1 }),
+  ));
+
+  assertThrows(
+    () => alice.applyRemote(childEvent),
+    Error,
+    "must dominate parent clock",
   );
 });
 
@@ -220,7 +283,7 @@ Deno.test("commit throws on kind mismatch", () => {
   assertThrows(
     () => core.add("items", "x", "a"),
     Error,
-    "expected record, found 'ListNode'",
+    "does not support 'addField'",
   );
 });
 
