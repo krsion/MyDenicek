@@ -82,6 +82,9 @@ export class Denicek {
       this.cachedDoc = doc;
       return event.id.format();
     } catch (e) {
+      // Failed local edits must be side-effect-free from the caller's point of
+      // view: they must not record events and must not keep a partially mutated
+      // cached document alive for future operations.
       this.cachedDoc = null;
       throw e;
     }

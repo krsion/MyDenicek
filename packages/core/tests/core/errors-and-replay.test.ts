@@ -73,7 +73,7 @@ Deno.test("applyRemote rejects events whose vector clock does not match their id
   assertThrows(
     () => alice.applyRemote(invalidClockEvent),
     Error,
-    "must carry vector clock entry 'bob:1'",
+    "must have vector clock entry bob=1",
   );
 });
 
@@ -100,7 +100,7 @@ Deno.test("applyRemote rejects events whose vector clock does not dominate paren
   assertThrows(
     () => alice.applyRemote(childEvent),
     Error,
-    "must dominate parent clock",
+    "must dominate parent",
   );
 });
 

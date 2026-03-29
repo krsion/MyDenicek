@@ -55,16 +55,23 @@ export class Event {
         );
       }
     }
+    // Every event advances exactly one peer-local sequence number, so the event's
+    // own vector-clock component must match its stable id. Otherwise concurrency
+    // checks could treat the event as if it had happened before or after itself.
     if (this.clock.get(this.id.peer) !== this.id.seq) {
       throw new Error(
-        `Event '${key}' must carry vector clock entry '${this.id.peer}:${this.id.seq}'.`,
+        `Event '${key}' must have vector clock entry ${this.id.peer}=${this.id.seq}, ` +
+          `but found ${this.clock.get(this.id.peer)}.`,
       );
     }
     for (const parent of this.parents) {
       const parentEvent = known.get(parent.format())!;
+      // A child must happen after every parent in the causal DAG, so its vector
+      // clock has to dominate each parent clock component-wise.
       if (!this.clock.dominates(parentEvent.clock)) {
         throw new Error(
-          `Event '${key}' must dominate parent clock '${parent.format()}'.`,
+          `Event '${key}' clock ${JSON.stringify(this.clock.toRecord())} must dominate parent ` +
+            `'${parent.format()}' clock ${JSON.stringify(parentEvent.clock.toRecord())}.`,
         );
       }
     }

@@ -130,6 +130,8 @@ function applyEditOpWithExplicitRejection(peer: Denicek, op: EditOp): void {
     if (!canRejectEditOp(error)) {
       throw error;
     }
+    // Failed edits are allowed in the generated trace, but they must behave like
+    // atomic rejections: no event is recorded and no partial state survives.
     assertEquals(
       peer.inspectEvents().length,
       beforeEvents,
