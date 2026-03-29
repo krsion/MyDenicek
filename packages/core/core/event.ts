@@ -70,8 +70,12 @@ export class Event {
       // clock has to dominate each parent clock component-wise.
       if (!this.clock.dominates(parentEvent.clock)) {
         throw new Error(
-          `Event '${key}' clock ${JSON.stringify(this.clock.toRecord())} must dominate parent ` +
-            `'${parent.format()}' clock ${JSON.stringify(parentEvent.clock.toRecord())}.`,
+          `Event '${key}' clock ${
+            JSON.stringify(this.clock.toRecord())
+          } must dominate parent ` +
+            `'${parent.format()}' clock ${
+              JSON.stringify(parentEvent.clock.toRecord())
+            }.`,
         );
       }
     }
