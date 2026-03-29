@@ -329,6 +329,18 @@ export class Denicek {
    * acknowledged frontier set. This refuses stale frontiers and buffered events.
    */
   compact(acknowledgedFrontiers: string[]): void {
+    if (!Array.isArray(acknowledgedFrontiers)) {
+      throw new Error(
+        "Compaction frontiers must be provided as an array of event ids.",
+      );
+    }
+    if (
+      acknowledgedFrontiers.some((frontier) => typeof frontier !== "string")
+    ) {
+      throw new Error(
+        "Compaction frontiers must only contain event id strings.",
+      );
+    }
     this.graph.compact(
       acknowledgedFrontiers.map((frontier) => EventId.parse(frontier)),
     );

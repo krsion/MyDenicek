@@ -1,10 +1,29 @@
+import { EventId } from "./event-id.ts";
+
 // ── VectorClock ─────────────────────────────────────────────────────
+
+function validateClockEntry(peer: string, seq: number): void {
+  EventId.validatePeer(peer);
+  if (!Number.isSafeInteger(seq) || seq < 0) {
+    throw new Error(
+      `Invalid vector clock entry ${peer}=${
+        String(seq)
+      }. Expected a non-negative safe integer.`,
+    );
+  }
+}
 
 export class VectorClock {
   private entries: Record<string, number>;
 
   constructor(entries?: Record<string, number>) {
-    this.entries = entries ? { ...entries } : {};
+    this.entries = {};
+    if (entries !== undefined) {
+      for (const [peer, seq] of Object.entries(entries)) {
+        validateClockEntry(peer, seq);
+        this.entries[peer] = seq;
+      }
+    }
   }
 
   get(peer: string): number {
@@ -12,12 +31,13 @@ export class VectorClock {
   }
 
   set(peer: string, seq: number): void {
+    validateClockEntry(peer, seq);
     this.entries[peer] = seq;
   }
 
   tick(peer: string): number {
     const next = this.get(peer) + 1;
-    this.entries[peer] = next;
+    this.set(peer, next);
     return next;
   }
 
@@ -29,7 +49,7 @@ export class VectorClock {
 
   merge(other: VectorClock): void {
     for (const [peer, seq] of Object.entries(other.entries)) {
-      this.entries[peer] = Math.max(this.get(peer), seq);
+      this.set(peer, Math.max(this.get(peer), seq));
     }
   }
 

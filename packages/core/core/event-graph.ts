@@ -27,6 +27,8 @@ type PendingDependencyIndex = {
   childKeysByMissingParent: ChildKeysByMissingParent;
   readyKeys: string[];
 };
+const MAX_BUFFERED_REMOTE_EVENTS = 10_000;
+const MAX_REPLAY_TRANSFORMATIONS = 10_000;
 
 export class EventGraph {
   private initial: Node;
@@ -81,6 +83,7 @@ export class EventGraph {
     const doc = this.initial.clone();
     const applied: { ev: Event; edit: Edit }[] = [];
     let replayEdit: Edit | null = null;
+    let replayTransformationCount = 0;
     for (const orderedKey of ordered) {
       const event = this.events.get(orderedKey) as Event;
       const edit = event.resolveAgainst(applied, doc);
@@ -92,6 +95,12 @@ export class EventGraph {
         }
         replayEdit = edit;
       } else if (replayEdit !== null && edit.isStructural) {
+        replayTransformationCount++;
+        if (replayTransformationCount > MAX_REPLAY_TRANSFORMATIONS) {
+          throw new Error(
+            `Cannot replay event '${key}' through more than ${MAX_REPLAY_TRANSFORMATIONS} structural transformations.`,
+          );
+        }
         replayEdit = edit.transformConcurrentEdit(replayEdit);
         if (replayEdit instanceof NoOpEdit) {
           throw new Error(
@@ -242,6 +251,12 @@ export class EventGraph {
       childKeysByMissingParent,
       readyKeys,
     );
+    if (this.bufferedEvents.length > MAX_BUFFERED_REMOTE_EVENTS) {
+      this.bufferedEvents = [];
+      throw new Error(
+        `Cannot buffer more than ${MAX_BUFFERED_REMOTE_EVENTS} out-of-order remote events.`,
+      );
+    }
     return [...this.bufferedEvents];
   }
 
