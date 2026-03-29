@@ -15,7 +15,7 @@ Deno.test("Formative: Conference List", () => {
   const alice = new Denicek("alice", initialDocument);
   const bob = new Denicek("bob", initialDocument);
 
-  const syncPeers = (): void => {
+  const synchronizePeers = (): void => {
     const aliceFrontiers = alice.frontiers;
     const bobFrontiers = bob.frontiers;
     for (const event of alice.eventsSince(bobFrontiers)) bob.applyRemote(event);
@@ -34,7 +34,7 @@ Deno.test("Formative: Conference List", () => {
   bob.rename("speakers/*/*", "contact", "name");
   bob.add("speakers/*/*", "email", "");
 
-  syncPeers();
+  synchronizePeers();
 
   const plainConferenceDocument = bob.toPlain() as {
     speakers: {
@@ -52,7 +52,7 @@ Deno.test("Formative: Conference List", () => {
     bob.set(`speakers/${rowIndex}/0/email`, email);
   }
 
-  syncPeers();
+  synchronizePeers();
 
   const expected = {
     $tag: "div",
@@ -112,7 +112,7 @@ Deno.test(
     const alice = new Denicek("alice", initialDocument);
     const bob = new Denicek("bob", initialDocument);
 
-    const syncPeers = (): void => {
+    const synchronizePeers = (): void => {
       const aliceFrontiers = alice.frontiers;
       const bobFrontiers = bob.frontiers;
       for (const event of alice.eventsSince(bobFrontiers)) bob.applyRemote(event);
@@ -127,7 +127,7 @@ Deno.test(
     });
     bob.copy("speakers/*/*/email", "speakers/*/*/name");
 
-    syncPeers();
+    synchronizePeers();
 
     const expected = {
       $tag: "div",
