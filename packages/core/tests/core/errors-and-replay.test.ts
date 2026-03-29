@@ -4,6 +4,7 @@ import {
   createRecordAddEvent,
   Denicek,
   Edit,
+  encodeRemoteEvent,
   Event,
   EventGraph,
   EventId,
@@ -12,7 +13,6 @@ import {
   RecordAddEdit,
   RecordDeleteEdit,
   RecordNode,
-  encodeRemoteEvent,
   registerPrimitiveEdit,
   Selector,
   VectorClock,
@@ -61,12 +61,14 @@ Deno.test("applyRemote rejects conflicting payload", () => {
 
 Deno.test("applyRemote rejects events whose vector clock does not match their id", () => {
   const alice = new Denicek("alice");
-  const invalidClockEvent = encodeRemoteEvent(new Event(
-    new EventId("bob", 1),
-    [],
-    new RecordAddEdit(Selector.parse("x"), new PrimitiveNode("b")),
-    new VectorClock({ bob: 0 }),
-  ));
+  const invalidClockEvent = encodeRemoteEvent(
+    new Event(
+      new EventId("bob", 1),
+      [],
+      new RecordAddEdit(Selector.parse("x"), new PrimitiveNode("b")),
+      new VectorClock({ bob: 0 }),
+    ),
+  );
 
   assertThrows(
     () => alice.applyRemote(invalidClockEvent),
@@ -77,19 +79,23 @@ Deno.test("applyRemote rejects events whose vector clock does not match their id
 
 Deno.test("applyRemote rejects events whose vector clock does not dominate parents", () => {
   const alice = new Denicek("alice");
-  const parentEvent = encodeRemoteEvent(new Event(
-    new EventId("bob", 0),
-    [],
-    new RecordAddEdit(Selector.parse("x"), new PrimitiveNode("a")),
-    new VectorClock({ bob: 0 }),
-  ));
+  const parentEvent = encodeRemoteEvent(
+    new Event(
+      new EventId("parent", 0),
+      [],
+      new RecordAddEdit(Selector.parse("x"), new PrimitiveNode("a")),
+      new VectorClock({ parent: 0 }),
+    ),
+  );
   alice.applyRemote(parentEvent);
-  const childEvent = encodeRemoteEvent(new Event(
-    new EventId("bob", 1),
-    [new EventId("bob", 0)],
-    new RecordAddEdit(Selector.parse("y"), new PrimitiveNode("b")),
-    new VectorClock({ bob: 1 }),
-  ));
+  const childEvent = encodeRemoteEvent(
+    new Event(
+      new EventId("bob", 0),
+      [new EventId("parent", 0)],
+      new RecordAddEdit(Selector.parse("y"), new PrimitiveNode("b")),
+      new VectorClock({ bob: 0 }),
+    ),
+  );
 
   assertThrows(
     () => alice.applyRemote(childEvent),
@@ -283,7 +289,7 @@ Deno.test("commit throws on kind mismatch", () => {
   assertThrows(
     () => core.add("items", "x", "a"),
     Error,
-    "does not support 'addField'",
+    "expected record, found 'ListNode'",
   );
 });
 
@@ -512,6 +518,10 @@ Deno.test("default edit transform throws unless removal handling is explicit", (
 
     withTarget(target: Selector): DummyEdit {
       return new DummyEdit(target);
+    }
+
+    encodeRemoteEdit(): never {
+      throw new Error("DummyEdit should not be serialized in this test.");
     }
   }
 

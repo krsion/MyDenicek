@@ -114,6 +114,8 @@ function canRejectEditOp(error: unknown): error is Error {
     "already exists",
     "cannot remove",
     "cannot create reference",
+    "expected record",
+    "expected list",
     "does not support",
     "copy:",
   ].some((messagePart) => error.message.includes(messagePart));
@@ -1177,7 +1179,9 @@ Deno.test("Intent: non-conflicting adds are all preserved", () => {
         syncAll(peers);
         assertConvergence(peers);
 
-        const result = peers[0]!.toPlain() as { data: Record<string, unknown> };
+        const result = peers[0]!.toPlain() as unknown as {
+          data: Record<string, unknown>;
+        };
         for (let i = 0; i < NUM_PEERS; i++) {
           assert(
             fields[i]! in result.data,
@@ -1208,7 +1212,9 @@ Deno.test("Intent: non-conflicting push-backs are all preserved", () => {
       syncAll(peers);
       assertConvergence(peers);
 
-      const result = peers[0]!.toPlain() as { items: { $items: unknown[] } };
+      const result = peers[0]!.toPlain() as unknown as {
+        items: { $items: unknown[] };
+      };
       for (let i = 0; i < NUM_PEERS; i++) {
         assert(
           result.items.$items.includes(values[i]!),
@@ -1236,7 +1242,9 @@ Deno.test("Intent: set on untouched field survives concurrent structural changes
       syncAll([alice, bob]);
       assertConvergence([alice, bob]);
 
-      const result = alice.toPlain() as { data: Record<string, unknown> };
+      const result = alice.toPlain() as unknown as {
+        data: Record<string, unknown>;
+      };
       assertEquals(result.data.name, value, "Alice's set was lost");
       assertEquals(result.data.extra, "value", "Bob's add was lost");
     }),

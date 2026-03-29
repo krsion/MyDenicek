@@ -39,7 +39,7 @@ Deno.test("Formative: Todo App", () => {
     completed: false,
   });
   {
-    const plainDocument = alice.toPlain() as {
+    const plainDocument = alice.toPlain() as unknown as {
       items: {
         $items: Array<{ $tag: string; text: string; completed: boolean }>;
       };
@@ -56,7 +56,7 @@ Deno.test("Formative: Todo App", () => {
   }
   syncPeers();
   {
-    const plainDocument = bob.toPlain() as {
+    const plainDocument = bob.toPlain() as unknown as {
       items: {
         $items: Array<{ $tag: string; text: string; completed: boolean }>;
       };

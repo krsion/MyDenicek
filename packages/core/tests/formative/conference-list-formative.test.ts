@@ -36,7 +36,7 @@ Deno.test("Formative: Conference List", () => {
 
   synchronizePeers();
 
-  const plainConferenceDocument = bob.toPlain() as {
+  const plainConferenceDocument = bob.toPlain() as unknown as {
     speakers: {
       $items: Array<{ $items: Array<{ name: string }> }>;
     };

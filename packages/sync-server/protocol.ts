@@ -1,8 +1,5 @@
 import type { Denicek, RemoteEvent } from "@mydenicek/core";
-import type {
-  EncodedRemoteEvent,
-  EncodedRemoteEventId,
-} from "@mydenicek/core";
+import type { EncodedRemoteEvent, EncodedRemoteEventId } from "@mydenicek/core";
 import { collectRemoteEventsSince } from "./internal-events.ts";
 
 export type EncodedEventId = EncodedRemoteEventId;

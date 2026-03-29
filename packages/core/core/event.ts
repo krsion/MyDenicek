@@ -50,7 +50,9 @@ export class Event {
     for (const [peer, seq] of this.clock.entryRecords()) {
       EventId.validatePeer(peer);
       if (!Number.isInteger(seq) || seq < 0) {
-        throw new Error(`Invalid vector clock entry '${peer}:${seq}' for '${key}'.`);
+        throw new Error(
+          `Invalid vector clock entry '${peer}:${seq}' for '${key}'.`,
+        );
       }
     }
     if (this.clock.get(this.id.peer) !== this.id.seq) {

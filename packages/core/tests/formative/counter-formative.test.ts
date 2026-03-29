@@ -35,7 +35,7 @@ Deno.test("Formative: Counter App", () => {
       : evaluateFormula(formula.left) + evaluateFormula(formula.right);
 
   const clickButton = (): void => {
-    const plainDocument = peer.toPlain() as {
+    const plainDocument = peer.toPlain() as unknown as {
       btn: {
         script: {
           steps: {
@@ -70,7 +70,7 @@ Deno.test("Formative: Counter App", () => {
   });
 
   {
-    const plainDocument = peer.toPlain() as {
+    const plainDocument = peer.toPlain() as unknown as {
       formula: FormulaNode;
       btn: { script: { steps: { $items: Array<{ eventId: string }> } } };
     };
@@ -87,7 +87,7 @@ Deno.test("Formative: Counter App", () => {
 
   clickButton();
   {
-    const plainDocument = peer.toPlain() as {
+    const plainDocument = peer.toPlain() as unknown as {
       formula: FormulaNode;
       btn: { script: { steps: { $items: Array<{ eventId: string }> } } };
     };
@@ -110,7 +110,9 @@ Deno.test("Formative: Counter App", () => {
   clickButton();
 
   assertEquals(
-    evaluateFormula((peer.toPlain() as { formula: FormulaNode }).formula),
+    evaluateFormula(
+      (peer.toPlain() as unknown as { formula: FormulaNode }).formula,
+    ),
     4,
   );
 });

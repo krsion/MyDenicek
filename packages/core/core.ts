@@ -1,9 +1,6 @@
 export { Denicek } from './core/denicek.ts';
-export {
-  decodeRemoteEvent,
-  encodeRemoteEvent,
-} from './core/remote-events.ts';
 export type {
+  EncodedRemoteEdit,
   EncodedRemoteEvent,
   EncodedRemoteEventId,
   RemoteEvent,

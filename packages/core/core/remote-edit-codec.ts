@@ -1,7 +1,8 @@
-import type { Edit } from "./edits/base.ts";
 import type { PlainNode } from "./nodes.ts";
 import type { PrimitiveValue } from "./selector.ts";
+import type { Edit } from "./edits/base.ts";
 
+/** Serializable edit payload stored inside a public {@link RemoteEvent}. */
 export type EncodedRemoteEdit =
   | { kind: "RecordAddEdit"; target: string; node: PlainNode }
   | { kind: "RecordDeleteEdit"; target: string }

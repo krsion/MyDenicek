@@ -86,7 +86,7 @@ Deno.test("Formative: Conference Budget", () => {
   syncPeers();
 
   {
-    const plainDocument = alice.toPlain() as {
+    const plainDocument = alice.toPlain() as unknown as {
       summary: { dependsOn: { $items: Array<{ $ref: string }> } };
     };
     const nextTotal = plainDocument.summary.dependsOn.$items.reduce(
@@ -99,7 +99,7 @@ Deno.test("Formative: Conference Budget", () => {
     alice.set("summary/total", nextTotal);
   }
   {
-    const plainDocument = bob.toPlain() as {
+    const plainDocument = bob.toPlain() as unknown as {
       summary: { dependsOn: { $items: Array<{ $ref: string }> } };
     };
     const nextTotal = plainDocument.summary.dependsOn.$items.reduce(
