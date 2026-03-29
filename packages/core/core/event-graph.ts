@@ -349,19 +349,19 @@ export class EventGraph {
     copyEdit: CopyEdit,
     otherEdit: Edit,
   ): number {
-    if (this.doesEditTouchSelectorAtOrBelow(otherEdit, copyEdit.target)) {
+    if (this.editTouchesSelectorAtOrBelow(otherEdit, copyEdit.target)) {
       return -1;
     }
-    if (this.doesEditTouchStrictAncestor(otherEdit, copyEdit.target)) {
+    if (this.editTouchesStrictAncestor(otherEdit, copyEdit.target)) {
       return 1;
     }
-    if (this.doesEditTouchSelector(otherEdit, copyEdit.source)) {
+    if (this.editTouchesSelector(otherEdit, copyEdit.source)) {
       return 1;
     }
     return 0;
   }
 
-  private doesEditTouchSelectorAtOrBelow(
+  private editTouchesSelectorAtOrBelow(
     edit: Edit,
     selector: Selector,
   ): boolean {
@@ -370,20 +370,20 @@ export class EventGraph {
     );
   }
 
-  private doesEditTouchStrictAncestor(edit: Edit, selector: Selector): boolean {
+  private editTouchesStrictAncestor(edit: Edit, selector: Selector): boolean {
     return edit.selectors.some((candidate) =>
       candidate.length < selector.length &&
       candidate.matchPrefix(selector).kind === "matched"
     );
   }
 
-  private doesEditTouchSelector(edit: Edit, selector: Selector): boolean {
+  private editTouchesSelector(edit: Edit, selector: Selector): boolean {
     return edit.selectors.some((candidate) =>
-      this.doSelectorsOverlap(candidate, selector)
+      this.selectorsOverlap(candidate, selector)
     );
   }
 
-  private doSelectorsOverlap(left: Selector, right: Selector): boolean {
+  private selectorsOverlap(left: Selector, right: Selector): boolean {
     return left.matchPrefix(right).kind === "matched" ||
       right.matchPrefix(left).kind === "matched";
   }
