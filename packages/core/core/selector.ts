@@ -21,13 +21,20 @@ export type SelectorTransform = { kind: "mapped"; selector: Selector } | {
 
 const NO_PREFIX_MATCH: PrefixMatch = { kind: "no-match" };
 export const REMOVED_SELECTOR: SelectorTransform = { kind: "removed" };
+// These bounds keep selector parsing cheap and predictable even for malformed
+// API inputs. They are intentionally far above normal document paths while still
+// cutting off memory-heavy or adversarial path payloads early.
 const MAX_SELECTOR_PATH_LENGTH = 4096;
 const MAX_SELECTOR_SEGMENTS = 512;
 
-function decodeSelectorSegment(part: string): SelectorSegment {
+function parseSelectorSegment(part: string): SelectorSegment {
   if (part === "*" || part === "..") return part;
   const n = Number(part);
-  return Number.isSafeInteger(n) && n >= 0 && String(n) === part ? n : part;
+  return (
+      Number.isSafeInteger(n) && n >= 0 && String(n) === part
+    )
+    ? n
+    : part;
 }
 
 export function mapSelector(selector: Selector): SelectorTransform {
@@ -82,7 +89,7 @@ export class Selector {
         `Selector path has too many segments (${parts.length} > ${MAX_SELECTOR_SEGMENTS}).`,
       );
     }
-    const segments = parts.map(decodeSelectorSegment);
+    const segments = parts.map(parseSelectorSegment);
     return new Selector(isAbs ? ["/", ...segments] : segments);
   }
 

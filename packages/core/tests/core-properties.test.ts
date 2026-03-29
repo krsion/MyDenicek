@@ -104,7 +104,7 @@ function applyEditOp(peer: Denicek, op: EditOp): void {
   }
 }
 
-function canRejectEditOp(error: unknown): error is Error {
+function shouldRejectEditOp(error: unknown): error is Error {
   if (!(error instanceof Error)) {
     return false;
   }
@@ -127,7 +127,7 @@ function applyEditOpWithExplicitRejection(peer: Denicek, op: EditOp): void {
   try {
     applyEditOp(peer, op);
   } catch (error) {
-    if (!canRejectEditOp(error)) {
+    if (!shouldRejectEditOp(error)) {
       throw error;
     }
     // Failed edits are allowed in the generated trace, but they must behave like
@@ -819,7 +819,7 @@ function assertAllSyncOrdersConverge(
       try {
         edits[i]!(peer);
       } catch (error) {
-        if (!canRejectEditOp(error)) {
+        if (!shouldRejectEditOp(error)) {
           throw error;
         }
         assertEquals(peer.inspectEvents().length, beforeEvents);

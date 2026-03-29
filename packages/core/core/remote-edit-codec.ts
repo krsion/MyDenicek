@@ -28,7 +28,7 @@ const remoteEditDecoders = new Map<
   RemoteEditDecoder
 >();
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+function checkIsRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
@@ -45,7 +45,7 @@ export function registerRemoteEditDecoder<
 }
 
 export function decodeRemoteEdit(encodedEdit: EncodedRemoteEdit): Edit {
-  if (!isRecord(encodedEdit) || typeof encodedEdit.kind !== "string") {
+  if (!checkIsRecord(encodedEdit) || typeof encodedEdit.kind !== "string") {
     throw new Error(
       "decodeRemoteEdit: encoded edit must be an object with a string kind.",
     );

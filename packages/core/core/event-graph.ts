@@ -27,6 +27,9 @@ type PendingDependencyIndex = {
   childKeysByMissingParent: ChildKeysByMissingParent;
   readyKeys: string[];
 };
+// These limits bound pathological remote input. Hitting them already means a
+// peer is far outside normal interactive-editing behavior, so rejecting the
+// input is safer than letting buffering or replay work grow without bound.
 const MAX_BUFFERED_REMOTE_EVENTS = 10_000;
 const MAX_REPLAY_TRANSFORMATIONS = 10_000;
 
@@ -252,7 +255,6 @@ export class EventGraph {
       readyKeys,
     );
     if (this.bufferedEvents.length > MAX_BUFFERED_REMOTE_EVENTS) {
-      this.bufferedEvents = [];
       throw new Error(
         `Cannot buffer more than ${MAX_BUFFERED_REMOTE_EVENTS} out-of-order remote events.`,
       );

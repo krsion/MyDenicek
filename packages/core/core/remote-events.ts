@@ -31,12 +31,12 @@ export interface EncodedRemoteEvent {
 /** Public transport payload exchanged between peers. */
 export type RemoteEvent = EncodedRemoteEvent;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+function checkIsRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function decodeRemoteEventId(encodedEventId: EncodedRemoteEventId): EventId {
-  if (!isRecord(encodedEventId)) {
+  if (!checkIsRecord(encodedEventId)) {
     throw new Error("Remote event ids must be objects.");
   }
   if (typeof encodedEventId.peer !== "string") {
@@ -65,13 +65,13 @@ export function encodeRemoteEvent(event: Event): EncodedRemoteEvent {
 
 /** Decodes a transport payload back into the internal event representation. */
 export function decodeRemoteEvent(encodedEvent: EncodedRemoteEvent): Event {
-  if (!isRecord(encodedEvent)) {
+  if (!checkIsRecord(encodedEvent)) {
     throw new Error("Remote events must be objects.");
   }
   if (!Array.isArray(encodedEvent.parents)) {
     throw new Error("Remote event parents must be an array.");
   }
-  if (!isRecord(encodedEvent.clock)) {
+  if (!checkIsRecord(encodedEvent.clock)) {
     throw new Error("Remote event clock must be an object.");
   }
   return new Event(

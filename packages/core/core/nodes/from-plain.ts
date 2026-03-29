@@ -6,10 +6,21 @@ import { ReferenceNode } from "./reference-node.ts";
 import type { PlainList, PlainNode, PlainRecord, PlainRef } from "./plain.ts";
 import { Selector, validateFieldName } from "../selector.ts";
 
+// This bound prevents stack overflows and runaway work when callers hand the
+// public API extremely deep object graphs. Real documents should stay far below
+// this depth, so rejecting deeper inputs protects invariants without narrowing
+// normal usage.
 const MAX_PLAIN_NODE_DEPTH = 512;
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
+function checkIsPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function validateNodeTag(tag: unknown, kind: "List" | "Record"): string {
+  if (typeof tag !== "string" || tag.length === 0) {
+    throw new Error(`${kind} nodes must carry a non-empty string $tag.`);
+  }
+  return tag;
 }
 
 function createNodeFromPlainInternal(
@@ -43,28 +54,24 @@ function createNodeFromPlainInternal(
     }
     if ("$items" in plain) {
       const list = plain as PlainList;
-      if (typeof list.$tag !== "string" || list.$tag.length === 0) {
-        throw new Error("List nodes must carry a non-empty string $tag.");
-      }
+      const tag = validateNodeTag(list.$tag, "List");
       if (!Array.isArray(list.$items)) {
         throw new Error("List nodes must carry an array $items field.");
       }
       return new ListNode(
-        list.$tag,
+        tag,
         list.$items.map((item) =>
           createNodeFromPlainInternal(item as PlainNode, ancestors, depth + 1)
         ),
       );
     }
-    if (!isPlainObject(plain)) {
+    if (!checkIsPlainObject(plain)) {
       throw new Error(
         "Plain nodes must be primitives, references, records, or lists.",
       );
     }
     const record = plain as PlainRecord;
-    if (typeof record.$tag !== "string" || record.$tag.length === 0) {
-      throw new Error("Record nodes must carry a non-empty string $tag.");
-    }
+    const tag = validateNodeTag(record.$tag, "Record");
     const fields: Record<string, Node> = {};
     for (const [key, value] of Object.entries(record)) {
       if (key !== "$tag") {
@@ -76,7 +83,7 @@ function createNodeFromPlainInternal(
         );
       }
     }
-    return new RecordNode(record.$tag, fields);
+    return new RecordNode(tag, fields);
   } finally {
     ancestors.delete(plain);
   }

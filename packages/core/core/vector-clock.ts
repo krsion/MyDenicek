@@ -6,9 +6,7 @@ function validateClockEntry(peer: string, seq: number): void {
   EventId.validatePeer(peer);
   if (!Number.isSafeInteger(seq) || seq < 0) {
     throw new Error(
-      `Invalid vector clock entry ${peer}=${
-        String(seq)
-      }. Expected a non-negative safe integer.`,
+      `Invalid vector clock entry ${peer}=${seq}. Expected a non-negative safe integer.`,
     );
   }
 }
