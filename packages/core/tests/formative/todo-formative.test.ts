@@ -2,87 +2,102 @@ import { assertEquals } from "@std/assert";
 import { Denicek } from "../../mod.ts";
 
 Deno.test("Formative: Todo App", () => {
-  const initialDocument = {
+  const peer = new Denicek("alice", {
     $tag: "app",
+    composer: {
+      $tag: "composer",
+      input: {
+        $tag: "input",
+        value: "Review feedback",
+      },
+      addAction: {
+        $tag: "button",
+        steps: { $tag: "event-steps", $items: [] },
+      },
+    },
     items: {
       $tag: "ul",
       $items: [
-        { $tag: "task", text: "Ship prototype", completed: true },
-        { $tag: "task", text: "Write paper", completed: false },
+        { $tag: "li", $items: ["Ship prototype"] },
+        { $tag: "li", $items: ["Write paper"] },
       ],
     },
-  };
-  const alice = new Denicek("alice", initialDocument);
-  const bob = new Denicek("bob", initialDocument);
-
-  const syncPeers = (): void => {
-    const aliceFrontiers = alice.frontiers;
-    const bobFrontiers = bob.frontiers;
-    for (const event of alice.eventsSince(bobFrontiers)) bob.applyRemote(event);
-    for (const event of bob.eventsSince(aliceFrontiers)) {
-      alice.applyRemote(event);
-    }
-  };
-
-  alice.pushBack("items", {
-    $tag: "task",
-    text: "Review feedback",
-    completed: false,
   });
-  bob.set("items/1/completed", true);
 
-  syncPeers();
-
-  alice.pushBack("items", {
-    $tag: "task",
-    text: "Book venue",
-    completed: false,
+  const insertItemEventId = peer.pushFront("items", {
+    $tag: "li",
+    $items: [""],
   });
-  {
-    const plainDocument = alice.toPlain() as unknown as {
-      items: {
-        $items: Array<{ $tag: string; text: string; completed: boolean }>;
-      };
-    };
-    const remainingItems = plainDocument.items.$items.filter((item) =>
-      !item.completed
-    );
-    alice.add("", "__scratchItems", { $tag: "ul", $items: [] });
-    for (const item of remainingItems) {
-      alice.pushBack("__scratchItems", item);
-    }
-    alice.copy("items", "__scratchItems");
-    alice.delete("", "__scratchItems");
-  }
-  syncPeers();
-  {
-    const plainDocument = bob.toPlain() as unknown as {
-      items: {
-        $items: Array<{ $tag: string; text: string; completed: boolean }>;
-      };
-    };
-    const remainingItems = plainDocument.items.$items.filter((item) =>
-      !item.completed
-    );
-    bob.add("", "__scratchItems", { $tag: "ul", $items: [] });
-    for (const item of remainingItems) {
-      bob.pushBack("__scratchItems", item);
-    }
-    bob.copy("items", "__scratchItems");
-    bob.delete("", "__scratchItems");
-  }
-  syncPeers();
+  const copyInputEventId = peer.copy("items/!0/0", "composer/input/value");
 
-  const expected = {
+  peer.pushBack("composer/addAction/steps", {
+    $tag: "replay-step",
+    eventId: insertItemEventId,
+  });
+  peer.pushBack("composer/addAction/steps", {
+    $tag: "replay-step",
+    eventId: copyInputEventId,
+  });
+
+  assertEquals(peer.toPlain(), {
     $tag: "app",
+    composer: {
+      $tag: "composer",
+      input: {
+        $tag: "input",
+        value: "Review feedback",
+      },
+      addAction: {
+        $tag: "button",
+        steps: {
+          $tag: "event-steps",
+          $items: [
+            { $tag: "replay-step", eventId: "alice:0" },
+            { $tag: "replay-step", eventId: "alice:1" },
+          ],
+        },
+      },
+    },
     items: {
       $tag: "ul",
       $items: [
-        { $tag: "task", text: "Review feedback", completed: false },
-        { $tag: "task", text: "Book venue", completed: false },
+        { $tag: "li", $items: ["Review feedback"] },
+        { $tag: "li", $items: ["Ship prototype"] },
+        { $tag: "li", $items: ["Write paper"] },
       ],
     },
-  };
-  assertEquals(alice.toPlain(), expected);
-  assertEquals(bob.toPlain(), expected);
+  });
+
+  peer.set("composer/input/value", "Book venue");
+  peer.repeatEditsFrom("composer/addAction/steps");
+
+  assertEquals(peer.toPlain(), {
+    $tag: "app",
+    composer: {
+      $tag: "composer",
+      input: {
+        $tag: "input",
+        value: "Book venue",
+      },
+      addAction: {
+        $tag: "button",
+        steps: {
+          $tag: "event-steps",
+          $items: [
+            { $tag: "replay-step", eventId: "alice:0" },
+            { $tag: "replay-step", eventId: "alice:1" },
+          ],
+        },
+      },
+    },
+    items: {
+      $tag: "ul",
+      $items: [
+        { $tag: "li", $items: ["Book venue"] },
+        { $tag: "li", $items: ["Review feedback"] },
+        { $tag: "li", $items: ["Ship prototype"] },
+        { $tag: "li", $items: ["Write paper"] },
+      ],
+    },
+  });
 });

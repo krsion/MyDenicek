@@ -6,7 +6,8 @@ export type PrimitiveValue = string | number | boolean;
 /**
  * A single segment in a selector path.
  * - `string` — record field name, `"*"` (all children), or `".."` (parent)
- * - `number` — list index position
+ * - `number` — dynamic list index position
+ * - `"!<n>"` — strict list index position that keeps the same coordinate
  */
 export type SelectorSegment = string | number;
 
@@ -21,14 +22,36 @@ export type SelectorTransform = { kind: "mapped"; selector: Selector } | {
 
 const NO_PREFIX_MATCH: PrefixMatch = { kind: "no-match" };
 export const REMOVED_SELECTOR: SelectorTransform = { kind: "removed" };
+const STRICT_INDEX_SEGMENT = /^![0-9]+$/;
 // These bounds keep selector parsing cheap and predictable even for malformed
 // API inputs. They are intentionally far above normal document paths while still
 // cutting off memory-heavy or adversarial path payloads early.
 const MAX_SELECTOR_PATH_LENGTH = 4096;
 const MAX_SELECTOR_SEGMENTS = 512;
 
+export function isStrictIndexSegment(segment: SelectorSegment): boolean {
+  return typeof segment === "string" && STRICT_INDEX_SEGMENT.test(segment);
+}
+
+export function isIndexSegment(segment: SelectorSegment): boolean {
+  return typeof segment === "number" || isStrictIndexSegment(segment);
+}
+
+export function getSelectorIndexValue(
+  segment: SelectorSegment,
+): number | null {
+  if (typeof segment === "number") return segment;
+  if (isStrictIndexSegment(segment)) return Number(segment.slice(1));
+  return null;
+}
+
+function formatSelectorSegment(segment: SelectorSegment): string {
+  return typeof segment === "number" ? String(segment) : segment;
+}
+
 function parseSelectorSegment(part: string): SelectorSegment {
   if (part === "*" || part === "..") return part;
+  if (STRICT_INDEX_SEGMENT.test(part)) return part;
   const n = Number(part);
   return (
       Number.isSafeInteger(n) && n >= 0 && String(n) === part
@@ -49,6 +72,9 @@ export function validateFieldName(field: string): void {
     throw new Error(`Field name '${field}' cannot contain '/'.`);
   }
   if (field === "*" || field === "..") {
+    throw new Error(`Field name '${field}' is reserved by selector syntax.`);
+  }
+  if (STRICT_INDEX_SEGMENT.test(field)) {
     throw new Error(`Field name '${field}' is reserved by selector syntax.`);
   }
   const numericField = Number(field);
@@ -96,9 +122,9 @@ export class Selector {
   format(): string {
     if (this.segments.length === 0) return "/";
     if (this.segments[0] === "/") {
-      return `/${this.segments.slice(1).map(String).join("/")}`;
+      return `/${this.segments.slice(1).map(formatSelectorSegment).join("/")}`;
     }
-    return this.segments.map(String).join("/");
+    return this.segments.map(formatSelectorSegment).join("/");
   }
 
   get isAbsolute(): boolean {
@@ -141,8 +167,13 @@ export class Selector {
       const prefixSeg = this.segments[i]!;
       const fullSeg = full.segments[i]!;
       if (prefixSeg === fullSeg) {
-        specificPrefix.push(prefixSeg);
-      } else if (prefixSeg === "*" && typeof fullSeg === "number") {
+        specificPrefix.push(fullSeg);
+      } else if (prefixSeg === "*" && isIndexSegment(fullSeg)) {
+        specificPrefix.push(fullSeg);
+      } else if (
+        isIndexSegment(prefixSeg) && isIndexSegment(fullSeg) &&
+        getSelectorIndexValue(prefixSeg) === getSelectorIndexValue(fullSeg)
+      ) {
         specificPrefix.push(fullSeg);
       } else {
         return NO_PREFIX_MATCH;
@@ -165,8 +196,10 @@ export class Selector {
     if (m.kind === "no-match" || m.rest.length === 0) return mapSelector(other);
     const head = m.rest.segments[0]!;
     const tail = m.rest.slice(1);
-    if (typeof head !== "number") return mapSelector(other);
-    const shifted = head + (head >= threshold ? delta : 0);
+    const index = getSelectorIndexValue(head);
+    if (index === null) return mapSelector(other);
+    if (isStrictIndexSegment(head)) return mapSelector(other);
+    const shifted = index + (index >= threshold ? delta : 0);
     if (shifted < 0) return REMOVED_SELECTOR;
     return mapSelector(
       new Selector([...m.specificPrefix.segments, shifted, ...tail.segments]),

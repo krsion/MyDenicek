@@ -1,4 +1,9 @@
-import { Selector, type SelectorSegment } from "../selector.ts";
+import {
+  getSelectorIndexValue,
+  isIndexSegment,
+  Selector,
+  type SelectorSegment,
+} from "../selector.ts";
 import { Node } from "./base.ts";
 
 export class ReferenceNode extends Node {
@@ -87,8 +92,12 @@ export class ReferenceNode extends Node {
       const baseSeg = basePath.segments[common]!;
       const absSeg = absolutePath.segments[common]!;
       const compatible = baseSeg === absSeg ||
-        (baseSeg === "*" && typeof absSeg === "number") ||
-        (typeof baseSeg === "number" && absSeg === "*");
+        (baseSeg === "*" && isIndexSegment(absSeg)) ||
+        (isIndexSegment(baseSeg) && absSeg === "*") ||
+        (
+          isIndexSegment(baseSeg) && isIndexSegment(absSeg) &&
+          getSelectorIndexValue(baseSeg) === getSelectorIndexValue(absSeg)
+        );
       if (!compatible) break;
       common++;
     }

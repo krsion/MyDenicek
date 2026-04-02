@@ -1,4 +1,8 @@
-import type { Selector, SelectorSegment } from "../selector.ts";
+import {
+  getSelectorIndexValue,
+  type Selector,
+  type SelectorSegment,
+} from "../selector.ts";
 import { Node } from "./base.ts";
 
 export class ListNode extends Node {
@@ -53,15 +57,17 @@ export class ListNode extends Node {
     if (seg === "*") {
       return this.items.map((child, i) => ({ key: i, child }));
     }
-    if (typeof seg === "number" && seg >= 0 && seg < this.items.length) {
-      return [{ key: seg, child: this.items[seg]! }];
+    const index = getSelectorIndexValue(seg);
+    if (index !== null && index >= 0 && index < this.items.length) {
+      return [{ key: index, child: this.items[index]! }];
     }
     return [];
   }
 
   replaceChild(key: SelectorSegment, replacement: Node): void {
-    if (typeof key === "number" && key >= 0 && key < this.items.length) {
-      this.items[key] = replacement;
+    const index = getSelectorIndexValue(key);
+    if (index !== null && index >= 0 && index < this.items.length) {
+      this.items[index] = replacement;
     }
   }
 
@@ -70,8 +76,11 @@ export class ListNode extends Node {
       for (let i = 0; i < this.items.length; i++) {
         this.items[i] = wrapper(this.items[i]!);
       }
-    } else if (typeof key === "number" && key >= 0 && key < this.items.length) {
-      this.items[key] = wrapper(this.items[key]!);
+    } else {
+      const index = getSelectorIndexValue(key);
+      if (index !== null && index >= 0 && index < this.items.length) {
+        this.items[index] = wrapper(this.items[index]!);
+      }
     }
   }
 

@@ -122,6 +122,11 @@ Deno.test("rejects reserved field names in initial plain records", () => {
     Error,
     "reserved by selector syntax",
   );
+  assertThrows(
+    () => new Denicek("alice", { $tag: "root", "!0": "nope" }),
+    Error,
+    "reserved by selector syntax",
+  );
 });
 
 Deno.test("rejects reserved field names in local add", () => {
@@ -129,6 +134,11 @@ Deno.test("rejects reserved field names in local add", () => {
 
   assertThrows(
     () => core.add("", "*", "value"),
+    Error,
+    "reserved by selector syntax",
+  );
+  assertThrows(
+    () => core.add("", "!0", "value"),
     Error,
     "reserved by selector syntax",
   );
@@ -417,6 +427,7 @@ Deno.test("Selector.parse rejects non-string, too-long, and unsafe numeric input
     Selector.parse("items/9007199254740992").segments[1],
     "9007199254740992",
   );
+  assertEquals(Selector.parse("items/!0").format(), "items/!0");
 });
 
 Deno.test("VectorClock rejects invalid entries", () => {
@@ -468,9 +479,134 @@ Deno.test("get returns all matched plain nodes without materializing the whole d
   });
 
   assertEquals(core.get("items/0"), ["first"]);
+  assertEquals(core.get("items/!0"), ["first"]);
   assertEquals(core.get("items/1"), ["second"]);
   assertEquals(core.get("items/2"), []);
   assertEquals(core.get("items/*"), ["first", "second"]);
+});
+
+Deno.test("repeatEdit keeps a strict list index at the same coordinate through push-front", () => {
+  Denicek.registerPrimitiveEdit("append-bang-strict", (value) => {
+    if (typeof value !== "string") {
+      throw new Error("append-bang-strict expects a string.");
+    }
+    return `${value}!`;
+  });
+
+  const core = new Denicek("alice", {
+    $tag: "root",
+    items: { $tag: "ul", $items: ["first", "second"] },
+  });
+
+  const eventId = core.applyPrimitiveEdit("items/!0", "append-bang-strict");
+  core.pushFront("items", "new");
+  core.repeatEditFromEventId(eventId);
+
+  assertEquals(core.toPlain(), {
+    $tag: "root",
+    items: { $tag: "ul", $items: ["new!", "first!", "second"] },
+  });
+});
+
+Deno.test("repeatEdit fails before recording when a strict replay target no longer exists", () => {
+  const core = new Denicek("alice", {
+    $tag: "root",
+    items: { $tag: "ul", $items: ["first", "second"] },
+  });
+
+  const eventId = core.set("items/!1", "updated");
+  core.popBack("items");
+
+  assertThrows(
+    () => core.repeatEditFromEventId(eventId),
+    Error,
+    "No nodes match selector 'items/!1'",
+  );
+  assertEquals(core.inspectEvents().map((event) => event.id), [
+    "alice:0",
+    "alice:1",
+  ]);
+});
+
+Deno.test("repeatEditsFrom replays stored step lists directly", () => {
+  const core = new Denicek("alice", {
+    $tag: "root",
+    composer: {
+      $tag: "composer",
+      input: { $tag: "input", value: "Review feedback" },
+      addAction: {
+        $tag: "button",
+        steps: { $tag: "event-steps", $items: [] },
+      },
+    },
+    items: {
+      $tag: "ul",
+      $items: [
+        { $tag: "li", $items: ["Ship prototype"] },
+        { $tag: "li", $items: ["Write paper"] },
+      ],
+    },
+  });
+
+  const insertItemEventId = core.pushFront("items", {
+    $tag: "li",
+    $items: [""],
+  });
+  const copyInputEventId = core.copy("items/!0/0", "composer/input/value");
+  core.pushBack("composer/addAction/steps", {
+    $tag: "replay-step",
+    eventId: insertItemEventId,
+  });
+  core.pushBack("composer/addAction/steps", {
+    $tag: "replay-step",
+    eventId: copyInputEventId,
+  });
+
+  core.set("composer/input/value", "Book venue");
+  core.repeatEditsFrom("composer/addAction/steps");
+
+  assertEquals(core.toPlain(), {
+    $tag: "root",
+    composer: {
+      $tag: "composer",
+      input: { $tag: "input", value: "Book venue" },
+      addAction: {
+        $tag: "button",
+        steps: {
+          $tag: "event-steps",
+          $items: [
+            { $tag: "replay-step", eventId: "alice:0" },
+            { $tag: "replay-step", eventId: "alice:1" },
+          ],
+        },
+      },
+    },
+    items: {
+      $tag: "ul",
+      $items: [
+        { $tag: "li", $items: ["Book venue"] },
+        { $tag: "li", $items: ["Review feedback"] },
+        { $tag: "li", $items: ["Ship prototype"] },
+        { $tag: "li", $items: ["Write paper"] },
+      ],
+    },
+  });
+});
+
+Deno.test("repeatEditsFrom rejects malformed step nodes", () => {
+  const core = new Denicek("alice", {
+    $tag: "root",
+    steps: {
+      $tag: "event-steps",
+      $items: [{ $tag: "replay-step", eventId: 1 }],
+    },
+  });
+
+  assertThrows(
+    () => core.repeatEditsFrom("steps"),
+    Error,
+    "string eventId field",
+  );
 });
 
 Deno.test("replays registered primitive edit against a different primitive value", () => {

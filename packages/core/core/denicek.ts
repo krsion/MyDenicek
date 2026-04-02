@@ -17,7 +17,13 @@ import {
 import type { Event } from "./event.ts";
 import { EventGraph, type EventSnapshot } from "./event-graph.ts";
 import { EventId } from "./event-id.ts";
-import { Node, type PlainNode, RecordNode } from "./nodes.ts";
+import {
+  ListNode,
+  Node,
+  type PlainNode,
+  PrimitiveNode,
+  RecordNode,
+} from "./nodes.ts";
 import { validatePeerId } from "./peer-id.ts";
 import {
   type PrimitiveEditImplementation,
@@ -223,6 +229,20 @@ export class Denicek {
   }
 
   /**
+   * Repeats every recorded step stored in the matched replay-step lists.
+   *
+   * Each matched node must be a list whose items are records containing a string
+   * `eventId` field. Steps are read in list order and replayed through the same
+   * repeat-edit semantics as {@link repeatEditFromEventId}.
+   * Returns the formatted ids of the newly recorded replay events.
+   */
+  repeatEditsFrom(target: string): string[] {
+    return this.collectRepeatEditEventIds(target).map((eventId) =>
+      this.repeatEditFromEventId(eventId)
+    );
+  }
+
+  /**
    * Appends `value` to every list matched by `target`.
    *
    * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
@@ -361,6 +381,45 @@ export class Denicek {
   /** Resolves and validates an event id before replaying its retargeted edit payload. */
   private resolveReplaySourceEdit(eventId: string): Edit {
     return this.graph.resolveReplayEdit(EventId.parse(eventId).format());
+  }
+
+  /** Collects replayable event ids from step lists without materializing the whole document to plain. */
+  private collectRepeatEditEventIds(target: string): string[] {
+    const doc = this.cachedDoc ?? this.rematerialize();
+    this.cachedDoc = doc;
+    const matchedNodes = doc.navigate(Selector.parse(target));
+    if (matchedNodes.length === 0) return [];
+    const eventIds: string[] = [];
+    for (const node of matchedNodes) {
+      if (!(node instanceof ListNode)) {
+        throw new Error(
+          `repeatEditsFrom expects list nodes at '${target}', found '${node.constructor.name}'.`,
+        );
+      }
+      for (const stepNode of node.items) {
+        eventIds.push(this.readRepeatEditEventId(stepNode, target));
+      }
+    }
+    return eventIds;
+  }
+
+  /** Reads a single repeat-edit step record and validates that it carries a string event id. */
+  private readRepeatEditEventId(stepNode: Node, target: string): string {
+    if (!(stepNode instanceof RecordNode)) {
+      throw new Error(
+        `repeatEditsFrom expects replay-step records in '${target}', found '${stepNode.constructor.name}'.`,
+      );
+    }
+    const eventIdNode = stepNode.fields.eventId;
+    if (
+      !(eventIdNode instanceof PrimitiveNode) ||
+      typeof eventIdNode.value !== "string"
+    ) {
+      throw new Error(
+        `repeatEditsFrom expects each step in '${target}' to contain a string eventId field.`,
+      );
+    }
+    return eventIdNode.value;
   }
 
   /** Rejects local adds that would overwrite an existing record field. */
