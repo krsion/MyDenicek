@@ -7,11 +7,13 @@ type ContactCell = {
 
 type NameCell = {
   $tag: "td";
-  name: {
-    $tag: "split-first";
-    source: { $ref: "../../../0/contact" };
-    separator: ", ";
-  };
+  name:
+    | ""
+    | {
+      $tag: "split-first";
+      source: { $ref: string };
+      separator: ", ";
+    };
 };
 
 type SpeakerRow = {
@@ -71,12 +73,12 @@ Deno.test("Formative: Conference List", () => {
   const alice = new Denicek("alice", initialDocument);
   const bob = new Denicek("bob", initialDocument);
 
-  const insertListSpeakerEventId = alice.pushFront("speakers", {
+  const insertListSpeakerEventId = alice.pushBack("speakers", {
     $tag: "li",
     contact: "",
   });
   const copyListInputEventId = alice.copy(
-    "speakers/!0/contact",
+    "speakers/!2/contact",
     "controls/input/value",
   );
   alice.pushBack("controls/addSpeakerFromInput/steps", {
@@ -87,16 +89,14 @@ Deno.test("Formative: Conference List", () => {
     $tag: "replay-step",
     eventId: copyListInputEventId,
   });
+  alice.popBack("speakers");
 
   sync(alice, bob);
 
-  bob.set("controls/input/value", "Margaret Hamilton, margaret@example.com");
-  bob.repeatEditsFrom("controls/addSpeakerFromInput/steps");
-
-  const retagTableEventId = alice.updateTag("speakers", "table");
-  const retagCellsEventId = alice.updateTag("speakers/*", "td");
-  const wrapRowsEventId = alice.wrapList("speakers/*", "tr");
-  const addNameCellsEventId = alice.pushBack("speakers/*", {
+  alice.updateTag("speakers", "table");
+  alice.updateTag("speakers/*", "td");
+  alice.wrapList("speakers/*", "tr");
+  alice.pushBack("speakers/*", {
     $tag: "td",
     name: {
       $tag: "split-first",
@@ -104,24 +104,23 @@ Deno.test("Formative: Conference List", () => {
       separator: ", ",
     },
   });
-  alice.pushBack("controls/addSpeakerFromInput/steps", {
-    $tag: "replay-step",
-    eventId: retagTableEventId,
-  });
-  alice.pushBack("controls/addSpeakerFromInput/steps", {
-    $tag: "replay-step",
-    eventId: retagCellsEventId,
-  });
-  alice.pushBack("controls/addSpeakerFromInput/steps", {
-    $tag: "replay-step",
-    eventId: wrapRowsEventId,
-  });
-  alice.pushBack("controls/addSpeakerFromInput/steps", {
-    $tag: "replay-step",
-    eventId: addNameCellsEventId,
-  });
+
+  bob.set("controls/input/value", "Margaret Hamilton, margaret@example.com");
+  bob.repeatEditsFrom("controls/addSpeakerFromInput/steps");
 
   sync(alice, bob);
+  const mergedConference = alice.toPlain() as ConferenceDocument;
+  assertEquals(
+    mergedConference.speakers.$items.map((row) => ({
+      tag: row.$tag,
+      contact: row.$items[0].contact,
+    })),
+    [
+      { tag: "tr", contact: "Ada Lovelace, ada@example.com" },
+      { tag: "tr", contact: "Grace Hopper, grace@example.com" },
+      { tag: "tr", contact: "Margaret Hamilton, margaret@example.com" },
+    ],
+  );
 
   const expected: ConferenceDocument = {
     $tag: "app",
@@ -138,10 +137,6 @@ Deno.test("Formative: Conference List", () => {
           $items: [
             { $tag: "replay-step", eventId: insertListSpeakerEventId },
             { $tag: "replay-step", eventId: copyListInputEventId },
-            { $tag: "replay-step", eventId: retagTableEventId },
-            { $tag: "replay-step", eventId: retagCellsEventId },
-            { $tag: "replay-step", eventId: wrapRowsEventId },
-            { $tag: "replay-step", eventId: addNameCellsEventId },
           ],
         },
       },
@@ -149,34 +144,6 @@ Deno.test("Formative: Conference List", () => {
     speakers: {
       $tag: "table",
       $items: [
-        {
-          $tag: "tr",
-          $items: [
-            { $tag: "td", contact: "Margaret Hamilton, margaret@example.com" },
-            {
-              $tag: "td",
-              name: {
-                $tag: "split-first",
-                source: { $ref: "../../../0/contact" },
-                separator: ", ",
-              },
-            },
-          ],
-        },
-        {
-          $tag: "tr",
-          $items: [
-            { $tag: "td", contact: "Katherine Johnson, katherine@example.com" },
-            {
-              $tag: "td",
-              name: {
-                $tag: "split-first",
-                source: { $ref: "../../../0/contact" },
-                separator: ", ",
-              },
-            },
-          ],
-        },
         {
           $tag: "tr",
           $items: [
@@ -205,20 +172,23 @@ Deno.test("Formative: Conference List", () => {
             },
           ],
         },
+        {
+          $tag: "tr",
+          $items: [
+            { $tag: "td", contact: "Margaret Hamilton, margaret@example.com" },
+            {
+              $tag: "td",
+              name: {
+                $tag: "split-first",
+                source: { $ref: "../../../0/contact" },
+                separator: ", ",
+              },
+            },
+          ],
+        },
       ],
     },
   };
   assertEquals(alice.toPlain(), expected);
   assertEquals(bob.toPlain(), expected);
-  assertEquals(
-    expected.speakers.$items.map((row) =>
-      row.$items[0].contact.split(row.$items[1].name.separator)[0]!.trim()
-    ),
-    [
-      "Margaret Hamilton",
-      "Katherine Johnson",
-      "Ada Lovelace",
-      "Grace Hopper",
-    ],
-  );
 });

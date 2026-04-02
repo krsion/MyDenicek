@@ -141,11 +141,13 @@ export abstract class Edit {
     doc: Node,
     insertions: { path: Selector; node: Node }[],
   ): void {
-    const insertedPaths = insertions.flatMap(({ path, node }) =>
-      node.navigateWithPaths(new Selector([])).map((entry) =>
-        new Selector([...path.segments, ...entry.path.segments])
-      )
-    );
+    const insertedPaths = insertions.flatMap(({ path, node }) => {
+      const paths: Selector[] = [];
+      node.forEach((relativePath) => {
+        paths.push(new Selector([...path.segments, ...relativePath.segments]));
+      });
+      return paths;
+    });
     for (const { path, node } of insertions) {
       for (const reference of node.collectResolvedReferencePaths(path)) {
         const targetExists = doc.navigate(reference.targetPath).length > 0 ||
