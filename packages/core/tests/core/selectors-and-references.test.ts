@@ -196,3 +196,149 @@ Deno.test("wildcard edit affects concurrently inserted item", () => {
   assertEquals(alice.toPlain(), expected);
   assertEquals(bob.toPlain(), expected);
 });
+
+Deno.test("concurrent refactor rewrites a replayed inserted row payload", () => {
+  const doc = {
+    $tag: "app",
+    controls: {
+      $tag: "toolbar",
+      input: {
+        $tag: "input",
+        value: "Katherine Johnson, katherine@example.com",
+      },
+      addSpeakerFromInput: {
+        $tag: "button",
+        steps: { $tag: "event-steps", $items: [] },
+      },
+    },
+    speakers: {
+      $tag: "ul",
+      $items: [
+        { $tag: "li", contact: "Ada Lovelace, ada@example.com" },
+        { $tag: "li", contact: "Grace Hopper, grace@example.com" },
+      ],
+    },
+  };
+  const alice = new Denicek("alice", doc);
+  const bob = new Denicek("bob", doc);
+
+  const insertListSpeakerEventId = alice.pushFront("speakers", {
+    $tag: "li",
+    contact: "",
+  });
+  const copyListInputEventId = alice.copy(
+    "speakers/!0/contact",
+    "controls/input/value",
+  );
+  alice.pushBack("controls/addSpeakerFromInput/steps", {
+    $tag: "replay-step",
+    eventId: insertListSpeakerEventId,
+  });
+  alice.pushBack("controls/addSpeakerFromInput/steps", {
+    $tag: "replay-step",
+    eventId: copyListInputEventId,
+  });
+
+  sync(alice, bob);
+
+  bob.set("controls/input/value", "Margaret Hamilton, margaret@example.com");
+  bob.repeatEditsFrom("controls/addSpeakerFromInput/steps");
+
+  alice.updateTag("speakers", "table");
+  alice.updateTag("speakers/*", "td");
+  alice.wrapList("speakers/*", "tr");
+  alice.pushBack("speakers/*", {
+    $tag: "td",
+    name: {
+      $tag: "split-first",
+      source: { $ref: "../../../0/contact" },
+      separator: ", ",
+    },
+  });
+
+  sync(alice, bob);
+
+  const expected = {
+    $tag: "app",
+    controls: {
+      $tag: "toolbar",
+      input: {
+        $tag: "input",
+        value: "Margaret Hamilton, margaret@example.com",
+      },
+      addSpeakerFromInput: {
+        $tag: "button",
+        steps: {
+          $tag: "event-steps",
+          $items: [
+            { $tag: "replay-step", eventId: "alice:0" },
+            { $tag: "replay-step", eventId: "alice:1" },
+          ],
+        },
+      },
+    },
+    speakers: {
+      $tag: "table",
+      $items: [
+        {
+          $tag: "tr",
+          $items: [
+            { $tag: "td", contact: "Margaret Hamilton, margaret@example.com" },
+            {
+              $tag: "td",
+              name: {
+                $tag: "split-first",
+                source: { $ref: "../../../0/contact" },
+                separator: ", ",
+              },
+            },
+          ],
+        },
+        {
+          $tag: "tr",
+          $items: [
+            { $tag: "td", contact: "Katherine Johnson, katherine@example.com" },
+            {
+              $tag: "td",
+              name: {
+                $tag: "split-first",
+                source: { $ref: "../../../0/contact" },
+                separator: ", ",
+              },
+            },
+          ],
+        },
+        {
+          $tag: "tr",
+          $items: [
+            { $tag: "td", contact: "Ada Lovelace, ada@example.com" },
+            {
+              $tag: "td",
+              name: {
+                $tag: "split-first",
+                source: { $ref: "../../../0/contact" },
+                separator: ", ",
+              },
+            },
+          ],
+        },
+        {
+          $tag: "tr",
+          $items: [
+            { $tag: "td", contact: "Grace Hopper, grace@example.com" },
+            {
+              $tag: "td",
+              name: {
+                $tag: "split-first",
+                source: { $ref: "../../../0/contact" },
+                separator: ", ",
+              },
+            },
+          ],
+        },
+      ],
+    },
+  };
+  assertEquals(alice.toPlain(), expected);
+  assertEquals(bob.toPlain(), expected);
+});

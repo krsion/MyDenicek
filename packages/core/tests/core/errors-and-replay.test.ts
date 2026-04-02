@@ -444,11 +444,16 @@ Deno.test("VectorClock rejects invalid entries", () => {
 });
 
 Deno.test("applies registered primitive edit locally", () => {
-  registerPrimitiveEdit("test-capitalize-local", (value) => {
+  registerPrimitiveEdit("test-capitalize-local", (value, suffix) => {
     if (typeof value !== "string") {
       throw new Error("test-capitalize-local expects a string.");
     }
-    return `${value.slice(0, 1).toUpperCase()}${value.slice(1).toLowerCase()}`;
+    if (typeof suffix !== "string") {
+      throw new Error("test-capitalize-local expects a string suffix.");
+    }
+    return `${value.slice(0, 1).toUpperCase()}${
+      value.slice(1).toLowerCase()
+    }${suffix}`;
   });
 
   const core = new Denicek("alice", {
@@ -456,11 +461,11 @@ Deno.test("applies registered primitive edit locally", () => {
     name: "bob",
   });
 
-  core.applyPrimitiveEdit("name", "test-capitalize-local");
+  core.applyPrimitiveEdit("name", "test-capitalize-local", "!");
 
   assertEquals(core.toPlain(), {
     $tag: "root",
-    name: "Bob",
+    name: "Bob!",
   });
 });
 
@@ -670,7 +675,7 @@ Deno.test("replays a primitive edit selected by event id onto another target", (
   });
 });
 
-Deno.test("replays a non-primitive edit selected by event id at its original target", () => {
+Deno.test("replays a primitive set edit selected by event id at its original target", () => {
   const source = new Denicek("source", {
     $tag: "root",
     items: { $tag: "ul", $items: ["first", "second"] },

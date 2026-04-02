@@ -1,4 +1,5 @@
 import { type Edit, NoOpOnRemovedTargetEdit } from "./base.ts";
+import { ListInsertEdit } from "./list-edits.ts";
 import {
   mapSelector,
   type PrimitiveValue,
@@ -12,67 +13,20 @@ import {
   registerRemoteEditDecoder,
 } from "../remote-edit-codec.ts";
 
-type EncodedSetValueEdit = Extract<EncodedRemoteEdit, { kind: "SetValueEdit" }>;
 type EncodedApplyPrimitiveEdit = Extract<
   EncodedRemoteEdit,
   { kind: "ApplyPrimitiveEdit" }
 >;
 
-export class SetValueEdit extends NoOpOnRemovedTargetEdit {
-  readonly isStructural = false;
-  readonly kind = "SetValue";
-
-  constructor(readonly target: Selector, readonly value: PrimitiveValue) {
-    super();
-  }
-
-  apply(doc: Node): void {
-    const nodes = this.navigateOrThrow(doc, this.target);
-    for (const node of nodes) {
-      node.setPrimitive(this.value);
-    }
-  }
-
-  canApply(doc: Node): boolean {
-    return this.canFindNodesOfType(
-      doc,
-      this.target,
-      (node) => node instanceof PrimitiveNode,
-    );
-  }
-
-  transformSelector(sel: Selector): SelectorTransform {
-    return mapSelector(sel);
-  }
-
-  equals(other: Edit): boolean {
-    return other instanceof SetValueEdit && this.target.equals(other.target) &&
-      this.value === other.value;
-  }
-
-  withTarget(target: Selector): SetValueEdit {
-    return new SetValueEdit(target, this.value);
-  }
-  encodeRemoteEdit(): EncodedSetValueEdit {
-    return {
-      kind: "SetValueEdit",
-      target: this.target.format(),
-      value: this.value,
-    };
-  }
-}
-
-registerRemoteEditDecoder<EncodedSetValueEdit>(
-  "SetValueEdit",
-  (encodedEdit) =>
-    new SetValueEdit(Selector.parse(encodedEdit.target), encodedEdit.value),
-);
-
 export class ApplyPrimitiveEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = false;
   readonly kind = "ApplyPrimitiveEdit";
 
-  constructor(readonly target: Selector, readonly editName: string) {
+  constructor(
+    readonly target: Selector,
+    readonly editName: string,
+    readonly args: PrimitiveValue[] = [],
+  ) {
     super();
   }
 
@@ -81,11 +35,11 @@ export class ApplyPrimitiveEdit extends NoOpOnRemovedTargetEdit {
     for (const node of nodes) {
       if (!(node instanceof PrimitiveNode)) {
         throw new Error(
-          `${this.constructor.name}: expected PrimitiveNode, found '${node.constructor.name}'`,
+          `${node.constructor.name} does not support 'setPrimitive'.`,
         );
       }
       node.setPrimitive(
-        applyRegisteredPrimitiveEdit(this.editName, node.value),
+        applyRegisteredPrimitiveEdit(this.editName, node.value, this.args),
       );
     }
   }
@@ -102,20 +56,49 @@ export class ApplyPrimitiveEdit extends NoOpOnRemovedTargetEdit {
     return mapSelector(sel);
   }
 
+  override transformLaterConcurrentEdit(concurrent: Edit): Edit {
+    if (!(concurrent instanceof ListInsertEdit)) {
+      return super.transformLaterConcurrentEdit(concurrent);
+    }
+    const rewritten = concurrent.rewriteInsertedNode(
+      this.target,
+      (transformedNode, relativeTarget) => {
+        const nodes = transformedNode.navigate(relativeTarget);
+        if (
+          nodes.length === 0 ||
+          !nodes.every((node) => node instanceof PrimitiveNode)
+        ) {
+          return null;
+        }
+        for (const node of nodes) {
+          node.setPrimitive(
+            applyRegisteredPrimitiveEdit(this.editName, node.value, this.args),
+          );
+        }
+        return transformedNode;
+      },
+    );
+    return rewritten ?? super.transformLaterConcurrentEdit(concurrent);
+  }
+
   equals(other: Edit): boolean {
     return other instanceof ApplyPrimitiveEdit &&
       this.target.equals(other.target) &&
-      this.editName === other.editName;
+      this.editName === other.editName &&
+      this.args.length === other.args.length &&
+      this.args.every((arg, index) => arg === other.args[index]);
   }
 
   withTarget(target: Selector): ApplyPrimitiveEdit {
-    return new ApplyPrimitiveEdit(target, this.editName);
+    return new ApplyPrimitiveEdit(target, this.editName, this.args);
   }
+
   encodeRemoteEdit(): EncodedApplyPrimitiveEdit {
     return {
       kind: "ApplyPrimitiveEdit",
       target: this.target.format(),
       editName: this.editName,
+      args: this.args,
     };
   }
 }
@@ -126,5 +109,6 @@ registerRemoteEditDecoder<EncodedApplyPrimitiveEdit>(
     new ApplyPrimitiveEdit(
       Selector.parse(encodedEdit.target),
       encodedEdit.editName,
+      Array.isArray(encodedEdit.args) ? encodedEdit.args : [],
     ),
 );

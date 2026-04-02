@@ -42,11 +42,13 @@ export abstract class Edit {
   }
 
   /**
-   * Transforms a concurrent edit through the structural change made by this
-   * edit. Structural edits with richer semantics, such as managed copy, can
-   * override this to duplicate or otherwise rewrite the concurrent edit.
+   * Rewrites a concurrent edit that will replay after this edit.
+   *
+   * The receiver is already earlier in deterministic replay order. Most edits
+   * simply transform the later edit's selector through themselves, while richer
+   * edits can also rewrite inserted payloads or duplicate mirrored effects.
    */
-  transformConcurrentEdit(concurrent: Edit): Edit {
+  transformLaterConcurrentEdit(concurrent: Edit): Edit {
     return concurrent.transform(this);
   }
 
@@ -209,7 +211,7 @@ export class NoOpEdit extends Edit {
     return this;
   }
 
-  override transformConcurrentEdit(_concurrent: Edit): Edit {
+  override transformLaterConcurrentEdit(_concurrent: Edit): Edit {
     return this;
   }
 
@@ -286,29 +288,29 @@ export class CompositeEdit extends Edit {
   }
 
   override transform(prior: Edit): Edit {
-    const transformedPrimary = prior.transformConcurrentEdit(this.primary);
+    const transformedPrimary = prior.transformLaterConcurrentEdit(this.primary);
     if (transformedPrimary instanceof NoOpEdit) {
       return transformedPrimary;
     }
     return createCompositeEdit(
       transformedPrimary,
       this.mirrors
-        .map((mirror) => prior.transformConcurrentEdit(mirror))
+        .map((mirror) => prior.transformLaterConcurrentEdit(mirror))
         .filter((mirror): mirror is Edit => !(mirror instanceof NoOpEdit)),
     );
   }
 
-  override transformConcurrentEdit(concurrent: Edit): Edit {
+  override transformLaterConcurrentEdit(concurrent: Edit): Edit {
     // Replay applies structural edits in deterministic topological order, so a
     // later concurrent edit must be transformed through the primary structural
     // change first and then through each mirrored structural change in that
     // same order.
-    let transformed = this.primary.transformConcurrentEdit(concurrent);
+    let transformed = this.primary.transformLaterConcurrentEdit(concurrent);
     for (const mirror of this.mirrors) {
       if (transformed instanceof NoOpEdit) {
         return transformed;
       }
-      transformed = mirror.transformConcurrentEdit(transformed);
+      transformed = mirror.transformLaterConcurrentEdit(transformed);
     }
     return transformed;
   }

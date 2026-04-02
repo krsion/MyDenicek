@@ -1,9 +1,8 @@
 import { BinaryHeap } from "@std/data-structures/binary-heap";
-import { CopyEdit, type Edit, NoOpEdit } from "./edits.ts";
+import { type Edit, NoOpEdit } from "./edits.ts";
 import { Event } from "./event.ts";
 import { EventId } from "./event-id.ts";
 import type { Node } from "./nodes.ts";
-import type { Selector } from "./selector.ts";
 import { VectorClock } from "./vector-clock.ts";
 
 // ── EventGraph ──────────────────────────────────────────────────────
@@ -104,7 +103,7 @@ export class EventGraph {
             `Cannot replay event '${key}' through more than ${MAX_REPLAY_TRANSFORMATIONS} structural transformations.`,
           );
         }
-        replayEdit = edit.transformConcurrentEdit(replayEdit);
+        replayEdit = edit.transformLaterConcurrentEdit(replayEdit);
         if (replayEdit instanceof NoOpEdit) {
           throw new Error(
             `Cannot replay event '${key}' because later structural edits removed its target.`,
@@ -287,6 +286,14 @@ export class EventGraph {
     return causalPast;
   }
 
+  /**
+   * Computes a deterministic topological order with plain Kahn scheduling.
+   *
+   * The only tie-break among currently ready nodes is EventId ordering; there
+   * are no replay-specific heuristics here. Any semantics that depend on
+   * concurrent ordering must therefore be expressed by edit transforms rather
+   * than by materialization order.
+   */
   computeTopologicalOrder(frontier?: EventId[]): string[] {
     const front = frontier ?? this._frontierIds;
     const causalPast = this.filterCausalPast(front);
@@ -305,29 +312,11 @@ export class EventGraph {
         children[pk]?.push(key);
       }
     }
-    const events = this.events;
-    const compareEvents = (leftKey: string, rightKey: string) => {
-      const leftEvent = events.get(leftKey) as Event,
-        rightEvent = events.get(rightKey) as Event;
-      const copyOrder = this.compareCopyReplayOrder(leftEvent, rightEvent);
-      if (copyOrder !== 0) {
-        return copyOrder;
-      }
-      const leftTarget = leftEvent.edit.target,
-        rightTarget = rightEvent.edit.target;
-      const minLength = Math.min(leftTarget.length, rightTarget.length);
-      for (let i = 0; i < minLength; i++) {
-        const leftIsAll = leftTarget.segments[i] === "*";
-        const rightIsAll = rightTarget.segments[i] === "*";
-        if (leftIsAll && !rightIsAll) return -1;
-        if (!leftIsAll && rightIsAll) return 1;
-      }
-      if (leftTarget.length !== rightTarget.length) {
-        return leftTarget.length - rightTarget.length;
-      }
-      return leftEvent.id.compareTo(rightEvent.id);
-    };
-    const queue = new BinaryHeap<string>(compareEvents);
+    const queue = new BinaryHeap<string>((leftKey, rightKey) =>
+      (this.events.get(leftKey) as Event).id.compareTo(
+        (this.events.get(rightKey) as Event).id,
+      )
+    );
     for (const key of Object.keys(indegree)) {
       if (indegree[key] === 0) queue.push(key);
     }
@@ -344,65 +333,6 @@ export class EventGraph {
       throw new Error("Event graph contains a cycle.");
     }
     return ordered;
-  }
-
-  private compareCopyReplayOrder(leftEvent: Event, rightEvent: Event): number {
-    if (
-      leftEvent.edit instanceof CopyEdit &&
-      !(rightEvent.edit instanceof CopyEdit)
-    ) {
-      return this.compareCopyEventAgainstEdit(leftEvent.edit, rightEvent.edit);
-    }
-    if (
-      rightEvent.edit instanceof CopyEdit &&
-      !(leftEvent.edit instanceof CopyEdit)
-    ) {
-      return -this.compareCopyEventAgainstEdit(rightEvent.edit, leftEvent.edit);
-    }
-    return 0;
-  }
-
-  private compareCopyEventAgainstEdit(
-    copyEdit: CopyEdit,
-    otherEdit: Edit,
-  ): number {
-    if (this.editTouchesSelectorAtOrBelow(otherEdit, copyEdit.target)) {
-      return -1;
-    }
-    if (this.editTouchesStrictAncestor(otherEdit, copyEdit.target)) {
-      return 1;
-    }
-    if (this.editTouchesSelector(otherEdit, copyEdit.source)) {
-      return 1;
-    }
-    return 0;
-  }
-
-  private editTouchesSelectorAtOrBelow(
-    edit: Edit,
-    selector: Selector,
-  ): boolean {
-    return edit.selectors.some((candidate) =>
-      selector.matchPrefix(candidate).kind === "matched"
-    );
-  }
-
-  private editTouchesStrictAncestor(edit: Edit, selector: Selector): boolean {
-    return edit.selectors.some((candidate) =>
-      candidate.length < selector.length &&
-      candidate.matchPrefix(selector).kind === "matched"
-    );
-  }
-
-  private editTouchesSelector(edit: Edit, selector: Selector): boolean {
-    return edit.selectors.some((candidate) =>
-      this.selectorsOverlap(candidate, selector)
-    );
-  }
-
-  private selectorsOverlap(left: Selector, right: Selector): boolean {
-    return left.matchPrefix(right).kind === "matched" ||
-      right.matchPrefix(left).kind === "matched";
   }
 
   materialize(frontier?: EventId[]): MaterializeResult {

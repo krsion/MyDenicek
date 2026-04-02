@@ -31,7 +31,7 @@ Deno.test("concurrent delete + edit: delete wins, edit is no-op", () => {
     kind: "NoOpEdit",
     target: "items/*/val",
     data:
-      "RecordDeleteEdit removed 'items/*/val' before SetValueEdit could apply.",
+      "RecordDeleteEdit removed 'items/*/val' before ApplyPrimitiveEdit could apply.",
   }];
   assertEquals(alice.toPlain(), expected);
   assertEquals(bob.toPlain(), expected);
@@ -60,7 +60,7 @@ Deno.test("concurrent wildcard edit on emptied list becomes no-op", () => {
     kind: "NoOpEdit",
     target: "items/*",
     data:
-      "Concurrent replay left 'items/*' unavailable before SetValueEdit could replay.",
+      "Concurrent replay left 'items/*' unavailable before ApplyPrimitiveEdit could replay.",
   }];
   assertEquals(alice.toPlain(), expected);
   assertEquals(bob.toPlain(), expected);

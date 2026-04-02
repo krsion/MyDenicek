@@ -12,7 +12,6 @@ export {
   RecordAddEdit,
   RecordDeleteEdit,
   RecordRenameFieldEdit,
-  SetValueEdit,
   UpdateTagEdit,
   WrapListEdit,
   WrapRecordEdit,

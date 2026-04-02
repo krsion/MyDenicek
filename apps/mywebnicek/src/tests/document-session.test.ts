@@ -40,7 +40,7 @@ describe("DocumentSession", () => {
     session.set("title", "Updated");
     const snapshot = session.createSnapshot();
     expect(snapshot.events).toHaveLength(1);
-    expect(snapshot.events[0]!.editKind).toBe("SetValue");
+    expect(snapshot.events[0]!.editKind).toBe("ApplyPrimitiveEdit");
     expect(readTitleField(snapshot.doc)).toBe("Updated");
   });
 });

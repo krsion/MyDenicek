@@ -9,7 +9,6 @@ import {
   RecordAddEdit,
   RecordDeleteEdit,
   RecordRenameFieldEdit,
-  SetValueEdit,
   UpdateTagEdit,
   WrapListEdit,
   WrapRecordEdit,
@@ -166,7 +165,9 @@ export class Denicek {
    * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
    */
   set(target: string, value: PrimitiveValue): string {
-    return this.commit(new SetValueEdit(Selector.parse(target), value));
+    return this.commit(
+      new ApplyPrimitiveEdit(Selector.parse(target), "set", [value]),
+    );
   }
 
   /**
@@ -186,12 +187,18 @@ export class Denicek {
 
   /**
    * Applies a registered named primitive edit to every primitive node matched by `target`.
+   * Additional primitive arguments are serialized with the event and passed back
+   * to the registered implementation during replay.
    *
    * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
    */
-  applyPrimitiveEdit(target: string, editName: string): string {
+  applyPrimitiveEdit(
+    target: string,
+    editName: string,
+    ...args: PrimitiveValue[]
+  ): string {
     return this.commit(
-      new ApplyPrimitiveEdit(Selector.parse(target), editName),
+      new ApplyPrimitiveEdit(Selector.parse(target), editName, args),
     );
   }
 

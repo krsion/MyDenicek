@@ -28,8 +28,32 @@ type EncodedListPopFrontEdit = Extract<
   { kind: "ListPopFrontEdit" }
 >;
 
-export class ListPushBackEdit extends NoOpOnRemovedTargetEdit {
+export abstract class ListInsertEdit extends NoOpOnRemovedTargetEdit {
   readonly isStructural = true;
+
+  abstract override readonly target: Selector;
+  abstract readonly node: Node;
+
+  matchInsertedChildRoot(target: Selector): Selector | null {
+    const insertedChildPath = new Selector([...this.target.segments, "*"]);
+    const match = insertedChildPath.matchPrefix(target);
+    return match.kind === "no-match" ? null : match.rest;
+  }
+
+  rewriteInsertedNode(
+    target: Selector,
+    rewrite: (node: Node, relativeTarget: Selector) => Node | null,
+  ): ListInsertEdit | null {
+    const relativeTarget = this.matchInsertedChildRoot(target);
+    if (relativeTarget === null) return null;
+    const rewrittenNode = rewrite(this.node.clone(), relativeTarget);
+    return rewrittenNode === null ? null : this.withInsertedNode(rewrittenNode);
+  }
+
+  protected abstract withInsertedNode(node: Node): ListInsertEdit;
+}
+
+export class ListPushBackEdit extends ListInsertEdit {
   readonly kind = "ListPushBack";
 
   constructor(readonly target: Selector, readonly node: Node) {
@@ -68,6 +92,28 @@ export class ListPushBackEdit extends NoOpOnRemovedTargetEdit {
     return mapSelector(sel);
   }
 
+  override transformLaterConcurrentEdit(concurrent: Edit): Edit {
+    if (!(concurrent instanceof ListInsertEdit)) {
+      return super.transformLaterConcurrentEdit(concurrent);
+    }
+    const rewritten = concurrent.rewriteInsertedNode(
+      this.target,
+      (transformedNode, relativeTarget) => {
+        if (
+          relativeTarget.length !== 0 || !(transformedNode instanceof ListNode)
+        ) {
+          return null;
+        }
+        transformedNode.pushBack(this.node.clone());
+        return transformedNode;
+      },
+    );
+    if (rewritten === null) {
+      return super.transformLaterConcurrentEdit(concurrent);
+    }
+    return rewritten;
+  }
+
   equals(other: Edit): boolean {
     return other instanceof ListPushBackEdit &&
       this.target.equals(other.target) && this.node.equals(other.node);
@@ -76,6 +122,11 @@ export class ListPushBackEdit extends NoOpOnRemovedTargetEdit {
   withTarget(target: Selector): ListPushBackEdit {
     return new ListPushBackEdit(target, this.node);
   }
+
+  protected withInsertedNode(node: Node): ListPushBackEdit {
+    return new ListPushBackEdit(this.target, node);
+  }
+
   encodeRemoteEdit(): EncodedListPushBackEdit {
     return {
       kind: "ListPushBackEdit",
@@ -94,8 +145,7 @@ registerRemoteEditDecoder<EncodedListPushBackEdit>(
     ),
 );
 
-export class ListPushFrontEdit extends NoOpOnRemovedTargetEdit {
-  readonly isStructural = true;
+export class ListPushFrontEdit extends ListInsertEdit {
   readonly kind = "ListPushFront";
 
   constructor(readonly target: Selector, readonly node: Node) {
@@ -139,6 +189,11 @@ export class ListPushFrontEdit extends NoOpOnRemovedTargetEdit {
   withTarget(target: Selector): ListPushFrontEdit {
     return new ListPushFrontEdit(target, this.node);
   }
+
+  protected withInsertedNode(node: Node): ListPushFrontEdit {
+    return new ListPushFrontEdit(this.target, node);
+  }
+
   encodeRemoteEdit(): EncodedListPushFrontEdit {
     return {
       kind: "ListPushFrontEdit",

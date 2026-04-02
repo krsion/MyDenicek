@@ -5,6 +5,7 @@ import {
   NoOpEdit,
   NoOpOnRemovedTargetEdit,
 } from "./base.ts";
+import { ListInsertEdit } from "./list-edits.ts";
 import { mapSelector, Selector, type SelectorTransform } from "../selector.ts";
 import { ListNode, type Node, RecordNode } from "../nodes.ts";
 import {
@@ -24,7 +25,7 @@ type EncodedWrapRecordEdit = Extract<
 type EncodedWrapListEdit = Extract<EncodedRemoteEdit, { kind: "WrapListEdit" }>;
 
 export class UpdateTagEdit extends NoOpOnRemovedTargetEdit {
-  readonly isStructural = false;
+  readonly isStructural = true;
   readonly kind = "UpdateTag";
 
   constructor(readonly target: Selector, readonly tag: string) {
@@ -48,6 +49,21 @@ export class UpdateTagEdit extends NoOpOnRemovedTargetEdit {
 
   transformSelector(sel: Selector): SelectorTransform {
     return mapSelector(sel);
+  }
+
+  override transformLaterConcurrentEdit(concurrent: Edit): Edit {
+    if (!(concurrent instanceof ListInsertEdit)) {
+      return super.transformLaterConcurrentEdit(concurrent);
+    }
+    const rewritten = concurrent.rewriteInsertedNode(
+      this.target,
+      (transformedNode, relativeTarget) => {
+        if (relativeTarget.length !== 0) return null;
+        transformedNode.updateTag(this.tag);
+        return transformedNode;
+      },
+    );
+    return rewritten ?? super.transformLaterConcurrentEdit(concurrent);
   }
 
   equals(other: Edit): boolean {
@@ -131,7 +147,7 @@ export class CopyEdit extends Edit {
     return mapSelector(sel);
   }
 
-  override transformConcurrentEdit(concurrent: Edit): Edit {
+  override transformLaterConcurrentEdit(concurrent: Edit): Edit {
     if (concurrent instanceof CompositeEdit) {
       return concurrent.transform(this);
     }
@@ -376,6 +392,20 @@ export class WrapListEdit extends NoOpOnRemovedTargetEdit {
         ...m.rest.segments,
       ]),
     );
+  }
+
+  override transformLaterConcurrentEdit(concurrent: Edit): Edit {
+    if (!(concurrent instanceof ListInsertEdit)) {
+      return super.transformLaterConcurrentEdit(concurrent);
+    }
+    const rewritten = concurrent.rewriteInsertedNode(
+      this.target,
+      (insertedNode, relativeTarget) =>
+        relativeTarget.length !== 0
+          ? null
+          : new ListNode(this.tag, [insertedNode]),
+    );
+    return rewritten ?? super.transformLaterConcurrentEdit(concurrent);
   }
 
   private transformReferenceSelector(sel: Selector): Selector {

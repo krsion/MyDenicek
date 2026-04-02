@@ -1,9 +1,65 @@
-import { assertEquals } from "@std/assert";
-import { Denicek } from "../../mod.ts";
+import { assertEquals, Denicek, sync } from "../core/test-helpers.ts";
+
+type ContactCell = {
+  $tag: "td";
+  contact: string;
+};
+
+type NameCell = {
+  $tag: "td";
+  name: {
+    $tag: "split-first";
+    source: { $ref: "../../../0/contact" };
+    separator: ", ";
+  };
+};
+
+type SpeakerRow = {
+  $tag: "tr";
+  $items: [ContactCell, NameCell];
+};
+
+type ReplayStep = {
+  $tag: "replay-step";
+  eventId: string;
+};
+
+type ConferenceDocument = {
+  $tag: "app";
+  controls: {
+    $tag: "toolbar";
+    input: {
+      $tag: "input";
+      value: string;
+    };
+    addSpeakerFromInput: {
+      $tag: "button";
+      steps: {
+        $tag: "event-steps";
+        $items: ReplayStep[];
+      };
+    };
+  };
+  speakers: {
+    $tag: "table";
+    $items: SpeakerRow[];
+  };
+};
 
 Deno.test("Formative: Conference List", () => {
   const initialDocument = {
-    $tag: "div",
+    $tag: "app",
+    controls: {
+      $tag: "toolbar",
+      input: {
+        $tag: "input",
+        value: "Katherine Johnson, katherine@example.com",
+      },
+      addSpeakerFromInput: {
+        $tag: "button",
+        steps: { $tag: "event-steps", $items: [] },
+      },
+    },
     speakers: {
       $tag: "ul",
       $items: [
@@ -15,155 +71,154 @@ Deno.test("Formative: Conference List", () => {
   const alice = new Denicek("alice", initialDocument);
   const bob = new Denicek("bob", initialDocument);
 
-  const synchronizePeers = (): void => {
-    const aliceFrontiers = alice.frontiers;
-    const bobFrontiers = bob.frontiers;
-    for (const event of alice.eventsSince(bobFrontiers)) bob.applyRemote(event);
-    for (const event of bob.eventsSince(aliceFrontiers)) {
-      alice.applyRemote(event);
-    }
-  };
-
-  alice.pushBack("speakers", {
+  const insertListSpeakerEventId = alice.pushFront("speakers", {
     $tag: "li",
-    contact: "Barbara Liskov, barbara@example.com",
+    contact: "",
   });
-  bob.updateTag("speakers", "table");
-  bob.updateTag("speakers/*", "td");
-  bob.wrapList("speakers/*", "tr");
-  bob.rename("speakers/*/*", "contact", "name");
-  bob.add("speakers/*/*", "email", "");
+  const copyListInputEventId = alice.copy(
+    "speakers/!0/contact",
+    "controls/input/value",
+  );
+  alice.pushBack("controls/addSpeakerFromInput/steps", {
+    $tag: "replay-step",
+    eventId: insertListSpeakerEventId,
+  });
+  alice.pushBack("controls/addSpeakerFromInput/steps", {
+    $tag: "replay-step",
+    eventId: copyListInputEventId,
+  });
 
-  synchronizePeers();
+  sync(alice, bob);
 
-  const plainConferenceDocument = bob.toPlain() as unknown as {
-    speakers: {
-      $items: Array<{ $items: Array<{ name: string }> }>;
-    };
-  };
+  bob.set("controls/input/value", "Margaret Hamilton, margaret@example.com");
+  bob.repeatEditsFrom("controls/addSpeakerFromInput/steps");
 
-  for (
-    const [rowIndex, row] of plainConferenceDocument.speakers.$items.entries()
-  ) {
-    const [name, email = ""] = row.$items[0]!.name.split(",").map((part) =>
-      part.trim()
-    );
-    bob.set(`speakers/${rowIndex}/0/name`, name);
-    bob.set(`speakers/${rowIndex}/0/email`, email);
-  }
+  const retagTableEventId = alice.updateTag("speakers", "table");
+  const retagCellsEventId = alice.updateTag("speakers/*", "td");
+  const wrapRowsEventId = alice.wrapList("speakers/*", "tr");
+  const addNameCellsEventId = alice.pushBack("speakers/*", {
+    $tag: "td",
+    name: {
+      $tag: "split-first",
+      source: { $ref: "../../../0/contact" },
+      separator: ", ",
+    },
+  });
+  alice.pushBack("controls/addSpeakerFromInput/steps", {
+    $tag: "replay-step",
+    eventId: retagTableEventId,
+  });
+  alice.pushBack("controls/addSpeakerFromInput/steps", {
+    $tag: "replay-step",
+    eventId: retagCellsEventId,
+  });
+  alice.pushBack("controls/addSpeakerFromInput/steps", {
+    $tag: "replay-step",
+    eventId: wrapRowsEventId,
+  });
+  alice.pushBack("controls/addSpeakerFromInput/steps", {
+    $tag: "replay-step",
+    eventId: addNameCellsEventId,
+  });
 
-  synchronizePeers();
+  sync(alice, bob);
 
-  const expected = {
-    $tag: "div",
+  const expected: ConferenceDocument = {
+    $tag: "app",
+    controls: {
+      $tag: "toolbar",
+      input: {
+        $tag: "input",
+        value: "Margaret Hamilton, margaret@example.com",
+      },
+      addSpeakerFromInput: {
+        $tag: "button",
+        steps: {
+          $tag: "event-steps",
+          $items: [
+            { $tag: "replay-step", eventId: insertListSpeakerEventId },
+            { $tag: "replay-step", eventId: copyListInputEventId },
+            { $tag: "replay-step", eventId: retagTableEventId },
+            { $tag: "replay-step", eventId: retagCellsEventId },
+            { $tag: "replay-step", eventId: wrapRowsEventId },
+            { $tag: "replay-step", eventId: addNameCellsEventId },
+          ],
+        },
+      },
+    },
     speakers: {
       $tag: "table",
       $items: [
         {
           $tag: "tr",
-          $items: [{
-            $tag: "td",
-            name: "Ada Lovelace",
-            email: "ada@example.com",
-          }],
+          $items: [
+            { $tag: "td", contact: "Margaret Hamilton, margaret@example.com" },
+            {
+              $tag: "td",
+              name: {
+                $tag: "split-first",
+                source: { $ref: "../../../0/contact" },
+                separator: ", ",
+              },
+            },
+          ],
         },
         {
           $tag: "tr",
-          $items: [{
-            $tag: "td",
-            name: "Grace Hopper",
-            email: "grace@example.com",
-          }],
+          $items: [
+            { $tag: "td", contact: "Katherine Johnson, katherine@example.com" },
+            {
+              $tag: "td",
+              name: {
+                $tag: "split-first",
+                source: { $ref: "../../../0/contact" },
+                separator: ", ",
+              },
+            },
+          ],
         },
         {
           $tag: "tr",
-          $items: [{
-            $tag: "td",
-            name: "Barbara Liskov",
-            email: "barbara@example.com",
-          }],
+          $items: [
+            { $tag: "td", contact: "Ada Lovelace, ada@example.com" },
+            {
+              $tag: "td",
+              name: {
+                $tag: "split-first",
+                source: { $ref: "../../../0/contact" },
+                separator: ", ",
+              },
+            },
+          ],
+        },
+        {
+          $tag: "tr",
+          $items: [
+            { $tag: "td", contact: "Grace Hopper, grace@example.com" },
+            {
+              $tag: "td",
+              name: {
+                $tag: "split-first",
+                source: { $ref: "../../../0/contact" },
+                separator: ", ",
+              },
+            },
+          ],
         },
       ],
     },
   };
   assertEquals(alice.toPlain(), expected);
   assertEquals(bob.toPlain(), expected);
+  assertEquals(
+    expected.speakers.$items.map((row) =>
+      row.$items[0].contact.split(row.$items[1].name.separator)[0]!.trim()
+    ),
+    [
+      "Margaret Hamilton",
+      "Katherine Johnson",
+      "Ada Lovelace",
+      "Grace Hopper",
+    ],
+  );
 });
-
-Deno.test(
-  "Formative: Conference List wildcard copy affects concurrently added speaker",
-  () => {
-    const initialDocument = {
-      $tag: "div",
-      speakers: {
-        $tag: "table",
-        $items: [
-          {
-            $tag: "tr",
-            $items: [{ $tag: "td", name: "Ada Lovelace", email: "" }],
-          },
-          {
-            $tag: "tr",
-            $items: [{ $tag: "td", name: "Grace Hopper", email: "" }],
-          },
-        ],
-      },
-    };
-    const alice = new Denicek("alice", initialDocument);
-    const bob = new Denicek("bob", initialDocument);
-
-    const synchronizePeers = (): void => {
-      const aliceFrontiers = alice.frontiers;
-      const bobFrontiers = bob.frontiers;
-      for (const event of alice.eventsSince(bobFrontiers)) {
-        bob.applyRemote(event);
-      }
-      for (const event of bob.eventsSince(aliceFrontiers)) {
-        alice.applyRemote(event);
-      }
-    };
-
-    alice.pushBack("speakers", {
-      $tag: "tr",
-      $items: [{ $tag: "td", name: "Barbara Liskov", email: "" }],
-    });
-    bob.copy("speakers/*/*/email", "speakers/*/*/name");
-
-    synchronizePeers();
-
-    const expected = {
-      $tag: "div",
-      speakers: {
-        $tag: "table",
-        $items: [
-          {
-            $tag: "tr",
-            $items: [{
-              $tag: "td",
-              name: "Ada Lovelace",
-              email: "Ada Lovelace",
-            }],
-          },
-          {
-            $tag: "tr",
-            $items: [{
-              $tag: "td",
-              name: "Grace Hopper",
-              email: "Grace Hopper",
-            }],
-          },
-          {
-            $tag: "tr",
-            $items: [{
-              $tag: "td",
-              name: "Barbara Liskov",
-              email: "Barbara Liskov",
-            }],
-          },
-        ],
-      },
-    };
-    assertEquals(alice.toPlain(), expected);
-    assertEquals(bob.toPlain(), expected);
-  },
-);

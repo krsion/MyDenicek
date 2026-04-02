@@ -9,10 +9,8 @@ import type { Node } from "./nodes.ts";
 import { validatePeerId } from "./peer-id.ts";
 import type { VectorClock } from "./vector-clock.ts";
 
-function transformConcurrentEdit(prior: Edit, concurrent: Edit): Edit {
-  return (prior as Edit & {
-    transformConcurrentEdit(concurrent: Edit): Edit;
-  }).transformConcurrentEdit(concurrent);
+function transformLaterConcurrentEdit(prior: Edit, concurrent: Edit): Edit {
+  return prior.transformLaterConcurrentEdit(concurrent);
 }
 
 // ── Event ───────────────────────────────────────────────────────────
@@ -89,25 +87,23 @@ export class Event {
   }
 
   /**
-   * Transforms this event's edit against all concurrent prior structural edits.
-   * If those edits have already removed or overwritten the target at replay
-   * time, the result becomes an explicit no-op edit reported as a conflict.
+   * Transforms this event's edit against all concurrent prior edits.
+   * Most edit pairs map through unchanged, but some concurrent edits rewrite a
+   * later edit's selector or inserted payload during deterministic replay.
    */
   resolveAgainst(applied: { ev: Event; edit: Edit }[], doc: Node): Edit {
     let edit: Edit = this.edit;
     let sawConcurrentEdit = false;
-    let sawConcurrentStructuralEdit = false;
+    let sawConcurrentTransform = false;
     for (const prior of applied) {
       if (this.clock.dominates(prior.ev.clock)) continue;
       if (this.isConcurrentWith(prior.ev)) {
         sawConcurrentEdit = true;
-        if (prior.edit.isStructural) {
-          sawConcurrentStructuralEdit = true;
-          edit = transformConcurrentEdit(prior.edit, edit);
-        }
+        sawConcurrentTransform = true;
+        edit = transformLaterConcurrentEdit(prior.edit, edit);
       }
     }
-    if (sawConcurrentStructuralEdit && !edit.canApply(doc)) {
+    if (sawConcurrentTransform && !edit.canApply(doc)) {
       return new NoOpEdit(
         edit.target,
         `Concurrent replay left '${edit.target.format()}' unavailable before ${this.edit.constructor.name} could replay.`,
@@ -115,8 +111,8 @@ export class Event {
     }
     // Only transformed edits need the extra protected-target check here: local
     // validation already blocked removals against the issuer's current state,
-    // while concurrent structural rewrites can retarget a previously valid
-    // removal onto a referenced subtree during deterministic replay.
+    // while concurrent rewrites can retarget a previously valid removal or
+    // mutate an inserted payload during deterministic replay.
     if (sawConcurrentEdit) {
       try {
         edit.validate(doc);

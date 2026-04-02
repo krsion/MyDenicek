@@ -7,8 +7,12 @@ export type EncodedRemoteEdit =
   | { kind: "RecordAddEdit"; target: string; node: PlainNode }
   | { kind: "RecordDeleteEdit"; target: string }
   | { kind: "RecordRenameFieldEdit"; target: string; to: string }
-  | { kind: "SetValueEdit"; target: string; value: PrimitiveValue }
-  | { kind: "ApplyPrimitiveEdit"; target: string; editName: string }
+  | {
+    kind: "ApplyPrimitiveEdit";
+    target: string;
+    editName: string;
+    args: PrimitiveValue[];
+  }
   | { kind: "ListPushBackEdit"; target: string; node: PlainNode }
   | { kind: "ListPushFrontEdit"; target: string; node: PlainNode }
   | { kind: "ListPopBackEdit"; target: string }
