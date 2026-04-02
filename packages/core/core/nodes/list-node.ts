@@ -11,34 +11,40 @@ export class ListNode extends Node {
     this.items = items;
   }
 
-  override pushBack(node: Node): void {
+  override pushBack(node: Node): boolean {
     this.items.push(node);
+    return true;
   }
 
-  override pushFront(node: Node): void {
+  override pushFront(node: Node): boolean {
     this.items.unshift(node);
+    return true;
   }
 
-  override popBack(): void {
+  override popBack(): boolean {
     if (this.items.length === 0) {
       throw new Error("list-pop-back: list is empty");
     }
     this.items.pop();
+    return true;
   }
 
-  override popFront(): void {
+  override popFront(): boolean {
     if (this.items.length === 0) {
       throw new Error("list-pop-front: list is empty");
     }
     this.items.shift();
+    return true;
   }
 
-  override updateTag(tag: string): void {
+  override updateTag(tag: string): boolean {
     this.tag = tag;
+    return true;
   }
 
-  override setItems(items: Node[]): void {
+  override setItems(items: Node[]): boolean {
     this.items = items;
+    return true;
   }
 
   protected resolveSegment(
@@ -80,7 +86,7 @@ export class ListNode extends Node {
     }
   }
 
-  clone(): ListNode {
+  override clone(): ListNode {
     return new ListNode(this.tag, this.items.map((item) => item.clone()));
   }
 

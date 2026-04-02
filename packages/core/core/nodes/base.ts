@@ -30,8 +30,8 @@ export abstract class Node {
   ): void;
 
   // ── Polymorphic edit operations ───────────────────────────────────
-  // Subclasses override the methods they support and return true.
-  // Default: return false (not applicable to this node type).
+  // Subclasses override the operations they support.
+  // The base implementation throws when an operation does not apply.
 
   setPrimitive(_value: PrimitiveValue): void {
     throw this.createUnsupportedOperationError("setPrimitive");

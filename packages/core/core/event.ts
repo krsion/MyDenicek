@@ -4,9 +4,16 @@ import {
   NoOpEdit,
   ProtectedTargetError,
 } from "./edits.ts";
-import { EventId } from "./event-id.ts";
+import type { EventId } from "./event-id.ts";
 import type { Node } from "./nodes.ts";
+import { validatePeerId } from "./peer-id.ts";
 import type { VectorClock } from "./vector-clock.ts";
+
+function transformConcurrentEdit(prior: Edit, concurrent: Edit): Edit {
+  return (prior as Edit & {
+    transformConcurrentEdit(concurrent: Edit): Edit;
+  }).transformConcurrentEdit(concurrent);
+}
 
 // ── Event ───────────────────────────────────────────────────────────
 
@@ -35,7 +42,7 @@ export class Event {
 
   validate(known: Map<string, Event>): void {
     const key = this.id.format();
-    EventId.validatePeer(this.id.peer);
+    validatePeerId(this.id.peer);
     if (!Number.isInteger(this.id.seq) || this.id.seq < 0) {
       throw new Error(`Invalid seq for '${key}'.`);
     }
@@ -47,8 +54,8 @@ export class Event {
         throw new Error(`Unknown parent '${p.format()}' for event '${key}'.`);
       }
     }
-    for (const [peer, seq] of this.clock.entryRecords()) {
-      EventId.validatePeer(peer);
+    for (const [peer, seq] of Object.entries(this.clock.toRecord())) {
+      validatePeerId(peer);
       if (!Number.isInteger(seq) || seq < 0) {
         throw new Error(
           `Invalid vector clock entry '${peer}:${seq}' for '${key}'.`,
@@ -96,7 +103,7 @@ export class Event {
         sawConcurrentEdit = true;
         if (prior.edit.isStructural) {
           sawConcurrentStructuralEdit = true;
-          edit = prior.edit.transformConcurrentEdit(edit);
+          edit = transformConcurrentEdit(prior.edit, edit);
         }
       }
     }

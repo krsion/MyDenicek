@@ -18,6 +18,7 @@ import type { Event } from "./event.ts";
 import { EventGraph, type EventSnapshot } from "./event-graph.ts";
 import { EventId } from "./event-id.ts";
 import { Node, type PlainNode, RecordNode } from "./nodes.ts";
+import { validatePeerId } from "./peer-id.ts";
 import {
   type PrimitiveEditImplementation,
   registerPrimitiveEdit,
@@ -29,8 +30,8 @@ import {
 } from "./selector.ts";
 import {
   decodeRemoteEvent,
+  type EncodedRemoteEvent,
   encodeRemoteEvent,
-  type RemoteEvent,
 } from "./remote-events.ts";
 
 // ── Denicek (collaborative document peer) ───────────────────────────
@@ -52,7 +53,7 @@ export class Denicek {
   /** Creates a peer with an optional initial plain document tree. */
   constructor(peer: string, initial?: PlainNode);
   constructor(peer: string, arg?: PlainNode) {
-    EventId.validatePeer(peer);
+    validatePeerId(peer);
     this.peer = peer;
     this.graph = new EventGraph(Node.fromPlain(arg ?? { $tag: "root" }));
   }
@@ -91,7 +92,7 @@ export class Denicek {
   }
 
   /** Returns and clears opaque event payloads produced by local edits since the last drain. */
-  drain(): RemoteEvent[] {
+  drain(): EncodedRemoteEvent[] {
     const events = this.pendingEvents;
     this.pendingEvents = [];
     return events.map(encodeRemoteEvent);
@@ -103,14 +104,14 @@ export class Denicek {
   }
 
   /** Returns opaque event payloads unknown to a peer with the given frontier strings. */
-  eventsSince(remoteFrontiers: string[]): RemoteEvent[] {
+  eventsSince(remoteFrontiers: string[]): EncodedRemoteEvent[] {
     return this.graph.eventsSince(
       remoteFrontiers.map((frontier) => EventId.parse(frontier)),
     ).map(encodeRemoteEvent);
   }
 
   /** Ingests an opaque event payload produced by another peer. Buffers out-of-order events. */
-  applyRemote(event: RemoteEvent): void {
+  applyRemote(event: EncodedRemoteEvent): void {
     this.graph.ingestEvents([decodeRemoteEvent(event)]);
     this.cachedDoc = null;
   }

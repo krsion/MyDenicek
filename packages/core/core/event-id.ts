@@ -1,15 +1,12 @@
+import { validatePeerId } from "./peer-id.ts";
+
 // ── EventId ─────────────────────────────────────────────────────────
 
 export class EventId {
   constructor(readonly peer: string, readonly seq: number) {}
 
   static validatePeer(peer: string): void {
-    if (peer.length === 0) {
-      throw new Error("Peer ids must not be empty.");
-    }
-    if (peer.includes(":")) {
-      throw new Error(`Peer id '${peer}' cannot contain ':'.`);
-    }
+    validatePeerId(peer);
   }
 
   static parse(value: string): EventId {
