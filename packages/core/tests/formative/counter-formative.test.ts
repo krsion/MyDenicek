@@ -7,10 +7,6 @@ type FormulaNode =
     $tag: "x-formula-plus";
     left: FormulaNode;
     right: FormulaNode;
-  }
-  | {
-    $tag: "paragraph";
-    math: FormulaNode;
   };
 
 Deno.test("Formative: Counter App", () => {
@@ -30,23 +26,10 @@ Deno.test("Formative: Counter App", () => {
   const evaluateFormula = (formula: FormulaNode): number =>
     typeof formula === "number"
       ? formula
-      : formula.$tag === "paragraph"
-      ? evaluateFormula(formula.math)
       : evaluateFormula(formula.left) + evaluateFormula(formula.right);
 
   const clickButton = (): void => {
-    const plainDocument = peer.toPlain() as unknown as {
-      btn: {
-        script: {
-          steps: {
-            $items: Array<{ eventId: string; target: string }>;
-          };
-        };
-      };
-    };
-    for (const step of plainDocument.btn.script.steps.$items) {
-      peer.replayEditFromEventId(step.eventId, step.target);
-    }
+    peer.repeatEditsFrom("btn/script/steps");
   };
 
   const wrapEventId = peer.wrapRecord("formula", "formula", "x-formula-plus");
@@ -56,17 +39,14 @@ Deno.test("Formative: Counter App", () => {
   peer.pushBack("btn/script/steps", {
     $tag: "replay-step",
     eventId: wrapEventId,
-    target: "formula",
   });
   peer.pushBack("btn/script/steps", {
     $tag: "replay-step",
     eventId: renameEventId,
-    target: "formula/formula",
   });
   peer.pushBack("btn/script/steps", {
     $tag: "replay-step",
     eventId: addRightEventId,
-    target: "formula/right",
   });
 
   {
@@ -87,32 +67,34 @@ Deno.test("Formative: Counter App", () => {
 
   clickButton();
   {
-    const plainDocument = peer.toPlain() as unknown as {
-      formula: FormulaNode;
-      btn: { script: { steps: { $items: Array<{ eventId: string }> } } };
+    const formula = (peer.toPlain() as unknown as { formula: FormulaNode })
+      .formula;
+    const expected: FormulaNode = {
+      $tag: "x-formula-plus",
+      left: { $tag: "x-formula-plus", left: 1, right: 1 },
+      right: 1,
     };
-    assertEquals(
-      plainDocument.btn.script.steps.$items.map((step) => step.eventId),
-      [
-        wrapEventId,
-        renameEventId,
-        addRightEventId,
-      ],
-    );
-    assertEquals(evaluateFormula(plainDocument.formula), 3);
+    assertEquals(formula, expected);
+    assertEquals(evaluateFormula(expected), 3);
   }
 
   peer.wrapRecord("formula", "math", "paragraph");
-  peer.set("btn/script/steps/0/target", "formula/math");
-  peer.set("btn/script/steps/1/target", "formula/math/formula");
-  peer.set("btn/script/steps/2/target", "formula/math/right");
-
   clickButton();
 
-  assertEquals(
-    evaluateFormula(
-      (peer.toPlain() as unknown as { formula: FormulaNode }).formula,
-    ),
-    4,
-  );
+  {
+    const formula =
+      (peer.toPlain() as unknown as { formula: { math: FormulaNode } })
+        .formula.math;
+    const expected: FormulaNode = {
+      $tag: "x-formula-plus",
+      left: {
+        $tag: "x-formula-plus",
+        left: { $tag: "x-formula-plus", left: 1, right: 1 },
+        right: 1,
+      },
+      right: 1,
+    };
+    assertEquals(formula, expected);
+    assertEquals(evaluateFormula(expected), 4);
+  }
 });

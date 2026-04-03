@@ -241,12 +241,19 @@ export class Denicek {
    * Each matched node must be a list whose items are records containing a string
    * `eventId` field. Steps are read in list order and replayed through the same
    * repeat-edit semantics as {@link repeatEditFromEventId}.
+   *
+   * All source edits are resolved before any are committed, so multi-step
+   * structural recipes (such as wrap + rename + add) replay correctly: each
+   * step's selector is retargeted through the graph's structural history
+   * without being affected by the other replayed steps in the batch.
+   *
    * Returns the formatted ids of the newly recorded replay events.
    */
   repeatEditsFrom(target: string): string[] {
-    return this.collectRepeatEditEventIds(target).map((eventId) =>
-      this.repeatEditFromEventId(eventId)
+    const edits = this.collectRepeatEditEventIds(target).map((eventId) =>
+      this.resolveReplaySourceEdit(eventId)
     );
+    return edits.map((edit) => this.commit(edit));
   }
 
   /**
