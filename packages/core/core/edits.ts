@@ -21,4 +21,5 @@ export {
   WrapListEdit,
   WrapRecordEdit,
 } from "./edits/tree-edits.ts";
+export { UnwrapListEdit, UnwrapRecordEdit } from "./edits/unwrap-edits.ts";
 export { ApplyPrimitiveEdit } from "./edits/value-edits.ts";

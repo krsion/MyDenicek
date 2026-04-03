@@ -81,6 +81,17 @@ export class ApplyPrimitiveEdit extends NoOpOnRemovedTargetEdit {
     return rewritten ?? super.transformLaterConcurrentEdit(concurrent);
   }
 
+  computeInverse(preDoc: Node): Edit {
+    const nodes = this.navigateOrThrow(preDoc, this.target);
+    const primitive = nodes[0]!;
+    if (!(primitive instanceof PrimitiveNode)) {
+      throw new Error(
+        `ApplyPrimitiveEdit.computeInverse: expected primitive, found '${primitive.constructor.name}'`,
+      );
+    }
+    return new ApplyPrimitiveEdit(this.target, "set", [primitive.value]);
+  }
+
   equals(other: Edit): boolean {
     return other instanceof ApplyPrimitiveEdit &&
       this.target.equals(other.target) &&

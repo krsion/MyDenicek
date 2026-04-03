@@ -38,6 +38,8 @@ import {
   type EncodedRemoteEvent,
   encodeRemoteEvent,
 } from "./remote-events.ts";
+import { evaluateAllFormulas, FormulaError } from "./formula-engine.ts";
+import type { FormulaResult } from "./formula-engine.ts";
 
 // ── Denicek (collaborative document peer) ───────────────────────────
 
@@ -54,6 +56,9 @@ export class Denicek {
   private graph: EventGraph;
   private pendingEvents: Event[] = [];
   private cachedDoc: Node | null = null;
+  private undoStack: string[] = [];
+  private redoStack: string[] = [];
+  private isUndoRedoCommit = false;
 
   /** Creates a peer with an optional initial plain document tree. */
   constructor(peer: string, initial?: PlainNode);
@@ -85,6 +90,10 @@ export class Denicek {
       edit.apply(doc);
       const event = this.graph.createEvent(this.peer, edit);
       this.pendingEvents.push(event);
+      if (!this.isUndoRedoCommit) {
+        this.undoStack.push(event.id.format());
+        this.redoStack = [];
+      }
       this.cachedDoc = doc;
       return event.id.format();
     } catch (e) {
@@ -93,6 +102,75 @@ export class Denicek {
       // cached document alive for future operations.
       this.cachedDoc = null;
       throw e;
+    }
+  }
+
+  /** Whether there is a local edit that can be undone. */
+  get canUndo(): boolean {
+    return this.undoStack.length > 0;
+  }
+
+  /** Whether a previously undone edit can be redone. */
+  get canRedo(): boolean {
+    return this.redoStack.length > 0;
+  }
+
+  /**
+   * Undoes the most recent local edit by appending its inverse to the DAG.
+   *
+   * The inverse is computed against the document state just before the
+   * original edit was applied (materialized at the event's parent frontier).
+   * The resulting inverse event is a regular DAG event, so remote peers
+   * converge on the same undone state automatically.
+   *
+   * Returns the formatted event id of the newly created inverse event.
+   */
+  undo(): string {
+    if (this.undoStack.length === 0) {
+      throw new Error("Nothing to undo.");
+    }
+    const eventId = this.undoStack.pop()!;
+    const event = this.graph.getEvent(eventId);
+    if (event === undefined) {
+      throw new Error(`Cannot undo unknown event '${eventId}'.`);
+    }
+
+    const { doc: preDoc } = this.graph.materialize(event.parents);
+
+    const inverseEdit = event.edit.computeInverse(preDoc);
+
+    this.isUndoRedoCommit = true;
+    try {
+      const inverseEventId = this.commit(inverseEdit);
+      this.redoStack.push(eventId);
+      return inverseEventId;
+    } finally {
+      this.isUndoRedoCommit = false;
+    }
+  }
+
+  /**
+   * Redoes the most recently undone edit by replaying it from the event DAG.
+   *
+   * Returns the formatted event id of the newly created redo event.
+   */
+  redo(): string {
+    if (this.redoStack.length === 0) {
+      throw new Error("Nothing to redo.");
+    }
+    const eventId = this.redoStack.pop()!;
+    const event = this.graph.getEvent(eventId);
+    if (event === undefined) {
+      throw new Error(`Cannot redo unknown event '${eventId}'.`);
+    }
+
+    this.isUndoRedoCommit = true;
+    try {
+      const redoEventId = this.commit(event.edit);
+      this.undoStack.push(eventId);
+      return redoEventId;
+    } finally {
+      this.isUndoRedoCommit = false;
     }
   }
 
@@ -449,6 +527,37 @@ export class Denicek {
         );
       }
     }
+  }
+
+  /**
+   * Evaluates all formula nodes in the current document and returns their results.
+   *
+   * Formula nodes are tagged records whose `$tag` starts with `"x-formula"`.
+   * Results are returned as a map from formula path to computed value or error.
+   */
+  evaluateFormulas(): Map<string, FormulaResult> {
+    return evaluateAllFormulas(this.materialize());
+  }
+
+  /**
+   * Evaluates all formula nodes and writes their results back into the document.
+   *
+   * For each formula that evaluates to a primitive value (not an error), this
+   * sets the `result` field on the formula record. Formula errors are skipped.
+   * Returns the evaluation results map for inspection.
+   */
+  recomputeFormulas(): Map<string, FormulaResult> {
+    const results = this.evaluateFormulas();
+    for (const [path, result] of results) {
+      if (!(result instanceof FormulaError)) {
+        try {
+          this.set(`${path}/result`, result);
+        } catch {
+          // Skip if path doesn't resolve (formula may have been deleted concurrently)
+        }
+      }
+    }
+    return results;
   }
 
   /** Rejects local renames that would overwrite an existing sibling field. */

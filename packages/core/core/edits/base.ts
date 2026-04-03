@@ -29,6 +29,9 @@ export abstract class Edit {
   abstract withTarget(target: Selector): Edit;
   abstract encodeRemoteEdit(): EncodedRemoteEdit;
 
+  /** Computes the inverse edit that undoes this edit given the pre-edit document state. */
+  abstract computeInverse(preDoc: Node): Edit;
+
   get selectors(): Selector[] {
     return [this.target];
   }
@@ -217,6 +220,10 @@ export class NoOpEdit extends Edit {
     return this;
   }
 
+  computeInverse(_preDoc: Node): NoOpEdit {
+    return this;
+  }
+
   equals(other: Edit): boolean {
     return other instanceof NoOpEdit &&
       this.target.equals(other.target) &&
@@ -315,6 +322,13 @@ export class CompositeEdit extends Edit {
       transformed = mirror.transformLaterConcurrentEdit(transformed);
     }
     return transformed;
+  }
+
+  computeInverse(preDoc: Node): Edit {
+    const allEdits = [this.primary, ...this.mirrors];
+    const inverses = allEdits.map((edit) => edit.computeInverse(preDoc))
+      .reverse();
+    return createCompositeEdit(inverses[0]!, inverses.slice(1));
   }
 
   equals(other: Edit): boolean {

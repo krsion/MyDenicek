@@ -12,6 +12,7 @@ import {
   type EncodedRemoteEdit,
   registerRemoteEditDecoder,
 } from "../remote-edit-codec.ts";
+import { UnwrapListEdit, UnwrapRecordEdit } from "./unwrap-edits.ts";
 
 type EncodedUpdateTagEdit = Extract<
   EncodedRemoteEdit,
@@ -64,6 +65,18 @@ export class UpdateTagEdit extends NoOpOnRemovedTargetEdit {
       },
     );
     return rewritten ?? super.transformLaterConcurrentEdit(concurrent);
+  }
+
+  computeInverse(preDoc: Node): Edit {
+    const nodes = this.navigateOrThrow(preDoc, this.target);
+    const plain = nodes[0]!.toPlain() as Record<string, unknown>;
+    const oldTag = plain.$tag;
+    if (typeof oldTag !== "string") {
+      throw new Error(
+        "UpdateTagEdit.computeInverse: node has no $tag.",
+      );
+    }
+    return new UpdateTagEdit(this.target, oldTag);
   }
 
   equals(other: Edit): boolean {
@@ -254,6 +267,10 @@ export class CopyEdit extends Edit {
     return selector.segments.filter((segment) => segment === "*").length;
   }
 
+  computeInverse(_preDoc: Node): Edit {
+    throw new Error("CopyEdit does not support computeInverse.");
+  }
+
   equals(other: Edit): boolean {
     return other instanceof CopyEdit && this.target.equals(other.target) &&
       this.source.equals(other.source);
@@ -326,6 +343,10 @@ export class WrapRecordEdit extends NoOpOnRemovedTargetEdit {
       return this.handleRemovedTarget(prior);
     }
     return new WrapRecordEdit(transformedTarget.selector, this.field, this.tag);
+  }
+
+  computeInverse(_preDoc: Node): Edit {
+    return new UnwrapRecordEdit(this.target, this.field);
   }
 
   equals(other: Edit): boolean {
@@ -416,6 +437,10 @@ export class WrapListEdit extends NoOpOnRemovedTargetEdit {
       "*",
       ...m.rest.segments,
     ]);
+  }
+
+  computeInverse(_preDoc: Node): Edit {
+    return new UnwrapListEdit(this.target);
   }
 
   equals(other: Edit): boolean {

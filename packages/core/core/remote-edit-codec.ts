@@ -21,6 +21,8 @@ export type EncodedRemoteEdit =
   | { kind: "WrapRecordEdit"; target: string; field: string; tag: string }
   | { kind: "WrapListEdit"; target: string; tag: string }
   | { kind: "CopyEdit"; target: string; source: string }
+  | { kind: "UnwrapRecordEdit"; target: string; field: string }
+  | { kind: "UnwrapListEdit"; target: string }
   | { kind: "NoOpEdit"; target: string; reason: string };
 
 type RemoteEditDecoder<

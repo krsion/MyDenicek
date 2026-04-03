@@ -114,6 +114,10 @@ export class ListPushBackEdit extends ListInsertEdit {
     return rewritten;
   }
 
+  computeInverse(_preDoc: Node): Edit {
+    return new ListPopBackEdit(this.target);
+  }
+
   equals(other: Edit): boolean {
     return other instanceof ListPushBackEdit &&
       this.target.equals(other.target) && this.node.equals(other.node);
@@ -179,6 +183,10 @@ export class ListPushFrontEdit extends ListInsertEdit {
 
   transformSelector(sel: Selector): SelectorTransform {
     return this.target.shiftIndex(sel, 0, +1);
+  }
+
+  computeInverse(_preDoc: Node): Edit {
+    return new ListPopFrontEdit(this.target);
   }
 
   equals(other: Edit): boolean {
@@ -265,6 +273,15 @@ export class ListPopBackEdit extends NoOpOnRemovedTargetEdit {
     return super.transform(prior);
   }
 
+  computeInverse(preDoc: Node): Edit {
+    const nodes = this.navigateOrThrow(preDoc, this.target);
+    const list = this.assertList(nodes[0]!);
+    return new ListPushBackEdit(
+      this.target,
+      list.items[list.items.length - 1]!.clone(),
+    );
+  }
+
   equals(other: Edit): boolean {
     return other instanceof ListPopBackEdit && this.target.equals(other.target);
   }
@@ -337,6 +354,12 @@ export class ListPopFrontEdit extends NoOpOnRemovedTargetEdit {
       );
     }
     return super.transform(prior);
+  }
+
+  computeInverse(preDoc: Node): Edit {
+    const nodes = this.navigateOrThrow(preDoc, this.target);
+    const list = this.assertList(nodes[0]!);
+    return new ListPushFrontEdit(this.target, list.items[0]!.clone());
   }
 
   equals(other: Edit): boolean {

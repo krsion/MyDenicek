@@ -66,6 +66,10 @@ export class RecordAddEdit extends NoOpOnRemovedTargetEdit {
     return mapSelector(sel);
   }
 
+  computeInverse(_preDoc: Node): Edit {
+    return new RecordDeleteEdit(this.target);
+  }
+
   equals(other: Edit): boolean {
     return other instanceof RecordAddEdit && this.target.equals(other.target) &&
       this.node.equals(other.node);
@@ -131,6 +135,11 @@ export class RecordDeleteEdit extends NoOpOnRemovedTargetEdit {
     return mapSelector(sel);
   }
 
+  computeInverse(preDoc: Node): Edit {
+    const nodes = this.navigateOrThrow(preDoc, this.target);
+    return new RecordAddEdit(this.target, nodes[0]!.clone());
+  }
+
   equals(other: Edit): boolean {
     return other instanceof RecordDeleteEdit &&
       this.target.equals(other.target);
@@ -189,6 +198,15 @@ export class RecordRenameFieldEdit extends NoOpOnRemovedTargetEdit {
         ...m.rest.segments,
       ]),
     );
+  }
+
+  computeInverse(_preDoc: Node): Edit {
+    const from = String(this.target.lastSegment);
+    const newTarget = new Selector([
+      ...this.target.parent.segments,
+      this.to,
+    ]);
+    return new RecordRenameFieldEdit(newTarget, from);
   }
 
   equals(other: Edit): boolean {

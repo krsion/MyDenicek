@@ -795,6 +795,10 @@ Deno.test("default edit transform throws unless removal handling is explicit", (
     encodeRemoteEdit(): never {
       throw new Error("DummyEdit should not be serialized in this test.");
     }
+
+    computeInverse(_preDoc: Node): Edit {
+      throw new Error("DummyEdit does not support computeInverse.");
+    }
   }
 
   const edit = new DummyEdit(Selector.parse("item/name"));
