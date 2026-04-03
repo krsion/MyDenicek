@@ -115,6 +115,40 @@ export function MyWebnicekApp() {
     persistSyncServerUrl(syncServerUrl);
   }, [syncServerUrl]);
 
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        if (session.getDocument().canUndo) {
+          try {
+            session.undo();
+            handleLocalEdit();
+          } catch { /* ignore */ }
+        }
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && e.shiftKey) {
+        e.preventDefault();
+        if (session.getDocument().canRedo) {
+          try {
+            session.redo();
+            handleLocalEdit();
+          } catch { /* ignore */ }
+        }
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "y") {
+        e.preventDefault();
+        if (session.getDocument().canRedo) {
+          try {
+            session.redo();
+            handleLocalEdit();
+          } catch { /* ignore */ }
+        }
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  });
+
   const snapshot = session.createSnapshot();
   const selectedEvent =
     snapshot.events.find((event) => event.id === selectedEventId) ?? null;
@@ -470,6 +504,82 @@ export function MyWebnicekApp() {
                 <strong>Conflicts:</strong> {snapshot.conflicts.length}
               </div>
             </div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              <button
+                type="button"
+                disabled={!snapshot.canUndo}
+                onClick={() => {
+                  try {
+                    session.undo();
+                    handleLocalEdit();
+                  } catch (e) {
+                    setStatusMessage(
+                      e instanceof Error ? e.message : String(e),
+                    );
+                  }
+                }}
+                style={{
+                  background: snapshot.canUndo ? "#0078d4" : "#c8c8c8",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 4,
+                  padding: "5px 12px",
+                  cursor: snapshot.canUndo ? "pointer" : "not-allowed",
+                  fontSize: 12,
+                }}
+              >
+                ↩ Undo
+              </button>
+              <button
+                type="button"
+                disabled={!snapshot.canRedo}
+                onClick={() => {
+                  try {
+                    session.redo();
+                    handleLocalEdit();
+                  } catch (e) {
+                    setStatusMessage(
+                      e instanceof Error ? e.message : String(e),
+                    );
+                  }
+                }}
+                style={{
+                  background: snapshot.canRedo ? "#0078d4" : "#c8c8c8",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 4,
+                  padding: "5px 12px",
+                  cursor: snapshot.canRedo ? "pointer" : "not-allowed",
+                  fontSize: 12,
+                }}
+              >
+                ↪ Redo
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    session.recomputeFormulas();
+                    handleLocalEdit();
+                  } catch (e) {
+                    setStatusMessage(
+                      e instanceof Error ? e.message : String(e),
+                    );
+                  }
+                }}
+                style={{
+                  background: "#8764b8",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 4,
+                  padding: "5px 12px",
+                  cursor: "pointer",
+                  fontSize: 12,
+                }}
+              >
+                ƒ Recompute
+              </button>
+            </div>
             <p style={{ ...sectionTitle, marginTop: 0 }}>Edit</p>
             <EditComposer session={session} onEdit={handleLocalEdit} />
           </section>
@@ -516,8 +626,55 @@ export function MyWebnicekApp() {
             }}
           >
             <p style={sectionTitle}>Materialized Tree</p>
-            <MaterializedTree node={snapshot.doc} />
+            <MaterializedTree
+              node={snapshot.doc}
+              formulaResults={snapshot.formulaResults}
+            />
           </section>
+
+          {snapshot.formulaResults.size > 0 && (
+            <section
+              style={{
+                background: "#fff",
+                borderRadius: 8,
+                padding: 16,
+                boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+              }}
+            >
+              <p style={sectionTitle}>Formulas</p>
+              <div style={{ fontFamily: "monospace", fontSize: 12 }}>
+                {Array.from(snapshot.formulaResults.entries()).map(
+                  ([path, result]) => (
+                    <div
+                      key={path}
+                      style={{
+                        display: "flex",
+                        gap: 8,
+                        padding: "3px 0",
+                        borderBottom: "1px solid #f0f0f0",
+                      }}
+                    >
+                      <span style={{ color: "#001080", minWidth: 120 }}>
+                        {path}
+                      </span>
+                      <span
+                        style={{
+                          color: typeof result === "object"
+                            ? "#c50f1f"
+                            : "#107c10",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {typeof result === "object"
+                          ? result.toString()
+                          : JSON.stringify(result)}
+                      </span>
+                    </div>
+                  ),
+                )}
+              </div>
+            </section>
+          )}
 
           <section
             style={{

@@ -1,5 +1,10 @@
 import { Denicek } from "@mydenicek/core";
-import type { EventSnapshot, PlainNode, PrimitiveValue } from "@mydenicek/core";
+import type {
+  EventSnapshot,
+  FormulaResult,
+  PlainNode,
+  PrimitiveValue,
+} from "@mydenicek/core";
 
 export type DocumentSnapshot = {
   readonly peerId: string;
@@ -7,6 +12,9 @@ export type DocumentSnapshot = {
   readonly events: EventSnapshot[];
   readonly conflicts: PlainNode[];
   readonly frontiers: string[];
+  readonly canUndo: boolean;
+  readonly canRedo: boolean;
+  readonly formulaResults: Map<string, FormulaResult>;
 };
 
 export class DocumentSession {
@@ -31,6 +39,9 @@ export class DocumentSession {
       events: this.denicekDocument.inspectEvents(),
       conflicts: this.denicekDocument.conflicts,
       frontiers: this.denicekDocument.frontiers,
+      canUndo: this.denicekDocument.canUndo,
+      canRedo: this.denicekDocument.canRedo,
+      formulaResults: this.denicekDocument.evaluateFormulas(),
     };
   }
 
@@ -80,5 +91,17 @@ export class DocumentSession {
 
   copy(target: string, source: string): void {
     this.denicekDocument.copy(target, source);
+  }
+
+  undo(): void {
+    this.denicekDocument.undo();
+  }
+
+  redo(): void {
+    this.denicekDocument.redo();
+  }
+
+  recomputeFormulas(): void {
+    this.denicekDocument.recomputeFormulas();
   }
 }

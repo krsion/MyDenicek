@@ -1,11 +1,16 @@
 import type {
+  FormulaResult,
   PlainList,
   PlainNode,
   PlainRecord,
   PlainRef,
 } from "@mydenicek/core";
 
-type Props = { node: PlainNode; path?: string };
+type Props = {
+  node: PlainNode;
+  path?: string;
+  formulaResults?: Map<string, FormulaResult>;
+};
 
 function isRecord(n: PlainNode): n is PlainRecord {
   return typeof n === "object" && n !== null && !Array.isArray(n) &&
@@ -21,7 +26,12 @@ function isPrimitive(n: PlainNode): n is string | number | boolean {
   return typeof n !== "object";
 }
 
-function NodeView({ node, path = "" }: Props) {
+function isFormula(n: PlainNode): boolean {
+  return isRecord(n) && typeof n.$tag === "string" &&
+    (n.$tag as string).startsWith("x-formula");
+}
+
+function NodeView({ node, path = "", formulaResults }: Props) {
   if (isPrimitive(node)) {
     return (
       <span style={{ color: typeof node === "string" ? "#a31515" : "#0000ff" }}>
@@ -42,9 +52,55 @@ function NodeView({ node, path = "" }: Props) {
         {node.$items.map((item, i) => (
           <div key={i} style={{ display: "flex", gap: 4, marginTop: 2 }}>
             <span style={{ color: "#888", minWidth: 20 }}>{i}:</span>
-            <NodeView node={item} path={`${path}/${i}`} />
+            <NodeView
+              node={item}
+              path={`${path}/${i}`}
+              formulaResults={formulaResults}
+            />
           </div>
         ))}
+      </div>
+    );
+  }
+  if (isFormula(node)) {
+    const rec = node as PlainRecord;
+    const op = typeof rec.operation === "string" ? rec.operation : "?";
+    const resultPath = path.startsWith("/") ? path.slice(1) : path;
+    const formulaResult = formulaResults?.get(resultPath);
+    return (
+      <div style={{ marginLeft: 16 }}>
+        <span style={{ color: "#8764b8", fontWeight: 600 }}>
+          ƒ {op}
+        </span>
+        {formulaResult !== undefined && (
+          <span
+            style={{
+              marginLeft: 8,
+              color: typeof formulaResult === "object" ? "#c50f1f" : "#107c10",
+              fontWeight: 600,
+              fontSize: "0.9em",
+            }}
+          >
+            = {typeof formulaResult === "object"
+              ? formulaResult.toString()
+              : JSON.stringify(formulaResult)}
+          </span>
+        )}
+        {Object.entries(rec)
+          .filter(([k]) => k !== "$tag")
+          .map(([key, val]) => (
+            <div
+              key={key}
+              style={{ display: "flex", gap: 4, marginTop: 2 }}
+            >
+              <span style={{ color: "#001080", minWidth: 60 }}>{key}:</span>
+              <NodeView
+                node={val as PlainNode}
+                path={`${path}/${key}`}
+                formulaResults={formulaResults}
+              />
+            </div>
+          ))}
       </div>
     );
   }
@@ -61,7 +117,11 @@ function NodeView({ node, path = "" }: Props) {
         {fields.map(([key, val]) => (
           <div key={key} style={{ display: "flex", gap: 4, marginTop: 2 }}>
             <span style={{ color: "#001080", minWidth: 60 }}>{key}:</span>
-            <NodeView node={val as PlainNode} path={`${path}/${key}`} />
+            <NodeView
+              node={val as PlainNode}
+              path={`${path}/${key}`}
+              formulaResults={formulaResults}
+            />
           </div>
         ))}
       </div>
@@ -70,7 +130,12 @@ function NodeView({ node, path = "" }: Props) {
   return <span style={{ color: "#888" }}>?</span>;
 }
 
-export function MaterializedTree({ node }: { node: PlainNode }) {
+export function MaterializedTree(
+  { node, formulaResults }: {
+    node: PlainNode;
+    formulaResults?: Map<string, FormulaResult>;
+  },
+) {
   return (
     <div
       style={{
@@ -80,7 +145,7 @@ export function MaterializedTree({ node }: { node: PlainNode }) {
         overflowX: "auto",
       }}
     >
-      <NodeView node={node} />
+      <NodeView node={node} formulaResults={formulaResults} />
     </div>
   );
 }

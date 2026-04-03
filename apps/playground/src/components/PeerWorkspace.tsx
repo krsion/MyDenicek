@@ -108,7 +108,10 @@ export function PeerWorkspace(
 
         {/* Materialized Tree */}
         <p style={{ ...sectionTitle, marginTop: 12 }}>Materialized Tree</p>
-        <MaterializedTree node={snapshot.doc} />
+        <MaterializedTree
+          node={snapshot.doc}
+          formulaResults={snapshot.formulaResults}
+        />
 
         {/* Conflicts */}
         <p style={{ ...sectionTitle, marginTop: 12 }}>
@@ -128,6 +131,109 @@ export function PeerWorkspace(
           )}
         </p>
         <ConflictsPanel conflicts={snapshot.conflicts} />
+
+        {/* Formula Results */}
+        {snapshot.formulaResults.size > 0 && (
+          <>
+            <p style={{ ...sectionTitle, marginTop: 12 }}>Formulas</p>
+            <div style={{ fontFamily: "monospace", fontSize: 11 }}>
+              {Array.from(snapshot.formulaResults.entries()).map(
+                ([path, result]) => (
+                  <div
+                    key={path}
+                    style={{
+                      display: "flex",
+                      gap: 6,
+                      padding: "2px 0",
+                      borderBottom: "1px solid #f0f0f0",
+                    }}
+                  >
+                    <span style={{ color: "#001080" }}>{path}</span>
+                    <span
+                      style={{
+                        color: typeof result === "object"
+                          ? "#c50f1f"
+                          : "#107c10",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {typeof result === "object"
+                        ? result.toString()
+                        : JSON.stringify(result)}
+                    </span>
+                  </div>
+                ),
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Actions */}
+        <p style={{ ...sectionTitle, marginTop: 12 }}>Actions</p>
+        <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+          <button
+            type="button"
+            disabled={!snapshot.canUndo}
+            onClick={() => {
+              try {
+                session.undo();
+                onEdit();
+              } catch { /* ignore */ }
+            }}
+            style={{
+              background: snapshot.canUndo ? "#0078d4" : "#c8c8c8",
+              color: "#fff",
+              border: "none",
+              borderRadius: 3,
+              padding: "4px 10px",
+              cursor: snapshot.canUndo ? "pointer" : "not-allowed",
+              fontSize: 11,
+            }}
+          >
+            ↩ Undo
+          </button>
+          <button
+            type="button"
+            disabled={!snapshot.canRedo}
+            onClick={() => {
+              try {
+                session.redo();
+                onEdit();
+              } catch { /* ignore */ }
+            }}
+            style={{
+              background: snapshot.canRedo ? "#0078d4" : "#c8c8c8",
+              color: "#fff",
+              border: "none",
+              borderRadius: 3,
+              padding: "4px 10px",
+              cursor: snapshot.canRedo ? "pointer" : "not-allowed",
+              fontSize: 11,
+            }}
+          >
+            ↪ Redo
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              try {
+                session.recomputeFormulas();
+                onEdit();
+              } catch { /* ignore */ }
+            }}
+            style={{
+              background: "#8764b8",
+              color: "#fff",
+              border: "none",
+              borderRadius: 3,
+              padding: "4px 10px",
+              cursor: "pointer",
+              fontSize: 11,
+            }}
+          >
+            ƒ Recompute
+          </button>
+        </div>
 
         {/* Edit Composer */}
         <p style={{ ...sectionTitle, marginTop: 12 }}>Edit</p>

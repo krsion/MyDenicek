@@ -1,5 +1,10 @@
 import { Denicek } from "@mydenicek/core";
-import type { EventSnapshot, PlainNode, PrimitiveValue } from "@mydenicek/core";
+import type {
+  EventSnapshot,
+  FormulaResult,
+  PlainNode,
+  PrimitiveValue,
+} from "@mydenicek/core";
 
 /** Snapshot of a peer's visible state, safe to pass as React props. */
 export type PeerSnapshot = {
@@ -8,6 +13,9 @@ export type PeerSnapshot = {
   readonly events: EventSnapshot[];
   readonly conflicts: PlainNode[];
   readonly frontiers: string[];
+  readonly canUndo: boolean;
+  readonly canRedo: boolean;
+  readonly formulaResults: Map<string, FormulaResult>;
 };
 
 /**
@@ -37,6 +45,9 @@ export class PeerSession {
       events: this.denicek.inspectEvents(),
       conflicts: this.denicek.conflicts,
       frontiers: this.denicek.frontiers,
+      canUndo: this.denicek.canUndo,
+      canRedo: this.denicek.canRedo,
+      formulaResults: this.denicek.evaluateFormulas(),
     };
   }
 
@@ -83,5 +94,17 @@ export class PeerSession {
   }
   copy(target: string, source: string): void {
     this.denicek.copy(target, source);
+  }
+
+  undo(): void {
+    this.denicek.undo();
+  }
+
+  redo(): void {
+    this.denicek.redo();
+  }
+
+  recomputeFormulas(): void {
+    this.denicek.recomputeFormulas();
   }
 }
