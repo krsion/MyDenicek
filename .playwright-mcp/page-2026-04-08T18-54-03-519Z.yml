@@ -1,0 +1,5 @@
+- generic [ref=e5]:
+  - generic [ref=e6]: mydenicek
+  - generic [ref=e7]: Enter your name to start collaborating
+  - textbox "e.g. Alice" [active] [ref=e8]
+  - button "Join" [ref=e9] [cursor=pointer]

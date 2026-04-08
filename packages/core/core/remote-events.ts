@@ -6,6 +6,15 @@ import {
 } from "./remote-edit-codec.ts";
 import { VectorClock } from "./vector-clock.ts";
 
+// Force-load all edit modules to register their remote-edit decoders.
+// These modules call registerRemoteEditDecoder() at the top level.
+// Without these imports, tree-shaking may eliminate the side effects.
+import "./edits/value-edits.ts";
+import "./edits/record-edits.ts";
+import "./edits/list-edits.ts";
+import "./edits/tree-edits.ts";
+import "./edits/unwrap-edits.ts";
+
 export type { EncodedRemoteEdit } from "./remote-edit-codec.ts";
 
 /** Serializable identifier for one remote event. */
