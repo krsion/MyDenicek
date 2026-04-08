@@ -91,7 +91,7 @@ export type NodeInput =
 
 // ── Metadata field helpers ──────────────────────────────────────────
 
-const METADATA_FIELDS = new Set(["$tag", "$id", "$kind", "$order"]);
+const METADATA_FIELDS = new Set(["$tag", "$id", "$kind"]);
 
 function isPlainRecord(value: PlainNode): value is PlainRecord {
   return typeof value === "object" && value !== null &&
@@ -174,7 +174,6 @@ export class DocumentAdapter {
       $tag: tag,
       $id: id,
       $kind: "element",
-      $order: "",
     };
     this.denicek.add("", "root", record);
     this.notifyAfterMutation();
@@ -200,8 +199,6 @@ export class DocumentAdapter {
       newIds.push(id);
     }
 
-    // Update $order on the parent
-    this.insertIntoOrder(parentPath, newIds, startIndex);
     this.notifyAfterMutation();
     return newIds;
   }
@@ -215,7 +212,6 @@ export class DocumentAdapter {
       if (parentPath == null) continue;
 
       this.denicek.delete(parentPath, id);
-      this.removeFromOrder(parentPath, id);
     }
     this.notifyAfterMutation();
   }
@@ -224,9 +220,10 @@ export class DocumentAdapter {
   moveNodes(
     nodeIds: string[],
     newParentId: string,
-    index?: number,
+    _index?: number,
   ): void {
-    // Remove from old parents
+    const newParentPath = this.requirePath(newParentId);
+
     for (const id of nodeIds) {
       const oldParentId = this.parentIndex.get(id);
       if (oldParentId == null) continue;
@@ -238,16 +235,11 @@ export class DocumentAdapter {
         oldParentPath + "/" + id,
       )[0] as PlainRecord;
       this.denicek.delete(oldParentPath, id);
-      this.removeFromOrder(oldParentPath, id);
 
       // Re-add under new parent
-      const newParentPath = this.requirePath(newParentId);
       this.denicek.add(newParentPath, id, subtreePlain);
     }
 
-    // Insert IDs into new parent's $order
-    const newParentPath = this.requirePath(newParentId);
-    this.insertIntoOrder(newParentPath, nodeIds, index);
     this.notifyAfterMutation();
   }
 
@@ -472,7 +464,11 @@ export class DocumentAdapter {
     }
   }
 
-  /** Indexes an element node: extracts attrs, discovers children via $order. */
+  /**
+   * Indexes an element node: extracts attrs and discovers children by
+   * scanning record fields for PlainRecord values. Child order is the
+   * `Object.keys()` order, which matches insertion order in JavaScript.
+   */
   private indexElementNode(
     record: PlainRecord,
     id: string,
@@ -481,38 +477,14 @@ export class DocumentAdapter {
     const attrs: Record<string, unknown> = {};
     const childIds: string[] = [];
 
-    // Parse the $order string to get ordered child IDs
-    const orderStr = record["$order"] as string | undefined;
-    const orderedIds = orderStr
-      ? orderStr.split(",").filter((s) => s.length > 0)
-      : [];
-
-    // Separate children from attributes
-    const childRecords = new Map<string, PlainRecord>();
     for (const key of Object.keys(record)) {
       if (METADATA_FIELDS.has(key)) continue;
       const value = record[key];
-      if (isPlainRecord(value)) {
-        childRecords.set(key, value);
-      } else {
+      if (value !== undefined && isPlainRecord(value)) {
+        childIds.push(key);
+        this.indexRecord(value, selectorPath + "/" + key, id);
+      } else if (value !== undefined) {
         attrs[key] = value;
-      }
-    }
-
-    // Index children in $order sequence
-    for (const childKey of orderedIds) {
-      const childRecord = childRecords.get(childKey);
-      if (childRecord) {
-        childIds.push(childKey);
-        this.indexRecord(childRecord, selectorPath + "/" + childKey, id);
-      }
-    }
-
-    // Include children not listed in $order (append at end)
-    for (const [childKey, childRecord] of childRecords) {
-      if (!orderedIds.includes(childKey)) {
-        childIds.push(childKey);
-        this.indexRecord(childRecord, selectorPath + "/" + childKey, id);
       }
     }
 
@@ -533,7 +505,6 @@ export class DocumentAdapter {
           $tag: input.tag,
           $id: id,
           $kind: "element",
-          $order: "",
         };
         if (input.attrs) {
           for (const [key, value] of Object.entries(input.attrs)) {
@@ -541,13 +512,10 @@ export class DocumentAdapter {
           }
         }
         if (input.children && input.children.length > 0) {
-          const childIds: string[] = [];
           for (const child of input.children) {
             const childId = crypto.randomUUID();
-            childIds.push(childId);
             record[childId] = this.buildPlainRecord(child, childId);
           }
-          record["$order"] = childIds.join(",");
         }
         return record;
       }
@@ -596,34 +564,6 @@ export class DocumentAdapter {
       throw new Error(`Node not found: ${id}`);
     }
     return path;
-  }
-
-  /** Reads the current $order value from a parent path. */
-  private readOrder(parentPath: string): string[] {
-    const values = this.denicek.get(parentPath + "/$order");
-    const orderStr = values.length > 0 ? String(values[0]) : "";
-    return orderStr.length > 0 ? orderStr.split(",") : [];
-  }
-
-  /** Inserts new IDs into a parent's $order at the specified index. */
-  private insertIntoOrder(
-    parentPath: string,
-    newIds: string[],
-    startIndex?: number,
-  ): void {
-    const order = this.readOrder(parentPath);
-    const idx = startIndex !== undefined
-      ? Math.min(startIndex, order.length)
-      : order.length;
-    order.splice(idx, 0, ...newIds);
-    this.denicek.set(parentPath + "/$order", order.join(","));
-  }
-
-  /** Removes an ID from a parent's $order. */
-  private removeFromOrder(parentPath: string, childId: string): void {
-    const order = this.readOrder(parentPath);
-    const filtered = order.filter((id) => id !== childId);
-    this.denicek.set(parentPath + "/$order", filtered.join(","));
   }
 
   /** Increments version, rebuilds indexes, and notifies all listeners. */
