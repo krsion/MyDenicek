@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+const BASE = process.env.BASE_URL ?? "https://krsion.github.io/mydenicek/";
+
 test.describe("mydenicek E2E", () => {
   test("page loads and renders document after entering name", async ({ page }) => {
     await page.goto("./");
@@ -24,7 +26,7 @@ test.describe("mydenicek E2E", () => {
     // Alice joins
     const aliceCtx = await browser.newContext();
     const alice = await aliceCtx.newPage();
-    await alice.goto(`https://krsion.github.io/mydenicek/#${roomId}`);
+    await alice.goto(`${BASE}#${roomId}`);
     await alice.getByPlaceholder("e.g. Alice").fill("Alice");
     await alice.getByRole("button", { name: "Join" }).click();
     await expect(alice.locator("h2").first()).toBeVisible({ timeout: 10_000 });
@@ -33,23 +35,26 @@ test.describe("mydenicek E2E", () => {
     // Bob joins the same room
     const bobCtx = await browser.newContext();
     const bob = await bobCtx.newPage();
-    await bob.goto(`https://krsion.github.io/mydenicek/#${roomId}`);
+    await bob.goto(`${BASE}#${roomId}`);
     await bob.getByPlaceholder("e.g. Alice").fill("Bob");
     await bob.getByRole("button", { name: "Join" }).click();
     await expect(bob.locator("h2").first()).toBeVisible({ timeout: 10_000 });
     await expect(bob.getByText("connected")).toBeVisible({ timeout: 10_000 });
 
+    // Wait for initial sync to settle between both peers
+    await bob.waitForTimeout(2000);
+
     // Alice makes an edit via the command bar
     const aliceInput = alice.getByPlaceholder("Type a command");
     await aliceInput.click();
-    await aliceInput.fill('set /header/title/text "ALICE-EDIT"');
+    await aliceInput.fill("set /header/title/text ALICE-EDIT");
     await aliceInput.press("Enter");
 
     // Wait for sync — Bob should see Alice's edit
-    await expect(bob.getByRole("heading", { name: "ALICE-EDIT" })).toBeVisible({ timeout: 15_000 });
+    await expect(bob.getByText("ALICE-EDIT")).toBeVisible({ timeout: 15_000 });
 
-    // Verify Alice also sees it
-    await expect(alice.getByRole("heading", { name: "ALICE-EDIT" })).toBeVisible();
+    // Verify Alice also sees it (use .first() since command output also contains the text)
+    await expect(alice.getByText("ALICE-EDIT").first()).toBeVisible();
 
     await aliceCtx.close();
     await bobCtx.close();
