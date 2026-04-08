@@ -187,7 +187,7 @@ export class DocumentAdapter {
   addChildren(
     parentId: string,
     children: NodeInput[],
-    startIndex?: number,
+    _startIndex?: number,
   ): string[] {
     const parentPath = this.requirePath(parentId);
     const newIds: string[] = [];
