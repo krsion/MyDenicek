@@ -77,6 +77,8 @@ export interface UseDenicekReturn {
   wrapList: (target: string, tag: string) => void;
   /** Copy nodes from `source` into `target`. */
   copy: (target: string, source: string) => void;
+  /** Query nodes matching `target` selector (read-only, no re-render). */
+  get: (target: string) => PlainNode[];
   /** Undo the last local edit. */
   undo: () => void;
   /** Redo the last undone edit. */
@@ -87,6 +89,11 @@ export interface UseDenicekReturn {
   connectSync: (opts: SyncOptions) => void;
   /** Disconnect from the sync server. */
   disconnectSync: () => void;
+
+  /** Monotonic version counter — increments on every mutation. */
+  version: number;
+  /** Force a re-render (e.g. after mutating denicek directly). */
+  forceUpdate: () => void;
 }
 
 /** React hook for working with a Denicek CRDT document. */
@@ -189,6 +196,7 @@ export function useDenicek(options?: UseDenicekOptions): UseDenicekReturn {
       (t: string, s: string) => mutate(() => dk.copy(t, s)),
       [dk, mutate],
     ),
+    get: useCallback((t: string) => dk.get(t), [dk]),
     undo: useCallback(() => mutate(() => dk.undo()), [dk, mutate]),
     redo: useCallback(() => mutate(() => dk.redo()), [dk, mutate]),
 
@@ -197,5 +205,8 @@ export function useDenicek(options?: UseDenicekOptions): UseDenicekReturn {
       [sync],
     ),
     disconnectSync: useCallback(() => sync.disconnect(), [sync]),
+
+    version,
+    forceUpdate: bump,
   };
 }
