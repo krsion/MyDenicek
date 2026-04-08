@@ -120,30 +120,40 @@ function renderTree(
   }
 }
 
-// ── Navigate to a path in the plain tree ─────────────────────────────────
+// ── Navigate to nodes in the plain tree ───────────────────────────────
 
-function navigateTo(
+/** Navigate through path expanding `*` wildcards. Returns all matching nodes. */
+function navigateToAll(
   root: PlainNode,
   segments: string[],
-): PlainNode | undefined {
-  let current: PlainNode = root;
+): PlainNode[] {
+  let current: PlainNode[] = [root];
   for (const seg of segments) {
-    if (isPlainRecord(current)) {
-      if (seg in current && seg !== "$tag") {
-        current = current[seg]!;
-      } else {
-        return undefined;
+    const next: PlainNode[] = [];
+    for (const node of current) {
+      if (seg === "*") {
+        if (isPlainList(node)) {
+          next.push(...node.$items);
+        } else if (isPlainRecord(node)) {
+          for (const [key, child] of Object.entries(node)) {
+            if (!META_KEYS.has(key) && child !== undefined) {
+              next.push(child as PlainNode);
+            }
+          }
+        }
+      } else if (isPlainRecord(node)) {
+        if (seg in node && !META_KEYS.has(seg)) {
+          next.push(node[seg] as PlainNode);
+        }
+      } else if (isPlainList(node)) {
+        const idx = Number(seg);
+        if (!Number.isNaN(idx) && idx >= 0 && idx < node.$items.length) {
+          next.push(node.$items[idx]!);
+        }
       }
-    } else if (isPlainList(current)) {
-      const idx = Number(seg);
-      if (!Number.isNaN(idx) && idx >= 0 && idx < current.$items.length) {
-        current = current.$items[idx]!;
-      } else {
-        return undefined;
-      }
-    } else {
-      return undefined;
     }
+    if (next.length === 0) return [];
+    current = next;
   }
   return current;
 }
@@ -152,42 +162,107 @@ const META_KEYS = new Set(["$tag", "$id", "$kind", "$order"]);
 
 interface CompletionItem {
   name: string;
-  label: string; // display text with type info
+  label: string;
+  navigable?: boolean;
+}
+
+function describeChild(key: string, child: PlainNode): CompletionItem {
+  if (isPlainRecord(child)) {
+    const kind = child["$kind"] as string | undefined;
+    const tag = child["$tag"] as string;
+    if (kind === "value") {
+      const val = child["value"];
+      const display = typeof val === "string"
+        ? `"${val.length > 20 ? val.slice(0, 20) + "…" : val}"`
+        : String(val);
+      return { name: key, label: `${key} = ${display}` };
+    }
+    if (kind === "ref") {
+      return { name: key, label: `${key} → ${child["target"]}` };
+    }
+    if (kind === "formula") {
+      return {
+        name: key,
+        label: `${key} ƒ(${child["operation"]})`,
+        navigable: true,
+      };
+    }
+    if (kind === "action") {
+      return { name: key, label: `${key} ▶ "${child["label"]}"` };
+    }
+    return { name: key, label: `{} ${key} <${tag}>`, navigable: true };
+  }
+  if (isPlainList(child)) {
+    return {
+      name: key,
+      label: `${key} [${child.$tag}] (${child.$items.length} items)`,
+      navigable: true,
+    };
+  }
+  if (isPlainRef(child)) {
+    return { name: key, label: `${key} → ${child.$ref}` };
+  }
+  if (typeof child === "string") {
+    const display = child.length > 25 ? child.slice(0, 25) + "…" : child;
+    return { name: key, label: `${key}: "${display}"` };
+  }
+  return { name: key, label: `${key}: ${String(child)}` };
 }
 
 function getChildCompletions(node: PlainNode): CompletionItem[] {
+  if (isPlainList(node)) {
+    const items: CompletionItem[] = [];
+    if (node.$items.length > 0) {
+      items.push({
+        name: "*",
+        label: `* (all ${node.$items.length} items)`,
+        navigable: true,
+      });
+    }
+    node.$items.forEach((item, i) => {
+      items.push(describeChild(String(i), item));
+    });
+    return items;
+  }
   if (!isPlainRecord(node)) return [];
   const items: CompletionItem[] = [];
   for (const key of Object.keys(node)) {
     if (META_KEYS.has(key)) continue;
     const child = node[key];
     if (child === undefined) continue;
-    if (isPlainRecord(child)) {
-      const kind = child["$kind"] as string | undefined;
-      const tag = child["$tag"] as string;
-      if (kind === "value") {
-        const val = child["value"];
-        const display = typeof val === "string"
-          ? `"${val.length > 20 ? val.slice(0, 20) + "…" : val}"`
-          : String(val);
-        items.push({ name: key, label: `${key} = ${display}` });
-      } else if (kind === "ref") {
-        items.push({ name: key, label: `${key} → ${child["target"]}` });
-      } else if (kind === "formula") {
-        items.push({ name: key, label: `${key} ƒ(${child["operation"]})` });
-      } else if (kind === "action") {
-        items.push({ name: key, label: `${key} ▶ "${child["label"]}"` });
-      } else {
-        items.push({ name: key, label: `{} ${key} <${tag}>` });
-      }
-    } else if (typeof child === "string") {
-      const display = child.length > 25 ? child.slice(0, 25) + "…" : child;
-      items.push({ name: key, label: `${key}: "${display}"` });
-    } else if (typeof child === "number" || typeof child === "boolean") {
-      items.push({ name: key, label: `${key}: ${child}` });
-    }
+    items.push(describeChild(key, child as PlainNode));
   }
   return items;
+}
+
+/** Completions common to ALL nodes (for wildcard expansion). */
+function intersectCompletions(nodes: PlainNode[]): CompletionItem[] {
+  if (nodes.length === 0) return [];
+  if (nodes.length === 1) return getChildCompletions(nodes[0]!);
+
+  const allCompletions = nodes.map((n) => getChildCompletions(n));
+  const nameCount = new Map<string, number>();
+  for (const items of allCompletions) {
+    const seen = new Set<string>();
+    for (const item of items) {
+      if (!seen.has(item.name)) {
+        seen.add(item.name);
+        nameCount.set(item.name, (nameCount.get(item.name) ?? 0) + 1);
+      }
+    }
+  }
+  const commonNames = new Set<string>();
+  for (const [name, count] of nameCount) {
+    if (count === nodes.length) commonNames.add(name);
+  }
+
+  return allCompletions[0]!
+    .filter((item) => commonNames.has(item.name))
+    .map((item) => ({
+      name: item.name,
+      label: `${item.name} (×${nodes.length})`,
+      navigable: item.navigable,
+    }));
 }
 
 // ── Parse value argument — try JSON first, fall back to string ──────────
@@ -258,7 +333,13 @@ const HELP_TEXT = `Commands:
   undo / redo                           Undo or redo
   get <selector>                        Show nodes at selector
   tree [selector]                       Show document tree
-  help                                  Show this help`;
+  help                                  Show this help
+
+Selectors:
+  /path/to/node       Navigate to a specific node
+  /list/*             Wildcard — targets all list items
+  /list/*/field       Field common to every list item
+  Tab                 Auto-complete paths and commands`;
 
 // ── Component ────────────────────────────────────────────────────────────
 
@@ -320,43 +401,23 @@ export function CommandBar({ dk }: CommandBarProps) {
       const parentSegments = segments.slice(0, -1);
       const partial = segments[segments.length - 1] ?? "";
 
-      const parentNode = parentSegments.length === 0
-        ? userRoot
-        : navigateTo(userRoot, parentSegments);
-      if (!parentNode) return { items: [], prefix: "" };
+      const parentNodes = parentSegments.length === 0
+        ? [userRoot]
+        : navigateToAll(userRoot, parentSegments);
+      if (parentNodes.length === 0) return { items: [], prefix: "" };
 
-      const all = getChildCompletions(parentNode).filter((c) =>
-        c.name.startsWith(partial)
-      );
+      const all =
+        (parentNodes.length === 1
+          ? getChildCompletions(parentNodes[0]!)
+          : intersectCompletions(parentNodes)).filter((c) =>
+            c.name.startsWith(partial)
+          );
       const prefix = "/" +
         (parentSegments.length > 0 ? parentSegments.join("/") + "/" : "");
       return { items: all, prefix };
     },
     [tree],
   );
-
-  /** Apply a selected completion item to the input. */
-  const applyCompletion = useCallback((item: string) => {
-    const parts = input.split(/\s+/);
-    if (parts.length <= 1) {
-      // Completing a command name
-      setInput(item + " ");
-    } else {
-      // Completing a path — rebuild with "/" prefix
-      const selectorArg = parts[1] ?? "";
-      const pathStr = selectorArg.startsWith("/")
-        ? selectorArg.slice(1)
-        : selectorArg;
-      const segments = pathStr.split("/");
-      segments[segments.length - 1] = item;
-      const newSelector = "/" + segments.join("/");
-      const rest = parts.slice(2).join(" ");
-      setInput(parts[0]! + " " + newSelector + (rest ? " " + rest : ""));
-    }
-    setCompletions([]);
-    setCompletionIdx(-1);
-    setGhostText("");
-  }, [input]);
 
   /** Update completions list and ghost text when input changes. */
   const updateCompletions = useCallback((text: string) => {
@@ -368,7 +429,6 @@ export function CommandBar({ dk }: CommandBarProps) {
       : (parts[1] ?? "").split("/").pop() ?? "";
 
     if (items.length >= 1 && isPathCompletion) {
-      // Always show dropdown for path completions so user sees what's available
       setCompletions(items);
       setCompletionIdx(-1);
       if (items.length === 1 && items[0]!.name !== partial) {
@@ -377,12 +437,10 @@ export function CommandBar({ dk }: CommandBarProps) {
         setGhostText("");
       }
     } else if (items.length === 1 && !isPathCompletion) {
-      // Command completion — just ghost text
       setGhostText(items[0]!.name.slice(partial.length));
       setCompletions([]);
     } else {
       setCompletions([]);
-      // Show argument hints when path is done but more args are needed
       const cmd = parts[0] ?? "";
       const hints = ARG_HINTS[cmd];
       if (hints && parts.length >= 2) {
@@ -397,6 +455,43 @@ export function CommandBar({ dk }: CommandBarProps) {
       }
     }
   }, [getPathCompletions]);
+
+  /** Apply a selected completion item to the input. */
+  const applyCompletion = useCallback((name: string) => {
+    const parts = input.split(/\s+/);
+    let newVal: string;
+    let advance = false;
+
+    if (parts.length <= 1) {
+      newVal = name + " ";
+    } else {
+      const selectorArg = parts[1] ?? "";
+      const pathStr = selectorArg.startsWith("/")
+        ? selectorArg.slice(1)
+        : selectorArg;
+      const segments = pathStr.split("/");
+      segments[segments.length - 1] = name;
+      const newSelector = "/" + segments.join("/");
+
+      const match = completions.find((c) => c.name === name);
+      advance = !!match?.navigable;
+      const suffix = advance ? "/" : "";
+
+      const rest = parts.slice(2).join(" ");
+      newVal = parts[0]! + " " + newSelector + suffix +
+        (rest ? " " + rest : "");
+    }
+
+    setInput(newVal);
+    setCompletionIdx(-1);
+
+    if (advance) {
+      updateCompletions(newVal);
+    } else {
+      setCompletions([]);
+      setGhostText("");
+    }
+  }, [input, completions, updateCompletions]);
 
   const handleTab = useCallback(() => {
     if (completions.length > 0) {

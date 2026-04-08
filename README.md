@@ -35,6 +35,10 @@ https://krsion.github.io/mydenicek/
   demonstrating the CRDT core
 - [Design Decisions](docs/design-decisions.md) — rationale for key architectural
   choices
+- [Specification Divergence](docs/specification-divergence.md) — why the
+  implementation diverged from the original specification
+- [Compound Operation Decomposition](docs/design/compound-operation-decomposition.md)
+  — why transactions are impossible in local-first software
 - [Specification](documents/specification/specification.pdf) — project
   specification
 - [Specification (markdown)](docs/specification.md) — specification (markdown
@@ -73,8 +77,7 @@ The Azure deployment workflows publish these public endpoints:
   `https://mydenicek-core-krsion-dev-sync.happyisland-d6dda219.westeurope.azurecontainerapps.io/healthz`
 - **Web Application**: https://krsion.github.io/mydenicek/
 
-The exact deployment values are configured in
-`.github/workflows/infra-setup.yml` and `.github/workflows/deploy-app.yml`.
+The exact deployment values are configured in `.github/workflows/deno.yml`.
 
 ## Local setup
 
@@ -161,6 +164,7 @@ cd apps/mywebnicek && deno install && deno task build && deno task test
 ## Workspace README files
 
 - [Core package README](./packages/core/README.md)
+- [React package README](./packages/react/README.md)
 - [Sync server README](./packages/sync-server/README.md)
 - [Sync server app README](./apps/sync-server/README.md)
 - [Playground README](./apps/playground/README.md)
