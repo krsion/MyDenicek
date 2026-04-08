@@ -1,2 +1,4 @@
 /node_modules/
 packages/core/npm-dist/
+
+.playwright-mcp/
