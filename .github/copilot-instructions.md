@@ -1,4 +1,4 @@
-# Copilot Instructions for mydenicek-core
+# Copilot Instructions for mydenicek
 
 ## Commands
 

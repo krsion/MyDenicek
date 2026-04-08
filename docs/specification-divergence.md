@@ -1,8 +1,8 @@
-# Why mydenicek-core Diverged from the Original Specification
+# Why mydenicek Diverged from the Original Specification
 
 ## Executive Summary
 
-The [original specification](https://github.com/krsion/MyDenicek/blob/main/specification/specification.tex)[^1] describes a system built on **Loro CRDTs** with ID-addressed nodes, a Loro-managed undo/redo system, automatic recording via Loro event subscriptions, and a formula engine embedded in the node model. The actual `mydenicek-core` implementation[^2] took a fundamentally different architectural path: it uses a **custom OT-based event DAG with vector clocks**, path-addressed selectors, explicit edit types with hand-written transformation rules, a custom undo/redo mechanism based on inverse events, and a formula evaluation engine. This document justifies each architectural divergence, maps every specification requirement to the current implementation status, and identifies the few features that remain missing.
+The [original specification](https://github.com/krsion/MyDenicek/blob/main/specification/specification.tex)[^1] describes a system built on **Loro CRDTs** with ID-addressed nodes, a Loro-managed undo/redo system, automatic recording via Loro event subscriptions, and a formula engine embedded in the node model. The actual `mydenicek` implementation[^2] took a fundamentally different architectural path: it uses a **custom OT-based event DAG with vector clocks**, path-addressed selectors, explicit edit types with hand-written transformation rules, a custom undo/redo mechanism based on inverse events, and a formula evaluation engine. This document justifies each architectural divergence, maps every specification requirement to the current implementation status, and identifies the few features that remain missing.
 
 ---
 
@@ -14,7 +14,7 @@ The specification prescribes Loro[^3] as the CRDT substrate. Nodes are addressed
 
 ### What was actually built
 
-`mydenicek-core` implements its own **event DAG** with causal ordering via **vector clocks**[^6], **deterministic topological replay** via Kahn's algorithm with `EventId` tie-breaking[^7], and **hand-written operational transformation rules** for every structural edit type (rename, wrap, unwrap, delete, copy)[^8]. Nodes are addressed by **path-based selectors** (`"items/0/name"`, `"speakers/*/contact"`)[^9], not unique IDs.
+`mydenicek` implements its own **event DAG** with causal ordering via **vector clocks**[^6], **deterministic topological replay** via Kahn's algorithm with `EventId` tie-breaking[^7], and **hand-written operational transformation rules** for every structural edit type (rename, wrap, unwrap, delete, copy)[^8]. Nodes are addressed by **path-based selectors** (`"items/0/name"`, `"speakers/*/contact"`)[^9], not unique IDs.
 
 ### Justification
 
@@ -150,7 +150,7 @@ The current implementation includes capabilities not specified:
 
 ## Confidence Assessment
 
-- **High confidence:** The architectural comparison and requirement mapping are based on thorough reading of both the specification LaTeX source and the full `mydenicek-core` implementation (22 files, +2806 lines changed).
+- **High confidence:** The architectural comparison and requirement mapping are based on thorough reading of both the specification LaTeX source and the full `mydenicek` implementation (22 files, +2806 lines changed).
 - **High confidence:** Undo/redo and formula engine statuses are verified by 205 passing tests as of commit `cbcefa0`.
 - **Medium confidence:** Web app requirements (FR-14, FR-18, FR-19) could not be fully verified without running the applications interactively.
 - **High confidence:** The missing features list is minimal — most specification requirements are now implemented.
@@ -160,7 +160,7 @@ The current implementation includes capabilities not specified:
 ## Footnotes
 
 [^1]: [`specification/specification.tex`](https://github.com/krsion/MyDenicek/blob/main/specification/specification.tex) — the original project specification
-[^2]: `packages/core/` in the `mydenicek-core` repository
+[^2]: `packages/core/` in the `mydenicek` repository
 [^3]: Specification §1 "Relation to Denicek": "MyDenicek replaces this with a CRDT-based approach using Loro"
 [^4]: Specification §2.3 "Core Library Architecture": "Sync: `connectToSync()`, `disconnectSync()`"
 [^5]: Specification §1 "Relation to Denicek": "nodes are indexed by unique IDs rather than paths, avoiding the 'shifting index' problem"

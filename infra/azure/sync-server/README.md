@@ -39,7 +39,7 @@ $RepoOwner = "<github-owner>"
 $RepoName = "<github-repo>"
 $Branch = "main"
 $Scope = "/subscriptions/$(az account show --query id -o tsv)"
-$AppName = "mydenicek-core-github-actions"
+$AppName = "mydenicek-github-actions"
 
 $SubscriptionId = az account show --query id -o tsv
 $TenantId = az account show --query tenantId -o tsv
@@ -89,7 +89,7 @@ Create these repository variables in GitHub:
 
 Run **Azure infra setup** from the Actions tab with:
 
-- `name_prefix` — defaults to `mydenicek-core-krsion-dev`
+- `name_prefix` — defaults to `mydenicek-krsion-dev`
 - `location` — defaults to `westeurope`
 
 After the workflow finishes, store both Static Web Apps deployment tokens as GitHub repository secrets.
@@ -97,7 +97,7 @@ After the workflow finishes, store both Static Web Apps deployment tokens as Git
 From your machine, use:
 
 ```powershell
-$NamePrefix = "mydenicek-core-krsion-dev"
+$NamePrefix = "mydenicek-krsion-dev"
 $NormalizedPrefix = $NamePrefix.ToLower() -replace "[^a-z0-9]+", "-"
 $PlaygroundStaticWebAppName = "$NormalizedPrefix-playground"
 $MyWebnicekStaticWebAppName = "$NormalizedPrefix-mywebnicek"
@@ -125,7 +125,7 @@ Paste the values into these repository secrets:
 
 Run **Deploy sync server, playground, and mywebnicek** with:
 
-- `name_prefix` — defaults to `mydenicek-core-krsion-dev`
+- `name_prefix` — defaults to `mydenicek-krsion-dev`
 - `image_tag` — defaults to `latest`
 
 It will:

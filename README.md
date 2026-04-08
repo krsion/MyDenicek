@@ -1,4 +1,4 @@
-# mydenicek-core
+# mydenicek
 
 **Local-first collaborative document editor built on a custom OT-based CRDT.**\
 Published on JSR as [`@mydenicek/core`](https://jsr.io/@mydenicek/core) and [`@mydenicek/react`](https://jsr.io/@mydenicek/react).
@@ -22,7 +22,7 @@ references — addressed by filesystem-style selectors like `/header/title/text`
 
 ## Live Demo
 
-https://krsion.github.io/mydenicek-core/
+https://krsion.github.io/mydenicek/
 
 ## Documentation
 
@@ -59,7 +59,7 @@ The Azure deployment workflows publish these public endpoints:
 - **Sync Server**: `wss://mydenicek-sync-prod.azurewebsites.net`
 - **Sync Server Health Check**:
   `https://mydenicek-sync-prod.azurewebsites.net/health`
-- **Web Application**: https://krsion.github.io/mydenicek-core/
+- **Web Application**: https://krsion.github.io/mydenicek/
 
 The exact deployment values are configured in
 `.github/workflows/infra-setup.yml` and `.github/workflows/deploy-app.yml`.

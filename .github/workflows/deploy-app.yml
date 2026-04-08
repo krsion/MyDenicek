@@ -6,7 +6,7 @@ on:
       name_prefix:
         description: Prefix used for derived Azure resource names
         required: true
-        default: mydenicek-core-krsion-dev
+        default: mydenicek-krsion-dev
         type: string
       image_tag:
         description: Container image tag

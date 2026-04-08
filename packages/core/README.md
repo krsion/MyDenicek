@@ -1,8 +1,8 @@
-# mydenicek-core
+# mydenicek
 
 A CRDT for collaborative editing of a tagged document tree.
 
-`mydenicek-core` models a document as a tree of tagged records, lists, primitive values, and references. Each peer records edits as events in a causal DAG and converges by replaying the same event set in deterministic order.
+`mydenicek` models a document as a tree of tagged records, lists, primitive values, and references. Each peer records edits as events in a causal DAG and converges by replaying the same event set in deterministic order.
 
 ## Install
 

@@ -5,8 +5,8 @@
 **Author**: Bc. Ondřej Krsička  
 **Supervisor**: Mgr. Tomáš Petříček, Ph.D.  
 **Repositories**:
-- Core engine: [krsion/mydenicek-core-core](https://github.com/krsion/mydenicek-core-core) — published on JSR as `@mydenicek/core`
-- Web application: [krsion/mydenicek-core](https://github.com/krsion/mydenicek-core)
+- Core engine: [krsion/mydenicek](https://github.com/krsion/mydenicek) — published on JSR as `@mydenicek/core`
+- Web application: [krsion/mydenicek](https://github.com/krsion/mydenicek)
 
 ---
 
@@ -229,7 +229,7 @@ The original project specification prescribed Loro CRDTs as the synchronization 
 | **Dependencies** | Loro (2 MB WASM) | Zero external CRDT deps | Pure TypeScript; no WASM compatibility concerns |
 | **Package registry** | npm | JSR | Deno-native registry with first-class TypeScript support |
 
-The mywebnicek web application repository still uses Loro CRDTs, making it possible to compare both approaches empirically. See the [specification divergence document](https://github.com/krsion/mydenicek-core-core/blob/main/docs/specification-divergence.md) for a requirement-by-requirement mapping.
+The mywebnicek web application repository still uses Loro CRDTs, making it possible to compare both approaches empirically. See the [specification divergence document](https://github.com/krsion/mydenicek/blob/main/docs/specification-divergence.md) for a requirement-by-requirement mapping.
 
 ---
 
@@ -279,7 +279,7 @@ Examples of structural conflict resolution:
 
 ### 5.4 Compound Operation Decomposition
 
-A key design insight (documented in detail in [`docs/design/compound-operation-decomposition.md`](https://github.com/krsion/mydenicek-core/blob/main/docs/design/compound-operation-decomposition.md)) is that **compound operations cannot be atomic in local-first software**.
+A key design insight (documented in detail in [`docs/design/compound-operation-decomposition.md`](https://github.com/krsion/mydenicek/blob/main/docs/design/compound-operation-decomposition.md)) is that **compound operations cannot be atomic in local-first software**.
 
 The "wrap" operation illustrates this: `wrap(X, tag)` is secretly `add(wrapper) + move(X, wrapper)`. When two peers concurrently wrap the same node, both wrappers are created (creates never conflict) but only one move wins (LWW). The losing peer's wrapper becomes an empty orphan. This orphan is **observationally indistinguishable** from a legitimately created empty node, making automatic cleanup impossible.
 
@@ -539,7 +539,7 @@ Configuration: tests run against `http://localhost:5174/mywebnicek/` on Chromium
 
 ```bash
 # Clone the repository
-git clone https://github.com/krsion/mydenicek-core-core.git
+git clone https://github.com/krsion/mydenicek.git
 cd mywebnicek-core
 
 # Install dependencies (Deno auto-manages, but for npm compat packages):
@@ -566,7 +566,7 @@ deno task sync-server
 
 ```bash
 # Clone the repository
-git clone https://github.com/krsion/mydenicek-core.git
+git clone https://github.com/krsion/mydenicek.git
 cd mywebnicek
 
 # Install dependencies:
@@ -594,7 +594,7 @@ npm run test -w mywebnicek             # E2E tests (Playwright)
 
 **Sync server** (mywebnicek): Deployed to Azure App Service (`mywebnicek-sync-prod.azurewebsites.net`). Uses Azure Blob Storage for event persistence. Deployment is triggered by changes to `apps/mywebnicek-sync-server/` or manual dispatch.
 
-**Web application**: Deployed to GitHub Pages at `https://krsion.github.io/mydenicek-core/`. Live demo connects to the Azure sync server via `wss://mywebnicek-sync-prod.azurewebsites.net`.
+**Web application**: Deployed to GitHub Pages at `https://krsion.github.io/mydenicek/`. Live demo connects to the Azure sync server via `wss://mywebnicek-sync-prod.azurewebsites.net`.
 
 ### 8.3 CI/CD Pipelines
 

@@ -1,7 +1,7 @@
 {
   "name": "@mydenicek/sync-server",
   "version": "0.1.0",
-  "description": "WebSocket sync server and client helpers for mydenicek-core.",
+  "description": "WebSocket sync server and client helpers for mydenicek.",
   "license": "MIT",
   "exports": "./mod.ts",
   "publish": {

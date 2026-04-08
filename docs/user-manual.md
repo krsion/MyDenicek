@@ -26,7 +26,7 @@ Key features:
 
 Open the live demo in your browser:
 
-> **<https://krsion.github.io/mydenicek-core/>**
+> **<https://krsion.github.io/mydenicek/>**
 
 No installation is required. The application runs entirely in the browser and automatically connects to the sync server for collaboration.
 
@@ -42,7 +42,7 @@ If you want to run the application on your own machine:
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/krsion/mydenicek-core.git
+   git clone https://github.com/krsion/mydenicek.git
    cd mywebnicek
    ```
 2. Install dependencies:
@@ -254,7 +254,7 @@ You can toggle sync on/off using the **switch** next to the status indicator.
 
 ### 6.2 Sharing and Real-time Collaboration
 
-Each document session has a unique **room ID** embedded in the URL hash (e.g., `https://krsion.github.io/mydenicek-core/#abc12345`).
+Each document session has a unique **room ID** embedded in the URL hash (e.g., `https://krsion.github.io/mydenicek/#abc12345`).
 
 To collaborate:
 1. Click the **Share** button in the toolbar — the URL is copied to your clipboard.
