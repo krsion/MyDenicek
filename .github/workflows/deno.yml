@@ -1,9 +1,8 @@
-# This workflow installs Deno and validates the monorepo packages.
-# Each task (fmt, lint, check, test, build) runs as a separate parallel job.
-# Within each job, packages run as separate steps using raw deno commands
-# (not `deno task`) to avoid workspace task resolution hitting ARG_MAX.
+# Validates and deploys the monorepo on push to main.
+# CI jobs (fmt, lint, check, test, build) run in parallel.
+# Deploy jobs run after all CI jobs pass.
 
-name: Deno CI
+name: CI & Deploy
 
 on:
   push:
@@ -86,3 +85,81 @@ jobs:
       - run: deno install
         working-directory: apps/mywebnicek
       - run: deno task build
+
+  # Deploy to GitHub Pages after all CI jobs pass (push to main only)
+  deploy-pages:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [fmt, lint, check, test, build]
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+      - run: deno install
+        working-directory: apps/mywebnicek
+      - run: deno task build
+        working-directory: apps/mywebnicek
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: apps/mywebnicek/dist
+      - uses: actions/deploy-pages@v4
+
+  # Deploy sync server to Azure after all CI jobs pass (push to main only)
+  deploy-sync-server:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [fmt, lint, check, test, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      IMAGE_REPOSITORY: sync-server
+      IMAGE_TAG: latest
+      NAME_PREFIX: mydenicek-krsion-dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Resolve deployment names
+        shell: bash
+        run: |
+          set -euo pipefail
+          NORMALIZED_PREFIX="$(echo "$NAME_PREFIX" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')"
+          BASE="$(echo "$NORMALIZED_PREFIX" | tr -cd 'a-z0-9')"
+          echo "ACR_NAME=${BASE}acr" >> "$GITHUB_ENV"
+          echo "CONTAINER_APP_ENVIRONMENT_NAME=cae-$NORMALIZED_PREFIX" >> "$GITHUB_ENV"
+          echo "CONTAINER_APP_NAME=${NORMALIZED_PREFIX}-sync" >> "$GITHUB_ENV"
+          echo "DEPLOYMENT_NAME=app-deploy-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
+          echo "PERSISTENCE_STORAGE_ACCOUNT_NAME=${BASE}sync" >> "$GITHUB_ENV"
+          echo "RESOURCE_GROUP=rg-$NORMALIZED_PREFIX" >> "$GITHUB_ENV"
+      - name: Build and push sync-server image
+        shell: bash
+        run: |
+          set -euo pipefail
+          az acr config authentication-as-arm update --registry "$ACR_NAME" --status enabled --only-show-errors
+          az acr build --resource-group "$RESOURCE_GROUP" --registry "$ACR_NAME" --image "$IMAGE_REPOSITORY:$IMAGE_TAG" --file apps/sync-server/Dockerfile .
+      - name: Ensure AcrPull role assignment
+        shell: bash
+        run: |
+          set -euo pipefail
+          REGISTRY_ID="$(az acr show --name "$ACR_NAME" --resource-group "$RESOURCE_GROUP" --query id -o tsv)"
+          PRINCIPAL_ID="$(az resource show --resource-group "$RESOURCE_GROUP" --name "$CONTAINER_APP_NAME" --resource-type Microsoft.App/containerApps --query identity.principalId -o tsv)"
+          EXISTING="$(az role assignment list --assignee-object-id "$PRINCIPAL_ID" --scope "$REGISTRY_ID" --role AcrPull --query '[0].id' -o tsv)"
+          if [ -z "$EXISTING" ]; then
+            az role assignment create --assignee-object-id "$PRINCIPAL_ID" --assignee-principal-type ServicePrincipal --role AcrPull --scope "$REGISTRY_ID" --only-show-errors --output none
+          fi
+      - name: Redeploy sync-server
+        shell: bash
+        run: |
+          set -euo pipefail
+          az deployment group create \
+            --name "$DEPLOYMENT_NAME" --resource-group "$RESOURCE_GROUP" \
+            --template-file infra/azure/sync-server/main.bicep \
+            --parameters containerAppEnvironmentName="$CONTAINER_APP_ENVIRONMENT_NAME" containerAppName="$CONTAINER_APP_NAME" containerImageRepository="$IMAGE_REPOSITORY" containerImageTag="$IMAGE_TAG" containerRegistryName="$ACR_NAME" persistenceStorageAccountName="$PERSISTENCE_STORAGE_ACCOUNT_NAME" \
+            --only-show-errors --output table
