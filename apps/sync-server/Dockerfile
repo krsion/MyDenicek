@@ -5,7 +5,13 @@ WORKDIR /app
 COPY deno.json deno.lock ./
 COPY apps/sync-server ./apps/sync-server
 COPY packages/core ./packages/core
+COPY packages/react ./packages/react
 COPY packages/sync-server ./packages/sync-server
+
+# Create stub workspace members that the sync server doesn't need
+RUN mkdir -p apps/playground apps/mywebnicek && \
+    echo '{}' > apps/playground/deno.json && \
+    echo '{}' > apps/mywebnicek/deno.json
 
 RUN deno cache apps/sync-server/main.ts
 
