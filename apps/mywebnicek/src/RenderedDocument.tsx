@@ -103,11 +103,11 @@ class RenderErrorBoundary extends React.Component<
   { children: React.ReactNode },
   { error: string | null }
 > {
-  state = { error: null as string | null };
+  override state = { error: null as string | null };
   static getDerivedStateFromError(err: Error) {
     return { error: err.message };
   }
-  render() {
+  override render() {
     if (this.state.error) {
       return (
         <div

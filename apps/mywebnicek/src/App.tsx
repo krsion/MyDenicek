@@ -3,9 +3,9 @@ import type { PlainRecord } from "@mydenicek/react";
 import { useDenicek } from "@mydenicek/react";
 import { useEffect, useMemo } from "react";
 
-import { CommandBar } from "./CommandBar";
-import { ErrorBoundary } from "./components/ErrorBoundary";
-import { initializeDocument } from "./initializeDocument";
+import { CommandBar } from "./CommandBar.tsx";
+import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
+import { initializeDocument } from "./initializeDocument.ts";
 import { RenderedDocument } from "./RenderedDocument.tsx";
 
 const SYNC_SERVER_URL =
