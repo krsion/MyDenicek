@@ -1,7 +1,7 @@
 import { Text } from "@fluentui/react-components";
 import type { PlainRecord } from "@mydenicek/react";
 import { useDenicek } from "@mydenicek/react";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { CommandBar } from "./CommandBar.tsx";
 import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
@@ -34,9 +34,73 @@ const statusColors: Record<string, string> = {
   idle: "#8a8a8a",
 };
 
-export function App() {
-  const roomId = useMemo(getRoomId, []);
-  const dk = useDenicek({ sync: { url: SYNC_SERVER_URL, roomId } });
+function PeerNamePrompt(
+  { onSubmit }: { onSubmit: (name: string) => void },
+) {
+  const [name, setName] = useState("");
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        height: "100vh",
+        background: "#f5f5f5",
+      }}
+    >
+      <div
+        style={{
+          background: "#fff",
+          padding: 32,
+          borderRadius: 8,
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+          textAlign: "center",
+        }}
+      >
+        <Text size={500} weight="semibold" block style={{ marginBottom: 16 }}>
+          mydenicek
+        </Text>
+        <Text block style={{ marginBottom: 12, color: "#605e5c" }}>
+          Enter your name to start collaborating
+        </Text>
+        <input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && name.trim()) onSubmit(name.trim());
+          }}
+          placeholder="e.g. Alice"
+          style={{
+            padding: "8px 12px",
+            fontSize: 16,
+            border: "1px solid #ccc",
+            borderRadius: 4,
+            width: 200,
+            marginRight: 8,
+          }}
+        />
+        <button
+          onClick={() => name.trim() && onSubmit(name.trim())}
+          style={{
+            padding: "8px 16px",
+            fontSize: 16,
+            background: "#0078d4",
+            color: "#fff",
+            border: "none",
+            borderRadius: 4,
+            cursor: "pointer",
+          }}
+        >
+          Join
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Editor({ peer, roomId }: { peer: string; roomId: string }) {
+  const dk = useDenicek({ peer, sync: { url: SYNC_SERVER_URL, roomId } });
 
   // Initialize with sample document on first load
   useEffect(() => {
@@ -79,7 +143,7 @@ export function App() {
             color: statusColors[dk.syncStatus] ?? "#8a8a8a",
           }}
         >
-          ● {dk.syncStatus} — room: {roomId}
+          ● {dk.syncStatus} — {peer} — room: {roomId}
         </span>
       </div>
 
@@ -104,4 +168,15 @@ export function App() {
       </ErrorBoundary>
     </div>
   );
+}
+
+export function App() {
+  const roomId = useMemo(getRoomId, []);
+  const [peer, setPeer] = useState<string | null>(null);
+
+  if (!peer) {
+    return <PeerNamePrompt onSubmit={setPeer} />;
+  }
+
+  return <Editor peer={peer} roomId={roomId} />;
 }
