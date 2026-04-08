@@ -2,11 +2,22 @@ import { mapSelector, Selector, type SelectorTransform } from "../selector.ts";
 import { ListNode, type Node, PrimitiveNode, RecordNode } from "../nodes.ts";
 import type { EncodedRemoteEdit } from "../remote-edit-codec.ts";
 
+/** Thrown when an edit would remove a node that is the target of a live reference. */
 export class ProtectedTargetError extends Error {}
+/** Thrown when an inserted node contains a reference whose target does not exist. */
 export class MissingReferenceTargetError extends Error {}
 
+/**
+ * Abstract base class for all document edits in the CRDT event DAG.
+ *
+ * Edits mutate the document tree in place, support operational
+ * transformation of selectors for concurrent structural changes,
+ * and encode themselves for remote replication.
+ */
 export abstract class Edit {
+  /** Selector path that this edit targets in the document tree. */
   abstract readonly target: Selector;
+  /** Whether this edit changes the document structure (e.g. wrap, rename, delete). */
   abstract readonly isStructural: boolean;
   /** Stable string identifier for this edit type. Survives minification. */
   abstract readonly kind: string;
@@ -17,21 +28,26 @@ export abstract class Edit {
    * Explicit replay no-ops are surfaced by materialization as conflicts.
    */
   abstract apply(doc: Node): void;
+  /** Returns whether this edit can be applied to `doc` without throwing. */
   abstract canApply(doc: Node): boolean;
+  /** Validates pre-conditions against the document. Override in subclasses. */
   validate(_doc: Node): void {}
 
   /** Transforms another selector through the structural change made by this edit. */
   abstract transformSelector(sel: Selector): SelectorTransform;
 
+  /** Structural equality check against another edit. */
   abstract equals(other: Edit): boolean;
 
   /** Returns a copy of this edit with a different target. */
   abstract withTarget(target: Selector): Edit;
+  /** Serializes this edit into the wire format for remote replication. */
   abstract encodeRemoteEdit(): EncodedRemoteEdit;
 
   /** Computes the inverse edit that undoes this edit given the pre-edit document state. */
   abstract computeInverse(preDoc: Node): Edit;
 
+  /** All selectors involved in this edit (target and any secondary selectors). */
   get selectors(): Selector[] {
     return [this.target];
   }
@@ -176,6 +192,7 @@ export abstract class Edit {
   }
 }
 
+/** Edit subclass that degrades to a no-op when its target is removed by a prior structural edit. */
 export abstract class NoOpOnRemovedTargetEdit extends Edit {
   protected override handleRemovedTarget(prior: Edit): Edit {
     return this.createRemovedTargetNoOp(prior);
@@ -254,8 +271,10 @@ export class NoOpEdit extends Edit {
  * structural history.
  */
 export class CompositeEdit extends Edit {
+  /** @inheritDoc */
   readonly kind = "Composite";
 
+  /** Creates a composite from a primary edit and additional mirror edits. */
   constructor(readonly primary: Edit, readonly mirrors: Edit[]) {
     super();
   }
@@ -373,6 +392,7 @@ export class CompositeEdit extends Edit {
   }
 }
 
+/** Creates a composite edit from a primary and zero or more mirror edits. Returns the primary directly when no mirrors exist. */
 export function createCompositeEdit(primary: Edit, mirrors: Edit[]): Edit {
   return mirrors.length === 0 ? primary : new CompositeEdit(primary, mirrors);
 }

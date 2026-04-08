@@ -24,8 +24,11 @@ type EncodedRecordRenameFieldEdit = Extract<
   { kind: "RecordRenameFieldEdit" }
 >;
 
+/** Adds a named field to every record matched by the target selector's parent. */
 export class RecordAddEdit extends NoOpOnRemovedTargetEdit {
+  /** @inheritDoc */
   readonly isStructural = false;
+  /** @inheritDoc */
   readonly kind = "RecordAdd";
 
   constructor(readonly target: Selector, readonly node: Node) {
@@ -96,8 +99,11 @@ registerRemoteEditDecoder<EncodedRecordAddEdit>(
     ),
 );
 
+/** Deletes a named field from every record matched by the target selector's parent. */
 export class RecordDeleteEdit extends NoOpOnRemovedTargetEdit {
+  /** @inheritDoc */
   readonly isStructural = true;
+  /** @inheritDoc */
   readonly kind = "RecordDelete";
 
   constructor(readonly target: Selector) {
@@ -158,8 +164,11 @@ registerRemoteEditDecoder<EncodedRecordDeleteEdit>(
   (encodedEdit) => new RecordDeleteEdit(Selector.parse(encodedEdit.target)),
 );
 
+/** Renames a field on every record matched by the target selector's parent. */
 export class RecordRenameFieldEdit extends NoOpOnRemovedTargetEdit {
+  /** @inheritDoc */
   readonly isStructural = true;
+  /** @inheritDoc */
   readonly kind = "RecordRenameField";
 
   constructor(readonly target: Selector, readonly to: string) {

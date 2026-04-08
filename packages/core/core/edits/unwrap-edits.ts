@@ -21,8 +21,11 @@ type EncodedUnwrapListEdit = Extract<
   { kind: "UnwrapListEdit" }
 >;
 
+/** Unwraps a record wrapper, replacing it with the child at the given field. */
 export class UnwrapRecordEdit extends NoOpOnRemovedTargetEdit {
+  /** @inheritDoc */
   readonly isStructural = true;
+  /** @inheritDoc */
   readonly kind = "UnwrapRecord";
 
   constructor(readonly target: Selector, readonly field: string) {
@@ -111,8 +114,11 @@ registerRemoteEditDecoder<EncodedUnwrapRecordEdit>(
     ),
 );
 
+/** Unwraps a single-item list, replacing it with its sole child. */
 export class UnwrapListEdit extends NoOpOnRemovedTargetEdit {
+  /** @inheritDoc */
   readonly isStructural = true;
+  /** @inheritDoc */
   readonly kind = "UnwrapList";
 
   constructor(readonly target: Selector) {

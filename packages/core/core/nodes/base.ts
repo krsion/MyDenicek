@@ -10,6 +10,7 @@ type ReferenceTransformTarget = {
   referenceNode: Node;
 };
 
+/** Abstract base for all document tree nodes (record, list, primitive, reference). */
 export abstract class Node {
   abstract clone(): Node;
   abstract toPlain(): unknown;

@@ -1,5 +1,11 @@
-// Internal re-exports for sibling monorepo packages.
-// This file is not part of the stable public API for external consumers.
+/**
+ * @module
+ * Internal re-exports for sibling monorepo packages.
+ *
+ * This module exposes low-level primitives (events, edits, selectors,
+ * vector clocks) consumed by other packages in the mydenicek monorepo.
+ * It is **not** part of the stable public API for external consumers.
+ */
 export {
   ApplyPrimitiveEdit,
   CopyEdit,

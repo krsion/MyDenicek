@@ -25,8 +25,11 @@ type EncodedWrapRecordEdit = Extract<
 >;
 type EncodedWrapListEdit = Extract<EncodedRemoteEdit, { kind: "WrapListEdit" }>;
 
+/** Updates the structural tag on every matched record or list node. */
 export class UpdateTagEdit extends NoOpOnRemovedTargetEdit {
+  /** @inheritDoc */
   readonly isStructural = true;
+  /** @inheritDoc */
   readonly kind = "UpdateTag";
 
   constructor(readonly target: Selector, readonly tag: string) {
@@ -102,8 +105,11 @@ registerRemoteEditDecoder<EncodedUpdateTagEdit>(
     new UpdateTagEdit(Selector.parse(encodedEdit.target), encodedEdit.tag),
 );
 
+/** Copies nodes from a source selector to a target selector. */
 export class CopyEdit extends Edit {
+  /** @inheritDoc */
   readonly isStructural = true;
+  /** @inheritDoc */
   readonly kind = "Copy";
 
   constructor(readonly target: Selector, readonly source: Selector) {
@@ -297,8 +303,11 @@ registerRemoteEditDecoder<EncodedCopyEdit>(
     ),
 );
 
+/** Wraps every matched node in a new record with the given field name and tag. */
 export class WrapRecordEdit extends NoOpOnRemovedTargetEdit {
+  /** @inheritDoc */
   readonly isStructural = true;
+  /** @inheritDoc */
   readonly kind = "WrapRecord";
 
   constructor(
@@ -378,8 +387,11 @@ registerRemoteEditDecoder<EncodedWrapRecordEdit>(
     ),
 );
 
+/** Wraps every matched node in a new single-item list with the given tag. */
 export class WrapListEdit extends NoOpOnRemovedTargetEdit {
+  /** @inheritDoc */
   readonly isStructural = true;
+  /** @inheritDoc */
   readonly kind = "WrapList";
 
   constructor(readonly target: Selector, readonly tag: string) {

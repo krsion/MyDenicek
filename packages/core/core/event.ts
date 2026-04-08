@@ -15,6 +15,7 @@ function transformLaterConcurrentEdit(prior: Edit, concurrent: Edit): Edit {
 
 // ── Event ───────────────────────────────────────────────────────────
 
+/** A single causal event in the CRDT event DAG, carrying an edit and its vector clock. */
 export class Event {
   constructor(
     readonly id: EventId,

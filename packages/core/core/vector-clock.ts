@@ -11,6 +11,7 @@ function validateClockEntry(peer: string, seq: number): void {
   }
 }
 
+/** A Lamport-style vector clock tracking causal ordering across peers. */
 export class VectorClock {
   private entries: Record<string, number>;
 

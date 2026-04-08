@@ -2,6 +2,7 @@ import { validatePeerId } from "./peer-id.ts";
 
 // ── EventId ─────────────────────────────────────────────────────────
 
+/** A stable identifier for an event in the DAG, composed of a peer name and sequence number. */
 export class EventId {
   constructor(readonly peer: string, readonly seq: number) {}
 

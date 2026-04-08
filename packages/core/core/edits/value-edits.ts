@@ -18,10 +18,14 @@ type EncodedApplyPrimitiveEdit = Extract<
   { kind: "ApplyPrimitiveEdit" }
 >;
 
+/** Applies a registered named primitive edit (e.g. "set") to every matched primitive node. */
 export class ApplyPrimitiveEdit extends NoOpOnRemovedTargetEdit {
+  /** @inheritDoc */
   readonly isStructural = false;
+  /** @inheritDoc */
   readonly kind = "ApplyPrimitiveEdit";
 
+  /** Creates an edit that applies the named primitive edit with the given arguments. */
   constructor(
     readonly target: Selector,
     readonly editName: string,

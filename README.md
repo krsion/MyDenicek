@@ -11,7 +11,7 @@ Mathematics and Physics
 
 ## About
 
-This repository contains the complete mywebnicek project — a local-first
+This repository contains the complete mydenicek project — a local-first
 collaborative document editor for tagged document trees. It extends the original
 [Denicek](https://tomasp.net/academic/papers/denicek/) system by Tomáš Petříček
 with real-time multi-peer collaboration via a custom OT-based CRDT.
@@ -35,8 +35,12 @@ https://krsion.github.io/mydenicek/
   demonstrating the CRDT core
 - [Design Decisions](docs/design-decisions.md) — rationale for key architectural
   choices
-- [Specification](specification/specification.pdf) — project specification
-- [Proposal](proposal/proposal.pdf) — project proposal
+- [Specification](documents/specification/specification.pdf) — project
+  specification
+- [Specification (markdown)](docs/specification.md) — specification (markdown
+  version)
+- [Proposal](documents/proposal/proposal.pdf) — project proposal
+- [Proposal (markdown)](docs/proposal.md) — proposal (markdown version)
 
 ## Workspace Structure
 
@@ -63,9 +67,10 @@ clients:
 
 The Azure deployment workflows publish these public endpoints:
 
-- **Sync Server**: `wss://mydenicek-sync-prod.azurewebsites.net`
+- **Sync Server**:
+  `wss://mydenicek-core-krsion-dev-sync.happyisland-d6dda219.westeurope.azurecontainerapps.io/sync`
 - **Sync Server Health Check**:
-  `https://mydenicek-sync-prod.azurewebsites.net/health`
+  `https://mydenicek-core-krsion-dev-sync.happyisland-d6dda219.westeurope.azurecontainerapps.io/healthz`
 - **Web Application**: https://krsion.github.io/mydenicek/
 
 The exact deployment values are configured in

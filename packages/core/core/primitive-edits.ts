@@ -35,6 +35,7 @@ export function registerPrimitiveEdit(
   registeredPrimitiveEdits.set(name, implementation);
 }
 
+/** Applies a previously registered primitive edit by name to a primitive value. */
 export function applyRegisteredPrimitiveEdit(
   name: string,
   value: PrimitiveValue,

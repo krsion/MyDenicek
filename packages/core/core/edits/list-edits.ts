@@ -28,7 +28,9 @@ type EncodedListPopFrontEdit = Extract<
   { kind: "ListPopFrontEdit" }
 >;
 
+/** Abstract base for list insertion edits (push-back and push-front). */
 export abstract class ListInsertEdit extends NoOpOnRemovedTargetEdit {
+  /** @inheritDoc */
   readonly isStructural = true;
 
   abstract override readonly target: Selector;
@@ -53,7 +55,9 @@ export abstract class ListInsertEdit extends NoOpOnRemovedTargetEdit {
   protected abstract withInsertedNode(node: Node): ListInsertEdit;
 }
 
+/** Appends a node to the end of every list matched by the target selector. */
 export class ListPushBackEdit extends ListInsertEdit {
+  /** @inheritDoc */
   readonly kind = "ListPushBack";
 
   constructor(readonly target: Selector, readonly node: Node) {
@@ -149,7 +153,9 @@ registerRemoteEditDecoder<EncodedListPushBackEdit>(
     ),
 );
 
+/** Prepends a node to the beginning of every list matched by the target selector. */
 export class ListPushFrontEdit extends ListInsertEdit {
+  /** @inheritDoc */
   readonly kind = "ListPushFront";
 
   constructor(readonly target: Selector, readonly node: Node) {
@@ -220,8 +226,11 @@ registerRemoteEditDecoder<EncodedListPushFrontEdit>(
     ),
 );
 
+/** Removes the last item from every list matched by the target selector. */
 export class ListPopBackEdit extends NoOpOnRemovedTargetEdit {
+  /** @inheritDoc */
   readonly isStructural = true;
+  /** @inheritDoc */
   readonly kind = "ListPopBack";
 
   constructor(readonly target: Selector) {
@@ -299,8 +308,11 @@ registerRemoteEditDecoder<EncodedListPopBackEdit>(
   (encodedEdit) => new ListPopBackEdit(Selector.parse(encodedEdit.target)),
 );
 
+/** Removes the first item from every list matched by the target selector. */
 export class ListPopFrontEdit extends NoOpOnRemovedTargetEdit {
+  /** @inheritDoc */
   readonly isStructural = true;
+  /** @inheritDoc */
   readonly kind = "ListPopFront";
 
   constructor(readonly target: Selector) {
