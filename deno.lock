@@ -2499,6 +2499,7 @@
       "packages/react": {
         "dependencies": [
           "jsr:@mydenicek/core@0.2",
+          "jsr:@mydenicek/sync-server@0.1",
           "npm:react@19"
         ]
       }

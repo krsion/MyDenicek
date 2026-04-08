@@ -117,7 +117,7 @@ jobs:
     env:
       IMAGE_REPOSITORY: sync-server
       IMAGE_TAG: latest
-      NAME_PREFIX: mydenicek-krsion-dev
+      NAME_PREFIX: mydenicek-core-krsion-dev
     steps:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2

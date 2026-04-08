@@ -19,6 +19,8 @@ export interface SyncClientOptions {
   autoSyncIntervalMs?: number;
   /** Called when remote events are applied to the document. */
   onRemoteChange?: (document: Denicek, response: EncodedSyncResponse) => void;
+  /** Called when the WebSocket connection closes (both explicit and unexpected). */
+  onDisconnect?: () => void;
 }
 
 /**
@@ -35,6 +37,7 @@ export class SyncClient {
     document: Denicek,
     response: EncodedSyncResponse,
   ) => void;
+  private readonly onDisconnect?: () => void;
   private socket: WebSocket | null = null;
   private autoSyncTimer: ReturnType<typeof setInterval> | null = null;
   private knownServerFrontiers: string[] = [];
@@ -46,6 +49,7 @@ export class SyncClient {
     this.document = options.document;
     this.autoSyncIntervalMs = options.autoSyncIntervalMs ?? 1000;
     this.onRemoteChange = options.onRemoteChange;
+    this.onDisconnect = options.onDisconnect;
   }
 
   /** Build the full WebSocket URL with room query parameter. */
@@ -74,6 +78,7 @@ export class SyncClient {
       socket.onclose = () => {
         this.socket = null;
         this.stopAutoSyncLoop();
+        this.onDisconnect?.();
       };
     });
   }
