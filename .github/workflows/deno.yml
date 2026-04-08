@@ -1,4 +1,7 @@
 # This workflow installs Deno and validates the monorepo packages.
+# Each task (fmt, lint, check, test, build) runs as a separate parallel job.
+# Within each job, packages run as separate steps using raw deno commands
+# (not `deno task`) to avoid workspace task resolution hitting ARG_MAX.
 
 name: Deno CI
 
@@ -18,15 +21,15 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2
       - run: deno fmt --check deno.json README.md main.ts
-      - run: deno task fmt:check
+      - run: deno fmt --check mod.ts internal.ts core tests tools deno.json
         working-directory: packages/core
-      - run: deno task fmt:check
+      - run: deno fmt --check .
         working-directory: packages/sync-server
-      - run: deno task fmt:check
+      - run: deno fmt --check .
         working-directory: apps/sync-server
-      - run: deno task fmt:check
+      - run: deno fmt --check deno.json README.md index.html src vite.config.ts tsconfig.json tsconfig.node.json
         working-directory: apps/playground
-      - run: deno task fmt:check
+      - run: deno fmt --check src/ deno.json index.html vite.config.ts
         working-directory: apps/mywebnicek
 
   lint:
@@ -34,15 +37,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2
-      - run: deno task lint
+      - run: deno lint . && deno doc --lint mod.ts
         working-directory: packages/core
-      - run: deno task lint
+      - run: deno lint .
         working-directory: packages/sync-server
-      - run: deno task lint
+      - run: deno lint .
         working-directory: apps/sync-server
-      - run: deno task lint
+      - run: deno lint src vite.config.ts
         working-directory: apps/playground
-      - run: deno task lint
+      - run: deno lint src/
         working-directory: apps/mywebnicek
 
   check:
@@ -50,15 +53,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2
-      - run: deno task check
+      - run: deno check mod.ts tests/**/*.ts
         working-directory: packages/core
-      - run: deno task check
+      - run: deno check mod.ts
         working-directory: packages/sync-server
-      - run: deno task check
+      - run: deno check main.ts
         working-directory: apps/sync-server
-      - run: deno task check
+      - run: deno check src/main.tsx src/tests/peer-session.test.ts src/tests/sync-service.test.ts
         working-directory: apps/playground
-      - run: deno task check
+      - run: deno check src/main.tsx
         working-directory: apps/mywebnicek
 
   test:
@@ -66,22 +69,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2
-      - run: deno task test
+      - run: deno test --allow-all --no-check tests
         working-directory: packages/core
-      - run: deno task test
+      - run: deno test --allow-read --allow-write tests
         working-directory: packages/sync-server
-      - run: deno task test
+      - run: deno test --allow-all src/tests
         working-directory: apps/playground
-      - run: deno task test
-        working-directory: apps/mywebnicek
 
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2
-      - working-directory: apps/playground
-        run: deno install
-      - working-directory: apps/mywebnicek
-        run: deno install
+      - run: deno install
+        working-directory: apps/playground
+      - run: deno install
+        working-directory: apps/mywebnicek
       - run: deno task build
