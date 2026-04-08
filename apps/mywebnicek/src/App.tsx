@@ -70,7 +70,7 @@ export function App() {
         }}
       >
         <Text size={400} weight="semibold" style={{ color: "#242424" }}>
-          mywebnicek
+          mydenicek
         </Text>
         <span
           style={{

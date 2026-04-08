@@ -1,4 +1,4 @@
-name: Deploy mywebnicek to GitHub Pages
+name: Deploy mydenicek to GitHub Pages
 
 on:
   push:
