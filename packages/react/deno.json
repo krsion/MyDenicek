@@ -1,0 +1,22 @@
+{
+  "name": "@mydenicek/react",
+  "version": "0.1.0",
+  "description": "React hook for the Denicek collaborative CRDT.",
+  "license": "MIT",
+  "exports": {
+    ".": "./mod.ts"
+  },
+  "publish": {
+    "exclude": ["tests/"]
+  },
+  "tasks": {
+    "fmt": "deno fmt mod.ts useDenicek.ts sync.ts deno.json",
+    "fmt:check": "deno fmt --check mod.ts useDenicek.ts sync.ts deno.json",
+    "lint": "deno lint mod.ts useDenicek.ts sync.ts",
+    "check": "deno check mod.ts"
+  },
+  "imports": {
+    "react": "npm:react@^19.0.0",
+    "@mydenicek/core": "jsr:@mydenicek/core@^0.2"
+  }
+}

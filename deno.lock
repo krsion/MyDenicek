@@ -32,6 +32,7 @@
     "npm:fast-check@*": "4.5.3",
     "npm:fast-check@^4.5.3": "4.5.3",
     "npm:react-dom@^18.3.0": "18.3.1_react@18.3.1",
+    "npm:react@19": "19.2.4",
     "npm:react@^18.3.0": "18.3.1",
     "npm:vite@6": "6.4.1"
   },
@@ -986,7 +987,7 @@
       "integrity": "sha512-5m4nQKp+rZRb09LNH59GM4BxTh9251/ylbKIbpe7TpGxfJ+9kv6BLkLBXIjjspbgbnIBNqlI23tRnTWT0snUIw==",
       "dependencies": [
         "loose-envify",
-        "react",
+        "react@18.3.1",
         "scheduler"
       ]
     },
@@ -998,6 +999,9 @@
       "dependencies": [
         "loose-envify"
       ]
+    },
+    "react@19.2.4": {
+      "integrity": "sha512-9nfp2hYpCwOjAN+8TZFGhtWEwgvWHXqESH8qT89AT/lWklpLON22Lc8pEtnpsZz7VmawabSU0gCjnj8aC0euHQ=="
     },
     "robust-predicates@3.0.3": {
       "integrity": "sha512-NS3levdsRIUOmiJ8FZWCP7LG3QpJyrs/TE0Zpf1yvZu8cAJJ6QMW92H1c7kWpdIHo8RvmLxN/o2JXTKHp74lUA=="
@@ -1124,6 +1128,12 @@
           "jsr:@std/data-structures@1",
           "jsr:@std/random@*",
           "npm:fast-check@^4.5.3"
+        ]
+      },
+      "packages/react": {
+        "dependencies": [
+          "jsr:@mydenicek/core@0.2",
+          "npm:react@19"
         ]
       }
     }
