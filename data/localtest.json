@@ -1,0 +1,1640 @@
+[
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 0
+    },
+    "parents": [],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root",
+      "node": {
+        "$tag": "section"
+      }
+    },
+    "clock": {
+      "Alice": 0
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 1
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 0
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/header",
+      "node": {
+        "$tag": "header"
+      }
+    },
+    "clock": {
+      "Alice": 1
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 2
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 1
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/header/title",
+      "node": {
+        "$tag": "h1"
+      }
+    },
+    "clock": {
+      "Alice": 2
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 3
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 2
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/header/title/text",
+      "node": "mydenicek"
+    },
+    "clock": {
+      "Alice": 3
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 4
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 3
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/header/subtitle",
+      "node": {
+        "$tag": "p"
+      }
+    },
+    "clock": {
+      "Alice": 4
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 5
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 4
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/header/subtitle/text",
+      "node": "A local-first collaborative document editor"
+    },
+    "clock": {
+      "Alice": 5
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 6
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 5
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples",
+      "node": {
+        "$tag": "main"
+      }
+    },
+    "clock": {
+      "Alice": 6
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 7
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 6
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/counter",
+      "node": {
+        "$tag": "article"
+      }
+    },
+    "clock": {
+      "Alice": 7
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 8
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 7
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/counter/heading",
+      "node": {
+        "$tag": "h2"
+      }
+    },
+    "clock": {
+      "Alice": 8
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 9
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 8
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/counter/heading/text",
+      "node": "Counter"
+    },
+    "clock": {
+      "Alice": 9
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 10
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 9
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/counter/value",
+      "node": {
+        "$tag": "p"
+      }
+    },
+    "clock": {
+      "Alice": 10
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 11
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 10
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/counter/value/count",
+      "node": 0
+    },
+    "clock": {
+      "Alice": 11
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 12
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 11
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/todoList",
+      "node": {
+        "$tag": "article"
+      }
+    },
+    "clock": {
+      "Alice": 12
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 13
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 12
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/todoList/heading",
+      "node": {
+        "$tag": "h2"
+      }
+    },
+    "clock": {
+      "Alice": 13
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 14
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 13
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/todoList/heading/text",
+      "node": "Todo List"
+    },
+    "clock": {
+      "Alice": 14
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 15
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 14
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/todoList/items",
+      "node": {
+        "$tag": "ul"
+      }
+    },
+    "clock": {
+      "Alice": 15
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 16
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 15
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/todoList/items/item1",
+      "node": {
+        "$tag": "li"
+      }
+    },
+    "clock": {
+      "Alice": 16
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 17
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 16
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/todoList/items/item1/text",
+      "node": "Try editing this text"
+    },
+    "clock": {
+      "Alice": 17
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 18
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 17
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/todoList/items/item2",
+      "node": {
+        "$tag": "li"
+      }
+    },
+    "clock": {
+      "Alice": 18
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 19
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 18
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/todoList/items/item2/text",
+      "node": "Add new items with the command bar"
+    },
+    "clock": {
+      "Alice": 19
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 20
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 19
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/todoList/items/item3",
+      "node": {
+        "$tag": "li"
+      }
+    },
+    "clock": {
+      "Alice": 20
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 21
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 20
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/todoList/items/item3/text",
+      "node": "Delete items with: delete /path field"
+    },
+    "clock": {
+      "Alice": 21
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 22
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 21
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/conferences",
+      "node": {
+        "$tag": "article"
+      }
+    },
+    "clock": {
+      "Alice": 22
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 23
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 22
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/conferences/heading",
+      "node": {
+        "$tag": "h2"
+      }
+    },
+    "clock": {
+      "Alice": 23
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 24
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 23
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/conferences/heading/text",
+      "node": "Conferences"
+    },
+    "clock": {
+      "Alice": 24
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 25
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 24
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/conferences/table",
+      "node": {
+        "$tag": "table"
+      }
+    },
+    "clock": {
+      "Alice": 25
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 26
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 25
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/conferences/table/head",
+      "node": {
+        "$tag": "thead"
+      }
+    },
+    "clock": {
+      "Alice": 26
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 27
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 26
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/conferences/table/head/headerRow",
+      "node": {
+        "$tag": "tr"
+      }
+    },
+    "clock": {
+      "Alice": 27
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 28
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 27
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/conferences/table/head/headerRow/name",
+      "node": {
+        "$tag": "th"
+      }
+    },
+    "clock": {
+      "Alice": 28
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 29
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 28
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/conferences/table/head/headerRow/name/text",
+      "node": "Name"
+    },
+    "clock": {
+      "Alice": 29
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 30
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 29
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/conferences/table/head/headerRow/location",
+      "node": {
+        "$tag": "th"
+      }
+    },
+    "clock": {
+      "Alice": 30
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 31
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 30
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/conferences/table/head/headerRow/location/text",
+      "node": "Location"
+    },
+    "clock": {
+      "Alice": 31
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 32
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 31
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/conferences/table/body",
+      "node": {
+        "$tag": "tbody"
+      }
+    },
+    "clock": {
+      "Alice": 32
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 33
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 32
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/conferences/table/body/ecoop",
+      "node": {
+        "$tag": "tr"
+      }
+    },
+    "clock": {
+      "Alice": 33
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 34
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 33
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/conferences/table/body/ecoop/name",
+      "node": {
+        "$tag": "td"
+      }
+    },
+    "clock": {
+      "Alice": 34
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 35
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 34
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/conferences/table/body/ecoop/name/text",
+      "node": "ECOOP 2025"
+    },
+    "clock": {
+      "Alice": 35
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 36
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 35
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/conferences/table/body/ecoop/location",
+      "node": {
+        "$tag": "td"
+      }
+    },
+    "clock": {
+      "Alice": 36
+    }
+  },
+  {
+    "id": {
+      "peer": "Alice",
+      "seq": 37
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 36
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/conferences/table/body/ecoop/location/text",
+      "node": "Bergen"
+    },
+    "clock": {
+      "Alice": 37
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 0
+    },
+    "parents": [],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root",
+      "node": {
+        "$tag": "section"
+      }
+    },
+    "clock": {
+      "Bob": 0
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 1
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 0
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/header",
+      "node": {
+        "$tag": "header"
+      }
+    },
+    "clock": {
+      "Bob": 1
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 2
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 1
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/header/title",
+      "node": {
+        "$tag": "h1"
+      }
+    },
+    "clock": {
+      "Bob": 2
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 3
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 2
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/header/title/text",
+      "node": "mydenicek"
+    },
+    "clock": {
+      "Bob": 3
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 4
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 3
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/header/subtitle",
+      "node": {
+        "$tag": "p"
+      }
+    },
+    "clock": {
+      "Bob": 4
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 5
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 4
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/header/subtitle/text",
+      "node": "A local-first collaborative document editor"
+    },
+    "clock": {
+      "Bob": 5
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 6
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 5
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples",
+      "node": {
+        "$tag": "main"
+      }
+    },
+    "clock": {
+      "Bob": 6
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 7
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 6
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/counter",
+      "node": {
+        "$tag": "article"
+      }
+    },
+    "clock": {
+      "Bob": 7
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 8
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 7
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/counter/heading",
+      "node": {
+        "$tag": "h2"
+      }
+    },
+    "clock": {
+      "Bob": 8
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 9
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 8
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/counter/heading/text",
+      "node": "Counter"
+    },
+    "clock": {
+      "Bob": 9
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 10
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 9
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/counter/value",
+      "node": {
+        "$tag": "p"
+      }
+    },
+    "clock": {
+      "Bob": 10
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 11
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 10
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/counter/value/count",
+      "node": 0
+    },
+    "clock": {
+      "Bob": 11
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 12
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 11
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/todoList",
+      "node": {
+        "$tag": "article"
+      }
+    },
+    "clock": {
+      "Bob": 12
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 13
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 12
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/todoList/heading",
+      "node": {
+        "$tag": "h2"
+      }
+    },
+    "clock": {
+      "Bob": 13
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 14
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 13
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/todoList/heading/text",
+      "node": "Todo List"
+    },
+    "clock": {
+      "Bob": 14
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 15
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 14
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/todoList/items",
+      "node": {
+        "$tag": "ul"
+      }
+    },
+    "clock": {
+      "Bob": 15
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 16
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 15
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/todoList/items/item1",
+      "node": {
+        "$tag": "li"
+      }
+    },
+    "clock": {
+      "Bob": 16
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 17
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 16
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/todoList/items/item1/text",
+      "node": "Try editing this text"
+    },
+    "clock": {
+      "Bob": 17
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 18
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 17
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/todoList/items/item2",
+      "node": {
+        "$tag": "li"
+      }
+    },
+    "clock": {
+      "Bob": 18
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 19
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 18
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/todoList/items/item2/text",
+      "node": "Add new items with the command bar"
+    },
+    "clock": {
+      "Bob": 19
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 20
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 19
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/todoList/items/item3",
+      "node": {
+        "$tag": "li"
+      }
+    },
+    "clock": {
+      "Bob": 20
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 21
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 20
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/todoList/items/item3/text",
+      "node": "Delete items with: delete /path field"
+    },
+    "clock": {
+      "Bob": 21
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 22
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 21
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/conferences",
+      "node": {
+        "$tag": "article"
+      }
+    },
+    "clock": {
+      "Bob": 22
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 23
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 22
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/conferences/heading",
+      "node": {
+        "$tag": "h2"
+      }
+    },
+    "clock": {
+      "Bob": 23
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 24
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 23
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/conferences/heading/text",
+      "node": "Conferences"
+    },
+    "clock": {
+      "Bob": 24
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 25
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 24
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/conferences/table",
+      "node": {
+        "$tag": "table"
+      }
+    },
+    "clock": {
+      "Bob": 25
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 26
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 25
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/conferences/table/head",
+      "node": {
+        "$tag": "thead"
+      }
+    },
+    "clock": {
+      "Bob": 26
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 27
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 26
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/conferences/table/head/headerRow",
+      "node": {
+        "$tag": "tr"
+      }
+    },
+    "clock": {
+      "Bob": 27
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 28
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 27
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/conferences/table/head/headerRow/name",
+      "node": {
+        "$tag": "th"
+      }
+    },
+    "clock": {
+      "Bob": 28
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 29
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 28
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/conferences/table/head/headerRow/name/text",
+      "node": "Name"
+    },
+    "clock": {
+      "Bob": 29
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 30
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 29
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/conferences/table/head/headerRow/location",
+      "node": {
+        "$tag": "th"
+      }
+    },
+    "clock": {
+      "Bob": 30
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 31
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 30
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/conferences/table/head/headerRow/location/text",
+      "node": "Location"
+    },
+    "clock": {
+      "Bob": 31
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 32
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 31
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/conferences/table/body",
+      "node": {
+        "$tag": "tbody"
+      }
+    },
+    "clock": {
+      "Bob": 32
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 33
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 32
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/conferences/table/body/ecoop",
+      "node": {
+        "$tag": "tr"
+      }
+    },
+    "clock": {
+      "Bob": 33
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 34
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 33
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/conferences/table/body/ecoop/name",
+      "node": {
+        "$tag": "td"
+      }
+    },
+    "clock": {
+      "Bob": 34
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 35
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 34
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/conferences/table/body/ecoop/name/text",
+      "node": "ECOOP 2025"
+    },
+    "clock": {
+      "Bob": 35
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 36
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 35
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/conferences/table/body/ecoop/location",
+      "node": {
+        "$tag": "td"
+      }
+    },
+    "clock": {
+      "Bob": 36
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 37
+    },
+    "parents": [
+      {
+        "peer": "Bob",
+        "seq": 36
+      }
+    ],
+    "edit": {
+      "kind": "RecordAddEdit",
+      "target": "root/examples/conferences/table/body/ecoop/location/text",
+      "node": "Bergen"
+    },
+    "clock": {
+      "Bob": 37
+    }
+  },
+  {
+    "id": {
+      "peer": "Bob",
+      "seq": 38
+    },
+    "parents": [
+      {
+        "peer": "Alice",
+        "seq": 37
+      },
+      {
+        "peer": "Bob",
+        "seq": 37
+      }
+    ],
+    "edit": {
+      "kind": "ApplyPrimitiveEdit",
+      "target": "root/header/title/text",
+      "editName": "set",
+      "args": [
+        "\"BOB WAS HERE\""
+      ]
+    },
+    "clock": {
+      "Alice": 37,
+      "Bob": 38
+    }
+  }
+]

@@ -8,8 +8,9 @@ import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
 import { initializeDocument } from "./initializeDocument.ts";
 import { RenderedDocument } from "./RenderedDocument.tsx";
 
-const SYNC_SERVER_URL =
-  "wss://mydenicek-core-krsion-dev-sync.happyisland-d6dda219.westeurope.azurecontainerapps.io/sync";
+const SYNC_SERVER_URL = globalThis.location?.hostname === "localhost"
+  ? "ws://localhost:8787/sync"
+  : "wss://mydenicek-core-krsion-dev-sync.happyisland-d6dda219.westeurope.azurecontainerapps.io/sync";
 
 function getRoomId(): string {
   if (globalThis.location?.hash && globalThis.location.hash.length > 1) {
