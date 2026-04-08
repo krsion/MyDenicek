@@ -7,8 +7,10 @@ This repo now targets:
 
 The supported workflows are:
 
-- `.github\workflows\infra-setup.yml` — provisions Azure resources with GitHub OIDC
-- `.github\workflows\deploy-app.yml` — builds and deploys the sync server image, playground, and mywebnicek
+- `.github\workflows\infra-setup.yml` — provisions Azure resources with GitHub
+  OIDC
+- `.github\workflows\deploy-app.yml` — builds and deploys the sync server image,
+  playground, and mywebnicek
 
 ## What the infra workflow creates
 
@@ -22,13 +24,15 @@ From a single `name_prefix`, the workflow derives:
 - playground Static Web App = `<name_prefix>-playground`
 - mywebnicek Static Web App = `<name_prefix>-mywebnicek`
 
-The Bicep template also creates an Azure Files share mounted into the sync-server container. The app is configured with:
+The Bicep template also creates an Azure Files share mounted into the
+sync-server container. The app is configured with:
 
 - **Consumption**-style serverless hosting
 - **min replicas = 0**
 - **max replicas = 1**
 
-That `max replicas = 1` limit is intentional because the current sync server persists room events to files and should stay single-writer.
+That `max replicas = 1` limit is intentional because the current sync server
+persists room events to files and should stay single-writer.
 
 ## One-time Azure OIDC setup
 
@@ -75,7 +79,8 @@ az ad app federated-credential create `
 Why these roles:
 
 - `Contributor` lets the workflow create the resource group and Azure resources
-- `User Access Administrator` is needed because the Bicep template creates the `AcrPull` role assignment for the Container App identity
+- `User Access Administrator` is needed because the Bicep template creates the
+  `AcrPull` role assignment for the Container App identity
 
 ## GitHub repository variables
 
@@ -92,7 +97,8 @@ Run **Azure infra setup** from the Actions tab with:
 - `name_prefix` — defaults to `mydenicek-krsion-dev`
 - `location` — defaults to `westeurope`
 
-After the workflow finishes, store both Static Web Apps deployment tokens as GitHub repository secrets.
+After the workflow finishes, store both Static Web Apps deployment tokens as
+GitHub repository secrets.
 
 From your machine, use:
 

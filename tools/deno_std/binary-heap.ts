@@ -35,7 +35,12 @@ export class BinaryHeap<T> {
     let currentIndex = index;
     while (currentIndex > 0) {
       const parentIndex = Math.floor((currentIndex - 1) / 2);
-      if (this.compareValues(this.values[currentIndex]!, this.values[parentIndex]!) >= 0) {
+      if (
+        this.compareValues(
+          this.values[currentIndex]!,
+          this.values[parentIndex]!,
+        ) >= 0
+      ) {
         return;
       }
 
@@ -56,14 +61,20 @@ export class BinaryHeap<T> {
 
       if (
         leftChildIndex < this.values.length &&
-        this.compareValues(this.values[leftChildIndex]!, this.values[smallestIndex]!) < 0
+        this.compareValues(
+            this.values[leftChildIndex]!,
+            this.values[smallestIndex]!,
+          ) < 0
       ) {
         smallestIndex = leftChildIndex;
       }
 
       if (
         rightChildIndex < this.values.length &&
-        this.compareValues(this.values[rightChildIndex]!, this.values[smallestIndex]!) < 0
+        this.compareValues(
+            this.values[rightChildIndex]!,
+            this.values[smallestIndex]!,
+          ) < 0
       ) {
         smallestIndex = rightChildIndex;
       }

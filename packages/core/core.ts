@@ -31,7 +31,4 @@ export {
   FormulaError,
   registerFormulaOperation,
 } from "./core/formula-engine.ts";
-export type {
-  FormulaOperation,
-  FormulaResult,
-} from "./core/formula-engine.ts";
+export type { FormulaOperation, FormulaResult } from "./core/formula-engine.ts";

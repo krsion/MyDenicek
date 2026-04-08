@@ -1,9 +1,8 @@
 # Formative Examples
 
-**Project**: mywebnicek
-**Author**: Bc. Ondřej Krsička
-**Supervisor**: Mgr. Tomáš Petříček, Ph.D.
-**Institution**: Charles University, Faculty of Mathematics and Physics
+**Project**: mywebnicek **Author**: Bc. Ondřej Krsička **Supervisor**: Mgr.
+Tomáš Petříček, Ph.D. **Institution**: Charles University, Faculty of
+Mathematics and Physics
 
 ---
 
@@ -57,8 +56,8 @@ This example demonstrates two key features:
    string.
 3. **Apply the edit to a single message** (`messages/0`) on the "recorded" peer.
 4. **Sync** the recorded peer's events to a "replay" peer.
-5. **Replay the edit** on the replay peer, targeting `messages/*` — which applies
-   the same transformation to every item in the list.
+5. **Replay the edit** on the replay peer, targeting `messages/*` — which
+   applies the same transformation to every item in the list.
 
 ### Code
 
@@ -293,8 +292,10 @@ A new item "Book venue" is inserted at the front:
 
 A counter application where clicking a button increments a numeric value. The
 value is not stored as a single mutable number — instead, each increment
-**wraps** the current value into a formula tree node `{ left: <previous>,
-right: 1 }`. The final value is computed by recursively evaluating the tree.
+**wraps** the current value into a formula tree node
+`{ left: <previous>,
+right: 1 }`. The final value is computed by recursively
+evaluating the tree.
 
 This demonstrates:
 
@@ -373,7 +374,7 @@ peer.pushBack("btn/script/steps", {
     "left": 1,
     "right": 1
   },
-  "btn": { "..." : "..." }
+  "btn": { "...": "..." }
 }
 ```
 
@@ -929,11 +930,11 @@ peer.set("stats/primary/minInjuries", 2);
 
 ## Summary of Demonstrated Capabilities
 
-| Example              | Key Features                                                          |
-| -------------------- | --------------------------------------------------------------------- |
-| Hello World          | Custom primitive edits, wildcard replay (`*`)                         |
-| Todo App             | Multi-step action recording, `pushFront`, `copy`, `repeatEditsFrom`   |
-| Counter App          | `wrapRecord`, `rename`, `add`, structural stability across replays    |
-| Conference List      | Two-peer sync, concurrent structural transform + item insertion       |
-| Conference Budget    | `$ref` references, automatic path transformation under `wrapList`     |
-| Traffic Accidents    | `copy`, inter-formula `$ref` linking, cascading computed updates      |
+| Example           | Key Features                                                        |
+| ----------------- | ------------------------------------------------------------------- |
+| Hello World       | Custom primitive edits, wildcard replay (`*`)                       |
+| Todo App          | Multi-step action recording, `pushFront`, `copy`, `repeatEditsFrom` |
+| Counter App       | `wrapRecord`, `rename`, `add`, structural stability across replays  |
+| Conference List   | Two-peer sync, concurrent structural transform + item insertion     |
+| Conference Budget | `$ref` references, automatic path transformation under `wrapList`   |
+| Traffic Accidents | `copy`, inter-formula `$ref` linking, cascading computed updates    |

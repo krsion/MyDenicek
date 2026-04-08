@@ -2,7 +2,9 @@
 
 A CRDT for collaborative editing of a tagged document tree.
 
-`mydenicek` models a document as a tree of tagged records, lists, primitive values, and references. Each peer records edits as events in a causal DAG and converges by replaying the same event set in deterministic order.
+`mydenicek` models a document as a tree of tagged records, lists, primitive
+values, and references. Each peer records edits as events in a causal DAG and
+converges by replaying the same event set in deterministic order.
 
 ## Install
 
@@ -29,7 +31,9 @@ console.log(doc.toPlain());
 
 ## Sync two peers
 
-The package exposes typed `RemoteEvent` payloads for replication. They are plain serializable objects, so you can move them between peers without depending on internal `Event` classes.
+The package exposes typed `RemoteEvent` payloads for replication. They are plain
+serializable objects, so you can move them between peers without depending on
+internal `Event` classes.
 
 ```ts
 import { Denicek } from "jsr:@mydenicek/core";
@@ -60,7 +64,9 @@ Selectors use slash-separated paths such as:
 - `"items/0/name"`
 - `"items/*/status"`
 
-Record field names must be selector-addressable, so they cannot be empty, contain `/`, or equal selector-reserved segments such as `"*"`, `".."`, or canonical integers like `"0"`.
+Record field names must be selector-addressable, so they cannot be empty,
+contain `/`, or equal selector-reserved segments such as `"*"`, `".."`, or
+canonical integers like `"0"`.
 
 ## Editing operations
 

@@ -1,7 +1,7 @@
 # @mydenicek/react
 
-React hook for the [Denicek](https://jsr.io/@mydenicek/core) collaborative
-CRDT. Wraps a `Denicek` instance with React state management — every mutation
+React hook for the [Denicek](https://jsr.io/@mydenicek/core) collaborative CRDT.
+Wraps a `Denicek` instance with React state management — every mutation
 automatically re-renders and optionally syncs over WebSocket.
 
 ## Installation
@@ -40,15 +40,15 @@ function Editor() {
 
 Returns an object with:
 
-| Property | Description |
+| Property     | Description                                          |
 | ------------ | ---------------------------------------------------- |
-| `denicek` | The raw `Denicek` instance for advanced use. |
-| `doc` | Current materialized document tree (`PlainNode`). |
-| `conflicts` | Conflict nodes from the last materialization. |
-| `canUndo` | Whether there is a local edit that can be undone. |
-| `canRedo` | Whether a previously undone edit can be redone. |
+| `denicek`    | The raw `Denicek` instance for advanced use.         |
+| `doc`        | Current materialized document tree (`PlainNode`).    |
+| `conflicts`  | Conflict nodes from the last materialization.        |
+| `canUndo`    | Whether there is a local edit that can be undone.    |
+| `canRedo`    | Whether a previously undone edit can be redone.      |
 | `syncStatus` | Current sync status (`"idle"`, `"connected"`, etc.). |
-| `version` | Monotonic counter — increments on every mutation. |
+| `version`    | Monotonic counter — increments on every mutation.    |
 
 **Mutations** — all auto-trigger re-render and sync flush:
 

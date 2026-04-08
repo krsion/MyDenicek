@@ -18,14 +18,20 @@ export function assert(expr: unknown, msg?: string): asserts expr {
   }
 }
 
-export function assertEquals(actual: unknown, expected: unknown, msg?: string): void {
+export function assertEquals(
+  actual: unknown,
+  expected: unknown,
+  msg?: string,
+): void {
   if (isDeepStrictEqual(actual, expected)) {
     return;
   }
 
   fail(
     msg ??
-      `Values are not equal.\nActual: ${formatValue(actual)}\nExpected: ${formatValue(expected)}`,
+      `Values are not equal.\nActual: ${formatValue(actual)}\nExpected: ${
+        formatValue(expected)
+      }`,
   );
 }
 
@@ -38,10 +44,13 @@ export function assertThrows(
     fn();
   } catch (error) {
     if (!(error instanceof Error)) {
-      fail(`Expected function to throw an Error, but threw ${formatValue(error)}.`);
+      fail(
+        `Expected function to throw an Error, but threw ${formatValue(error)}.`,
+      );
     }
     const actualError = error as Error;
-    const actualErrorName = Object.getPrototypeOf(actualError)?.constructor?.name ?? "Error";
+    const actualErrorName =
+      Object.getPrototypeOf(actualError)?.constructor?.name ?? "Error";
 
     if (ErrorClass !== undefined && !(actualError instanceof ErrorClass)) {
       fail(
@@ -49,15 +58,24 @@ export function assertThrows(
       );
     }
 
-    if (typeof msgIncludes === "string" && !actualError.message.includes(msgIncludes)) {
+    if (
+      typeof msgIncludes === "string" &&
+      !actualError.message.includes(msgIncludes)
+    ) {
       fail(
-        `Expected error message to include ${formatValue(msgIncludes)}, but got ${formatValue(actualError.message)}.`,
+        `Expected error message to include ${
+          formatValue(msgIncludes)
+        }, but got ${formatValue(actualError.message)}.`,
       );
     }
 
-    if (msgIncludes instanceof RegExp && !msgIncludes.test(actualError.message)) {
+    if (
+      msgIncludes instanceof RegExp && !msgIncludes.test(actualError.message)
+    ) {
       fail(
-        `Expected error message to match ${String(msgIncludes)}, but got ${formatValue(actualError.message)}.`,
+        `Expected error message to match ${String(msgIncludes)}, but got ${
+          formatValue(actualError.message)
+        }.`,
       );
     }
 
