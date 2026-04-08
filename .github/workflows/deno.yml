@@ -17,7 +17,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2
+      - run: deno fmt --check deno.json README.md main.ts
       - run: deno task fmt:check
+        working-directory: packages/core
+      - run: deno task fmt:check
+        working-directory: packages/sync-server
+      - run: deno task fmt:check
+        working-directory: apps/sync-server
+      - run: deno task fmt:check
+        working-directory: apps/playground
+      - run: deno task fmt:check
+        working-directory: apps/mywebnicek
 
   lint:
     runs-on: ubuntu-latest
@@ -25,6 +35,15 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2
       - run: deno task lint
+        working-directory: packages/core
+      - run: deno task lint
+        working-directory: packages/sync-server
+      - run: deno task lint
+        working-directory: apps/sync-server
+      - run: deno task lint
+        working-directory: apps/playground
+      - run: deno task lint
+        working-directory: apps/mywebnicek
 
   check:
     runs-on: ubuntu-latest
@@ -32,6 +51,15 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2
       - run: deno task check
+        working-directory: packages/core
+      - run: deno task check
+        working-directory: packages/sync-server
+      - run: deno task check
+        working-directory: apps/sync-server
+      - run: deno task check
+        working-directory: apps/playground
+      - run: deno task check
+        working-directory: apps/mywebnicek
 
   test:
     runs-on: ubuntu-latest
@@ -39,6 +67,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2
       - run: deno task test
+        working-directory: packages/core
+      - run: deno task test
+        working-directory: packages/sync-server
+      - run: deno task test
+        working-directory: apps/playground
+      - run: deno task test
+        working-directory: apps/mywebnicek
 
   build:
     runs-on: ubuntu-latest
