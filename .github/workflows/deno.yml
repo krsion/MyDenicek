@@ -132,11 +132,13 @@ jobs:
           set -euo pipefail
           NORMALIZED_PREFIX="$(echo "$NAME_PREFIX" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')"
           BASE="$(echo "$NORMALIZED_PREFIX" | tr -cd 'a-z0-9')"
-          echo "ACR_NAME=${BASE}acr" >> "$GITHUB_ENV"
+          ACR_NAME="${BASE}acr"; ACR_NAME="${ACR_NAME:0:50}"
+          STORAGE_NAME="${BASE}sync"; STORAGE_NAME="${STORAGE_NAME:0:24}"
+          echo "ACR_NAME=$ACR_NAME" >> "$GITHUB_ENV"
           echo "CONTAINER_APP_ENVIRONMENT_NAME=cae-$NORMALIZED_PREFIX" >> "$GITHUB_ENV"
           echo "CONTAINER_APP_NAME=${NORMALIZED_PREFIX}-sync" >> "$GITHUB_ENV"
           echo "DEPLOYMENT_NAME=app-deploy-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
-          echo "PERSISTENCE_STORAGE_ACCOUNT_NAME=${BASE}sync" >> "$GITHUB_ENV"
+          echo "PERSISTENCE_STORAGE_ACCOUNT_NAME=$STORAGE_NAME" >> "$GITHUB_ENV"
           echo "RESOURCE_GROUP=rg-$NORMALIZED_PREFIX" >> "$GITHUB_ENV"
       - name: Build and push sync-server image
         shell: bash
