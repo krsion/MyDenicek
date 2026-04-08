@@ -27,7 +27,12 @@ export type { SyncStatus } from "./sync.ts";
 // Re-export core types for convenience
 export {
   Denicek,
+  type EncodedRemoteEdit,
+  type EncodedRemoteEvent,
+  type EncodedRemoteEventId,
   type EventSnapshot,
+  FormulaError,
+  type FormulaResult,
   type PlainList,
   type PlainNode,
   type PlainRecord,

@@ -33,3 +33,20 @@ export { createSyncServer } from "./server.ts";
 export type { SyncServerHandle, SyncServerOptions } from "./server.ts";
 export { SyncClient } from "./client.ts";
 export type { SyncClientOptions } from "./client.ts";
+
+// Re-export core types used in the public API so deno doc --lint is satisfied.
+export {
+  Denicek,
+  type EncodedRemoteEdit,
+  type EncodedRemoteEvent,
+  type EncodedRemoteEventId,
+  type EventSnapshot,
+  FormulaError,
+  type FormulaResult,
+  type PlainList,
+  type PlainNode,
+  type PlainRecord,
+  type PlainRef,
+  type PrimitiveValue,
+  type RemoteEvent,
+} from "@mydenicek/core";

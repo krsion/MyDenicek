@@ -48,6 +48,7 @@ export class SyncClient {
     this.onRemoteChange = options.onRemoteChange;
   }
 
+  /** Build the full WebSocket URL with room query parameter. */
   private buildSyncUrl(baseUrl: string, roomId: string): string {
     const url = new URL(baseUrl);
     url.searchParams.set("room", roomId);
@@ -97,6 +98,7 @@ export class SyncClient {
     this.socket.send(JSON.stringify(request));
   }
 
+  /** Start the periodic auto-sync timer. */
   private startAutoSyncLoop(): void {
     if (this.autoSyncTimer !== null) {
       return;
@@ -107,6 +109,7 @@ export class SyncClient {
     );
   }
 
+  /** Stop the periodic auto-sync timer. */
   private stopAutoSyncLoop(): void {
     if (this.autoSyncTimer === null) {
       return;
@@ -115,6 +118,7 @@ export class SyncClient {
     this.autoSyncTimer = null;
   }
 
+  /** Dispatch an incoming WebSocket message to the appropriate handler. */
   private handleSocketMessage(rawMessage: string): void {
     let message: EncodedSyncMessage;
     try {
@@ -139,6 +143,7 @@ export class SyncClient {
     this.onRemoteChange?.(this.document, message);
   }
 
+  /** Handle the server hello message by triggering an initial sync. */
   private handleHelloMessage(_message: EncodedHelloMessage): void {
     this.syncNow();
   }
