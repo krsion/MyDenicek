@@ -21,7 +21,7 @@
   },
   "imports": {
     "@std/assert": "../../tools/deno_std/assert.ts",
-    "@std/data-structures/binary-heap": "../../tools/deno_std/binary-heap.ts",
+    "@std/data-structures/binary-heap": "jsr:@std/data-structures@^1/binary-heap",
     "@std/random": "jsr:@std/random",
     "fast-check": "npm:fast-check@^4.5.3"
   }
