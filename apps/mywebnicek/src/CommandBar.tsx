@@ -163,7 +163,6 @@ const META_KEYS = new Set(["$tag", "$id", "$kind", "$order"]);
 interface CompletionItem {
   name: string;
   label: string;
-  navigable?: boolean;
 }
 
 function describeChild(key: string, child: PlainNode): CompletionItem {
@@ -181,22 +180,17 @@ function describeChild(key: string, child: PlainNode): CompletionItem {
       return { name: key, label: `${key} → ${child["target"]}` };
     }
     if (kind === "formula") {
-      return {
-        name: key,
-        label: `${key} ƒ(${child["operation"]})`,
-        navigable: true,
-      };
+      return { name: key, label: `${key} ƒ(${child["operation"]})` };
     }
     if (kind === "action") {
       return { name: key, label: `${key} ▶ "${child["label"]}"` };
     }
-    return { name: key, label: `{} ${key} <${tag}>`, navigable: true };
+    return { name: key, label: `{} ${key} <${tag}>` };
   }
   if (isPlainList(child)) {
     return {
       name: key,
       label: `${key} [${child.$tag}] (${child.$items.length} items)`,
-      navigable: true,
     };
   }
   if (isPlainRef(child)) {
@@ -216,7 +210,6 @@ function getChildCompletions(node: PlainNode): CompletionItem[] {
       items.push({
         name: "*",
         label: `* (all ${node.$items.length} items)`,
-        navigable: true,
       });
     }
     node.$items.forEach((item, i) => {
@@ -261,7 +254,6 @@ function intersectCompletions(nodes: PlainNode[]): CompletionItem[] {
     .map((item) => ({
       name: item.name,
       label: `${item.name} (×${nodes.length})`,
-      navigable: item.navigable,
     }));
 }
 
@@ -460,7 +452,6 @@ export function CommandBar({ dk }: CommandBarProps) {
   const applyCompletion = useCallback((name: string) => {
     const parts = input.split(/\s+/);
     let newVal: string;
-    let advance = false;
 
     if (parts.length <= 1) {
       newVal = name + " ";
@@ -473,25 +464,16 @@ export function CommandBar({ dk }: CommandBarProps) {
       segments[segments.length - 1] = name;
       const newSelector = "/" + segments.join("/");
 
-      const match = completions.find((c) => c.name === name);
-      advance = !!match?.navigable;
-      const suffix = advance ? "/" : "";
-
       const rest = parts.slice(2).join(" ");
-      newVal = parts[0]! + " " + newSelector + suffix +
+      newVal = parts[0]! + " " + newSelector +
         (rest ? " " + rest : "");
     }
 
     setInput(newVal);
     setCompletionIdx(-1);
-
-    if (advance) {
-      updateCompletions(newVal);
-    } else {
-      setCompletions([]);
-      setGhostText("");
-    }
-  }, [input, completions, updateCompletions]);
+    setCompletions([]);
+    setGhostText("");
+  }, [input]);
 
   const handleTab = useCallback(() => {
     if (completions.length > 0) {
