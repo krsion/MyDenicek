@@ -42,14 +42,14 @@ test.describe("mydenicek E2E", () => {
     // Alice makes an edit via the command bar
     const aliceInput = alice.getByPlaceholder("Type a command");
     await aliceInput.click();
-    await aliceInput.fill("add / e2e-proof");
+    await aliceInput.fill('set /header/title/text "ALICE-EDIT"');
     await aliceInput.press("Enter");
 
     // Wait for sync — Bob should see Alice's edit
-    await expect(bob.getByText("e2e-proof")).toBeVisible({ timeout: 15_000 });
+    await expect(bob.getByRole("heading", { name: "ALICE-EDIT" })).toBeVisible({ timeout: 15_000 });
 
     // Verify Alice also sees it
-    await expect(alice.getByText("e2e-proof")).toBeVisible();
+    await expect(alice.getByRole("heading", { name: "ALICE-EDIT" })).toBeVisible();
 
     await aliceCtx.close();
     await bobCtx.close();
