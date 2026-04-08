@@ -82,6 +82,7 @@ function PeerNamePrompt(
           }}
         />
         <button
+          type="button"
           onClick={() => name.trim() && onSubmit(name.trim())}
           style={{
             padding: "8px 16px",

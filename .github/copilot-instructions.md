@@ -15,9 +15,14 @@ deno run packages/core/tools/core-random-fuzzer.ts               # Standalone lo
 
 ## Validation
 
-- **Always run `deno task fmt`, `deno task check`, and `deno task build` before handing work back.**
-- Prefer the root monorepo tasks over ad hoc per-file commands so local validation stays aligned with CI.
+- **Before EVERY commit, run these checks from the repo root and verify they pass:**
+  1. `deno lint src/` from `apps/mywebnicek` (catches JSX lint errors like missing `type` on buttons)
+  2. `deno check src/main.tsx` from `apps/mywebnicek` (catches type errors in the web app)
+  3. `deno check mod.ts` from `packages/core` and `packages/sync-server`
+  4. `deno task build` from the repo root (catches Vite build issues)
+- The root `deno task check` and `deno task lint` chains are too slow and hit ARG_MAX on Linux CI. Use the per-package commands above instead.
 - When a change can affect behavior or tests, also run `deno task test`.
+- **Do NOT commit without verifying lint and check pass.** CI failures from lint/check errors waste time.
 
 ## Architecture
 
