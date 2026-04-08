@@ -1,6 +1,5 @@
 import { assertEquals } from "@std/assert";
 import { Denicek, FormulaError } from "../../mod.ts";
-import type { FormulaResult } from "../../mod.ts";
 import { sync } from "./test-helpers.ts";
 
 // ── 1. evaluateFormulas on a Denicek instance ───────────────────────────
