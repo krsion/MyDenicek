@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test.describe("mydenicek E2E", () => {
   test("page loads and renders document after entering name", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("./");
 
     // Name prompt should appear
     await expect(page.getByPlaceholder("e.g. Alice")).toBeVisible();
@@ -24,7 +24,7 @@ test.describe("mydenicek E2E", () => {
     // Alice joins
     const aliceCtx = await browser.newContext();
     const alice = await aliceCtx.newPage();
-    await alice.goto(`/#${roomId}`);
+    await alice.goto(`https://krsion.github.io/mydenicek/#${roomId}`);
     await alice.getByPlaceholder("e.g. Alice").fill("Alice");
     await alice.getByRole("button", { name: "Join" }).click();
     await expect(alice.locator("h2").first()).toBeVisible({ timeout: 10_000 });
@@ -33,7 +33,7 @@ test.describe("mydenicek E2E", () => {
     // Bob joins the same room
     const bobCtx = await browser.newContext();
     const bob = await bobCtx.newPage();
-    await bob.goto(`/#${roomId}`);
+    await bob.goto(`https://krsion.github.io/mydenicek/#${roomId}`);
     await bob.getByPlaceholder("e.g. Alice").fill("Bob");
     await bob.getByRole("button", { name: "Join" }).click();
     await expect(bob.locator("h2").first()).toBeVisible({ timeout: 10_000 });
