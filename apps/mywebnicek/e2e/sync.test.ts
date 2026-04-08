@@ -1,4 +1,4 @@
-import { expect, test } from "npm:@playwright/test@^1.50";
+import { expect, test } from "@playwright/test";
 
 test.describe("mydenicek E2E", () => {
   test("page loads and renders document after entering name", async ({ page }) => {

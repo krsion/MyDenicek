@@ -1,4 +1,4 @@
-import { defineConfig } from "npm:@playwright/test@^1.50";
+import { defineConfig } from "@playwright/test";
 
 const BASE_URL = process.env.BASE_URL ?? "https://krsion.github.io/mydenicek/";
 

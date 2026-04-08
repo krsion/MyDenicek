@@ -173,8 +173,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@v2
+      - run: npm install @playwright/test
+        working-directory: apps/mywebnicek
       - run: npx playwright install chromium
+        working-directory: apps/mywebnicek
       - name: Run E2E tests against live site
         working-directory: apps/mywebnicek
-        run: deno run -A npm:playwright test --config playwright.config.ts
+        run: npx playwright test
