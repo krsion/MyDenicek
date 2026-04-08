@@ -1,7 +1,8 @@
 # mydenicek
 
 **Local-first collaborative document editor built on a custom OT-based CRDT.**\
-Published on JSR as [`@mydenicek/core`](https://jsr.io/@mydenicek/core) and [`@mydenicek/react`](https://jsr.io/@mydenicek/react).
+Published on JSR as [`@mydenicek/core`](https://jsr.io/@mydenicek/core) and
+[`@mydenicek/react`](https://jsr.io/@mydenicek/react).
 
 **Author**: Bc. Ondřej Krsička\
 **Supervisor**: Mgr. Tomáš Petříček, Ph.D.\
@@ -26,10 +27,14 @@ https://krsion.github.io/mydenicek/
 
 ## Documentation
 
-- [Technical Documentation](docs/tech-docs.md) — architecture, CRDT design, implementation details
-- [User Manual](docs/user-manual.md) — getting started, features, keyboard shortcuts
-- [Formative Examples](docs/formative-examples.md) — worked examples demonstrating the CRDT core
-- [Design Decisions](docs/design-decisions.md) — rationale for key architectural choices
+- [Technical Documentation](docs/tech-docs.md) — architecture, CRDT design,
+  implementation details
+- [User Manual](docs/user-manual.md) — getting started, features, keyboard
+  shortcuts
+- [Formative Examples](docs/formative-examples.md) — worked examples
+  demonstrating the CRDT core
+- [Design Decisions](docs/design-decisions.md) — rationale for key architectural
+  choices
 - [Specification](specification/specification.pdf) — project specification
 - [Proposal](proposal/proposal.pdf) — project proposal
 
@@ -38,8 +43,10 @@ https://krsion.github.io/mydenicek/
 Deno workspace for the Denicek document model, sync infrastructure, and browser
 clients:
 
-- `packages/core` — the OT-based Denicek CRDT implementation ([`@mydenicek/core`](https://jsr.io/@mydenicek/core))
-- `packages/react` — React hook for reactive Denicek usage ([`@mydenicek/react`](https://jsr.io/@mydenicek/react))
+- `packages/core` — the OT-based Denicek CRDT implementation
+  ([`@mydenicek/core`](https://jsr.io/@mydenicek/core))
+- `packages/react` — React hook for reactive Denicek usage
+  ([`@mydenicek/react`](https://jsr.io/@mydenicek/react))
 - `packages/sync-server` — sync protocol, sync room, and server/client helpers
 - `apps/sync-server` — the runnable WebSocket sync server
 - `apps/playground` — experimental playground for multi-peer DAG exploration
