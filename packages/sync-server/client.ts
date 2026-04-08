@@ -7,14 +7,25 @@ import {
   type EncodedSyncResponse,
 } from "./protocol.ts";
 
+/** Options for creating a {@linkcode SyncClient}. */
 export interface SyncClientOptions {
+  /** WebSocket URL of the sync server endpoint. */
   url: string;
+  /** Room identifier to join. */
   roomId: string;
+  /** The local Denicek document to synchronize. */
   document: Denicek;
+  /** Interval in ms between automatic sync requests (default `1000`). */
   autoSyncIntervalMs?: number;
+  /** Called when remote events are applied to the document. */
   onRemoteChange?: (document: Denicek, response: EncodedSyncResponse) => void;
 }
 
+/**
+ * WebSocket client that synchronizes a local Denicek document
+ * with a remote sync server. Connects, exchanges frontiers, and
+ * auto-syncs on a configurable interval.
+ */
 export class SyncClient {
   private readonly url: string;
   private readonly roomId: string;
@@ -28,6 +39,7 @@ export class SyncClient {
   private autoSyncTimer: ReturnType<typeof setInterval> | null = null;
   private knownServerFrontiers: string[] = [];
 
+  /** Create a sync client with the given options. */
   constructor(options: SyncClientOptions) {
     this.url = this.buildSyncUrl(options.url, options.roomId);
     this.roomId = options.roomId;
@@ -42,6 +54,7 @@ export class SyncClient {
     return url.toString();
   }
 
+  /** Open a WebSocket connection to the sync server. */
   connect(): Promise<void> {
     if (this.socket !== null) {
       return Promise.resolve();
@@ -64,12 +77,14 @@ export class SyncClient {
     });
   }
 
+  /** Close the WebSocket connection and stop auto-sync. */
   close(): void {
     this.stopAutoSyncLoop();
     this.socket?.close();
     this.socket = null;
   }
 
+  /** Immediately send a sync request with any pending local events. */
   syncNow(): void {
     if (this.socket === null || this.socket.readyState !== WebSocket.OPEN) {
       return;

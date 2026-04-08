@@ -1,15 +1,23 @@
 import type { EncodedHelloMessage, EncodedSyncRequest } from "./protocol.ts";
 import { SyncRoom } from "./room.ts";
 
+/** Options for {@linkcode createSyncServer}. */
 export interface SyncServerOptions {
+  /** Port to listen on (default `8787`). */
   port?: number;
+  /** Bind address (default `0.0.0.0`). */
   hostname?: string;
+  /** URL path for WebSocket upgrades (default `/sync`). */
   path?: string;
+  /** Directory for JSON event persistence. Omit for in-memory only. */
   persistencePath?: string;
 }
 
+/** Handle returned by {@linkcode createSyncServer}. */
 export interface SyncServerHandle {
+  /** The underlying Deno HTTP server. */
   server: Deno.HttpServer<Deno.NetAddr>;
+  /** Gracefully shut down, flushing any pending writes. */
   close(): Promise<void>;
 }
 
@@ -54,6 +62,7 @@ async function persistRoomEvents(
   await Deno.rename(temporaryRoomFilePath, roomFilePath);
 }
 
+/** Create a WebSocket sync server with optional file-based persistence. */
 export function createSyncServer(
   options: SyncServerOptions = {},
 ): SyncServerHandle {

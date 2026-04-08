@@ -1,3 +1,18 @@
+/**
+ * @module
+ * WebSocket sync server and client for the Denicek CRDT.
+ *
+ * Provides a ready-to-use sync server ({@linkcode createSyncServer}),
+ * a browser/Deno sync client ({@linkcode SyncClient}), and the
+ * underlying protocol types for custom integrations.
+ *
+ * ```ts
+ * import { createSyncServer } from "@mydenicek/sync-server";
+ *
+ * createSyncServer({ port: 8787, persistencePath: "./data" });
+ * ```
+ */
+
 export {
   applySyncResponse,
   createSyncRequest,
