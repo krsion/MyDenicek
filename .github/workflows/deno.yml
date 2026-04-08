@@ -1,10 +1,4 @@
-# This workflow uses actions that are not certified by GitHub.
-# They are provided by a third-party and are governed by
-# separate terms of service, privacy policy, and support
-# documentation.
-
 # This workflow installs Deno and validates the monorepo packages.
-# For more information see: https://github.com/denoland/setup-deno
 
 name: Deno CI
 
@@ -18,37 +12,41 @@ permissions:
   contents: read
 
 jobs:
-  validate:
+  fmt:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Setup repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+      - run: deno task fmt:check
 
-      - name: Setup Deno
-        uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+      - run: deno task lint
 
-      - name: Verify formatting
-        run: deno task fmt:check
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+      - run: deno task check
 
-      - name: Run monorepo linter
-        run: deno task lint
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+      - run: deno task test
 
-      - name: Type-check monorepo
-        run: deno task check
-
-      - name: Run monorepo tests
-        run: deno task test
-
-      - name: Install playground dependencies
-        working-directory: apps/playground
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+      - working-directory: apps/playground
         run: deno install
-
-      - name: Install mywebnicek dependencies
-        working-directory: apps/mywebnicek
+      - working-directory: apps/mywebnicek
         run: deno install
-
-      - name: Build monorepo apps
-        run: deno task build
+      - run: deno task build
