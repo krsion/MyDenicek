@@ -40,7 +40,7 @@ test.describe("mydenicek E2E", () => {
     await expect(bob.getByText("connected")).toBeVisible({ timeout: 10_000 });
 
     // Alice makes an edit via the command bar
-    const aliceInput = alice.locator("input[type='text']").last();
+    const aliceInput = alice.getByPlaceholder("Type a command");
     await aliceInput.click();
     await aliceInput.fill("add / e2e-proof");
     await aliceInput.press("Enter");
