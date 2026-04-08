@@ -4,7 +4,8 @@
     "build": "deno run -A npm:vite build",
     "preview": "deno run -A npm:vite preview",
     "lint": "deno lint src/",
-    "fmt": "deno fmt src/ deno.json index.html vite.config.ts"
+    "fmt": "deno fmt src/ deno.json index.html vite.config.ts",
+    "e2e": "deno run -A npm:playwright test --config playwright.config.ts"
   },
   "imports": {
     "@std/data-structures/binary-heap": "jsr:@std/data-structures@^1/binary-heap",

@@ -163,3 +163,16 @@ jobs:
             --template-file infra/azure/sync-server/main.bicep \
             --parameters containerAppEnvironmentName="$CONTAINER_APP_ENVIRONMENT_NAME" containerAppName="$CONTAINER_APP_NAME" containerImageRepository="$IMAGE_REPOSITORY" containerImageTag="$IMAGE_TAG" containerRegistryName="$ACR_NAME" persistenceStorageAccountName="$PERSISTENCE_STORAGE_ACCOUNT_NAME" \
             --only-show-errors --output table
+
+  # E2E smoke test against the live deployment (after both deploys)
+  e2e:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [deploy-pages, deploy-sync-server]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+      - run: npx playwright install chromium
+      - name: Run E2E tests against live site
+        working-directory: apps/mywebnicek
+        run: deno run -A npm:playwright test --config playwright.config.ts
