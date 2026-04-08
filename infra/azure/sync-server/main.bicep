@@ -18,12 +18,6 @@ param persistenceStorageAccountName string
 @description('Azure Files share name used for sync-server persistence.')
 param persistenceShareName string = 'sync-data'
 
-@description('Globally unique name of the Azure Static Web App for the playground.')
-param playgroundStaticWebAppName string
-
-@description('Globally unique name of the Azure Static Web App for MyWebnicek.')
-param mywebnicekStaticWebAppName string
-
 @description('Container image repository name, for example sync-server.')
 param containerImageRepository string = 'sync-server'
 
@@ -214,47 +208,11 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   tags: tags
 }
 
-resource playgroundStaticWebApp 'Microsoft.Web/staticSites@2025-03-01' = {
-  name: playgroundStaticWebAppName
-  location: location
-  sku: {
-    name: 'Free'
-    tier: 'Free'
-  }
-  properties: {
-    allowConfigFileUpdates: true
-    publicNetworkAccess: 'Enabled'
-    stagingEnvironmentPolicy: 'Disabled'
-  }
-  tags: tags
-}
-
-resource mywebnicekStaticWebApp 'Microsoft.Web/staticSites@2025-03-01' = {
-  name: mywebnicekStaticWebAppName
-  location: location
-  sku: {
-    name: 'Free'
-    tier: 'Free'
-  }
-  properties: {
-    allowConfigFileUpdates: true
-    publicNetworkAccess: 'Enabled'
-    stagingEnvironmentPolicy: 'Disabled'
-  }
-  tags: tags
-}
-
 output containerAppEnvironmentId string = containerAppEnvironment.id
 output containerAppUrl string = 'https://${containerApp.properties.latestRevisionFqdn}'
 output containerImage string = resolvedContainerImageName
 output containerRegistryLoginServer string = containerRegistry.properties.loginServer
 output healthCheckUrl string = 'https://${containerApp.properties.latestRevisionFqdn}${healthCheckPath}'
-output mywebnicekStaticWebAppDefaultHostname string = mywebnicekStaticWebApp.properties.defaultHostname
-output mywebnicekStaticWebAppName string = mywebnicekStaticWebApp.name
-output mywebnicekStaticWebAppUrl string = 'https://${mywebnicekStaticWebApp.properties.defaultHostname}'
 output persistenceShareName string = persistenceShare.name
 output persistenceStorageAccountName string = persistenceStorage.name
-output playgroundStaticWebAppDefaultHostname string = playgroundStaticWebApp.properties.defaultHostname
-output playgroundStaticWebAppName string = playgroundStaticWebApp.name
-output playgroundStaticWebAppUrl string = 'https://${playgroundStaticWebApp.properties.defaultHostname}'
 output webSocketSyncUrl string = 'wss://${containerApp.properties.latestRevisionFqdn}/sync'
