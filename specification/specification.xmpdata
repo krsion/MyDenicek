@@ -1,0 +1,5 @@
+\Title{Using CRDTs to enable collaborative editing in Denicek}
+\Author{Bc. Ondrej Krsicka}
+\Language{en-US}
+\Subject{Research project specification for MyDenicek - a CRDT-based local-first document editing substrate}
+\Keywords{CRDT\sep local-first\sep collaborative editing\sep Denicek\sep TypeScript}

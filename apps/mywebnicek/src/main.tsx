@@ -1,11 +1,13 @@
-import { StrictMode } from "react";
-import { createRoot } from "react-dom/client";
-import { MyWebnicekApp } from "./components/MyWebnicekApp.tsx";
+import { FluentProvider, webLightTheme } from '@fluentui/react-components';
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
 
-const root = document.getElementById("root");
-if (!root) throw new Error("Root element not found");
-createRoot(root).render(
+import { App } from './App.tsx';
+
+createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <MyWebnicekApp />
-  </StrictMode>,
+    <FluentProvider theme={webLightTheme}>
+      <App />
+    </FluentProvider>
+  </StrictMode>
 );

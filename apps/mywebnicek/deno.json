@@ -1,30 +1,24 @@
 {
   "tasks": {
-    "fmt": "deno fmt deno.json README.md index.html src vite.config.ts tsconfig.json tsconfig.node.json",
-    "fmt:check": "deno fmt --check deno.json README.md index.html src vite.config.ts tsconfig.json tsconfig.node.json",
-    "lint": "deno lint src vite.config.ts",
-    "check": "deno check src/main.tsx src/tests/config.test.ts src/tests/document-session.test.ts",
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "test": "deno test --allow-all src/tests"
-  },
-  "compilerOptions": {
-    "lib": ["deno.ns", "dom", "dom.iterable", "es2022"],
-    "jsx": "react-jsx",
-    "jsxImportSource": "npm:react@^18.3.0",
-    "types": ["npm:@types/react@^18.3.12", "npm:@types/react-dom@^18.3.1"]
+    "dev": "deno run -A npm:vite",
+    "build": "deno run -A npm:vite build",
+    "preview": "deno run -A npm:vite preview",
+    "lint": "deno lint src/",
+    "fmt": "deno fmt src/ deno.json index.html vite.config.ts"
   },
   "imports": {
-    "@std/expect": "jsr:@std/expect@1",
-    "@std/testing": "jsr:@std/testing@1",
-    "@types/react": "npm:@types/react@^18.3.12",
-    "@types/react-dom": "npm:@types/react-dom@^18.3.1",
-    "@vitejs/plugin-react": "npm:@vitejs/plugin-react@^4.3.0",
-    "d3": "npm:d3@^7.9.0",
-    "react": "npm:react@^18.3.0",
-    "react/jsx-runtime": "npm:react@^18.3.0/jsx-runtime",
-    "react-dom/client": "npm:react-dom@^18.3.0/client",
-    "vite": "npm:vite@^6.0.0"
+    "@std/data-structures/binary-heap": "jsr:@std/data-structures@^1/binary-heap",
+    "react": "npm:react@^19.2.0",
+    "react-dom": "npm:react-dom@^19.2.0",
+    "react/jsx-runtime": "npm:react@^19.2.0/jsx-runtime",
+    "@fluentui/react-components": "npm:@fluentui/react-components@^9.72.7",
+    "@vitejs/plugin-react": "npm:@vitejs/plugin-react@^5.1.0",
+    "vite": "npm:vite@^6.3.5",
+    "@deno/vite-plugin": "npm:@deno/vite-plugin@^1"
+  },
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
+    "lib": ["dom", "dom.iterable", "esnext"]
   }
 }

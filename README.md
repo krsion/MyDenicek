@@ -1,7 +1,7 @@
 # mydenicek-core
 
-**Core CRDT engine for the MyDenicek collaborative document editor.**\
-Published on JSR as [`@mydenicek/core`](https://jsr.io/@mydenicek/core).
+**Local-first collaborative document editor built on a custom OT-based CRDT.**\
+Published on JSR as [`@mydenicek/core`](https://jsr.io/@mydenicek/core) and [`@mydenicek/react`](https://jsr.io/@mydenicek/react).
 
 **Author**: Bc. Ondřej Krsička\
 **Supervisor**: Mgr. Tomáš Petříček, Ph.D.\
@@ -10,23 +10,40 @@ Mathematics and Physics
 
 ## About
 
-This repository contains the OT-based CRDT implementation for the MyDenicek
-local-first collaborative document editor. The core uses an **event DAG with
-vector clocks** and **operational transformation of selector paths** to achieve
-strong eventual consistency across peers. Edits are recorded as events in a
-causal DAG, and convergence is achieved by replaying all events in deterministic
-topological order, with OT resolving concurrent structural edits (rename, wrap,
-delete).
+This repository contains the complete mywebnicek project — a local-first
+collaborative document editor for tagged document trees. It extends the original
+[Denicek](https://tomasp.net/academic/papers/denicek/) system by Tomáš Petříček
+with real-time multi-peer collaboration via a custom OT-based CRDT.
 
-The engine models a tree of `Node` variants (record, list, primitive,
-reference), addressed by `Selector` paths like `["items", 2, "name"]`. It is
-designed as a self-contained library with no framework dependencies.
+The core uses an **event DAG with vector clocks** and **operational
+transformation of selector paths** to achieve strong eventual consistency.
+Documents are modeled as tagged trees of records, lists, primitives, and
+references — addressed by filesystem-style selectors like `/header/title/text`.
 
-## Related Repository
+## Live Demo
 
-- **[MyDenicek](https://github.com/krsion/MyDenicek)** — Web application (React
-  19 + Fluent UI), sync server, documentation, and
-  [live demo](https://krsion.github.io/MyDenicek/)
+https://krsion.github.io/mydenicek-core/
+
+## Documentation
+
+- [Technical Documentation](docs/tech-docs.md) — architecture, CRDT design, implementation details
+- [User Manual](docs/user-manual.md) — getting started, features, keyboard shortcuts
+- [Formative Examples](docs/formative-examples.md) — worked examples demonstrating the CRDT core
+- [Design Decisions](docs/design-decisions.md) — rationale for key architectural choices
+- [Specification](specification/specification.pdf) — project specification
+- [Proposal](proposal/proposal.pdf) — project proposal
+
+## Workspace Structure
+
+Deno workspace for the Denicek document model, sync infrastructure, and browser
+clients:
+
+- `packages/core` — the OT-based Denicek CRDT implementation ([`@mydenicek/core`](https://jsr.io/@mydenicek/core))
+- `packages/react` — React hook for reactive Denicek usage ([`@mydenicek/react`](https://jsr.io/@mydenicek/react))
+- `packages/sync-server` — sync protocol, sync room, and server/client helpers
+- `apps/sync-server` — the runnable WebSocket sync server
+- `apps/playground` — experimental playground for multi-peer DAG exploration
+- `apps/mywebnicek` — production web app (Deno + Vite + React + Fluent UI)
 
 ## References
 
@@ -35,19 +52,6 @@ designed as a self-contained library with no framework dependencies.
   - DOI: https://doi.org/10.1145/3746059.3747646
   - [Project page](https://tomasp.net/academic/papers/denicek/)
 
-## Workspace Structure
-
-TypeScript/Deno workspace for experimenting with the Denicek document model and
-building browser clients around it:
-
-- `packages/core` — the OT-based Denicek CRDT implementation
-- `packages/sync-server` — sync protocol, sync room, and server/client helpers
-- `apps/sync-server` — the runnable WebSocket sync server
-- `apps/playground` — the experimental playground for multi-peer DAG and sync
-  exploration
-- `apps/mywebnicek` — the production-oriented browser UI that syncs through the
-  deployed sync server
-
 ## Live Deployment
 
 The Azure deployment workflows publish these public endpoints:
@@ -55,7 +59,7 @@ The Azure deployment workflows publish these public endpoints:
 - **Sync Server**: `wss://mydenicek-sync-prod.azurewebsites.net`
 - **Sync Server Health Check**:
   `https://mydenicek-sync-prod.azurewebsites.net/health`
-- **Web Application**: https://krsion.github.io/MyDenicek/
+- **Web Application**: https://krsion.github.io/mydenicek-core/
 
 The exact deployment values are configured in
 `.github/workflows/infra-setup.yml` and `.github/workflows/deploy-app.yml`.
