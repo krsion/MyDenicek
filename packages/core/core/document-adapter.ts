@@ -120,6 +120,7 @@ export class DocumentAdapter {
   private _version = 0;
   private listeners: Set<() => void> = new Set();
 
+  /** Creates a new adapter for the given peer, optionally seeding initial state. */
   constructor(peer: string, initializer?: (adapter: DocumentAdapter) => void) {
     this.denicek = new Denicek(peer);
     if (initializer) {
@@ -284,7 +285,7 @@ export class DocumentAdapter {
   updateTag(nodeIds: string[], newTag: string): void {
     for (const id of nodeIds) {
       const path = this.requirePath(id);
-      this.denicek.set(path + "/$tag", newTag);
+      this.denicek.updateTag(path, newTag);
     }
     this.notifyAfterMutation();
   }

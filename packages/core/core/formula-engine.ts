@@ -10,7 +10,9 @@ import type { PrimitiveValue } from "./selector.ts";
 
 /** A formula evaluation error returned as a value, not thrown. */
 export class FormulaError {
+  /** Creates a FormulaError with the given diagnostic message. */
   constructor(readonly message: string) {}
+  /** Returns a human-readable error string prefixed with `#ERR:`. */
   toString(): string {
     return `#ERR: ${this.message}`;
   }
@@ -18,7 +20,9 @@ export class FormulaError {
 
 // ── Types ───────────────────────────────────────────────────────────────
 
+/** A pure function that computes a primitive value from primitive arguments. */
 export type FormulaOperation = (args: PrimitiveValue[]) => PrimitiveValue;
+/** The result of evaluating a formula: either a value or a {@link FormulaError}. */
 export type FormulaResult = PrimitiveValue | FormulaError;
 
 // ── Type guards ─────────────────────────────────────────────────────────
