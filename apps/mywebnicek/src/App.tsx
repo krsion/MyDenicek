@@ -102,10 +102,15 @@ function EditorInner(
     sync: { url: SYNC_SERVER_URL, roomId },
   });
 
+  // Run init actions once and flush to server immediately
   const initialized = useRef(false);
   if (!initialized.current && runInitActions) {
-    runInitActions(dk.denicek);
+    // Only run if this is a fresh document (no events from server yet)
+    if (dk.denicek.inspectEvents().length === 0) {
+      runInitActions(dk.denicek);
+    }
     initialized.current = true;
+    dk.forceUpdate();
   }
 
   const [syncEnabled, setSyncEnabled] = useState(true);
