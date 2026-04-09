@@ -1,9 +1,22 @@
-import type { PlainNode, PlainRecord } from "@mydenicek/core";
+import type {
+  PlainList,
+  PlainNode,
+  PlainRecord,
+  PlainRef,
+} from "@mydenicek/core";
 import React from "react";
 
 function isRec(v: PlainNode): v is PlainRecord {
   return typeof v === "object" && v !== null && "$tag" in v &&
     !("$items" in v) && !("$ref" in v);
+}
+
+function isList(v: PlainNode): v is PlainList {
+  return typeof v === "object" && v !== null && "$tag" in v && "$items" in v;
+}
+
+function isRef(v: PlainNode): v is PlainRef {
+  return typeof v === "object" && v !== null && "$ref" in v;
 }
 
 const META = new Set(["$tag", "$id", "$kind"]);
@@ -73,17 +86,52 @@ function renderNode(node: PlainNode): React.ReactNode {
   if (typeof node === "number" || typeof node === "boolean") {
     return String(node);
   }
+  if (isList(node)) {
+    return (
+      <>
+        {node.$items.map((item, i) => (
+          <React.Fragment key={i}>{renderNode(item)}</React.Fragment>
+        ))}
+      </>
+    );
+  }
+  if (isRef(node)) {
+    return <span style={{ color: "#0078d4" }}>→ {node.$ref}</span>;
+  }
   if (!isRec(node)) return null;
 
   const tag = String(node.$tag);
+
+  // Formula nodes: show computed result inline
+  if (tag.startsWith("x-formula")) {
+    const result = node["result"];
+    const op = node["operation"];
+    const hasResult = result !== undefined && result !== 0;
+    return (
+      <span
+        style={{
+          fontFamily: "Consolas, monospace",
+          background: "#e8f0fe",
+          padding: "1px 6px",
+          borderRadius: 3,
+          fontSize: "0.9em",
+        }}
+        title={`ƒ ${op ?? "formula"}`}
+      >
+        {hasResult ? String(result) : `ƒ(${op ?? "?"})`}
+      </span>
+    );
+  }
 
   // Render children: records recurse, primitives render as text
   const children: React.ReactNode[] = [];
   for (const [key, val] of Object.entries(node)) {
     if (META.has(key) || val === undefined) continue;
-    if (isRec(val)) {
+    if (isRec(val) || isList(val) || isRef(val)) {
       children.push(
-        <React.Fragment key={key}>{renderNode(val)}</React.Fragment>,
+        <React.Fragment key={key}>
+          {renderNode(val as PlainNode)}
+        </React.Fragment>,
       );
     } else if (
       typeof val === "string" || typeof val === "number" ||

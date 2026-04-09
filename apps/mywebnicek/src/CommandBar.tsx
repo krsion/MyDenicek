@@ -288,6 +288,7 @@ const COMMANDS = [
   "wrapRecord",
   "wrapList",
   "copy",
+  "formula",
   "undo",
   "redo",
   "get",
@@ -307,7 +308,26 @@ const ARG_HINTS: Record<string, string[]> = {
   wrapRecord: ["<field>", "<tag>"],
   wrapList: ["<tag>"],
   copy: ["<source-selector>"],
+  formula: ["<field>", "<operation>", "<ref|value> ..."],
 };
+
+const FORMULA_OPS = [
+  "sum",
+  "product",
+  "mod",
+  "round",
+  "floor",
+  "ceil",
+  "abs",
+  "concat",
+  "uppercase",
+  "lowercase",
+  "capitalize",
+  "trim",
+  "length",
+  "replace",
+  "countChildren",
+];
 
 const HELP_TEXT = `Commands:
   add <selector> <field> <value|json>   Add a field to matched records
@@ -322,10 +342,14 @@ const HELP_TEXT = `Commands:
   wrapRecord <selector> <field> <tag>   Wrap in a record
   wrapList <selector> <tag>             Wrap in a list
   copy <target> <source>                Copy nodes
+  formula <sel> <field> <op> [args]     Add a formula node
   undo / redo                           Undo or redo
   get <selector>                        Show nodes at selector
   tree [selector]                       Show document tree
   help                                  Show this help
+
+Formula args: paths (e.g. /counter/value) become refs, others are literals.
+Operations: ${FORMULA_OPS.join(", ")}
 
 Selectors:
   /path/to/node       Navigate to a specific node
@@ -528,6 +552,7 @@ export function CommandBar({ dk }: CommandBarProps) {
       "wrapRecord",
       "wrapList",
       "copy",
+      "formula",
     ]);
     let effectiveArgs = argsStr;
     if (argsStr && SELECTOR_CMDS.has(command)) {
@@ -801,6 +826,48 @@ export function CommandBar({ dk }: CommandBarProps) {
           const id = dk.copy(target!, source!);
           pushOutput({
             text: `Copied ${source} → ${target} (${id})`,
+            kind: "success",
+          });
+          break;
+        }
+
+        case "formula": {
+          // formula <selector> <field> <operation> [arg1] [arg2] ...
+          const { args } = splitArgs(effectiveArgs, 4);
+          if (args.length < 3) {
+            pushOutput({
+              text:
+                "Usage: formula <selector> <field> <operation> [ref|value ...]",
+              kind: "error",
+            });
+            break;
+          }
+          const [fTarget, fField, fOp] = args as [string, string, string];
+          // Parse remaining args: paths starting with / become refs, rest are values
+          const rawArgs = args[3] ? args[3].split(/\s+/).filter(Boolean) : [];
+          const formulaArgs: PlainNode[] = rawArgs.map((a) => {
+            if (a.startsWith("/")) {
+              // User path → CRDT path (prepend root)
+              const cleaned = a.startsWith("/") ? a.slice(1) : a;
+              return { $ref: "/root/" + cleaned };
+            }
+            return parseValue(a);
+          });
+          const formulaNode: PlainNode = {
+            $tag: "x-formula",
+            $kind: "formula",
+            operation: fOp!,
+            args: { $tag: "args", $items: formulaArgs },
+            result: 0,
+          };
+          dk.add(fTarget!, fField!, formulaNode);
+          const opsList = FORMULA_OPS.includes(fOp!)
+            ? ""
+            : `\n  Known ops: ${FORMULA_OPS.join(", ")}`;
+          pushOutput({
+            text: `Formula '${fField}' = ${fOp}(${
+              rawArgs.join(", ")
+            }) added to ${argsStr.split(" ")[0]}${opsList}`,
             kind: "success",
           });
           break;

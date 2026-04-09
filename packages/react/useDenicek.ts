@@ -125,14 +125,15 @@ export function useDenicek(options?: UseDenicekOptions): UseDenicekReturn {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Wrap a CRDT mutation: call it, bump version, flush sync
+  // Wrap a CRDT mutation: call it, recompute formulas, bump version, flush sync
   const mutate = useCallback(
     (fn: () => void) => {
       fn();
+      dk.recomputeFormulas();
       bump();
       sync.flush();
     },
-    [bump, sync],
+    [dk, bump, sync],
   );
 
   // Keep version in scope so doc/conflicts/canUndo/canRedo are fresh
