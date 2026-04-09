@@ -4,6 +4,7 @@ import type {
   PlainRecord,
   PlainRef,
 } from "@mydenicek/core";
+import { evaluateAllFormulas, FormulaError } from "@mydenicek/core";
 import React from "react";
 
 function isRec(v: PlainNode): v is PlainRecord {
@@ -68,16 +69,21 @@ export function RenderedDocument({ doc }: Props) {
   if (!isRec(doc)) {
     return <div style={{ color: "#888", padding: 20 }}>Empty document</div>;
   }
+  const formulaResults = evaluateAllFormulas(doc);
   return (
     <RenderErrorBoundary>
       <div style={{ fontFamily: "system-ui, sans-serif", lineHeight: 1.6 }}>
-        {renderNode(doc)}
+        {renderNode(doc, "", formulaResults)}
       </div>
     </RenderErrorBoundary>
   );
 }
 
-function renderNode(node: PlainNode): React.ReactNode {
+function renderNode(
+  node: PlainNode,
+  path: string,
+  formulas: Map<string, unknown>,
+): React.ReactNode {
   if (typeof node === "string") return node;
   if (typeof node === "number" || typeof node === "boolean") {
     return String(node);
@@ -86,7 +92,9 @@ function renderNode(node: PlainNode): React.ReactNode {
     return (
       <>
         {node.$items.map((item, i) => (
-          <React.Fragment key={i}>{renderNode(item)}</React.Fragment>
+          <React.Fragment key={i}>
+            {renderNode(item, path ? `${path}/${i}` : String(i), formulas)}
+          </React.Fragment>
         ))}
       </>
     );
@@ -100,21 +108,24 @@ function renderNode(node: PlainNode): React.ReactNode {
 
   // Formula nodes: show computed result inline
   if (tag.startsWith("x-formula")) {
-    const result = node["result"];
     const op = node["operation"];
-    const hasResult = result !== undefined && result !== 0;
+    const computed = formulas.get(path);
+    const hasResult = computed !== undefined &&
+      !(computed instanceof FormulaError);
     return (
       <span
         style={{
           fontFamily: "Consolas, monospace",
-          background: "#e8f0fe",
+          background: hasResult ? "#e8f0fe" : "#fff4e5",
           padding: "1px 6px",
           borderRadius: 3,
           fontSize: "0.9em",
         }}
-        title={`ƒ ${op ?? "formula"}`}
+        title={`ƒ ${op ?? "formula"}${
+          hasResult ? " = " + String(computed) : ""
+        }`}
       >
-        {hasResult ? String(result) : `ƒ(${op ?? "?"})`}
+        {hasResult ? String(computed) : `ƒ(${op ?? "?"})`}
       </span>
     );
   }
@@ -126,7 +137,11 @@ function renderNode(node: PlainNode): React.ReactNode {
     if (isRec(val) || isList(val) || isRef(val)) {
       children.push(
         <React.Fragment key={key}>
-          {renderNode(val as PlainNode)}
+          {renderNode(
+            val as PlainNode,
+            path ? `${path}/${key}` : key,
+            formulas,
+          )}
         </React.Fragment>,
       );
     } else if (
