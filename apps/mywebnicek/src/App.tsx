@@ -48,9 +48,6 @@ const statusColors: Record<string, string> = {
   idle: "#8a8a8a",
 };
 
-const views = ["rendered", "raw", "events"] as const;
-type ViewMode = (typeof views)[number];
-
 function Editor(
   { peerId, roomId }: {
     peerId: string;
@@ -64,7 +61,14 @@ function Editor(
   });
 
   const [syncEnabled, setSyncEnabled] = useState(true);
-  const [view, setView] = useState<ViewMode>("rendered");
+  const [panels, setPanels] = useState({
+    rendered: true,
+    raw: false,
+    events: false,
+  });
+
+  const togglePanel = (key: keyof typeof panels) =>
+    setPanels((p) => ({ ...p, [key]: !p[key] }));
 
   const toggleSync = () => {
     if (syncEnabled) {
@@ -74,6 +78,8 @@ function Editor(
     }
     setSyncEnabled(!syncEnabled);
   };
+
+  const activePanels = Object.entries(panels).filter(([, on]) => on);
 
   return (
     <div
@@ -100,24 +106,24 @@ function Editor(
           mydenicek
         </Text>
         <div style={{ display: "flex", gap: 4 }}>
-          {views.map((v) => (
+          {(["rendered", "raw", "events"] as const).map((key) => (
             <button
-              key={v}
+              key={key}
               type="button"
-              onClick={() => setView(v)}
+              onClick={() => togglePanel(key)}
               style={{
                 padding: "4px 12px",
                 fontSize: 12,
                 cursor: "pointer",
-                background: view === v ? "#0078d4" : "transparent",
-                color: view === v ? "#fff" : "#616161",
-                border: view === v ? "1px solid #0078d4" : "1px solid #d0d0d0",
+                background: panels[key] ? "#0078d4" : "transparent",
+                color: panels[key] ? "#fff" : "#616161",
+                border: panels[key] ? "1px solid #0078d4" : "1px solid #d0d0d0",
                 borderRadius: 4,
               }}
             >
-              {v === "rendered"
+              {key === "rendered"
                 ? "Document"
-                : v === "raw"
+                : key === "raw"
                 ? "Raw JSON"
                 : "Event Graph"}
             </button>
@@ -152,23 +158,60 @@ function Editor(
         </span>
       </div>
 
-      {/* Main area */}
+      {/* Main area — side-by-side panels */}
       <div
         style={{
           flex: 1,
-          overflow: "auto",
-          background: "#fff",
-          padding: view === "rendered" ? 24 : 0,
+          display: "flex",
+          overflow: "hidden",
           minHeight: 0,
         }}
       >
-        <ErrorBoundary>
-          {view === "rendered" && <RenderedDocument doc={dk.doc} />}
-          {view === "raw" && <RawDocumentView doc={dk.doc} />}
-          {view === "events" && (
+        {activePanels.length === 0 && (
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#888",
+            }}
+          >
+            Toggle a panel above
+          </div>
+        )}
+        {panels.rendered && (
+          <div
+            style={{
+              flex: 1,
+              overflow: "auto",
+              padding: 24,
+              borderRight: activePanels.length > 1
+                ? "1px solid #e0e0e0"
+                : undefined,
+            }}
+          >
+            <ErrorBoundary>
+              <RenderedDocument doc={dk.doc} />
+            </ErrorBoundary>
+          </div>
+        )}
+        {panels.raw && (
+          <div
+            style={{
+              flex: 1,
+              overflow: "auto",
+              borderRight: panels.events ? "1px solid #e0e0e0" : undefined,
+            }}
+          >
+            <RawDocumentView doc={dk.doc} />
+          </div>
+        )}
+        {panels.events && (
+          <div style={{ flex: 1, overflow: "auto" }}>
             <EventGraphView denicek={dk.denicek} version={dk.version} />
-          )}
-        </ErrorBoundary>
+          </div>
+        )}
       </div>
 
       {/* Bottom command bar */}
