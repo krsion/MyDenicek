@@ -5,7 +5,57 @@ import type {
   PlainRef,
 } from "@mydenicek/core";
 import { evaluateAllFormulas, FormulaError } from "@mydenicek/core";
-import React from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+
+/** Input that batches keystrokes and only commits via onSetValue on blur or after a delay. */
+function DebouncedInput(
+  { value, onCommit, readOnly, style }: {
+    value: string;
+    onCommit?: (value: string) => void;
+    readOnly: boolean;
+    style?: React.CSSProperties;
+  },
+) {
+  const [local, setLocal] = useState(value);
+  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const DEBOUNCE_MS = 500;
+
+  // Sync local state when the external value changes (e.g. from a remote peer)
+  useEffect(() => {
+    setLocal(value);
+  }, [value]);
+
+  const flush = useCallback((v: string) => {
+    clearTimeout(timerRef.current);
+    if (onCommit && v !== value) onCommit(v);
+  }, [onCommit, value]);
+
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const v = e.target.value;
+      setLocal(v);
+      clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => flush(v), DEBOUNCE_MS);
+    },
+    [flush],
+  );
+
+  const handleBlur = useCallback(() => {
+    flush(local);
+  }, [flush, local]);
+
+  useEffect(() => () => clearTimeout(timerRef.current), []);
+
+  return (
+    <input
+      readOnly={readOnly}
+      value={local}
+      onChange={readOnly ? undefined : handleChange}
+      onBlur={readOnly ? undefined : handleBlur}
+      style={style}
+    />
+  );
+}
 
 function isRec(v: PlainNode): v is PlainRecord {
   return typeof v === "object" && v !== null && "$tag" in v &&
@@ -193,14 +243,12 @@ function renderNode(
     const value = node["value"];
     const valuePath = path ? `${path}/value` : "value";
     return (
-      <input
+      <DebouncedInput
         readOnly={!onSetValue}
         value={typeof value === "string" || typeof value === "number"
           ? String(value)
           : ""}
-        onChange={onSetValue
-          ? (e) => onSetValue(valuePath, e.target.value)
-          : undefined}
+        onCommit={onSetValue ? (v) => onSetValue(valuePath, v) : undefined}
         style={{
           padding: "4px 8px",
           fontSize: 13,
