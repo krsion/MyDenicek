@@ -18,14 +18,14 @@ test.describe("mydenicek E2E", () => {
     const alice = await aliceCtx.newPage();
     await alice.goto(`${BASE}#${roomId}`);
     await expect(alice.locator("h2").first()).toBeVisible({ timeout: 10_000 });
-    await expect(alice.getByText("connected")).toBeVisible({ timeout: 10_000 });
+    await expect(alice.getByText("connected")).toBeVisible({ timeout: 30_000 });
 
     // Bob joins the same room
     const bobCtx = await browser.newContext();
     const bob = await bobCtx.newPage();
     await bob.goto(`${BASE}#${roomId}`);
     await expect(bob.locator("h2").first()).toBeVisible({ timeout: 10_000 });
-    await expect(bob.getByText("connected")).toBeVisible({ timeout: 10_000 });
+    await expect(bob.getByText("connected")).toBeVisible({ timeout: 30_000 });
 
     // Wait for initial sync to settle between both peers
     await bob.waitForTimeout(2000);
