@@ -23,13 +23,19 @@ function getRoomId(): string {
 }
 
 const PEER_ID_KEY = "mydenicek-peer-id";
-/** Stable peer ID persisted in localStorage. Generated once, reused forever. */
-function getOrCreatePeerId(): string {
+
+/** Stable device ID persisted in localStorage (for display). */
+function getDeviceId(): string {
   const stored = globalThis.localStorage?.getItem(PEER_ID_KEY);
   if (stored) return stored;
-  const id = crypto.randomUUID().slice(0, 12);
+  const id = crypto.randomUUID().slice(0, 8);
   globalThis.localStorage?.setItem(PEER_ID_KEY, id);
   return id;
+}
+
+/** Unique peer ID per tab — combines device ID with a random session suffix. */
+function createPeerId(): string {
+  return getDeviceId() + "-" + crypto.randomUUID().slice(0, 4);
 }
 
 const statusColors: Record<string, string> = {
@@ -111,7 +117,8 @@ function Editor(
             color: statusColors[dk.syncStatus] ?? "#8a8a8a",
           }}
         >
-          ● {dk.syncStatus} — peer: {peerId.slice(0, 6)} — room: {roomId}
+          ● {dk.syncStatus} — peer: {peerId.slice(0, 6)} — room: {roomId} —{" "}
+          {SYNC_SERVER_URL.replace(/^wss?:\/\//, "").split("/")[0]}
         </span>
       </div>
 
@@ -144,7 +151,7 @@ function Editor(
 
 export function App() {
   const roomId = useMemo(getRoomId, []);
-  const peerId = useMemo(getOrCreatePeerId, []);
+  const peerId = useMemo(createPeerId, []);
 
   return <Editor peerId={peerId} roomId={roomId} />;
 }
