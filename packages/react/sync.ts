@@ -30,12 +30,10 @@ export interface SyncConnectionOptions {
 
 /**
  * Manages a WebSocket connection for syncing a Denicek instance.
- * Call `connect()` to start, `disconnect()` to stop.
- * After every local mutation, call `flush()` to send pending events.
  *
- * Internally delegates sync protocol handling to the
- * `SyncClient` from `@mydenicek/sync-server`, adding reactive
- * status tracking and auto-reconnect on top.
+ * - `connect()` / `disconnect()` — full lifecycle management with auto-reconnect.
+ * - `pause()` / `resume()` — soft pause: socket stays open, messages buffered.
+ * - `flush()` — send pending local events immediately.
  */
 export class SyncClient {
   private inner: BaseSyncClient | null = null;
@@ -43,7 +41,6 @@ export class SyncClient {
   private reconnectDelay = 1000;
   private opts: SyncConnectionOptions | null = null;
   private readonly initialDocumentHash: string;
-  private _userPaused = false;
 
   status: SyncStatus = "idle";
 
@@ -68,12 +65,10 @@ export class SyncClient {
       initialDocumentHash: this.initialDocumentHash,
       onRemoteChange: () => this.onRemoteChange(),
       onDisconnect: () => {
-        if (this._userPaused) return;
-        if (this.inner === inner && this.opts) {
-          this.inner = null;
-          this.setStatus("disconnected");
-          this.scheduleReconnect();
-        }
+        if (this.inner !== inner || !this.opts) return;
+        this.inner = null;
+        this.setStatus("disconnected");
+        this.scheduleReconnect();
       },
     });
     this.inner = inner;
@@ -86,49 +81,34 @@ export class SyncClient {
         }
       },
       () => {
-        if (this._userPaused) return;
-        if (this.inner === inner) {
-          this.inner = null;
-          this.setStatus("disconnected");
-          this.scheduleReconnect();
-        }
+        if (this.inner !== inner || !this.opts) return;
+        this.inner = null;
+        this.setStatus("disconnected");
+        this.scheduleReconnect();
       },
     );
   }
 
-  /** Disconnect from the sync server. */
+  /** Disconnect from the sync server and stop auto-reconnect. */
   disconnect(): void {
-    const opts = this.opts;
+    this.clearReconnectTimer();
     this.opts = null;
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
     if (this.inner) {
       this.inner.close();
       this.inner = null;
-    }
-    if (opts) {
       this.setStatus("idle");
     }
   }
 
-  /** Pause syncing: keeps WebSocket open but suppresses all sends/receives. */
+  /** Pause syncing: socket stays open, messages buffered, sends suppressed. */
   pause(): void {
-    this._userPaused = true;
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
-    if (this.inner) {
-      this.inner.pause();
-    }
+    this.clearReconnectTimer();
+    this.inner?.pause();
     this.setStatus("paused");
   }
 
-  /** Resume syncing after a pause. Immediately flushes pending edits. */
+  /** Resume syncing: replay buffered messages and flush pending edits. */
   resume(): void {
-    this._userPaused = false;
     if (this.inner) {
       this.inner.resume();
       this.setStatus("connected");
@@ -139,8 +119,9 @@ export class SyncClient {
 
   /** Send any pending local events to the server. */
   flush(): void {
-    if (this.status !== "connected" || !this.inner) return;
-    this.inner.syncNow();
+    if (this.inner?.paused === false) {
+      this.inner.syncNow();
+    }
   }
 
   private setStatus(s: SyncStatus): void {
@@ -150,8 +131,15 @@ export class SyncClient {
     }
   }
 
+  private clearReconnectTimer(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+  }
+
   private scheduleReconnect(): void {
-    if (!this.opts || this._userPaused) return;
+    if (!this.opts) return;
     this.reconnectTimer = setTimeout(() => {
       if (this.opts) this.connect(this.opts);
     }, this.reconnectDelay);
