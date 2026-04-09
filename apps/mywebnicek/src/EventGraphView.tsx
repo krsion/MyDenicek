@@ -75,7 +75,6 @@ function DagVisualization(
   return (
     <div
       style={{
-        maxHeight: 250,
         overflow: "auto",
         borderBottom: "1px solid #ccc",
       }}
@@ -194,8 +193,9 @@ export function EventGraphView(
       style={{
         fontFamily: "monospace",
         fontSize: 12,
-        overflow: "auto",
         height: "100%",
+        position: "relative",
+        overflow: "hidden",
       }}
     >
       {/* Stats header */}
@@ -214,22 +214,34 @@ export function EventGraphView(
         <span>Frontier: {frontierSet.size}</span>
       </div>
 
-      {/* DAG visualization */}
-      <DagVisualization
-        events={events}
-        frontierSet={frontierSet}
-        selectedId={selectedId}
-        onSelect={setSelectedId}
-      />
-
-      {/* Selected event detail */}
-      {selected && (
-        <EventDetail
-          event={selected}
-          isFrontier={frontierSet.has(selected.id)}
-          onReplay={onReplay}
-          onClose={() => setSelectedId(null)}
+      {/* DAG visualization — fills remaining space */}
+      <div style={{ overflow: "auto", height: "calc(100% - 32px)" }}>
+        <DagVisualization
+          events={events}
+          frontierSet={frontierSet}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
         />
+      </div>
+
+      {/* Overlay detail panel */}
+      {selected && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            zIndex: 10,
+          }}
+        >
+          <EventDetail
+            event={selected}
+            isFrontier={frontierSet.has(selected.id)}
+            onReplay={onReplay}
+            onClose={() => setSelectedId(null)}
+          />
+        </div>
       )}
     </div>
   );
@@ -251,6 +263,7 @@ function EventDetail(
         padding: "10px 14px",
         background: "#fafafa",
         borderTop: "1px solid #ddd",
+        boxShadow: "0 -2px 8px rgba(0,0,0,0.15)",
         fontSize: 11,
         lineHeight: 1.8,
       }}
