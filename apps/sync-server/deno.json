@@ -4,6 +4,10 @@
     "fmt:check": "deno fmt --check .",
     "lint": "deno lint main.ts",
     "check": "deno check main.ts",
+    "test": "deno test --allow-net --no-check tests/",
     "start": "deno run --allow-net --allow-read --allow-write --allow-env main.ts"
+  },
+  "imports": {
+    "@std/assert": "../../tools/deno_std/assert.ts"
   }
 }

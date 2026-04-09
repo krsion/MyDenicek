@@ -9,9 +9,10 @@ import { INITIAL_DOCUMENT } from "./initializeDocument.ts";
 import { RawDocumentView } from "./RawDocumentView.tsx";
 import { RenderedDocument } from "./RenderedDocument.tsx";
 
-const SYNC_SERVER_URL = globalThis.location?.hostname === "localhost"
-  ? "ws://localhost:8787/sync"
-  : "wss://mydenicek-core-krsion-dev-sync.happyisland-d6dda219.westeurope.azurecontainerapps.io/sync";
+const SYNC_SERVER_URL = import.meta.env.VITE_SYNC_URL ??
+  (globalThis.location?.hostname === "localhost"
+    ? "ws://localhost:8787/sync"
+    : "wss://mydenicek-core-krsion-dev-sync.happyisland-d6dda219.westeurope.azurecontainerapps.io/sync");
 
 function getRoomId(): string {
   if (globalThis.location?.hash && globalThis.location.hash.length > 1) {
