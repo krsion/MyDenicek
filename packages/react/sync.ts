@@ -6,7 +6,7 @@
  * reconnection with exponential backoff.
  */
 
-import type { Denicek } from "@mydenicek/core";
+import type { Denicek, PlainNode } from "@mydenicek/core";
 import {
   computeDocumentHash,
   SyncClient as BaseSyncClient,
@@ -41,6 +41,7 @@ export class SyncClient {
   private reconnectDelay = 1000;
   private opts: SyncConnectionOptions | null = null;
   private readonly initialDocumentHash: string;
+  private readonly initialDocumentSnapshot: PlainNode;
 
   status: SyncStatus = "idle";
 
@@ -49,7 +50,10 @@ export class SyncClient {
     private onStatusChange: (s: SyncStatus) => void,
     private onRemoteChange: () => void,
   ) {
-    this.initialDocumentHash = computeDocumentHash(denicek.materialize());
+    this.initialDocumentSnapshot = denicek.materialize();
+    this.initialDocumentHash = computeDocumentHash(
+      this.initialDocumentSnapshot,
+    );
   }
 
   /** Connect (or reconnect) to a sync server. */
@@ -63,6 +67,7 @@ export class SyncClient {
       roomId: opts.roomId,
       document: this.denicek,
       initialDocumentHash: this.initialDocumentHash,
+      initialDocument: this.initialDocumentSnapshot,
       onRemoteChange: () => this.onRemoteChange(),
       onDisconnect: () => {
         if (this.inner !== inner || !this.opts) return;

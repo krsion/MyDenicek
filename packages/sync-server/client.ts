@@ -36,6 +36,11 @@ export interface SyncClientOptions {
    * peers in a room share the same starting state. Omit to skip validation.
    */
   initialDocumentHash?: string;
+  /**
+   * Snapshot of the initial document tree. Sent to the server on first sync
+   * to bootstrap the room. If omitted, computed from `document.materialize()`.
+   */
+  initialDocument?: PlainNode;
   /** Called when remote events are applied to the document. */
   onRemoteChange?: (document: Denicek, response: EncodedSyncResponse) => void;
   /** Called when the WebSocket connection closes (both explicit and unexpected). */
@@ -73,7 +78,8 @@ export class SyncClient {
     this.roomId = options.roomId;
     this.document = options.document;
     this.autoSyncIntervalMs = options.autoSyncIntervalMs ?? 1000;
-    this.initialDocument = options.document.materialize();
+    this.initialDocument = options.initialDocument ??
+      options.document.materialize();
     this.initialDocumentHash = options.initialDocumentHash ??
       computeDocumentHash(this.initialDocument);
     this.onRemoteChange = options.onRemoteChange;
