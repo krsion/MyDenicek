@@ -3,28 +3,36 @@ import { expect, test } from "@playwright/test";
 const BASE = process.env.BASE_URL ?? "https://krsion.github.io/mydenicek/";
 
 test.describe("mydenicek E2E", () => {
-  test("page loads and renders document", async ({ page }) => {
+  test("page loads and renders document from template", async ({ page }) => {
     await page.goto("./");
 
-    // Document should render immediately (no prompt)
-    await expect(page.locator("h2").first()).toBeVisible({ timeout: 10_000 });
+    // Click the "Formative Examples" template button to create a document
+    await page.getByText("+ Formative Examples").click();
+
+    // Document should render after template selection
+    await expect(page.locator("h1").first()).toBeVisible({ timeout: 10_000 });
   });
 
   test("two peers can sync edits via the server", async ({ browser }) => {
-    const roomId = `e2e-${Date.now()}`;
-
-    // Alice joins
+    // Alice creates a room from a template
     const aliceCtx = await browser.newContext();
     const alice = await aliceCtx.newPage();
-    await alice.goto(`${BASE}#${roomId}`);
-    await expect(alice.locator("h2").first()).toBeVisible({ timeout: 10_000 });
+    await alice.goto(BASE);
+    await alice.getByText("+ Formative Examples").click();
+    await expect(alice.locator("h1").first()).toBeVisible({ timeout: 10_000 });
+
+    // Get Alice's room hash from the URL
+    const roomId = new URL(alice.url()).hash.slice(1);
+    expect(roomId).toBeTruthy();
+
+    // Wait for sync connection
     await expect(alice.getByText("connected")).toBeVisible({ timeout: 30_000 });
 
     // Bob joins the same room
     const bobCtx = await browser.newContext();
     const bob = await bobCtx.newPage();
     await bob.goto(`${BASE}#${roomId}`);
-    await expect(bob.locator("h2").first()).toBeVisible({ timeout: 10_000 });
+    await expect(bob.locator("h1").first()).toBeVisible({ timeout: 15_000 });
     await expect(bob.getByText("connected")).toBeVisible({ timeout: 30_000 });
 
     // Wait for initial sync to settle between both peers
