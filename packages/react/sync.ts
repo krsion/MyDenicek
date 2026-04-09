@@ -7,7 +7,10 @@
  */
 
 import type { Denicek } from "@mydenicek/core";
-import { SyncClient as BaseSyncClient } from "@mydenicek/sync-server";
+import {
+  computeDocumentHash,
+  SyncClient as BaseSyncClient,
+} from "@mydenicek/sync-server";
 
 /** Reactive sync status. */
 export type SyncStatus = "idle" | "connecting" | "connected" | "disconnected";
@@ -34,6 +37,7 @@ export class SyncClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectDelay = 1000;
   private opts: SyncConnectionOptions | null = null;
+  private readonly initialDocumentHash: string;
 
   status: SyncStatus = "idle";
 
@@ -41,7 +45,9 @@ export class SyncClient {
     private denicek: Denicek,
     private onStatusChange: (s: SyncStatus) => void,
     private onRemoteChange: () => void,
-  ) {}
+  ) {
+    this.initialDocumentHash = computeDocumentHash(denicek.materialize());
+  }
 
   /** Connect (or reconnect) to a sync server. */
   connect(opts: SyncConnectionOptions): void {
@@ -53,6 +59,7 @@ export class SyncClient {
       url: opts.url,
       roomId: opts.roomId,
       document: this.denicek,
+      initialDocumentHash: this.initialDocumentHash,
       onRemoteChange: () => this.onRemoteChange(),
       onDisconnect: () => {
         if (this.inner === inner && this.opts) {

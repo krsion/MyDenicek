@@ -18,20 +18,33 @@ Azure deployment workflow.
 
 ```ts
 import { Denicek } from "jsr:@mydenicek/core";
-import { SyncClient } from "jsr:@mydenicek/sync-server";
+import { computeDocumentHash, SyncClient } from "jsr:@mydenicek/sync-server";
 
-const peer = new Denicek("alice", {
-  $tag: "root",
-  title: "Shared note",
-});
+const initialDoc = { $tag: "root", title: "Shared note" };
+const peer = new Denicek("alice", initialDoc);
 
 const client = new SyncClient({
   url: "ws://127.0.0.1:8787/sync",
   roomId: "demo",
   document: peer,
+  initialDocumentHash: computeDocumentHash(initialDoc),
 });
 
 await client.connect();
-peer.set("title", "Updated title");
+peer.add("", "count", 0);
 client.syncNow();
 ```
+
+## Initial document validation
+
+All peers in a room must start from the same initial document. The sync server
+enforces this by comparing document hashes:
+
+1. The first client to sync sets the room's expected hash.
+2. Subsequent clients with a different hash receive an error response.
+3. Clients that omit the hash are accepted (backward compatibility).
+
+Use `computeDocumentHash()` to compute the hash from your initial document
+**before any edits**, and pass it as `initialDocumentHash` when creating a
+`SyncClient`. This prevents silent corruption when peers accidentally use
+different starting documents.
