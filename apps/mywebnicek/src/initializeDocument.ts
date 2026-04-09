@@ -88,11 +88,13 @@ export const INITIAL_DOCUMENT: PlainNode = {
       $items: [
         {
           $tag: "tr",
-          contact: "Tomáš Petříček, tomas@tomasp.net",
+          name: { $tag: "td", text: "Tomáš Petříček" },
+          email: { $tag: "td", text: "tomas@tomasp.net" },
         },
         {
           $tag: "tr",
-          contact: "Ada Lovelace, ada@example.com",
+          name: { $tag: "td", text: "Ada Lovelace" },
+          email: { $tag: "td", text: "ada@example.com" },
         },
       ],
     },
@@ -162,10 +164,11 @@ export function initializeActions(dk: Denicek): void {
   // ── Conferences: record the "add speaker from input" recipe ───────
   const addSpeakerId = dk.pushFront("conferences/speakers", {
     $tag: "tr",
-    contact: "",
+    name: { $tag: "td", text: "" },
+    email: { $tag: "td", text: "" },
   });
-  const copySpeakerContactId = dk.copy(
-    "conferences/speakers/!0/contact",
+  const copySpeakerNameId = dk.copy(
+    "conferences/speakers/!0/name/text",
     "conferences/composer/input/value",
   );
 
@@ -175,6 +178,6 @@ export function initializeActions(dk: Denicek): void {
   });
   dk.pushBack("conferences/composer/addAction/steps", {
     $tag: "step",
-    eventId: copySpeakerContactId,
+    eventId: copySpeakerNameId,
   });
 }
