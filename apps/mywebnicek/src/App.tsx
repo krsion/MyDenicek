@@ -43,6 +43,8 @@ const statusColors: Record<string, string> = {
   idle: "#8a8a8a",
 };
 
+const defaultPanels = { rendered: true, raw: false, events: false };
+
 function Editor(
   { peerId, roomId }: {
     peerId: string;
@@ -56,14 +58,23 @@ function Editor(
   });
 
   const [syncEnabled, setSyncEnabled] = useState(true);
-  const [panels, setPanels] = useState({
-    rendered: true,
-    raw: false,
-    events: false,
+  const PANELS_KEY = "mydenicek-panels";
+  const [panels, setPanels] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem(PANELS_KEY);
+      if (stored) return JSON.parse(stored) as typeof defaultPanels;
+    } catch { /* ignore */ }
+    return defaultPanels;
   });
 
   const togglePanel = (key: keyof typeof panels) =>
-    setPanels((p) => ({ ...p, [key]: !p[key] }));
+    setPanels((p) => {
+      const next = { ...p, [key]: !p[key] };
+      try {
+        sessionStorage.setItem(PANELS_KEY, JSON.stringify(next));
+      } catch { /* ignore */ }
+      return next;
+    });
 
   const toggleSync = () => {
     if (syncEnabled) {
