@@ -378,11 +378,30 @@ function commandsForNode(node: PlainNode): string[] {
   return ANY_NODE_CMDS;
 }
 
+const HISTORY_KEY = "mydenicek-cmd-history";
+const MAX_HISTORY = 200;
+
+function loadHistory(): string[] {
+  try {
+    const raw = globalThis.localStorage?.getItem(HISTORY_KEY);
+    return raw ? JSON.parse(raw) as string[] : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveHistory(history: string[]): void {
+  try {
+    const trimmed = history.slice(-MAX_HISTORY);
+    globalThis.localStorage?.setItem(HISTORY_KEY, JSON.stringify(trimmed));
+  } catch { /* localStorage unavailable */ }
+}
+
 // ── Component ────────────────────────────────────────────────────────────
 
 export function CommandBar({ dk }: CommandBarProps) {
   const [input, setInput] = useState("");
-  const [history, setHistory] = useState<string[]>([]);
+  const [history, setHistory] = useState<string[]>(loadHistory);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [output, setOutput] = useState<OutputMessage[]>([]);
   const [ghostText, setGhostText] = useState("");
@@ -614,7 +633,11 @@ export function CommandBar({ dk }: CommandBarProps) {
     const trimmed = cmd.trim();
     if (!trimmed) return;
 
-    setHistory((prev) => [...prev, trimmed]);
+    setHistory((prev) => {
+      const next = [...prev, trimmed];
+      saveHistory(next);
+      return next;
+    });
     setHistoryIndex(-1);
 
     // Parse: /selector command args...  OR  bareCommand
