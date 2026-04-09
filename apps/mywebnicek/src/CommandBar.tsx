@@ -418,14 +418,17 @@ export function CommandBar({ dk }: CommandBarProps) {
     const first = parts[0] ?? "";
     const hasTrailingSpace = text.endsWith(" ");
     if (first.startsWith("/")) {
+      const selectorDone = parts.length >= 2 || hasTrailingSpace;
+      const commandDone = parts.length >= 3 ||
+        (parts.length === 2 && hasTrailingSpace);
       return {
         selector: first,
         command: parts[1] ?? "",
         argsStr: parts.slice(2).join(" "),
         argCount: Math.max(0, parts.length - 2),
         hasSelector: true,
-        /** User has typed space after selector (ready for command). */
-        selectorDone: parts.length >= 2 || hasTrailingSpace,
+        selectorDone,
+        commandDone,
       };
     }
     return {
@@ -435,6 +438,7 @@ export function CommandBar({ dk }: CommandBarProps) {
       argCount: Math.max(0, parts.length - 1),
       hasSelector: false,
       selectorDone: false,
+      commandDone: false,
     };
   }, []);
 
@@ -491,8 +495,8 @@ export function CommandBar({ dk }: CommandBarProps) {
         return { items: all, phase: "path" };
       }
 
-      // Phase 3: selector done, completing command
-      if (parsed.hasSelector && parsed.selectorDone && !parsed.argsStr) {
+      // Phase 3: selector done, completing command (not yet confirmed with space)
+      if (parsed.hasSelector && parsed.selectorDone && !parsed.commandDone) {
         const nodes = resolveSelector(parsed.selector);
         if (nodes.length === 0) return { items: [], phase: "command" };
         // Union of valid commands across all matched nodes
@@ -525,8 +529,6 @@ export function CommandBar({ dk }: CommandBarProps) {
       setCompletionIdx(-1);
       const partial = phase === "path"
         ? (parsed.selector.split("/").pop() ?? "")
-        : phase === "command"
-        ? parsed.command
         : parsed.command;
       if (items.length === 1 && items[0]!.name !== partial) {
         setGhostText(items[0]!.name.slice(partial.length));
@@ -535,21 +537,23 @@ export function CommandBar({ dk }: CommandBarProps) {
       }
     } else {
       setCompletions([]);
-      // Show argument hints after command
       if (phase === "args" && parsed.command) {
+        // Show argument hints after command is confirmed
         const hints = ARG_HINTS[parsed.command];
         if (hints) {
-          const extraArgs = parsed.argCount;
-          if (extraArgs < hints.length) {
-            setGhostText(" " + hints.slice(extraArgs).join(" "));
+          // argCount counts args already typed; show remaining hints
+          const typed = parsed.commandDone ? Math.max(0, parsed.argCount) : 0;
+          if (typed < hints.length) {
+            setGhostText(" " + hints.slice(typed).join(" "));
           } else {
             setGhostText("");
           }
         } else {
           setGhostText("");
         }
-      } else if (phase === "command" && items.length === 0) {
-        // Just finished selector, show hint
+      } else if (
+        phase === "command" && !parsed.command && parsed.selectorDone
+      ) {
         setGhostText(" <command>");
       } else {
         setGhostText("");
