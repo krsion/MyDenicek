@@ -15,6 +15,8 @@ export interface EncodedSyncRequest {
   frontiers: string[];
   /** New events the client wants to send. */
   events: EncodedEvent[];
+  /** Hash of the client's initial document (before any events). */
+  initialDocumentHash?: string;
 }
 
 /** A sync response sent from server to client. */
@@ -74,6 +76,7 @@ export function createSyncRequest(
   document: Denicek,
   roomId: string,
   knownServerFrontiers: string[],
+  initialDocumentHash?: string,
 ): EncodedSyncRequest {
   return {
     type: "sync",
@@ -82,6 +85,7 @@ export function createSyncRequest(
     events: collectRemoteEventsSince(document, knownServerFrontiers).map(
       encodeEvent,
     ),
+    initialDocumentHash,
   };
 }
 

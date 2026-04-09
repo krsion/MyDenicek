@@ -24,6 +24,8 @@ export interface SyncServerHandle {
 type ClientState = {
   roomId: string;
   frontiers: string[];
+  /** Whether this client has passed initial document hash validation. */
+  hashValidated: boolean;
 };
 
 function buildRoomFilePath(persistencePath: string, roomId: string): string {
@@ -92,7 +94,7 @@ export function createSyncServer(
       // to the other sockets in the same room.
       if (
         socket === changedSocket || state.roomId !== room.id ||
-        socket.readyState !== WebSocket.OPEN
+        socket.readyState !== WebSocket.OPEN || !state.hashValidated
       ) {
         continue;
       }
@@ -150,7 +152,7 @@ export function createSyncServer(
     const { socket, response } = Deno.upgradeWebSocket(request);
 
     socket.onopen = () => {
-      clients.set(socket, { roomId, frontiers: [] });
+      clients.set(socket, { roomId, frontiers: [], hashValidated: false });
       const helloMessage: EncodedHelloMessage = { type: "hello", roomId };
       socket.send(JSON.stringify(helloMessage));
     };
@@ -173,6 +175,20 @@ export function createSyncServer(
           );
         }
         const room = await ensureRoomLoaded(clientRoomId);
+        const hashError = room.validateInitialDocumentHash(
+          message.initialDocumentHash,
+        );
+        if (hashError) {
+          socket.send(JSON.stringify({
+            type: "error",
+            roomId: clientRoomId,
+            message: hashError,
+          }));
+          return;
+        }
+        if (clientState !== undefined) {
+          clientState.hashValidated = true;
+        }
         const responseMessage = room.computeSyncResponse({
           ...message,
           roomId: clientRoomId,

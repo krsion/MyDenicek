@@ -1,4 +1,4 @@
-import type { Denicek } from "@mydenicek/core";
+import type { Denicek, PlainNode } from "@mydenicek/core";
 import {
   applySyncResponse,
   createSyncRequest,
@@ -6,6 +6,20 @@ import {
   type EncodedSyncMessage,
   type EncodedSyncResponse,
 } from "./protocol.ts";
+
+/**
+ * Compute a short hash of a PlainNode for initial document validation.
+ * Call this on your initial document BEFORE any edits and pass the result
+ * to `SyncClientOptions.initialDocumentHash`.
+ */
+export function computeDocumentHash(doc: PlainNode): string {
+  const json = JSON.stringify(doc);
+  let h = 0;
+  for (let i = 0; i < json.length; i++) {
+    h = ((h << 5) - h + json.charCodeAt(i)) | 0;
+  }
+  return (h >>> 0).toString(36);
+}
 
 /** Options for creating a {@linkcode SyncClient}. */
 export interface SyncClientOptions {
@@ -17,6 +31,11 @@ export interface SyncClientOptions {
   document: Denicek;
   /** Interval in ms between automatic sync requests (default `1000`). */
   autoSyncIntervalMs?: number;
+  /**
+   * Hash of the initial document (before any events). Used to verify all
+   * peers in a room share the same starting state. Omit to skip validation.
+   */
+  initialDocumentHash?: string;
   /** Called when remote events are applied to the document. */
   onRemoteChange?: (document: Denicek, response: EncodedSyncResponse) => void;
   /** Called when the WebSocket connection closes (both explicit and unexpected). */
@@ -33,6 +52,7 @@ export class SyncClient {
   private readonly roomId: string;
   private readonly document: Denicek;
   private readonly autoSyncIntervalMs: number;
+  private readonly initialDocumentHash: string;
   private readonly onRemoteChange?: (
     document: Denicek,
     response: EncodedSyncResponse,
@@ -48,6 +68,8 @@ export class SyncClient {
     this.roomId = options.roomId;
     this.document = options.document;
     this.autoSyncIntervalMs = options.autoSyncIntervalMs ?? 1000;
+    this.initialDocumentHash = options.initialDocumentHash ??
+      computeDocumentHash(options.document.materialize());
     this.onRemoteChange = options.onRemoteChange;
     this.onDisconnect = options.onDisconnect;
   }
@@ -99,6 +121,7 @@ export class SyncClient {
       this.document,
       this.roomId,
       this.knownServerFrontiers,
+      this.initialDocumentHash,
     );
     this.socket.send(JSON.stringify(request));
   }

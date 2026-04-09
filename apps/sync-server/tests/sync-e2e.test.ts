@@ -1,12 +1,15 @@
 import { assertEquals } from "@std/assert";
 import { Denicek } from "@mydenicek/core";
-import { createSyncServer, SyncClient } from "@mydenicek/sync-server";
+import {
+  computeDocumentHash,
+  createSyncServer,
+  SyncClient,
+} from "@mydenicek/sync-server";
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Wait until condition is true, polling every intervalMs. */
 async function waitFor(
   condition: () => boolean,
   timeoutMs = 5000,
@@ -14,228 +17,240 @@ async function waitFor(
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (!condition()) {
-    if (Date.now() > deadline) {
-      throw new Error("Timed out waiting for condition");
-    }
+    if (Date.now() > deadline) throw new Error("Timed out waiting");
     await delay(intervalMs);
   }
 }
 
-function startTestServer(): { handle: SyncServerHandle; url: string } {
+function startTestServer() {
   const handle = createSyncServer({ port: 0, persistencePath: undefined });
   const port = handle.server.addr.port;
   return { handle, url: `ws://127.0.0.1:${port}/sync` };
 }
 
 Deno.test({
-  name: "two peers sync edits through the server",
+  name: "two peers sync edits",
   sanitizeOps: false,
   sanitizeResources: false,
   async fn() {
     const { handle, url } = startTestServer();
-    const roomId = `room-${crypto.randomUUID().slice(0, 6)}`;
-
-    // Both peers start from { $tag: "root" } — the same default as the server
+    const room = `r-${crypto.randomUUID().slice(0, 6)}`;
     const dkA = new Denicek("peerA");
     const dkB = new Denicek("peerB");
-
-    const clientA = new SyncClient({
+    const cA = new SyncClient({
       url,
-      roomId,
+      roomId: room,
       document: dkA,
       autoSyncIntervalMs: 100,
     });
-    const clientB = new SyncClient({
+    const cB = new SyncClient({
       url,
-      roomId,
+      roomId: room,
       document: dkB,
       autoSyncIntervalMs: 100,
     });
-
     try {
-      await clientA.connect();
-      await clientB.connect();
+      await cA.connect();
+      await cB.connect();
       await delay(300);
-
       dkA.add("", "value", 42);
-
       await waitFor(
         () => (dkB.materialize() as Record<string, unknown>).value === 42,
       );
-
       assertEquals(dkA.materialize(), dkB.materialize());
     } finally {
-      clientA.close();
-      clientB.close();
+      cA.close();
+      cB.close();
       await handle.close();
     }
   },
 });
 
 Deno.test({
-  name: "peer joining late receives full history",
+  name: "late-joining peer receives full history",
   sanitizeOps: false,
   sanitizeResources: false,
   async fn() {
     const { handle, url } = startTestServer();
-    const roomId = `room-${crypto.randomUUID().slice(0, 6)}`;
-
+    const room = `r-${crypto.randomUUID().slice(0, 6)}`;
     const dkA = new Denicek("peerA");
-    const clientA = new SyncClient({
+    const cA = new SyncClient({
       url,
-      roomId,
+      roomId: room,
       document: dkA,
       autoSyncIntervalMs: 100,
     });
-
     try {
-      await clientA.connect();
+      await cA.connect();
       await delay(300);
-
       dkA.add("", "x", 10);
       dkA.add("", "y", 20);
-
-      // Wait for auto-sync to push all events
       await delay(500);
 
-      // B joins later
       const dkB = new Denicek("peerB");
-      const clientB = new SyncClient({
+      const cB = new SyncClient({
         url,
-        roomId,
+        roomId: room,
         document: dkB,
         autoSyncIntervalMs: 100,
       });
-
-      await clientB.connect();
-
+      await cB.connect();
       await waitFor(() => {
-        const doc = dkB.materialize() as Record<string, unknown>;
-        return doc.x === 10 && doc.y === 20;
+        const d = dkB.materialize() as Record<string, unknown>;
+        return d.x === 10 && d.y === 20;
       });
-
       assertEquals(dkB.materialize(), dkA.materialize());
-
-      clientB.close();
+      cB.close();
     } finally {
-      clientA.close();
+      cA.close();
       await handle.close();
     }
   },
 });
 
 Deno.test({
-  name: "concurrent edits from both peers converge",
+  name: "concurrent edits converge",
   sanitizeOps: false,
   sanitizeResources: false,
   async fn() {
     const { handle, url } = startTestServer();
-    const roomId = `room-${crypto.randomUUID().slice(0, 6)}`;
-
+    const room = `r-${crypto.randomUUID().slice(0, 6)}`;
     const dkA = new Denicek("peerA");
     const dkB = new Denicek("peerB");
-
-    const clientA = new SyncClient({
+    const cA = new SyncClient({
       url,
-      roomId,
+      roomId: room,
       document: dkA,
       autoSyncIntervalMs: 100,
     });
-    const clientB = new SyncClient({
+    const cB = new SyncClient({
       url,
-      roomId,
+      roomId: room,
       document: dkB,
       autoSyncIntervalMs: 100,
     });
-
     try {
-      await clientA.connect();
-      await clientB.connect();
+      await cA.connect();
+      await cB.connect();
       await delay(300);
-
-      // Both edit concurrently — adding different fields
       dkA.add("", "x", 10);
       dkB.add("", "y", 20);
-
       await waitFor(() => {
         const a = dkA.materialize() as Record<string, unknown>;
         const b = dkB.materialize() as Record<string, unknown>;
         return a.x === 10 && a.y === 20 && b.x === 10 && b.y === 20;
       });
-
       assertEquals(dkA.materialize(), dkB.materialize());
     } finally {
-      clientA.close();
-      clientB.close();
+      cA.close();
+      cB.close();
       await handle.close();
     }
   },
 });
 
 Deno.test({
-  name: "sync recovers after reconnect (simulated message loss)",
+  name: "sync recovers after reconnect",
   sanitizeOps: false,
   sanitizeResources: false,
   async fn() {
     const { handle, url } = startTestServer();
-    const roomId = `room-${crypto.randomUUID().slice(0, 6)}`;
-
+    const room = `r-${crypto.randomUUID().slice(0, 6)}`;
     const dkA = new Denicek("peerA");
     const dkB = new Denicek("peerB");
-
-    const clientA = new SyncClient({
+    const initialHash = computeDocumentHash(dkA.materialize());
+    const cA = new SyncClient({
       url,
-      roomId,
+      roomId: room,
       document: dkA,
       autoSyncIntervalMs: 100,
+      initialDocumentHash: initialHash,
     });
-
     try {
-      await clientA.connect();
+      await cA.connect();
       await delay(300);
-
-      // A adds a field
       dkA.add("", "step", 1);
       await delay(300);
 
-      // B connects, receives the add
-      const clientB1 = new SyncClient({
+      const cB1 = new SyncClient({
         url,
-        roomId,
+        roomId: room,
         document: dkB,
         autoSyncIntervalMs: 100,
+        initialDocumentHash: initialHash,
       });
-      await clientB1.connect();
+      await cB1.connect();
       await waitFor(
         () => (dkB.materialize() as Record<string, unknown>).step === 1,
       );
+      cB1.close();
 
-      // B disconnects (simulates network loss)
-      clientB1.close();
-
-      // A makes more edits while B is offline
       dkA.set("step", 2);
       dkA.set("step", 3);
       await delay(300);
 
-      // B reconnects — should catch up
-      const clientB2 = new SyncClient({
+      const cB2 = new SyncClient({
         url,
-        roomId,
+        roomId: room,
         document: dkB,
         autoSyncIntervalMs: 100,
+        initialDocumentHash: initialHash,
       });
-      await clientB2.connect();
-
+      await cB2.connect();
       await waitFor(
         () => (dkB.materialize() as Record<string, unknown>).step === 3,
       );
-
       assertEquals(dkA.materialize(), dkB.materialize());
-
-      clientB2.close();
+      cB2.close();
     } finally {
-      clientA.close();
+      cA.close();
+      await handle.close();
+    }
+  },
+});
+
+Deno.test({
+  name: "server rejects mismatched initial document",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    const { handle, url } = startTestServer();
+    const room = `r-${crypto.randomUUID().slice(0, 6)}`;
+
+    // A uses default { $tag: "root" }
+    const dkA = new Denicek("peerA");
+    const cA = new SyncClient({
+      url,
+      roomId: room,
+      document: dkA,
+      autoSyncIntervalMs: 100,
+    });
+
+    // B uses a DIFFERENT initial doc
+    const dkB = new Denicek("peerB", { $tag: "different", data: "mismatch" });
+
+    try {
+      await cA.connect();
+      await delay(300);
+      dkA.add("", "x", 1);
+      await delay(300);
+
+      const cB = new SyncClient({
+        url,
+        roomId: room,
+        document: dkB,
+        autoSyncIntervalMs: 100,
+      });
+      await cB.connect();
+      await delay(1000);
+
+      // B should NOT have A's edits — server rejected the mismatched hash
+      const bDoc = dkB.materialize() as Record<string, unknown>;
+      assertEquals(bDoc.x, undefined, "B should not have A's edits");
+
+      cB.close();
+    } finally {
+      cA.close();
       await handle.close();
     }
   },

@@ -16,11 +16,18 @@ export class SyncRoom {
   /** Unique room identifier. */
   readonly id: string;
   private roomPeer: Denicek;
+  /** Hash of the initial document agreed upon by the first client. */
+  private _initialDocumentHash: string | undefined;
 
   /** Create a new room with the given identifier. */
   constructor(id: string) {
     this.id = id;
     this.roomPeer = new Denicek(`room-${id.replaceAll(":", "-")}`);
+  }
+
+  /** The initial document hash for this room, if set. */
+  get initialDocumentHash(): string | undefined {
+    return this._initialDocumentHash;
   }
 
   /** Current frontier event IDs of this room's merged state. */
@@ -33,6 +40,24 @@ export class SyncRoom {
     for (const encodedEvent of events) {
       this.roomPeer.applyRemote(decodeEvent(encodedEvent));
     }
+  }
+
+  /**
+   * Validate and store the initial document hash.
+   * Returns an error message if the hash mismatches, or undefined if OK.
+   */
+  validateInitialDocumentHash(
+    clientHash: string | undefined,
+  ): string | undefined {
+    if (!clientHash) return undefined;
+    if (!this._initialDocumentHash) {
+      this._initialDocumentHash = clientHash;
+      return undefined;
+    }
+    if (this._initialDocumentHash !== clientHash) {
+      return `Initial document mismatch: room expects '${this._initialDocumentHash}' but client sent '${clientHash}'. All peers must start from the same initial document.`;
+    }
+    return undefined;
   }
 
   /** Process a sync request: ingest client events and return missing events. */
