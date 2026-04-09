@@ -60,6 +60,7 @@ export class SyncClient {
   ) => void;
   private readonly onDisconnect?: () => void;
   private socket: WebSocket | null = null;
+  private connecting = false;
   private autoSyncTimer: ReturnType<typeof setInterval> | null = null;
   private knownServerFrontiers: string[] = [];
   private serverBootstrapped = false;
@@ -89,6 +90,7 @@ export class SyncClient {
    */
   pause(): void {
     this._paused = true;
+    this.connecting = false;
     this.stopAutoSyncLoop();
     if (this.socket) {
       this.socket.onclose = null;
@@ -115,17 +117,20 @@ export class SyncClient {
 
   /** Open a WebSocket connection to the sync server. */
   connect(): Promise<void> {
-    if (this._paused || this.socket !== null) {
+    if (this._paused || this.socket !== null || this.connecting) {
       return Promise.resolve();
     }
+    this.connecting = true;
     return new Promise((resolve, reject) => {
       const socket = new WebSocket(this.url);
       socket.onopen = () => {
+        this.connecting = false;
         this.socket = socket;
         this.startAutoSyncLoop();
         resolve();
       };
       socket.onerror = () => {
+        this.connecting = false;
         reject(new Error(`Could not connect to sync server '${this.url}'.`));
       };
       socket.onmessage = (event) => this.handleSocketMessage(event.data);
@@ -139,6 +144,7 @@ export class SyncClient {
 
   /** Close the WebSocket connection and stop auto-sync. */
   close(): void {
+    this.connecting = false;
     this.stopAutoSyncLoop();
     this.socket?.close();
     this.socket = null;
