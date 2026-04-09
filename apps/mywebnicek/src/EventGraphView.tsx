@@ -1,9 +1,10 @@
-import type { Denicek } from "@mydenicek/core";
+import type { Denicek, EventSnapshot } from "@mydenicek/core";
 import { useMemo } from "react";
 
 interface EventGraphViewProps {
   denicek: Denicek;
   version: number;
+  onReplay?: (eventId: string) => void;
 }
 
 const PEER_COLORS = [
@@ -29,7 +30,130 @@ function shortenEditKind(kind: string): string {
   return kind.endsWith("Edit") ? kind.slice(0, -4) : kind;
 }
 
-export function EventGraphView({ denicek, version }: EventGraphViewProps) {
+function DagVisualization(
+  { events, frontierSet, onReplay }: {
+    events: EventSnapshot[];
+    frontierSet: Set<string>;
+    onReplay?: (eventId: string) => void;
+  },
+) {
+  const peers = [...new Set(events.map((e) => e.peer))];
+  const peerCol = new Map(peers.map((p, i) => [p, i]));
+
+  const colWidth = 80;
+  const rowHeight = 40;
+  const padding = 30;
+  const nodeRadius = 12;
+
+  const width = peers.length * colWidth + padding * 2;
+  const height = events.length * rowHeight + padding * 2;
+
+  const positions = new Map<string, { x: number; y: number }>();
+  events.forEach((ev, i) => {
+    const col = peerCol.get(ev.peer) ?? 0;
+    positions.set(ev.id, {
+      x: padding + col * colWidth + colWidth / 2,
+      y: padding + i * rowHeight + rowHeight / 2,
+    });
+  });
+
+  return (
+    <div
+      style={{
+        maxHeight: 250,
+        overflow: "auto",
+        borderBottom: "1px solid #ccc",
+      }}
+    >
+      <svg width={width} height={height} style={{ display: "block" }}>
+        {/* Peer labels */}
+        {peers.map((peer) => {
+          const col = peerCol.get(peer) ?? 0;
+          const x = padding + col * colWidth + colWidth / 2;
+          return (
+            <text
+              key={`label-${peer}`}
+              x={x}
+              y={14}
+              textAnchor="middle"
+              fontSize={10}
+              fontFamily="monospace"
+              fontWeight={600}
+              fill={computePeerColor(peer)}
+            >
+              {peer.slice(0, 6)}
+            </text>
+          );
+        })}
+
+        {/* Edges (drawn first so nodes render on top) */}
+        {events.flatMap((ev) =>
+          ev.parents.map((parentId) => {
+            const from = positions.get(ev.id);
+            const to = positions.get(parentId);
+            if (!from || !to) return null;
+            return (
+              <line
+                key={`edge-${ev.id}-${parentId}`}
+                x1={from.x}
+                y1={from.y}
+                x2={to.x}
+                y2={to.y}
+                stroke="#ccc"
+                strokeWidth={1.5}
+              />
+            );
+          })
+        )}
+
+        {/* Nodes */}
+        {events.map((ev) => {
+          const pos = positions.get(ev.id);
+          if (!pos) return null;
+          const isFrontier = frontierSet.has(ev.id);
+          const color = computePeerColor(ev.peer);
+          const record = ev as Record<string, unknown>;
+          const desc = record.editDescription
+            ? ` — ${record.editDescription}`
+            : "";
+          return (
+            <g
+              key={`node-${ev.id}`}
+              style={{ cursor: onReplay ? "pointer" : undefined }}
+              onClick={onReplay ? () => onReplay(ev.id) : undefined}
+            >
+              <title>{`${ev.id}${desc}`}</title>
+              <circle
+                cx={pos.x}
+                cy={pos.y}
+                r={nodeRadius}
+                fill={color}
+                stroke={isFrontier ? "#000" : color}
+                strokeWidth={isFrontier ? 3 : 1.5}
+              />
+              <text
+                x={pos.x}
+                y={pos.y}
+                textAnchor="middle"
+                dominantBaseline="central"
+                fontSize={9}
+                fontFamily="monospace"
+                fontWeight={700}
+                fill="#fff"
+              >
+                {ev.seq}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+export function EventGraphView(
+  { denicek, version, onReplay }: EventGraphViewProps,
+) {
   void version;
 
   const events = denicek.inspectEvents();
@@ -69,6 +193,13 @@ export function EventGraphView({ denicek, version }: EventGraphViewProps) {
         <span>Frontier: {frontierSet.size}</span>
       </div>
 
+      {/* DAG visualization */}
+      <DagVisualization
+        events={events}
+        frontierSet={frontierSet}
+        onReplay={onReplay}
+      />
+
       {/* Event table */}
       <table
         style={{
@@ -86,7 +217,7 @@ export function EventGraphView({ denicek, version }: EventGraphViewProps) {
               top: 0,
             }}
           >
-            {["ID", "Peer", "Parents", "Edit Kind", "Target"].map((h) => (
+            {["▶", "ID", "Peer", "Parents", "Edit Kind", "Target"].map((h) => (
               <th key={h} style={{ padding: "4px 6px", fontWeight: 600 }}>
                 {h}
               </th>
@@ -122,6 +253,26 @@ export function EventGraphView({ denicek, version }: EventGraphViewProps) {
                   fontWeight: isFrontier ? 700 : 400,
                 }}
               >
+                <td style={{ padding: "3px 6px" }}>
+                  {onReplay && (
+                    <button
+                      type="button"
+                      onClick={() => onReplay(ev.id)}
+                      title={`Replay: ${record.editDescription ?? ev.editKind}`}
+                      style={{
+                        padding: "1px 6px",
+                        fontSize: 10,
+                        cursor: "pointer",
+                        background: "#0078d4",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: 3,
+                      }}
+                    >
+                      ▶
+                    </button>
+                  )}
+                </td>
                 <td style={{ padding: "3px 6px", whiteSpace: "nowrap" }}>
                   {ev.id}
                   {isFrontier && (

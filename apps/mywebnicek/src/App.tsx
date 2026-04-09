@@ -31,14 +31,14 @@ const PEER_ID_KEY = "mydenicek-peer-id";
 function getDeviceId(): string {
   const stored = globalThis.localStorage?.getItem(PEER_ID_KEY);
   if (stored) return stored;
-  const id = crypto.randomUUID().slice(0, 8);
+  const id = crypto.randomUUID().slice(0, 4);
   globalThis.localStorage?.setItem(PEER_ID_KEY, id);
   return id;
 }
 
 /** Unique peer ID per tab — combines device ID with a random session suffix. */
 function createPeerId(): string {
-  return getDeviceId() + "-" + crypto.randomUUID().slice(0, 4);
+  return getDeviceId() + "-" + crypto.randomUUID().slice(0, 2);
 }
 
 const statusColors: Record<string, string> = {
@@ -139,7 +139,7 @@ function Editor(
             gap: 8,
           }}
         >
-          ● {dk.syncStatus} — peer: {peerId.slice(0, 6)} — room: {roomId}
+          ● {dk.syncStatus} — peer: {peerId} — room: {roomId}
           <button
             type="button"
             onClick={toggleSync}
@@ -209,7 +209,18 @@ function Editor(
         )}
         {panels.events && (
           <div style={{ flex: 1, overflow: "auto" }}>
-            <EventGraphView denicek={dk.denicek} version={dk.version} />
+            <EventGraphView
+              denicek={dk.denicek}
+              version={dk.version}
+              onReplay={(eventId) => {
+                try {
+                  dk.denicek.repeatEditFromEventId(eventId);
+                  dk.forceUpdate();
+                } catch (e) {
+                  console.error("Replay failed:", e);
+                }
+              }}
+            />
           </div>
         )}
       </div>

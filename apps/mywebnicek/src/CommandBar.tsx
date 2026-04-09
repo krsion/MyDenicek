@@ -285,6 +285,7 @@ const RECORD_CMDS = [
   "wrapList",
   "copy",
   "formula",
+  "repeat",
   "get",
   "tree",
 ];
@@ -297,14 +298,22 @@ const LIST_CMDS = [
   "wrapRecord",
   "wrapList",
   "copy",
+  "repeat",
   "get",
   "tree",
 ];
-const PRIMITIVE_CMDS = ["set", "get", "wrapRecord", "wrapList"];
-const ANY_NODE_CMDS = ["get", "tree", "copy", "wrapRecord", "wrapList"];
+const PRIMITIVE_CMDS = ["set", "get", "wrapRecord", "wrapList", "repeat"];
+const ANY_NODE_CMDS = [
+  "get",
+  "tree",
+  "copy",
+  "wrapRecord",
+  "wrapList",
+  "repeat",
+];
 
 /** Commands that work without a selector. */
-const BARE_CMDS = ["undo", "redo", "help", "tree"];
+const BARE_CMDS = ["undo", "redo", "help", "tree", "repeat"];
 
 // Ghost hints: command → [remaining args after command]
 const ARG_HINTS: Record<string, string[]> = {
@@ -319,6 +328,7 @@ const ARG_HINTS: Record<string, string[]> = {
   wrapList: ["<tag>"],
   copy: ["<source-selector>"],
   formula: ["<field>", "<operation>", "<ref|value> ..."],
+  repeat: ["<eventId>"],
 };
 
 const FORMULA_OPS = [
@@ -363,6 +373,7 @@ Commands (shown after selecting a path):
   tree                            Show subtree
 
 Standalone:
+  repeat <eventId>                   Replay an edit from its event ID
   undo / redo                     Undo or redo
   tree                            Show full document tree
   help                            Show this help
@@ -965,6 +976,29 @@ export function CommandBar({ dk }: CommandBarProps) {
             text: `Formula '${fField}' = ${fOp}(${
               rawArgs.join(", ")
             }) added to ${parsed.selector}${opsList}`,
+            kind: "success",
+          });
+          break;
+        }
+
+        case "repeat": {
+          if (!argsStr) {
+            pushOutput({
+              text: "Usage: [/selector] repeat <eventId>",
+              kind: "error",
+            });
+            break;
+          }
+          const eventId = argsStr.trim();
+          let id: string;
+          if (target) {
+            id = dk.denicek.replayEditFromEventId(eventId, target);
+          } else {
+            id = dk.denicek.repeatEditFromEventId(eventId);
+          }
+          dk.forceUpdate();
+          pushOutput({
+            text: `Replayed ${eventId} → ${id}`,
             kind: "success",
           });
           break;

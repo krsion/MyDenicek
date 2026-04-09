@@ -27,7 +27,7 @@ export const INITIAL_DOCUMENT: PlainNode = {
   counter: {
     $tag: "article",
     heading: { $tag: "h2", text: "Counter" },
-    value: { $tag: "p", count: 0 },
+    value: 5,
   },
   todoList: {
     $tag: "article",
