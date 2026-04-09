@@ -30,5 +30,10 @@ export {
   evaluateFormulaNode,
   FormulaError,
   registerFormulaOperation,
+  registerFormulaTagEvaluator,
 } from "./core/formula-engine.ts";
-export type { FormulaOperation, FormulaResult } from "./core/formula-engine.ts";
+export type {
+  FormulaOperation,
+  FormulaResult,
+  FormulaTagEvaluator,
+} from "./core/formula-engine.ts";

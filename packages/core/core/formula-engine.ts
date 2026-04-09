@@ -56,7 +56,7 @@ function isPrimitive(node: PlainNode): node is PrimitiveValue {
 
 const operations = new Map<string, FormulaOperation>();
 
-/** Register a named formula operation. */
+/** Register a named formula operation (used with `$tag: "x-formula"` + `operation` field). */
 export function registerFormulaOperation(
   name: string,
   fn: FormulaOperation,
@@ -66,6 +66,47 @@ export function registerFormulaOperation(
 
 function lookupOperation(name: string): FormulaOperation | undefined {
   return operations.get(name);
+}
+
+// ── Tag-based Evaluator Registry ────────────────────────────────────────
+
+/**
+ * A tag evaluator computes a result from a formula record's own fields.
+ * The `evaluate` callback recursively evaluates child formula nodes.
+ */
+export type FormulaTagEvaluator = (
+  node: PlainRecord,
+  evaluate: (child: PlainNode) => FormulaResult,
+) => FormulaResult;
+
+const tagEvaluators = new Map<string, FormulaTagEvaluator>();
+
+/**
+ * Register a formula evaluator for a specific `$tag` value.
+ *
+ * When the engine encounters a node whose `$tag` starts with `"x-formula"`
+ * and matches a registered tag, it calls the evaluator instead of the
+ * default `operation + args` path.
+ *
+ * ```ts
+ * registerFormulaTagEvaluator("x-formula-plus", (node, evaluate) => {
+ *   const left = evaluate(node.left);
+ *   const right = evaluate(node.right);
+ *   if (left instanceof FormulaError) return left;
+ *   if (right instanceof FormulaError) return right;
+ *   return Number(left) + Number(right);
+ * });
+ * ```
+ */
+export function registerFormulaTagEvaluator(
+  tag: string,
+  fn: FormulaTagEvaluator,
+): void {
+  tagEvaluators.set(tag, fn);
+}
+
+function lookupTagEvaluator(tag: string): FormulaTagEvaluator | undefined {
+  return tagEvaluators.get(tag);
 }
 
 // ── Numeric helpers ─────────────────────────────────────────────────────
@@ -172,6 +213,32 @@ registerFormulaOperation("replace", (args) => {
 registerFormulaOperation("countChildren", (args) => {
   requireArity(args, 1, "countChildren");
   return coerceNumbers(args, "countChildren")[0];
+});
+
+// ── Built-in tag evaluators ─────────────────────────────────────────────
+
+registerFormulaTagEvaluator("x-formula-plus", (node, evaluate) => {
+  const left = evaluate(node.left as PlainNode);
+  const right = evaluate(node.right as PlainNode);
+  if (left instanceof FormulaError) return left;
+  if (right instanceof FormulaError) return right;
+  return Number(left) + Number(right);
+});
+
+registerFormulaTagEvaluator("x-formula-minus", (node, evaluate) => {
+  const left = evaluate(node.left as PlainNode);
+  const right = evaluate(node.right as PlainNode);
+  if (left instanceof FormulaError) return left;
+  if (right instanceof FormulaError) return right;
+  return Number(left) - Number(right);
+});
+
+registerFormulaTagEvaluator("x-formula-times", (node, evaluate) => {
+  const left = evaluate(node.left as PlainNode);
+  const right = evaluate(node.right as PlainNode);
+  if (left instanceof FormulaError) return left;
+  if (right instanceof FormulaError) return right;
+  return Number(left) * Number(right);
 });
 
 // ── Reference resolution ────────────────────────────────────────────────
@@ -324,6 +391,22 @@ function evaluateFormulaInner(
   visiting: Set<string>,
   depth: number,
 ): FormulaResult {
+  const tag = formula.$tag as string;
+
+  // Check for a tag-based evaluator first
+  const tagEvaluator = lookupTagEvaluator(tag);
+  if (tagEvaluator) {
+    return tagEvaluator(formula, (child: PlainNode) => {
+      if (isPrimitive(child)) return child;
+      if (isFormulaNode(child)) {
+        const childPath = formulaPath + "/?";
+        return evaluateFormulaNode(child, root, childPath, visiting, depth + 1);
+      }
+      return new FormulaError("non-primitive, non-formula child");
+    });
+  }
+
+  // Default path: operation + args
   const opName = formula.operation;
   if (typeof opName !== "string") {
     return new FormulaError("formula missing 'operation' field");

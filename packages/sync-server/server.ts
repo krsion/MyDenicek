@@ -1,12 +1,16 @@
 import type { PlainNode } from "@mydenicek/core";
-import type { EncodedHelloMessage, EncodedSyncRequest } from "./protocol.ts";
+import type {
+  EncodedEvent,
+  EncodedHelloMessage,
+  EncodedSyncRequest,
+} from "./protocol.ts";
 import { SyncRoom } from "./room.ts";
 
 /** Persisted room data format. */
 interface PersistedRoom {
   initialDocument?: PlainNode;
   initialDocumentHash?: string;
-  events: unknown[];
+  events: EncodedEvent[];
 }
 
 /** Options for {@linkcode createSyncServer}. */
