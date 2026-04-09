@@ -20,18 +20,24 @@ export class SyncRoom {
   /** Unique room identifier. */
   readonly id: string;
   private roomPeer: Denicek;
-  /** Hash of the initial document agreed upon by the first client. */
   private _initialDocumentHash: string | undefined;
+  private _initialDocument: PlainNode | undefined;
   private bootstrapped = false;
 
   /** Create a new room with the given identifier and optional initial doc. */
   constructor(id: string, initialDocument?: PlainNode) {
     this.id = id;
+    this._initialDocument = initialDocument;
     this.roomPeer = new Denicek(
       `room-${id.replaceAll(":", "-")}`,
       initialDocument,
     );
     this.bootstrapped = initialDocument !== undefined;
+  }
+
+  /** The initial document for this room, if set. */
+  get initialDocument(): PlainNode | undefined {
+    return this._initialDocument;
   }
 
   /** The initial document hash for this room, if set. */
@@ -65,6 +71,7 @@ export class SyncRoom {
     if (!this._initialDocumentHash) {
       this._initialDocumentHash = clientHash;
       if (clientInitialDocument && !this.bootstrapped) {
+        this._initialDocument = clientInitialDocument;
         this.roomPeer = new Denicek(
           `room-${this.id.replaceAll(":", "-")}`,
           clientInitialDocument,

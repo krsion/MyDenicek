@@ -1,5 +1,13 @@
+import type { PlainNode } from "@mydenicek/core";
 import type { EncodedHelloMessage, EncodedSyncRequest } from "./protocol.ts";
 import { SyncRoom } from "./room.ts";
+
+/** Persisted room data format. */
+interface PersistedRoom {
+  initialDocument?: PlainNode;
+  initialDocumentHash?: string;
+  events: unknown[];
+}
 
 /** Options for {@linkcode createSyncServer}. */
 export interface SyncServerOptions {
@@ -37,17 +45,29 @@ async function loadRoomEvents(
   persistencePath: string,
   roomId: string,
 ): Promise<SyncRoom> {
-  const room = new SyncRoom(roomId);
   const roomFilePath = buildRoomFilePath(persistencePath, roomId);
   try {
     const fileText = await Deno.readTextFile(roomFilePath);
-    room.ingestEncodedEvents(JSON.parse(fileText));
+    const data = JSON.parse(fileText);
+    // Support new format (object with initialDocument) and legacy (raw array)
+    if (Array.isArray(data)) {
+      const room = new SyncRoom(roomId);
+      room.ingestEncodedEvents(data);
+      return room;
+    }
+    const persisted = data as PersistedRoom;
+    const room = new SyncRoom(roomId, persisted.initialDocument);
+    if (persisted.initialDocumentHash) {
+      room.validateAndBootstrap(persisted.initialDocumentHash, undefined);
+    }
+    room.ingestEncodedEvents(persisted.events);
+    return room;
   } catch (error) {
     if (!(error instanceof Deno.errors.NotFound)) {
       throw error;
     }
   }
-  return room;
+  return new SyncRoom(roomId);
 }
 
 async function persistRoomEvents(
@@ -57,9 +77,14 @@ async function persistRoomEvents(
   await Deno.mkdir(persistencePath, { recursive: true });
   const roomFilePath = buildRoomFilePath(persistencePath, room.id);
   const temporaryRoomFilePath = `${roomFilePath}.${crypto.randomUUID()}.tmp`;
+  const data: PersistedRoom = {
+    initialDocument: room.initialDocument,
+    initialDocumentHash: room.initialDocumentHash,
+    events: room.listEncodedEvents(),
+  };
   await Deno.writeTextFile(
     temporaryRoomFilePath,
-    JSON.stringify(room.listEncodedEvents(), null, 2),
+    JSON.stringify(data, null, 2),
   );
   await Deno.rename(temporaryRoomFilePath, roomFilePath);
 }
