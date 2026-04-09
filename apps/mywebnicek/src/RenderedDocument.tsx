@@ -64,9 +64,10 @@ const HTML_TAGS = new Set([
 interface Props {
   doc: PlainNode;
   onAction?: (scriptPath: string) => void;
+  onSetValue?: (path: string, value: string) => void;
 }
 
-export function RenderedDocument({ doc, onAction }: Props) {
+export function RenderedDocument({ doc, onAction, onSetValue }: Props) {
   if (!isRec(doc)) {
     return <div style={{ color: "#888", padding: 20 }}>Empty document</div>;
   }
@@ -74,7 +75,7 @@ export function RenderedDocument({ doc, onAction }: Props) {
   return (
     <RenderErrorBoundary>
       <div style={{ fontFamily: "system-ui, sans-serif", lineHeight: 1.6 }}>
-        {renderNode(doc, "", formulaResults, onAction)}
+        {renderNode(doc, "", formulaResults, onAction, onSetValue)}
       </div>
     </RenderErrorBoundary>
   );
@@ -85,6 +86,7 @@ function renderNode(
   path: string,
   formulas: Map<string, unknown>,
   onAction?: (scriptPath: string) => void,
+  onSetValue?: (path: string, value: string) => void,
 ): React.ReactNode {
   if (typeof node === "string") return node;
   if (typeof node === "number" || typeof node === "boolean") {
@@ -100,6 +102,7 @@ function renderNode(
               path ? `${path}/${i}` : String(i),
               formulas,
               onAction,
+              onSetValue,
             )}
           </React.Fragment>
         ))}
@@ -198,22 +201,25 @@ function renderNode(
             path ? `${path}/addAction` : "addAction",
             formulas,
             onAction,
+            onSetValue,
           )}
       </div>
     );
   }
 
-  // Input: show as readonly input
+  // Input: editable when onSetValue provided
   if (tag === "input") {
     const value = node["value"];
+    const valuePath = path ? `${path}/value` : "value";
     return (
       <input
-        readOnly
-        value={typeof value === "string"
-          ? String(value)
-          : typeof value === "number"
+        readOnly={!onSetValue}
+        value={typeof value === "string" || typeof value === "number"
           ? String(value)
           : ""}
+        onChange={onSetValue
+          ? (e) => onSetValue(valuePath, e.target.value)
+          : undefined}
         style={{
           padding: "4px 8px",
           fontSize: 13,
@@ -236,6 +242,7 @@ function renderNode(
             path ? `${path}/${key}` : key,
             formulas,
             onAction,
+            onSetValue,
           )}
         </React.Fragment>,
       );

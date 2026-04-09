@@ -215,6 +215,13 @@ function Editor(
                     console.error("Action failed:", e);
                   }
                 }}
+                onSetValue={(valuePath, value) => {
+                  try {
+                    dk.set(valuePath, value);
+                  } catch (e) {
+                    console.error("Set failed:", e);
+                  }
+                }}
               />
             </ErrorBoundary>
           </div>
