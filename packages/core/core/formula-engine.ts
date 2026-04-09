@@ -241,6 +241,24 @@ registerFormulaTagEvaluator("x-formula-times", (node, evaluate) => {
   return Number(left) * Number(right);
 });
 
+registerFormulaTagEvaluator("x-formula-split-first", (node, evaluate) => {
+  const source = evaluate(node.source as PlainNode);
+  if (source instanceof FormulaError) return source;
+  const separator = typeof node.separator === "string" ? node.separator : ", ";
+  const str = String(source);
+  const idx = str.indexOf(separator);
+  return idx >= 0 ? str.slice(0, idx) : str;
+});
+
+registerFormulaTagEvaluator("x-formula-split-rest", (node, evaluate) => {
+  const source = evaluate(node.source as PlainNode);
+  if (source instanceof FormulaError) return source;
+  const separator = typeof node.separator === "string" ? node.separator : ", ";
+  const str = String(source);
+  const idx = str.indexOf(separator);
+  return idx >= 0 ? str.slice(idx + separator.length) : "";
+});
+
 // ── Reference resolution ────────────────────────────────────────────────
 
 /**
