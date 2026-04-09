@@ -435,3 +435,203 @@ Deno.test({
     }
   },
 });
+
+Deno.test({
+  name: "pause buffers incoming messages and replays on resume",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    const { handle, url } = startTestServer();
+    const room = `r-${crypto.randomUUID().slice(0, 6)}`;
+    const dkA = new Denicek("peerA");
+    const dkB = new Denicek("peerB");
+    const cA = new SyncClient({
+      url,
+      roomId: room,
+      document: dkA,
+      autoSyncIntervalMs: 100,
+    });
+    const cB = new SyncClient({
+      url,
+      roomId: room,
+      document: dkB,
+      autoSyncIntervalMs: 100,
+    });
+    try {
+      await cA.connect();
+      await cB.connect();
+      await delay(300);
+
+      dkA.add("", "x", 1);
+      await waitFor(() =>
+        (dkB.materialize() as Record<string, unknown>).x === 1
+      );
+
+      // Pause B — socket stays open, messages buffered
+      cB.pause();
+      await delay(100);
+
+      // A makes edits while B is paused
+      dkA.set("x", 10);
+      dkA.add("", "y", 20);
+      await delay(500);
+
+      // B has NOT applied them
+      const bBefore = dkB.materialize() as Record<string, unknown>;
+      assertEquals(bBefore.x, 1);
+      assertEquals(bBefore.y, undefined);
+
+      // Resume B — buffered messages replayed
+      cB.resume();
+      await waitFor(() => {
+        const d = dkB.materialize() as Record<string, unknown>;
+        return d.x === 10 && d.y === 20;
+      });
+      assertEquals(dkA.materialize(), dkB.materialize());
+    } finally {
+      cA.close();
+      cB.close();
+      await handle.close();
+    }
+  },
+});
+
+Deno.test({
+  name: "hard disconnect and reconnect syncs accumulated edits",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    const { handle, url } = startTestServer();
+    const room = `r-${crypto.randomUUID().slice(0, 6)}`;
+    const dkA = new Denicek("peerA");
+    const dkB = new Denicek("peerB");
+    const hash = computeDocumentHash(dkA.materialize());
+    const cA = new SyncClient({
+      url,
+      roomId: room,
+      document: dkA,
+      autoSyncIntervalMs: 100,
+      initialDocumentHash: hash,
+    });
+    try {
+      await cA.connect();
+      await delay(300);
+
+      dkA.add("", "step", 1);
+      await delay(300);
+
+      const cB1 = new SyncClient({
+        url,
+        roomId: room,
+        document: dkB,
+        autoSyncIntervalMs: 100,
+        initialDocumentHash: hash,
+      });
+      await cB1.connect();
+      await waitFor(() =>
+        (dkB.materialize() as Record<string, unknown>).step === 1
+      );
+
+      // B hard disconnects
+      cB1.close();
+
+      // A edits while B is offline
+      dkA.set("step", 2);
+      dkA.set("step", 3);
+      await delay(300);
+
+      assertEquals((dkB.materialize() as Record<string, unknown>).step, 1);
+
+      // B reconnects — must pass same initial hash
+      const cB2 = new SyncClient({
+        url,
+        roomId: room,
+        document: dkB,
+        autoSyncIntervalMs: 100,
+        initialDocumentHash: hash,
+      });
+      await cB2.connect();
+      await waitFor(() =>
+        (dkB.materialize() as Record<string, unknown>).step === 3
+      );
+      assertEquals(dkA.materialize(), dkB.materialize());
+
+      // B edits after reconnect — A gets them
+      dkB.set("step", 99);
+      await waitFor(() =>
+        (dkA.materialize() as Record<string, unknown>).step === 99
+      );
+      assertEquals(dkA.materialize(), dkB.materialize());
+
+      cB2.close();
+    } finally {
+      cA.close();
+      await handle.close();
+    }
+  },
+});
+
+Deno.test({
+  name: "hard disconnect: offline edits sync after reconnect",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    const { handle, url } = startTestServer();
+    const room = `r-${crypto.randomUUID().slice(0, 6)}`;
+    const dkA = new Denicek("peerA");
+    const dkB = new Denicek("peerB");
+    const hash = computeDocumentHash(dkA.materialize());
+    const cA = new SyncClient({
+      url,
+      roomId: room,
+      document: dkA,
+      autoSyncIntervalMs: 100,
+      initialDocumentHash: hash,
+    });
+    const cB1 = new SyncClient({
+      url,
+      roomId: room,
+      document: dkB,
+      autoSyncIntervalMs: 100,
+      initialDocumentHash: hash,
+    });
+    try {
+      await cA.connect();
+      await cB1.connect();
+      await delay(300);
+
+      dkA.add("", "v", 0);
+      await waitFor(() =>
+        (dkB.materialize() as Record<string, unknown>).v === 0
+      );
+
+      // B disconnects
+      cB1.close();
+
+      // BOTH edit while disconnected
+      dkA.set("v", 10);
+      dkB.set("v", 20);
+      await delay(300);
+
+      // B reconnects with same initial hash
+      const cB2 = new SyncClient({
+        url,
+        roomId: room,
+        document: dkB,
+        autoSyncIntervalMs: 100,
+        initialDocumentHash: hash,
+      });
+      await cB2.connect();
+      await waitFor(() => {
+        return JSON.stringify(dkA.materialize()) ===
+          JSON.stringify(dkB.materialize());
+      });
+      assertEquals(dkA.materialize(), dkB.materialize());
+
+      cB2.close();
+    } finally {
+      cA.close();
+      await handle.close();
+    }
+  },
+});
