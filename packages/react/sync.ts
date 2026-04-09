@@ -43,6 +43,7 @@ export class SyncClient {
   private reconnectDelay = 1000;
   private opts: SyncConnectionOptions | null = null;
   private readonly initialDocumentHash: string;
+  private _userPaused = false;
 
   status: SyncStatus = "idle";
 
@@ -67,6 +68,7 @@ export class SyncClient {
       initialDocumentHash: this.initialDocumentHash,
       onRemoteChange: () => this.onRemoteChange(),
       onDisconnect: () => {
+        if (this._userPaused) return;
         if (this.inner === inner && this.opts) {
           this.inner = null;
           this.setStatus("disconnected");
@@ -84,6 +86,7 @@ export class SyncClient {
         }
       },
       () => {
+        if (this._userPaused) return;
         if (this.inner === inner) {
           this.inner = null;
           this.setStatus("disconnected");
@@ -112,24 +115,23 @@ export class SyncClient {
 
   /** Pause syncing: closes the WebSocket but remembers the connection opts. */
   pause(): void {
+    this._userPaused = true;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
     if (this.inner) {
       this.inner.pause();
+      this.inner.close();
+      this.inner = null;
     }
     this.setStatus("paused");
   }
 
   /** Resume syncing after a pause. Reconnects and flushes pending edits. */
   resume(): void {
-    if (this.inner) {
-      this.inner.resume();
-      this.setStatus("connecting");
-      // The BaseSyncClient.resume() calls connect() which resolves async
-      // We rely on the onDisconnect/onopen handlers to update status
-    } else if (this.opts) {
+    this._userPaused = false;
+    if (this.opts) {
       this.connect(this.opts);
     }
   }
@@ -148,7 +150,7 @@ export class SyncClient {
   }
 
   private scheduleReconnect(): void {
-    if (!this.opts) return;
+    if (!this.opts || this._userPaused) return;
     this.reconnectTimer = setTimeout(() => {
       if (this.opts) this.connect(this.opts);
     }, this.reconnectDelay);
