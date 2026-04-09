@@ -43,6 +43,7 @@ import type { FormulaResult } from "./formula-engine.ts";
 
 // ── Denicek (collaborative document peer) ───────────────────────────
 
+/** Options for configuring a {@linkcode Denicek} instance. */
 export interface DenicekOptions {
   /**
    * When true, skip edit validation during event ingestion.

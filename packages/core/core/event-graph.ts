@@ -104,6 +104,7 @@ type PendingDependencyIndex = {
 const MAX_BUFFERED_REMOTE_EVENTS = 10_000;
 const MAX_REPLAY_TRANSFORMATIONS = 10_000;
 
+/** Options for configuring an {@linkcode EventGraph}. */
 export interface EventGraphOptions {
   /**
    * When true, skip edit validation during event ingestion.
