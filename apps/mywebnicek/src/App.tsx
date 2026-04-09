@@ -1,5 +1,5 @@
 import { Text } from "@fluentui/react-components";
-import type { PlainNode } from "@mydenicek/react";
+import type { Denicek, PlainNode } from "@mydenicek/react";
 import { useDenicek } from "@mydenicek/react";
 import { useMemo, useRef, useState } from "react";
 
@@ -24,10 +24,6 @@ function getRoomId(): string {
   const id = "demo-" + crypto.randomUUID().slice(0, 6);
   globalThis.location.hash = id;
   return id;
-}
-
-function isDemoRoom(roomId: string): boolean {
-  return roomId.startsWith("demo");
 }
 
 const PEER_SESSION_KEY = "mydenicek-peer-id";
@@ -55,7 +51,7 @@ function Editor(
     peerId: string;
     roomId: string;
     initialDocument?: PlainNode;
-    runInitActions?: boolean;
+    runInitActions?: (dk: Denicek) => void;
   },
 ) {
   const dk = useDenicek({
@@ -64,10 +60,9 @@ function Editor(
     sync: { url: SYNC_SERVER_URL, roomId },
   });
 
-  // Build interactive parts (buttons, replay scripts) once
   const initialized = useRef(false);
   if (!initialized.current && runInitActions) {
-    initializeActions(dk.denicek);
+    runInitActions(dk.denicek);
     initialized.current = true;
   }
 
@@ -270,59 +265,50 @@ function Editor(
   );
 }
 
+interface Template {
+  name: string;
+  initialDocument?: PlainNode;
+  initActions?: (dk: Denicek) => void;
+}
+
+const TEMPLATES: Template[] = [
+  {
+    name: "Formative Examples",
+    initialDocument: INITIAL_DOCUMENT,
+    initActions: initializeActions,
+  },
+  { name: "Empty" },
+];
+
 interface DocTab {
   id: string;
   label: string;
-  initialDocument?: PlainNode;
-  initActions?: boolean;
+  template: Template;
+}
+
+function createTab(template: Template): DocTab {
+  const id = crypto.randomUUID().slice(0, 8);
+  return { id, label: template.name, template };
 }
 
 export function App() {
   const peerId = useMemo(getOrCreatePeerId, []);
   const [tabs, setTabs] = useState<DocTab[]>(() => {
     const hashRoom = getRoomId();
-    if (isDemoRoom(hashRoom)) {
-      return [{
-        id: hashRoom,
-        label: "Demo",
-        initialDocument: INITIAL_DOCUMENT,
-        initActions: true,
-      }];
-    }
-    // URL points to a non-demo room — show Demo + that room
-    const demoId = "demo-" + crypto.randomUUID().slice(0, 6);
-    return [
-      {
-        id: demoId,
-        label: "Demo",
-        initialDocument: INITIAL_DOCUMENT,
-        initActions: true,
-      },
-      { id: hashRoom, label: hashRoom.slice(0, 8) },
-    ];
+    const defaultTab = {
+      id: hashRoom,
+      label: TEMPLATES[0]!.name,
+      template: TEMPLATES[0]!,
+    };
+    return [defaultTab];
   });
   const [activeTab, setActiveTab] = useState(() => getRoomId());
 
-  const addDocument = () => {
-    const id = crypto.randomUUID().slice(0, 8);
-    globalThis.location.hash = id;
-    setTabs((prev) => [...prev, { id, label: `Doc ${prev.length + 1}` }]);
-    setActiveTab(id);
-  };
-
-  const addDemo = () => {
-    const id = "demo-" + crypto.randomUUID().slice(0, 6);
-    globalThis.location.hash = id;
-    setTabs((prev) => [
-      ...prev,
-      {
-        id,
-        label: `Demo ${prev.filter((t) => isDemoRoom(t.id)).length + 1}`,
-        initialDocument: INITIAL_DOCUMENT,
-        initActions: true,
-      },
-    ]);
-    setActiveTab(id);
+  const addFromTemplate = (template: Template) => {
+    const tab = createTab(template);
+    globalThis.location.hash = tab.id;
+    setTabs((prev) => [...prev, tab]);
+    setActiveTab(tab.id);
   };
 
   const tab = tabs.find((t) => t.id === activeTab) ?? tabs[0]!;
@@ -365,38 +351,25 @@ export function App() {
             {t.label}
           </button>
         ))}
-        <button
-          type="button"
-          onClick={addDocument}
-          style={{
-            padding: "4px 8px",
-            fontSize: 14,
-            cursor: "pointer",
-            background: "transparent",
-            color: "#666",
-            border: "1px solid transparent",
-            borderRadius: 4,
-          }}
-          title="New empty document"
-        >
-          +
-        </button>
-        <button
-          type="button"
-          onClick={addDemo}
-          style={{
-            padding: "4px 8px",
-            fontSize: 11,
-            cursor: "pointer",
-            background: "transparent",
-            color: "#666",
-            border: "1px solid transparent",
-            borderRadius: 4,
-          }}
-          title="New demo document"
-        >
-          + Demo
-        </button>
+        {TEMPLATES.map((tpl) => (
+          <button
+            key={tpl.name}
+            type="button"
+            onClick={() => addFromTemplate(tpl)}
+            style={{
+              padding: "4px 8px",
+              fontSize: 11,
+              cursor: "pointer",
+              background: "transparent",
+              color: "#666",
+              border: "1px solid transparent",
+              borderRadius: 4,
+            }}
+            title={`New ${tpl.name} document`}
+          >
+            + {tpl.name}
+          </button>
+        ))}
       </div>
 
       {/* Active editor */}
@@ -405,8 +378,8 @@ export function App() {
           key={tab.id}
           peerId={peerId}
           roomId={tab.id}
-          initialDocument={tab.initialDocument}
-          runInitActions={tab.initActions}
+          initialDocument={tab.template.initialDocument}
+          runInitActions={tab.template.initActions}
         />
       </div>
     </div>
