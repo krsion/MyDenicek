@@ -269,7 +269,20 @@ function renderNode(
     return React.createElement(htmlTag, {});
   }
 
-  return React.createElement(htmlTag, {}, ...children);
+  // Table elements get borders
+  const tableStyles: Record<string, React.CSSProperties> = {
+    table: { borderCollapse: "collapse", margin: "8px 0", width: "100%" },
+    th: {
+      border: "1px solid #ccc",
+      padding: "4px 8px",
+      background: "#f0f0f0",
+      textAlign: "left",
+    },
+    td: { border: "1px solid #ccc", padding: "4px 8px" },
+  };
+  const style = tableStyles[htmlTag];
+
+  return React.createElement(htmlTag, style ? { style } : {}, ...children);
 }
 
 /** Catches rendering errors from invalid HTML nesting and shows a message. */
