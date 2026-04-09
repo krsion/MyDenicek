@@ -40,22 +40,36 @@ function DagVisualization(
   const peers = [...new Set(events.map((e) => e.peer))];
   const peerCol = new Map(peers.map((p, i) => [p, i]));
 
+  // Compute row per event: row = max(parent rows) + 1
+  // Concurrent events land on the same row in different peer columns.
+  const rowOf = new Map<string, number>();
+  for (const ev of events) {
+    let maxParentRow = -1;
+    for (const pid of ev.parents) {
+      const pr = rowOf.get(pid);
+      if (pr !== undefined && pr > maxParentRow) maxParentRow = pr;
+    }
+    rowOf.set(ev.id, maxParentRow + 1);
+  }
+  const totalRows = Math.max(0, ...rowOf.values()) + 1;
+
   const colWidth = 80;
   const rowHeight = 40;
   const padding = 30;
   const nodeRadius = 12;
 
   const width = peers.length * colWidth + padding * 2;
-  const height = events.length * rowHeight + padding * 2;
+  const height = totalRows * rowHeight + padding * 2;
 
   const positions = new Map<string, { x: number; y: number }>();
-  events.forEach((ev, i) => {
+  for (const ev of events) {
     const col = peerCol.get(ev.peer) ?? 0;
+    const row = rowOf.get(ev.id) ?? 0;
     positions.set(ev.id, {
       x: padding + col * colWidth + colWidth / 2,
-      y: padding + i * rowHeight + rowHeight / 2,
+      y: padding + row * rowHeight + rowHeight / 2,
     });
-  });
+  }
 
   return (
     <div
