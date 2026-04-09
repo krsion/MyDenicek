@@ -116,6 +116,23 @@ export function createSyncServer(
     return room;
   }
 
+  /** Load a room if it exists in memory or persistence. Returns undefined for new rooms. */
+  async function tryLoadRoom(
+    roomId: string,
+  ): Promise<SyncRoom | undefined> {
+    const existing = rooms.get(roomId);
+    if (existing) return existing;
+    if (!options.persistencePath) return undefined;
+    try {
+      const room = await loadRoomEvents(options.persistencePath, roomId);
+      if (room.initialDocument) {
+        rooms.set(roomId, room);
+        return room;
+      }
+    } catch { /* not found */ }
+    return undefined;
+  }
+
   function broadcastRoomState(changedSocket: WebSocket, room: SyncRoom): void {
     for (const [socket, state] of clients.entries()) {
       // The originating socket already receives its direct sync response in the
@@ -182,11 +199,11 @@ export function createSyncServer(
 
     socket.onopen = async () => {
       clients.set(socket, { roomId, frontiers: [], hashValidated: false });
-      const room = await ensureRoomLoaded(roomId);
+      const existingRoom = await tryLoadRoom(roomId);
       const helloMessage: EncodedHelloMessage = {
         type: "hello",
         roomId,
-        initialDocument: room.initialDocument,
+        initialDocument: existingRoom?.initialDocument,
       };
       socket.send(JSON.stringify(helloMessage));
     };
