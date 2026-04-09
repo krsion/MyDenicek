@@ -107,7 +107,8 @@ export class SyncClient {
 
   /** Send any pending local events to the server. */
   flush(): void {
-    this.inner?.syncNow();
+    if (this.status !== "connected" || !this.inner) return;
+    this.inner.syncNow();
   }
 
   private setStatus(s: SyncStatus): void {
