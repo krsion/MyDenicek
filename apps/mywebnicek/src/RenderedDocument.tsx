@@ -121,12 +121,96 @@ function renderNode(
           borderRadius: 3,
           fontSize: "0.9em",
         }}
-        title={`ƒ ${op ?? "formula"}${
-          hasResult ? " = " + String(computed) : ""
-        }`}
+        title={`ƒ ${op ?? tag}${hasResult ? " = " + String(computed) : ""}`}
       >
-        {hasResult ? String(computed) : `ƒ(${op ?? "?"})`}
+        {hasResult ? String(computed) : `ƒ(${op ?? tag})`}
       </span>
+    );
+  }
+
+  // Skip internal structural tags — don't render as HTML
+  if (
+    tag === "replay-script" || tag === "event-steps" ||
+    tag === "step" || tag === "args" || tag === "refs"
+  ) {
+    return null;
+  }
+
+  // Button: show label, skip script internals
+  if (tag === "button") {
+    const label = node["label"];
+    return (
+      <button
+        type="button"
+        style={{
+          padding: "4px 12px",
+          fontSize: 13,
+          cursor: "default",
+          background: "#0078d4",
+          color: "#fff",
+          border: "none",
+          borderRadius: 4,
+          margin: "4px 0",
+        }}
+      >
+        {typeof label === "string" ? label : "Button"}
+      </button>
+    );
+  }
+
+  // Composer: render children inline
+  if (tag === "composer") {
+    const inputNode = node["input"] as PlainRecord | undefined;
+    const value = inputNode?.["value"];
+    return (
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          alignItems: "center",
+          margin: "8px 0",
+        }}
+      >
+        <input
+          readOnly
+          value={typeof value === "string" ? value : ""}
+          style={{
+            padding: "4px 8px",
+            fontSize: 13,
+            border: "1px solid #ccc",
+            borderRadius: 4,
+            flex: 1,
+            maxWidth: 200,
+          }}
+        />
+        {isRec(node["addAction"] as PlainNode) &&
+          renderNode(
+            node["addAction"] as PlainNode,
+            path ? `${path}/addAction` : "addAction",
+            formulas,
+          )}
+      </div>
+    );
+  }
+
+  // Input: show as readonly input
+  if (tag === "input") {
+    const value = node["value"];
+    return (
+      <input
+        readOnly
+        value={typeof value === "string"
+          ? String(value)
+          : typeof value === "number"
+          ? String(value)
+          : ""}
+        style={{
+          padding: "4px 8px",
+          fontSize: 13,
+          border: "1px solid #ccc",
+          borderRadius: 4,
+        }}
+      />
     );
   }
 
