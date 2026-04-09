@@ -21,6 +21,21 @@ function isRef(v: PlainNode): v is PlainRef {
 }
 
 const META = new Set(["$tag", "$id", "$kind"]);
+
+const tableStyles: Record<string, React.CSSProperties> = {
+  table: {
+    borderCollapse: "collapse" as const,
+    margin: "8px 0",
+    width: "100%",
+  },
+  th: {
+    border: "1px solid #ccc",
+    padding: "4px 8px",
+    background: "#f0f0f0",
+    textAlign: "left" as const,
+  },
+  td: { border: "1px solid #ccc", padding: "4px 8px" },
+};
 const HTML_TAGS = new Set([
   "div",
   "span",
@@ -93,21 +108,24 @@ function renderNode(
     return String(node);
   }
   if (isList(node)) {
-    return (
-      <>
-        {node.$items.map((item, i) => (
-          <React.Fragment key={i}>
-            {renderNode(
-              item,
-              path ? `${path}/${i}` : String(i),
-              formulas,
-              onAction,
-              onSetValue,
-            )}
-          </React.Fragment>
-        ))}
-      </>
-    );
+    const listTag = String(node.$tag);
+    const htmlListTag = HTML_TAGS.has(listTag) ? listTag : null;
+    const items = node.$items.map((item, i) => (
+      <React.Fragment key={i}>
+        {renderNode(
+          item,
+          path ? `${path}/${i}` : String(i),
+          formulas,
+          onAction,
+          onSetValue,
+        )}
+      </React.Fragment>
+    ));
+    if (htmlListTag) {
+      const style = tableStyles[htmlListTag];
+      return React.createElement(htmlListTag, style ? { style } : {}, ...items);
+    }
+    return <>{items}</>;
   }
   if (isRef(node)) {
     return <span style={{ color: "#0078d4" }}>→ {node.$ref}</span>;
@@ -269,19 +287,7 @@ function renderNode(
     return React.createElement(htmlTag, {});
   }
 
-  // Table elements get borders
-  const tableStyles: Record<string, React.CSSProperties> = {
-    table: { borderCollapse: "collapse", margin: "8px 0", width: "100%" },
-    th: {
-      border: "1px solid #ccc",
-      padding: "4px 8px",
-      background: "#f0f0f0",
-      textAlign: "left",
-    },
-    td: { border: "1px solid #ccc", padding: "4px 8px" },
-  };
   const style = tableStyles[htmlTag];
-
   return React.createElement(htmlTag, style ? { style } : {}, ...children);
 }
 
