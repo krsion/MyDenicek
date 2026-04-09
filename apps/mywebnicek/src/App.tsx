@@ -45,6 +45,57 @@ function Editor(
     runInitActions?: (dk: Denicek) => void;
   },
 ) {
+  // If no initial document, fetch it from the sync server hello
+  const [resolvedDoc, setResolvedDoc] = useState<
+    PlainNode | undefined
+  >(initialDocument);
+  const [loading, setLoading] = useState(!initialDocument);
+
+  useEffect(() => {
+    if (initialDocument) return;
+    const url = new URL(SYNC_SERVER_URL);
+    url.searchParams.set("room", roomId);
+    const ws = new WebSocket(url.toString());
+    ws.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data);
+        if (msg.type === "hello") {
+          setResolvedDoc(msg.initialDocument ?? undefined);
+          setLoading(false);
+          ws.close();
+        }
+      } catch { /* ignore */ }
+    };
+    ws.onerror = () => setLoading(false);
+    return () => ws.close();
+  }, [initialDocument, roomId]);
+
+  if (loading) {
+    return (
+      <div style={{ padding: 24, color: "#888" }}>
+        Connecting to room {roomId}…
+      </div>
+    );
+  }
+
+  return (
+    <EditorInner
+      peerId={peerId}
+      roomId={roomId}
+      initialDocument={resolvedDoc}
+      runInitActions={runInitActions}
+    />
+  );
+}
+
+function EditorInner(
+  { peerId, roomId, initialDocument, runInitActions }: {
+    peerId: string;
+    roomId: string;
+    initialDocument?: PlainNode;
+    runInitActions?: (dk: Denicek) => void;
+  },
+) {
   const dk = useDenicek({
     peer: peerId,
     initialDocument,
@@ -273,22 +324,12 @@ const TEMPLATES: Template[] = [
 
 interface DocTab {
   id: string;
-  template: Template;
+  template?: Template;
 }
 
 function createTab(template: Template): DocTab {
-  const tplIdx = TEMPLATES.indexOf(template);
-  const id = `t${tplIdx}-${crypto.randomUUID().slice(0, 8)}`;
+  const id = crypto.randomUUID().slice(0, 8);
   return { id, template };
-}
-
-function templateFromRoomId(roomId: string): Template {
-  const match = roomId.match(/^t(\d+)-/);
-  if (match) {
-    const idx = Number(match[1]);
-    if (idx >= 0 && idx < TEMPLATES.length) return TEMPLATES[idx]!;
-  }
-  return TEMPLATES[TEMPLATES.length - 1]!;
 }
 
 export function App() {
@@ -296,7 +337,7 @@ export function App() {
 
   const [tabs, setTabs] = useState<DocTab[]>(() => {
     const hash = globalThis.location?.hash?.slice(1);
-    if (hash) return [{ id: hash, template: templateFromRoomId(hash) }];
+    if (hash) return [{ id: hash }];
     return [];
   });
   const [activeTab, setActiveTab] = useState<string | null>(
@@ -313,7 +354,7 @@ export function App() {
   const openRoom = useCallback((roomId: string) => {
     setTabs((prev) => {
       if (prev.some((t) => t.id === roomId)) return prev;
-      return [...prev, { id: roomId, template: templateFromRoomId(roomId) }];
+      return [...prev, { id: roomId }];
     });
     setActiveTab(roomId);
   }, []);
@@ -401,8 +442,8 @@ export function App() {
               key={tab.id}
               peerId={peerId}
               roomId={tab.id}
-              initialDocument={tab.template.initialDocument}
-              runInitActions={tab.template.initActions}
+              initialDocument={tab.template?.initialDocument}
+              runInitActions={tab.template?.initActions}
             />
           )
           : (

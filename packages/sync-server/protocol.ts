@@ -39,6 +39,8 @@ export interface EncodedHelloMessage {
   type: "hello";
   /** Room the client connected to. */
   roomId: string;
+  /** The room's initial document, if set by a previous peer. */
+  initialDocument?: PlainNode;
 }
 
 /** Error message sent by the server on protocol violations. */

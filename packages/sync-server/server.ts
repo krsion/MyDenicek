@@ -180,9 +180,14 @@ export function createSyncServer(
 
     const { socket, response } = Deno.upgradeWebSocket(request);
 
-    socket.onopen = () => {
+    socket.onopen = async () => {
       clients.set(socket, { roomId, frontiers: [], hashValidated: false });
-      const helloMessage: EncodedHelloMessage = { type: "hello", roomId };
+      const room = await ensureRoomLoaded(roomId);
+      const helloMessage: EncodedHelloMessage = {
+        type: "hello",
+        roomId,
+        initialDocument: room.initialDocument,
+      };
       socket.send(JSON.stringify(helloMessage));
     };
 
