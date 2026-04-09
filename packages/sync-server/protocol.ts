@@ -1,4 +1,4 @@
-import type { Denicek, RemoteEvent } from "@mydenicek/core";
+import type { Denicek, PlainNode, RemoteEvent } from "@mydenicek/core";
 import type { EncodedRemoteEvent, EncodedRemoteEventId } from "@mydenicek/core";
 import { collectRemoteEventsSince } from "./internal-events.ts";
 
@@ -17,6 +17,8 @@ export interface EncodedSyncRequest {
   events: EncodedEvent[];
   /** Hash of the client's initial document (before any events). */
   initialDocumentHash?: string;
+  /** The initial document tree. Sent with the first sync to bootstrap the room. */
+  initialDocument?: PlainNode;
 }
 
 /** A sync response sent from server to client. */
@@ -77,6 +79,7 @@ export function createSyncRequest(
   roomId: string,
   knownServerFrontiers: string[],
   initialDocumentHash?: string,
+  initialDocument?: PlainNode,
 ): EncodedSyncRequest {
   return {
     type: "sync",
@@ -86,6 +89,7 @@ export function createSyncRequest(
       encodeEvent,
     ),
     initialDocumentHash,
+    initialDocument,
   };
 }
 

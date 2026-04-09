@@ -53,6 +53,7 @@ export class SyncClient {
   private readonly document: Denicek;
   private readonly autoSyncIntervalMs: number;
   private readonly initialDocumentHash: string;
+  private readonly initialDocument: PlainNode;
   private readonly onRemoteChange?: (
     document: Denicek,
     response: EncodedSyncResponse,
@@ -61,6 +62,7 @@ export class SyncClient {
   private socket: WebSocket | null = null;
   private autoSyncTimer: ReturnType<typeof setInterval> | null = null;
   private knownServerFrontiers: string[] = [];
+  private serverBootstrapped = false;
 
   /** Create a sync client with the given options. */
   constructor(options: SyncClientOptions) {
@@ -68,8 +70,9 @@ export class SyncClient {
     this.roomId = options.roomId;
     this.document = options.document;
     this.autoSyncIntervalMs = options.autoSyncIntervalMs ?? 1000;
+    this.initialDocument = options.document.materialize();
     this.initialDocumentHash = options.initialDocumentHash ??
-      computeDocumentHash(options.document.materialize());
+      computeDocumentHash(this.initialDocument);
     this.onRemoteChange = options.onRemoteChange;
     this.onDisconnect = options.onDisconnect;
   }
@@ -122,6 +125,7 @@ export class SyncClient {
       this.roomId,
       this.knownServerFrontiers,
       this.initialDocumentHash,
+      this.serverBootstrapped ? undefined : this.initialDocument,
     );
     this.socket.send(JSON.stringify(request));
   }
@@ -168,6 +172,7 @@ export class SyncClient {
     }
     applySyncResponse(this.document, message);
     this.knownServerFrontiers = message.frontiers;
+    this.serverBootstrapped = true;
     this.onRemoteChange?.(this.document, message);
   }
 

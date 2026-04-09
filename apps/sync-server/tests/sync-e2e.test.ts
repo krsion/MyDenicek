@@ -255,3 +255,61 @@ Deno.test({
     }
   },
 });
+
+Deno.test({
+  name: "custom initial document: set works via server bootstrap",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    const { handle, url } = startTestServer();
+    const room = `r-${crypto.randomUUID().slice(0, 6)}`;
+
+    const initial = { $tag: "app", counter: { $tag: "p", count: 0 } };
+    const hash = computeDocumentHash(initial);
+
+    const dkA = new Denicek("peerA", initial);
+    const dkB = new Denicek("peerB", initial);
+
+    const cA = new SyncClient({
+      url,
+      roomId: room,
+      document: dkA,
+      autoSyncIntervalMs: 100,
+      initialDocumentHash: hash,
+    });
+    const cB = new SyncClient({
+      url,
+      roomId: room,
+      document: dkB,
+      autoSyncIntervalMs: 100,
+      initialDocumentHash: hash,
+    });
+
+    try {
+      await cA.connect();
+      await cB.connect();
+      await delay(300);
+
+      dkA.set("counter/count", 5);
+
+      await waitFor(() => {
+        const d = dkB.materialize() as Record<string, Record<string, unknown>>;
+        return d.counter?.count === 5;
+      });
+
+      assertEquals(dkA.materialize(), dkB.materialize());
+
+      dkA.set("counter/count", 10);
+      await waitFor(() => {
+        const d = dkB.materialize() as Record<string, Record<string, unknown>>;
+        return d.counter?.count === 10;
+      });
+
+      assertEquals(dkA.materialize(), dkB.materialize());
+    } finally {
+      cA.close();
+      cB.close();
+      await handle.close();
+    }
+  },
+});

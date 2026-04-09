@@ -175,8 +175,9 @@ export function createSyncServer(
           );
         }
         const room = await ensureRoomLoaded(clientRoomId);
-        const hashError = room.validateInitialDocumentHash(
+        const hashError = room.validateAndBootstrap(
           message.initialDocumentHash,
+          message.initialDocument,
         );
         if (hashError) {
           socket.send(JSON.stringify({

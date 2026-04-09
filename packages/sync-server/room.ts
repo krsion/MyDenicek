@@ -1,4 +1,4 @@
-import { Denicek } from "@mydenicek/core";
+import { Denicek, type PlainNode } from "@mydenicek/core";
 import {
   decodeEvent,
   type EncodedEvent,
@@ -11,6 +11,10 @@ import { collectRemoteEventsSince } from "./internal-events.ts";
 /**
  * Server-side room that merges events from all connected peers.
  * Each room maintains its own Denicek instance as the authoritative state.
+ *
+ * The first client to sync bootstraps the room with its initial document.
+ * All subsequent clients must share the same initial document (verified
+ * via hash comparison).
  */
 export class SyncRoom {
   /** Unique room identifier. */
@@ -18,11 +22,16 @@ export class SyncRoom {
   private roomPeer: Denicek;
   /** Hash of the initial document agreed upon by the first client. */
   private _initialDocumentHash: string | undefined;
+  private bootstrapped = false;
 
-  /** Create a new room with the given identifier. */
-  constructor(id: string) {
+  /** Create a new room with the given identifier and optional initial doc. */
+  constructor(id: string, initialDocument?: PlainNode) {
     this.id = id;
-    this.roomPeer = new Denicek(`room-${id.replaceAll(":", "-")}`);
+    this.roomPeer = new Denicek(
+      `room-${id.replaceAll(":", "-")}`,
+      initialDocument,
+    );
+    this.bootstrapped = initialDocument !== undefined;
   }
 
   /** The initial document hash for this room, if set. */
@@ -43,17 +52,28 @@ export class SyncRoom {
   }
 
   /**
-   * Validate and store the initial document hash.
+   * Validate the initial document hash and bootstrap the room if needed.
+   * The first client with a hash and document sets the room's initial state.
    * Returns an error message if the hash mismatches, or undefined if OK.
    */
-  validateInitialDocumentHash(
+  validateAndBootstrap(
     clientHash: string | undefined,
+    clientInitialDocument: PlainNode | undefined,
   ): string | undefined {
     if (!clientHash) return undefined;
+
     if (!this._initialDocumentHash) {
       this._initialDocumentHash = clientHash;
+      if (clientInitialDocument && !this.bootstrapped) {
+        this.roomPeer = new Denicek(
+          `room-${this.id.replaceAll(":", "-")}`,
+          clientInitialDocument,
+        );
+        this.bootstrapped = true;
+      }
       return undefined;
     }
+
     if (this._initialDocumentHash !== clientHash) {
       return `Initial document mismatch: room expects '${this._initialDocumentHash}' but client sent '${clientHash}'. All peers must start from the same initial document.`;
     }
