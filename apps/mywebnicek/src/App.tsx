@@ -277,18 +277,26 @@ interface DocTab {
 }
 
 function createTab(template: Template): DocTab {
-  const id = crypto.randomUUID().slice(0, 8);
+  const tplIdx = TEMPLATES.indexOf(template);
+  const id = `t${tplIdx}-${crypto.randomUUID().slice(0, 8)}`;
   return { id, template };
+}
+
+function templateFromRoomId(roomId: string): Template {
+  const match = roomId.match(/^t(\d+)-/);
+  if (match) {
+    const idx = Number(match[1]);
+    if (idx >= 0 && idx < TEMPLATES.length) return TEMPLATES[idx]!;
+  }
+  return TEMPLATES[TEMPLATES.length - 1]!;
 }
 
 export function App() {
   const peerId = useMemo(getOrCreatePeerId, []);
 
-  // Start with no tabs; if URL has a hash, create a tab for it (empty template
-  // since we don't know which template was used — sync will populate it).
   const [tabs, setTabs] = useState<DocTab[]>(() => {
     const hash = globalThis.location?.hash?.slice(1);
-    if (hash) return [{ id: hash, template: TEMPLATES[1]! }];
+    if (hash) return [{ id: hash, template: templateFromRoomId(hash) }];
     return [];
   });
   const [activeTab, setActiveTab] = useState<string | null>(
@@ -305,7 +313,7 @@ export function App() {
   const openRoom = useCallback((roomId: string) => {
     setTabs((prev) => {
       if (prev.some((t) => t.id === roomId)) return prev;
-      return [...prev, { id: roomId, template: TEMPLATES[1]! }];
+      return [...prev, { id: roomId, template: templateFromRoomId(roomId) }];
     });
     setActiveTab(roomId);
   }, []);
