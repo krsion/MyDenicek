@@ -76,7 +76,8 @@ export const INITIAL_DOCUMENT: PlainNode = {
     heading: { $tag: "h2", text: "Conferences" },
     composer: {
       $tag: "composer",
-      input: { $tag: "input", value: "Jan Novák, jan@novak.cz" },
+      nameInput: { $tag: "input", value: "Jan Novák" },
+      emailInput: { $tag: "input", value: "jan@novak.cz" },
       addAction: {
         $tag: "button",
         label: "Add Speaker",
@@ -169,7 +170,11 @@ export function initializeActions(dk: Denicek): void {
   });
   const copySpeakerNameId = dk.copy(
     "conferences/speakers/!0/name/text",
-    "conferences/composer/input/value",
+    "conferences/composer/nameInput/value",
+  );
+  const copySpeakerEmailId = dk.copy(
+    "conferences/speakers/!0/email/text",
+    "conferences/composer/emailInput/value",
   );
 
   dk.pushBack("conferences/composer/addAction/steps", {
@@ -179,5 +184,9 @@ export function initializeActions(dk: Denicek): void {
   dk.pushBack("conferences/composer/addAction/steps", {
     $tag: "step",
     eventId: copySpeakerNameId,
+  });
+  dk.pushBack("conferences/composer/addAction/steps", {
+    $tag: "step",
+    eventId: copySpeakerEmailId,
   });
 }
