@@ -1,5 +1,5 @@
 import type { Denicek, EventSnapshot } from "@mydenicek/core";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 interface EventGraphViewProps {
   denicek: Denicek;
@@ -31,10 +31,11 @@ function shortenEditKind(kind: string): string {
 }
 
 function DagVisualization(
-  { events, frontierSet, onReplay }: {
+  { events, frontierSet, selectedId, onSelect }: {
     events: EventSnapshot[];
     frontierSet: Set<string>;
-    onReplay?: (eventId: string) => void;
+    selectedId: string | null;
+    onSelect: (eventId: string) => void;
   },
 ) {
   const peers = [...new Set(events.map((e) => e.peer))];
@@ -125,6 +126,7 @@ function DagVisualization(
           const pos = positions.get(ev.id);
           if (!pos) return null;
           const isFrontier = frontierSet.has(ev.id);
+          const isSelected = ev.id === selectedId;
           const color = computePeerColor(ev.peer);
           const record = ev as Record<string, unknown>;
           const desc = record.editDescription
@@ -133,17 +135,17 @@ function DagVisualization(
           return (
             <g
               key={`node-${ev.id}`}
-              style={{ cursor: onReplay ? "pointer" : undefined }}
-              onClick={onReplay ? () => onReplay(ev.id) : undefined}
+              style={{ cursor: "pointer" }}
+              onClick={() => onSelect(ev.id)}
             >
               <title>{`${ev.id}${desc}`}</title>
               <circle
                 cx={pos.x}
                 cy={pos.y}
                 r={nodeRadius}
-                fill={color}
-                stroke={isFrontier ? "#000" : color}
-                strokeWidth={isFrontier ? 3 : 1.5}
+                fill={isSelected ? "#fff" : color}
+                stroke={isSelected ? color : isFrontier ? "#000" : color}
+                strokeWidth={isSelected ? 3 : isFrontier ? 3 : 1.5}
               />
               <text
                 x={pos.x}
@@ -153,7 +155,7 @@ function DagVisualization(
                 fontSize={9}
                 fontFamily="monospace"
                 fontWeight={700}
-                fill="#fff"
+                fill={isSelected ? color : "#fff"}
               >
                 {ev.seq}
               </text>
@@ -181,6 +183,11 @@ export function EventGraphView(
     for (const ev of events) seen.add(ev.peer);
     return seen;
   }, [events]);
+
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = selectedId
+    ? events.find((e) => e.id === selectedId) ?? null
+    : null;
 
   return (
     <div
@@ -211,133 +218,125 @@ export function EventGraphView(
       <DagVisualization
         events={events}
         frontierSet={frontierSet}
-        onReplay={onReplay}
+        selectedId={selectedId}
+        onSelect={setSelectedId}
       />
 
-      {/* Event table */}
-      <table
+      {/* Selected event detail */}
+      {selected && (
+        <EventDetail
+          event={selected}
+          isFrontier={frontierSet.has(selected.id)}
+          onReplay={onReplay}
+          onClose={() => setSelectedId(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function EventDetail(
+  { event, isFrontier, onReplay, onClose }: {
+    event: EventSnapshot;
+    isFrontier: boolean;
+    onReplay?: (eventId: string) => void;
+    onClose: () => void;
+  },
+) {
+  const record = event as Record<string, unknown>;
+  const color = computePeerColor(event.peer);
+  return (
+    <div
+      style={{
+        padding: "10px 14px",
+        background: "#fafafa",
+        borderTop: "1px solid #ddd",
+        fontSize: 11,
+        lineHeight: 1.8,
+      }}
+    >
+      <div
         style={{
-          width: "100%",
-          borderCollapse: "collapse",
-          fontSize: 11,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 6,
         }}
       >
-        <thead>
-          <tr
+        <span style={{ fontWeight: 700, fontSize: 13 }}>
+          {event.id}
+          {isFrontier && (
+            <span
+              style={{
+                marginLeft: 6,
+                background: "#0078d4",
+                color: "#fff",
+                borderRadius: 3,
+                padding: "1px 5px",
+                fontSize: 9,
+                fontWeight: 700,
+              }}
+            >
+              frontier
+            </span>
+          )}
+        </span>
+        <div style={{ display: "flex", gap: 6 }}>
+          {onReplay && (
+            <button
+              type="button"
+              onClick={() => onReplay(event.id)}
+              style={{
+                padding: "2px 10px",
+                fontSize: 11,
+                cursor: "pointer",
+                background: "#0078d4",
+                color: "#fff",
+                border: "none",
+                borderRadius: 3,
+              }}
+            >
+              ▶ Replay
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
             style={{
-              background: "#e8e8e8",
-              textAlign: "left",
-              position: "sticky",
-              top: 0,
+              padding: "2px 10px",
+              fontSize: 11,
+              cursor: "pointer",
+              background: "transparent",
+              color: "#666",
+              border: "1px solid #ccc",
+              borderRadius: 3,
             }}
           >
-            {["▶", "ID", "Peer", "Parents", "Edit Kind", "Target"].map((h) => (
-              <th key={h} style={{ padding: "4px 6px", fontWeight: 600 }}>
-                {h}
-              </th>
-            ))}
-            {events.length > 0 &&
-              (events[0] as Record<string, unknown>).vectorClock != null && (
-              <th style={{ padding: "4px 6px", fontWeight: 600 }}>
-                Vector Clock
-              </th>
-            )}
-            {events.length > 0 &&
-              (events[0] as Record<string, unknown>).editDescription !=
-                null &&
-              (
-                <th style={{ padding: "4px 6px", fontWeight: 600 }}>
-                  Description
-                </th>
-              )}
-          </tr>
-        </thead>
-        <tbody>
-          {events.map((ev, i) => {
-            const isFrontier = frontierSet.has(ev.id);
-            const record = ev as Record<string, unknown>;
-            const hasVectorClock = record.vectorClock != null;
-            const hasDescription = record.editDescription != null;
-
-            return (
-              <tr
-                key={ev.id}
-                style={{
-                  background: i % 2 === 0 ? "#fff" : "#fafafa",
-                  fontWeight: isFrontier ? 700 : 400,
-                }}
-              >
-                <td style={{ padding: "3px 6px" }}>
-                  {onReplay && (
-                    <button
-                      type="button"
-                      onClick={() => onReplay(ev.id)}
-                      title={`Replay: ${record.editDescription ?? ev.editKind}`}
-                      style={{
-                        padding: "1px 6px",
-                        fontSize: 10,
-                        cursor: "pointer",
-                        background: "#0078d4",
-                        color: "#fff",
-                        border: "none",
-                        borderRadius: 3,
-                      }}
-                    >
-                      ▶
-                    </button>
-                  )}
-                </td>
-                <td style={{ padding: "3px 6px", whiteSpace: "nowrap" }}>
-                  {ev.id}
-                  {isFrontier && (
-                    <span
-                      style={{
-                        marginLeft: 4,
-                        background: "#0078d4",
-                        color: "#fff",
-                        borderRadius: 3,
-                        padding: "0 4px",
-                        fontSize: 9,
-                        fontWeight: 700,
-                      }}
-                    >
-                      frontier
-                    </span>
-                  )}
-                </td>
-                <td
-                  style={{
-                    padding: "3px 6px",
-                    color: computePeerColor(ev.peer),
-                    fontWeight: 600,
-                  }}
-                >
-                  {ev.peer}
-                </td>
-                <td style={{ padding: "3px 6px", color: "#666" }}>
-                  {ev.parents.length > 0 ? ev.parents.join(", ") : "—"}
-                </td>
-                <td style={{ padding: "3px 6px" }}>
-                  {shortenEditKind(ev.editKind)}
-                </td>
-                <td style={{ padding: "3px 6px", color: "#444" }}>
-                  {ev.target}
-                </td>
-                {hasVectorClock && (
-                  <td style={{ padding: "3px 6px", color: "#888" }}>
-                    {JSON.stringify(record.vectorClock)}
-                  </td>
-                )}
-                {hasDescription && (
-                  <td style={{ padding: "3px 6px", color: "#555" }}>
-                    {String(record.editDescription)}
-                  </td>
-                )}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+            ✕
+          </button>
+        </div>
+      </div>
+      <div>
+        <b>Peer:</b>{" "}
+        <span style={{ color, fontWeight: 600 }}>{event.peer}</span>
+      </div>
+      <div>
+        <b>Edit:</b> {shortenEditKind(event.editKind)} → {event.target}
+      </div>
+      {record.editDescription && (
+        <div>
+          <b>Description:</b> {String(record.editDescription)}
+        </div>
+      )}
+      <div>
+        <b>Parents:</b>{" "}
+        {event.parents.length > 0 ? event.parents.join(", ") : "none (root)"}
+      </div>
+      {record.vectorClock && (
+        <div>
+          <b>Vector Clock:</b> {JSON.stringify(record.vectorClock)}
+        </div>
+      )}
     </div>
   );
 }
