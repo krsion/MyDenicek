@@ -134,7 +134,11 @@ export function useDenicek(options?: UseDenicekOptions): UseDenicekReturn {
   const mutate = useCallback(
     (fn: () => void) => {
       fn();
-      dk.recomputeFormulas();
+      try {
+        dk.recomputeFormulas();
+      } catch {
+        // Formula errors are non-fatal
+      }
       bump();
       sync.flush();
     },
