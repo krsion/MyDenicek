@@ -149,7 +149,11 @@ function renderNode(
   // Button: show label, execute script on click
   if (tag === "button") {
     const label = node["label"];
-    const scriptPath = `${path}/script/steps`;
+    // Steps can be at script/steps (counter) or steps directly (addAction)
+    const hasDirectSteps = node["steps"] !== undefined;
+    const scriptPath = hasDirectSteps
+      ? `${path}/steps`
+      : `${path}/script/steps`;
     return (
       <button
         type="button"
