@@ -73,21 +73,7 @@ export const INITIAL_DOCUMENT: PlainNode = {
     },
   },
 
-  // ── 3. Hello World (custom edits + wildcard replay) ────────────────
-  helloWorld: {
-    $tag: "article",
-    heading: { $tag: "h2", text: "Hello World" },
-    messages: {
-      $tag: "ul",
-      $items: [
-        "heLLo woRLD",
-        "gOOD mORning",
-        "denICEk FORmative",
-      ],
-    },
-  },
-
-  // ── 4. Conference List (table + composer) ───────────────────────────
+  // ── 3. Conference List (table + composer) ───────────────────────────
   conferences: {
     $tag: "article",
     heading: { $tag: "h2", text: "Conferences" },
@@ -114,33 +100,6 @@ export const INITIAL_DOCUMENT: PlainNode = {
           email: { $tag: "td", text: "ada@example.com" },
         },
       ],
-    },
-  },
-
-  // ── 5. Conference Budget (refs + computed total) ────────────────────
-  budget: {
-    $tag: "article",
-    heading: { $tag: "h2", text: "Conference Budget" },
-    speakers: {
-      $tag: "ul",
-      $items: [
-        { $tag: "speaker", name: "Tomáš Petříček", fee: 100 },
-        { $tag: "speaker", name: "Ada Lovelace", fee: 200 },
-      ],
-    },
-    summary: {
-      $tag: "budget",
-      total: {
-        $tag: "x-formula",
-        operation: "sum",
-        args: {
-          $tag: "args",
-          $items: [
-            { $ref: "/budget/speakers/0/fee" },
-            { $ref: "/budget/speakers/1/fee" },
-          ],
-        },
-      },
     },
   },
 };
