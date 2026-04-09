@@ -21,8 +21,13 @@ function getRoomId(): string {
   if (globalThis.location?.hash && globalThis.location.hash.length > 1) {
     return globalThis.location.hash.slice(1);
   }
-  globalThis.location.hash = "demo";
-  return "demo";
+  const id = "demo-" + crypto.randomUUID().slice(0, 6);
+  globalThis.location.hash = id;
+  return id;
+}
+
+function isDemoRoom(roomId: string): boolean {
+  return roomId.startsWith("demo");
 }
 
 const PEER_SESSION_KEY = "mydenicek-peer-id";
@@ -272,21 +277,29 @@ interface DocTab {
   initActions?: boolean;
 }
 
-const DEMO_ROOM = "demo";
-
 export function App() {
   const peerId = useMemo(getOrCreatePeerId, []);
   const [tabs, setTabs] = useState<DocTab[]>(() => {
     const hashRoom = getRoomId();
-    const demoTab: DocTab = {
-      id: DEMO_ROOM,
-      label: "Demo",
-      initialDocument: INITIAL_DOCUMENT,
-      initActions: true,
-    };
-    if (hashRoom === DEMO_ROOM) return [demoTab];
-    // URL points to a different room — add it as a second tab
-    return [demoTab, { id: hashRoom, label: hashRoom.slice(0, 6) }];
+    if (isDemoRoom(hashRoom)) {
+      return [{
+        id: hashRoom,
+        label: "Demo",
+        initialDocument: INITIAL_DOCUMENT,
+        initActions: true,
+      }];
+    }
+    // URL points to a non-demo room — show Demo + that room
+    const demoId = "demo-" + crypto.randomUUID().slice(0, 6);
+    return [
+      {
+        id: demoId,
+        label: "Demo",
+        initialDocument: INITIAL_DOCUMENT,
+        initActions: true,
+      },
+      { id: hashRoom, label: hashRoom.slice(0, 8) },
+    ];
   });
   const [activeTab, setActiveTab] = useState(() => getRoomId());
 
@@ -294,6 +307,21 @@ export function App() {
     const id = crypto.randomUUID().slice(0, 8);
     globalThis.location.hash = id;
     setTabs((prev) => [...prev, { id, label: `Doc ${prev.length + 1}` }]);
+    setActiveTab(id);
+  };
+
+  const addDemo = () => {
+    const id = "demo-" + crypto.randomUUID().slice(0, 6);
+    globalThis.location.hash = id;
+    setTabs((prev) => [
+      ...prev,
+      {
+        id,
+        label: `Demo ${prev.filter((t) => isDemoRoom(t.id)).length + 1}`,
+        initialDocument: INITIAL_DOCUMENT,
+        initActions: true,
+      },
+    ]);
     setActiveTab(id);
   };
 
@@ -349,9 +377,25 @@ export function App() {
             border: "1px solid transparent",
             borderRadius: 4,
           }}
-          title="New document"
+          title="New empty document"
         >
           +
+        </button>
+        <button
+          type="button"
+          onClick={addDemo}
+          style={{
+            padding: "4px 8px",
+            fontSize: 11,
+            cursor: "pointer",
+            background: "transparent",
+            color: "#666",
+            border: "1px solid transparent",
+            borderRadius: 4,
+          }}
+          title="New demo document"
+        >
+          + Demo
         </button>
       </div>
 
