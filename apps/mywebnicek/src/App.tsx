@@ -1,11 +1,10 @@
 import { Text } from "@fluentui/react-components";
-import type { PlainRecord } from "@mydenicek/react";
 import { useDenicek } from "@mydenicek/react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { CommandBar } from "./CommandBar.tsx";
 import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
-import { initializeDocument } from "./initializeDocument.ts";
+import { INITIAL_DOCUMENT } from "./initializeDocument.ts";
 import { RenderedDocument } from "./RenderedDocument.tsx";
 
 const SYNC_SERVER_URL = globalThis.location?.hostname === "localhost"
@@ -19,13 +18,6 @@ function getRoomId(): string {
   const id = crypto.randomUUID().slice(0, 8);
   globalThis.location.hash = id;
   return id;
-}
-
-function isRec(v: unknown): v is PlainRecord {
-  return typeof v === "object" && v !== null &&
-    "$tag" in (v as Record<string, unknown>) &&
-    !("$items" in (v as Record<string, unknown>)) &&
-    !("$ref" in (v as Record<string, unknown>));
 }
 
 const statusColors: Record<string, string> = {
@@ -102,17 +94,11 @@ function PeerNamePrompt(
 }
 
 function Editor({ peer, roomId }: { peer: string; roomId: string }) {
-  const dk = useDenicek({ peer, sync: { url: SYNC_SERVER_URL, roomId } });
-
-  // Initialize with sample document on first load
-  useEffect(() => {
-    const tree = dk.denicek.materialize();
-    if (!isRec(tree) || !("root" in tree)) {
-      initializeDocument(dk.denicek);
-      dk.forceUpdate();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const dk = useDenicek({
+    peer,
+    initialDocument: INITIAL_DOCUMENT,
+    sync: { url: SYNC_SERVER_URL, roomId },
+  });
 
   return (
     <div

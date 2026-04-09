@@ -1,92 +1,74 @@
 /**
- * Default document initialization for the web app.
+ * Default initial document for the web app.
  *
- * Uses the raw Denicek CRDT API directly.
- * Records have HTML tags. Text is stored as primitive strings.
+ * A plain tagged tree using HTML tags for rendering.
+ * Passed to `useDenicek({ initialDocument })`.
  */
 
-import type { Denicek } from "@mydenicek/core";
+import type { PlainNode } from "@mydenicek/core";
 
-/** Shorthand: add an element record with a valid HTML tag. */
-function el(dk: Denicek, path: string, name: string, tag: string): void {
-  dk.add(path, name, { $tag: tag });
+/** Value node shorthand: a record with `$kind: "value"`. */
+function val(tag: string, value: PlainNode): PlainNode {
+  return { $tag: tag, $kind: "value", value };
 }
 
-/**
- * Initialize a document with a simple starter structure.
- */
-export function initializeDocument(dk: Denicek): void {
-  // Root
-  el(dk, "", "root", "section");
-
-  // Header
-  el(dk, "root", "header", "header");
-  el(dk, "root/header", "title", "h1");
-  dk.add("root/header/title", "text", "mydenicek");
-  el(dk, "root/header", "subtitle", "p");
-  dk.add(
-    "root/header/subtitle",
-    "text",
-    "A local-first collaborative document editor",
-  );
-
-  // Examples container
-  el(dk, "root", "examples", "main");
-
-  // Example 1: Counter
-  el(dk, "root/examples", "counter", "article");
-  el(dk, "root/examples/counter", "heading", "h2");
-  dk.add("root/examples/counter/heading", "text", "Counter");
-  el(dk, "root/examples/counter", "value", "p");
-  dk.add("root/examples/counter/value", "count", 0);
-
-  // Example 2: Todo list
-  el(dk, "root/examples", "todoList", "article");
-  el(dk, "root/examples/todoList", "heading", "h2");
-  dk.add("root/examples/todoList/heading", "text", "Todo List");
-  el(dk, "root/examples/todoList", "items", "ul");
-  el(dk, "root/examples/todoList/items", "item1", "li");
-  dk.add("root/examples/todoList/items/item1", "text", "Try editing this text");
-  el(dk, "root/examples/todoList/items", "item2", "li");
-  dk.add(
-    "root/examples/todoList/items/item2",
-    "text",
-    "Add new items with the command bar",
-  );
-  el(dk, "root/examples/todoList/items", "item3", "li");
-  dk.add(
-    "root/examples/todoList/items/item3",
-    "text",
-    "Delete items with: delete /path field",
-  );
-
-  // Example 3: Conference table
-  el(dk, "root/examples", "conferences", "article");
-  el(dk, "root/examples/conferences", "heading", "h2");
-  dk.add("root/examples/conferences/heading", "text", "Conferences");
-  el(dk, "root/examples/conferences", "table", "table");
-  el(dk, "root/examples/conferences/table", "head", "thead");
-  el(dk, "root/examples/conferences/table/head", "headerRow", "tr");
-  el(dk, "root/examples/conferences/table/head/headerRow", "name", "th");
-  dk.add("root/examples/conferences/table/head/headerRow/name", "text", "Name");
-  el(dk, "root/examples/conferences/table/head/headerRow", "location", "th");
-  dk.add(
-    "root/examples/conferences/table/head/headerRow/location",
-    "text",
-    "Location",
-  );
-  el(dk, "root/examples/conferences/table", "body", "tbody");
-  el(dk, "root/examples/conferences/table/body", "ecoop", "tr");
-  el(dk, "root/examples/conferences/table/body/ecoop", "name", "td");
-  dk.add(
-    "root/examples/conferences/table/body/ecoop/name",
-    "text",
-    "ECOOP 2025",
-  );
-  el(dk, "root/examples/conferences/table/body/ecoop", "location", "td");
-  dk.add(
-    "root/examples/conferences/table/body/ecoop/location",
-    "text",
-    "Bergen",
-  );
-}
+/** The starter document tree shown to new users. */
+export const INITIAL_DOCUMENT: PlainNode = {
+  $tag: "section",
+    header: {
+      $tag: "header",
+      title: { $tag: "h1", text: "MyWebnicek" },
+      subtitle: {
+        $tag: "p",
+        text: "A local-first collaborative document-oriented end-user programming editor",
+      },
+    },
+    examples: {
+      $tag: "main",
+      counter: {
+        $tag: "article",
+        heading: { $tag: "h2", text: "Counter" },
+        value: { $tag: "p", count: 0 },
+      },
+      todoList: {
+        $tag: "article",
+        heading: { $tag: "h2", text: "Todo List" },
+        items: {
+          $tag: "ul",
+          item1: { $tag: "li", text: "Try editing this text" },
+          item2: {
+            $tag: "li",
+            text: "Add new items with the command bar",
+          },
+          item3: {
+            $tag: "li",
+            text: "Delete items with: delete /path field",
+          },
+        },
+      },
+      conferences: {
+        $tag: "article",
+        heading: { $tag: "h2", text: "Conferences" },
+        table: {
+          $tag: "table",
+          head: {
+            $tag: "thead",
+            headerRow: {
+              $tag: "tr",
+              name: val("th", "Name"),
+              location: val("th", "Location"),
+            },
+          },
+          body: {
+            $tag: "tbody",
+            ecoop: {
+              $tag: "tr",
+              name: val("td", "ECOOP 2025"),
+              location: val("td", "Bergen"),
+            },
+          },
+        },
+      },
+    },
+  
+};
