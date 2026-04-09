@@ -43,6 +43,15 @@ import type { FormulaResult } from "./formula-engine.ts";
 
 // ── Denicek (collaborative document peer) ───────────────────────────
 
+export interface DenicekOptions {
+  /**
+   * When true, skip edit validation during event ingestion.
+   * Intended for relay servers that store and forward events
+   * without needing custom edit implementations.
+   */
+  relayMode?: boolean;
+}
+
 /**
  * A collaborative document scoped to a single peer.
  *
@@ -61,11 +70,16 @@ export class Denicek {
   private isUndoRedoCommit = false;
 
   /** Creates a peer with an optional initial plain document tree. */
-  constructor(peer: string, initial?: PlainNode);
-  constructor(peer: string, arg?: PlainNode) {
+  constructor(peer: string, initial?: PlainNode, options?: DenicekOptions);
+  constructor(peer: string, arg?: PlainNode, options?: DenicekOptions) {
     validatePeerId(peer);
     this.peer = peer;
-    this.graph = new EventGraph(Node.fromPlain(arg ?? { $tag: "root" }));
+    this.graph = new EventGraph(
+      Node.fromPlain(arg ?? { $tag: "root" }),
+      undefined,
+      undefined,
+      { relayMode: options?.relayMode },
+    );
   }
 
   /** Registers a named primitive edit implementation used by local and remote replay. */

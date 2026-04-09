@@ -654,10 +654,14 @@ export function CommandBar({ dk }: CommandBarProps) {
     // Parse: /selector command args...  OR  bareCommand
     const parsed = parseInput(trimmed);
     const command = parsed.command;
-    // Strip leading "/" from selector for CRDT paths
-    const target = parsed.selector.startsWith("/")
-      ? parsed.selector.slice(1)
-      : parsed.selector;
+    // Strip leading "/" from selector for CRDT paths.
+    // "/" means root → target is "" (valid empty selector).
+    // No selector → target is null.
+    const target = parsed.hasSelector
+      ? (parsed.selector.startsWith("/")
+        ? parsed.selector.slice(1)
+        : parsed.selector)
+      : null;
     const argsStr = parsed.argsStr;
 
     try {
@@ -679,8 +683,8 @@ export function CommandBar({ dk }: CommandBarProps) {
         }
 
         case "tree": {
-          if (target) {
-            const nodes = dk.get(target);
+          if (target !== null) {
+            const nodes = target === "" ? [dk.doc] : dk.get(target);
             if (nodes.length === 0) {
               pushOutput({
                 text: `No nodes at '${parsed.selector}'`,
@@ -691,7 +695,7 @@ export function CommandBar({ dk }: CommandBarProps) {
                 const lines: string[] = [];
                 renderTree(
                   n,
-                  parsed.selector.split("/").pop() ?? "node",
+                  parsed.selector.split("/").pop() ?? "root",
                   0,
                   lines,
                 );
@@ -705,14 +709,14 @@ export function CommandBar({ dk }: CommandBarProps) {
         }
 
         case "get": {
-          if (!target) {
+          if (target === null) {
             pushOutput({
               text: "Usage: /selector get",
               kind: "error",
             });
             break;
           }
-          const nodes = dk.get(target);
+          const nodes = target === "" ? [dk.doc] : dk.get(target);
           if (nodes.length === 0) {
             pushOutput({
               text: `No nodes at '${parsed.selector}'`,
@@ -726,7 +730,7 @@ export function CommandBar({ dk }: CommandBarProps) {
 
         case "add": {
           const { args } = splitArgs(argsStr, 2);
-          if (!target || args.length < 1) {
+          if (target === null || args.length < 1) {
             pushOutput({
               text: "Usage: /selector add <field> [value|json]",
               kind: "error",
@@ -745,7 +749,7 @@ export function CommandBar({ dk }: CommandBarProps) {
 
         case "delete": {
           const { args } = splitArgs(argsStr, 1);
-          if (!target || args.length < 1) {
+          if (target === null || args.length < 1) {
             pushOutput({
               text: "Usage: /selector delete <field>",
               kind: "error",
@@ -763,7 +767,7 @@ export function CommandBar({ dk }: CommandBarProps) {
 
         case "rename": {
           const { args } = splitArgs(argsStr, 2);
-          if (!target || args.length < 2) {
+          if (target === null || args.length < 2) {
             pushOutput({
               text: "Usage: /selector rename <old-field> <new-field>",
               kind: "error",
@@ -780,7 +784,7 @@ export function CommandBar({ dk }: CommandBarProps) {
         }
 
         case "set": {
-          if (!target || !argsStr) {
+          if (target === null || !argsStr) {
             pushOutput({
               text: "Usage: /selector set <value>",
               kind: "error",
@@ -804,7 +808,7 @@ export function CommandBar({ dk }: CommandBarProps) {
         }
 
         case "pushBack": {
-          if (!target || !argsStr) {
+          if (target === null || !argsStr) {
             pushOutput({
               text: "Usage: /selector pushBack <value|json>",
               kind: "error",
@@ -821,7 +825,7 @@ export function CommandBar({ dk }: CommandBarProps) {
         }
 
         case "pushFront": {
-          if (!target || !argsStr) {
+          if (target === null || !argsStr) {
             pushOutput({
               text: "Usage: /selector pushFront <value|json>",
               kind: "error",
@@ -838,7 +842,7 @@ export function CommandBar({ dk }: CommandBarProps) {
         }
 
         case "popBack": {
-          if (!target) {
+          if (target === null) {
             pushOutput({
               text: "Usage: /selector popBack",
               kind: "error",
@@ -854,7 +858,7 @@ export function CommandBar({ dk }: CommandBarProps) {
         }
 
         case "popFront": {
-          if (!target) {
+          if (target === null) {
             pushOutput({
               text: "Usage: /selector popFront",
               kind: "error",
@@ -870,7 +874,7 @@ export function CommandBar({ dk }: CommandBarProps) {
         }
 
         case "updateTag": {
-          if (!target || !argsStr) {
+          if (target === null || !argsStr) {
             pushOutput({
               text: "Usage: /selector updateTag <new-tag>",
               kind: "error",
@@ -888,7 +892,7 @@ export function CommandBar({ dk }: CommandBarProps) {
 
         case "wrapRecord": {
           const { args } = splitArgs(argsStr, 2);
-          if (!target || args.length < 2) {
+          if (target === null || args.length < 2) {
             pushOutput({
               text: "Usage: /selector wrapRecord <field> <tag>",
               kind: "error",
@@ -906,7 +910,7 @@ export function CommandBar({ dk }: CommandBarProps) {
         }
 
         case "wrapList": {
-          if (!target || !argsStr) {
+          if (target === null || !argsStr) {
             pushOutput({
               text: "Usage: /selector wrapList <tag>",
               kind: "error",
@@ -923,7 +927,7 @@ export function CommandBar({ dk }: CommandBarProps) {
         }
 
         case "copy": {
-          if (!target || !argsStr) {
+          if (target === null || !argsStr) {
             pushOutput({
               text: "Usage: /target copy <source-selector>",
               kind: "error",
@@ -944,7 +948,7 @@ export function CommandBar({ dk }: CommandBarProps) {
         case "formula": {
           // /selector formula <field> <operation> [arg1] [arg2] ...
           const { args } = splitArgs(argsStr, 3);
-          if (!target || args.length < 2) {
+          if (target === null || args.length < 2) {
             pushOutput({
               text:
                 "Usage: /selector formula <field> <operation> [ref|value ...]",
@@ -991,7 +995,7 @@ export function CommandBar({ dk }: CommandBarProps) {
           }
           const eventId = argsStr.trim();
           let id: string;
-          if (target) {
+          if (target !== null) {
             id = dk.denicek.replayEditFromEventId(eventId, target);
           } else {
             id = dk.denicek.repeatEditFromEventId(eventId);

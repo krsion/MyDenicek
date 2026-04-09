@@ -104,21 +104,33 @@ type PendingDependencyIndex = {
 const MAX_BUFFERED_REMOTE_EVENTS = 10_000;
 const MAX_REPLAY_TRANSFORMATIONS = 10_000;
 
+export interface EventGraphOptions {
+  /**
+   * When true, skip edit validation during event ingestion.
+   * Use for relay servers that only store and forward events
+   * without needing to understand edit semantics.
+   */
+  relayMode?: boolean;
+}
+
 export class EventGraph {
   private initial: Node;
   private events: Map<string, Event>;
   private _frontierIds: EventId[];
   private cachedOrder: string[] | null = null;
   private bufferedEvents: Event[] = [];
+  private readonly relayMode: boolean;
 
   constructor(
     initial: Node,
     events?: Map<string, Event>,
     frontiers?: EventId[],
+    options?: EventGraphOptions,
   ) {
     this.initial = initial;
     this.events = events ?? new Map();
     this._frontierIds = frontiers ?? [];
+    this.relayMode = options?.relayMode ?? false;
   }
 
   get frontiers(): EventId[] {
@@ -198,7 +210,9 @@ export class EventGraph {
 
   insertEvent(event: Event): void {
     event.validate(this.events);
-    this.validateEventAgainstCausalState(event);
+    if (!this.relayMode) {
+      this.validateEventAgainstCausalState(event);
+    }
     this.events.set(event.id.format(), event);
     const parentKeys = new Set(event.parents.map((p) => p.format()));
     this._frontierIds = [

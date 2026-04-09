@@ -31,6 +31,7 @@ export class SyncRoom {
     this.roomPeer = new Denicek(
       `room-${id.replaceAll(":", "-")}`,
       initialDocument,
+      { relayMode: true },
     );
     this.bootstrapped = initialDocument !== undefined;
   }
@@ -75,6 +76,7 @@ export class SyncRoom {
         this.roomPeer = new Denicek(
           `room-${this.id.replaceAll(":", "-")}`,
           clientInitialDocument,
+          { relayMode: true },
         );
         this.bootstrapped = true;
       }

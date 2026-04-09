@@ -8,7 +8,23 @@
  * {@link initializeActions} after construction since they need event IDs.
  */
 
+import { registerPrimitiveEdit } from "@mydenicek/core";
 import type { Denicek, PlainNode } from "@mydenicek/core";
+
+// App-specific primitive edits for string splitting
+registerPrimitiveEdit("splitFirst", (current, ...args) => {
+  const separator = typeof args[0] === "string" ? args[0] : ", ";
+  const str = String(current);
+  const idx = str.indexOf(separator);
+  return idx >= 0 ? str.slice(0, idx) : str;
+});
+
+registerPrimitiveEdit("splitRest", (current, ...args) => {
+  const separator = typeof args[0] === "string" ? args[0] : ", ";
+  const str = String(current);
+  const idx = str.indexOf(separator);
+  return idx >= 0 ? str.slice(idx + separator.length) : "";
+});
 
 /** The starter document tree. */
 export const INITIAL_DOCUMENT: PlainNode = {

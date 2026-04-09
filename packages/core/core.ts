@@ -1,4 +1,4 @@
-export { Denicek } from "./core/denicek.ts";
+export { Denicek, type DenicekOptions } from "./core/denicek.ts";
 export { DocumentAdapter } from "./core/document-adapter.ts";
 export type {
   ActionNodeData,
