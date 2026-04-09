@@ -1,7 +1,7 @@
 import { Text } from "@fluentui/react-components";
 import type { Denicek, PlainNode } from "@mydenicek/react";
 import { useDenicek } from "@mydenicek/react";
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { CommandBar } from "./CommandBar.tsx";
 import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
@@ -301,6 +301,24 @@ export function App() {
     setTabs((prev) => [...prev, tab]);
     setActiveTab(tab.id);
   };
+
+  const openRoom = useCallback((roomId: string) => {
+    setTabs((prev) => {
+      if (prev.some((t) => t.id === roomId)) return prev;
+      return [...prev, { id: roomId, template: TEMPLATES[1]! }];
+    });
+    setActiveTab(roomId);
+  }, []);
+
+  // Listen for hash changes (e.g. pasting a link while app is open)
+  useEffect(() => {
+    const onHashChange = () => {
+      const hash = globalThis.location.hash.slice(1);
+      if (hash) openRoom(hash);
+    };
+    globalThis.addEventListener("hashchange", onHashChange);
+    return () => globalThis.removeEventListener("hashchange", onHashChange);
+  }, [openRoom]);
 
   const tab = activeTab ? tabs.find((t) => t.id === activeTab) : null;
 
