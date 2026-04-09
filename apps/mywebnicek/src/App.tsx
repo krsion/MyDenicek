@@ -22,6 +22,16 @@ function getRoomId(): string {
   return id;
 }
 
+const PEER_ID_KEY = "mydenicek-peer-id";
+/** Stable peer ID persisted in localStorage. Generated once, reused forever. */
+function getOrCreatePeerId(): string {
+  const stored = globalThis.localStorage?.getItem(PEER_ID_KEY);
+  if (stored) return stored;
+  const id = crypto.randomUUID().slice(0, 12);
+  globalThis.localStorage?.setItem(PEER_ID_KEY, id);
+  return id;
+}
+
 const statusColors: Record<string, string> = {
   connected: "#107c10",
   connecting: "#ca5010",
@@ -29,78 +39,17 @@ const statusColors: Record<string, string> = {
   idle: "#8a8a8a",
 };
 
-function PeerNamePrompt(
-  { onSubmit }: { onSubmit: (name: string) => void },
-) {
-  const [name, setName] = useState("");
-  return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        height: "100vh",
-        background: "#f5f5f5",
-      }}
-    >
-      <div
-        style={{
-          background: "#fff",
-          padding: 32,
-          borderRadius: 8,
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          textAlign: "center",
-        }}
-      >
-        <Text size={500} weight="semibold" block style={{ marginBottom: 16 }}>
-          mydenicek
-        </Text>
-        <Text block style={{ marginBottom: 12, color: "#605e5c" }}>
-          Enter your name to start collaborating
-        </Text>
-        <input
-          autoFocus
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && name.trim()) onSubmit(name.trim());
-          }}
-          placeholder="e.g. Alice"
-          style={{
-            padding: "8px 12px",
-            fontSize: 16,
-            border: "1px solid #ccc",
-            borderRadius: 4,
-            width: 200,
-            marginRight: 8,
-          }}
-        />
-        <button
-          type="button"
-          onClick={() => name.trim() && onSubmit(name.trim())}
-          style={{
-            padding: "8px 16px",
-            fontSize: 16,
-            background: "#0078d4",
-            color: "#fff",
-            border: "none",
-            borderRadius: 4,
-            cursor: "pointer",
-          }}
-        >
-          Join
-        </button>
-      </div>
-    </div>
-  );
-}
-
 const views = ["rendered", "raw", "events"] as const;
 type ViewMode = (typeof views)[number];
 
-function Editor({ peer, roomId }: { peer: string; roomId: string }) {
+function Editor(
+  { peerId, roomId }: {
+    peerId: string;
+    roomId: string;
+  },
+) {
   const dk = useDenicek({
-    peer,
+    peer: peerId,
     initialDocument: INITIAL_DOCUMENT,
     sync: { url: SYNC_SERVER_URL, roomId },
   });
@@ -162,7 +111,7 @@ function Editor({ peer, roomId }: { peer: string; roomId: string }) {
             color: statusColors[dk.syncStatus] ?? "#8a8a8a",
           }}
         >
-          ● {dk.syncStatus} — {peer} — room: {roomId}
+          ● {dk.syncStatus} — peer: {peerId.slice(0, 6)} — room: {roomId}
         </span>
       </div>
 
@@ -195,11 +144,7 @@ function Editor({ peer, roomId }: { peer: string; roomId: string }) {
 
 export function App() {
   const roomId = useMemo(getRoomId, []);
-  const [peer, setPeer] = useState<string | null>(null);
+  const peerId = useMemo(getOrCreatePeerId, []);
 
-  if (!peer) {
-    return <PeerNamePrompt onSubmit={setPeer} />;
-  }
-
-  return <Editor peer={peer} roomId={roomId} />;
+  return <Editor peerId={peerId} roomId={roomId} />;
 }

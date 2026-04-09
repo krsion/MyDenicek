@@ -3,21 +3,11 @@ import { expect, test } from "@playwright/test";
 const BASE = process.env.BASE_URL ?? "https://krsion.github.io/mydenicek/";
 
 test.describe("mydenicek E2E", () => {
-  test("page loads and renders document after entering name", async ({ page }) => {
+  test("page loads and renders document", async ({ page }) => {
     await page.goto("./");
 
-    // Name prompt should appear
-    await expect(page.getByPlaceholder("e.g. Alice")).toBeVisible();
-
-    // Enter name and join
-    await page.getByPlaceholder("e.g. Alice").fill("E2E-Tester");
-    await page.getByRole("button", { name: "Join" }).click();
-
-    // Document should render (wait for a heading)
+    // Document should render immediately (no prompt)
     await expect(page.locator("h2").first()).toBeVisible({ timeout: 10_000 });
-
-    // Header should show peer name and sync status
-    await expect(page.getByText("E2E-Tester")).toBeVisible();
   });
 
   test("two peers can sync edits via the server", async ({ browser }) => {
@@ -27,8 +17,6 @@ test.describe("mydenicek E2E", () => {
     const aliceCtx = await browser.newContext();
     const alice = await aliceCtx.newPage();
     await alice.goto(`${BASE}#${roomId}`);
-    await alice.getByPlaceholder("e.g. Alice").fill("Alice");
-    await alice.getByRole("button", { name: "Join" }).click();
     await expect(alice.locator("h2").first()).toBeVisible({ timeout: 10_000 });
     await expect(alice.getByText("connected")).toBeVisible({ timeout: 10_000 });
 
@@ -36,8 +24,6 @@ test.describe("mydenicek E2E", () => {
     const bobCtx = await browser.newContext();
     const bob = await bobCtx.newPage();
     await bob.goto(`${BASE}#${roomId}`);
-    await bob.getByPlaceholder("e.g. Alice").fill("Bob");
-    await bob.getByRole("button", { name: "Join" }).click();
     await expect(bob.locator("h2").first()).toBeVisible({ timeout: 10_000 });
     await expect(bob.getByText("connected")).toBeVisible({ timeout: 10_000 });
 
