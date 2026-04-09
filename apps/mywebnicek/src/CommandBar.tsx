@@ -414,8 +414,9 @@ export function CommandBar({ dk }: CommandBarProps) {
    * Format: `/selector command args...` or `bareCommand`.
    */
   const parseInput = useCallback((text: string) => {
-    const parts = text.split(/\s+/);
+    const parts = text.split(/\s+/).filter((p) => p !== "");
     const first = parts[0] ?? "";
+    const hasTrailingSpace = text.endsWith(" ");
     if (first.startsWith("/")) {
       return {
         selector: first,
@@ -423,6 +424,8 @@ export function CommandBar({ dk }: CommandBarProps) {
         argsStr: parts.slice(2).join(" "),
         argCount: Math.max(0, parts.length - 2),
         hasSelector: true,
+        /** User has typed space after selector (ready for command). */
+        selectorDone: parts.length >= 2 || hasTrailingSpace,
       };
     }
     return {
@@ -431,6 +434,7 @@ export function CommandBar({ dk }: CommandBarProps) {
       argsStr: parts.slice(1).join(" "),
       argCount: Math.max(0, parts.length - 1),
       hasSelector: false,
+      selectorDone: false,
     };
   }, []);
 
@@ -462,8 +466,8 @@ export function CommandBar({ dk }: CommandBarProps) {
         };
       }
 
-      // Phase 2: typing a selector path
-      if (parsed.hasSelector && !parsed.command) {
+      // Phase 2: typing a selector path (no space yet after selector)
+      if (parsed.hasSelector && !parsed.selectorDone) {
         const pathStr = parsed.selector.startsWith("/")
           ? parsed.selector.slice(1)
           : parsed.selector;
@@ -488,7 +492,7 @@ export function CommandBar({ dk }: CommandBarProps) {
       }
 
       // Phase 3: selector done, completing command
-      if (parsed.hasSelector && parsed.command && !parsed.argsStr) {
+      if (parsed.hasSelector && parsed.selectorDone && !parsed.argsStr) {
         const nodes = resolveSelector(parsed.selector);
         if (nodes.length === 0) return { items: [], phase: "command" };
         // Union of valid commands across all matched nodes
@@ -544,7 +548,7 @@ export function CommandBar({ dk }: CommandBarProps) {
         } else {
           setGhostText("");
         }
-      } else if (phase === "command" && items.length === 0 && !parsed.command) {
+      } else if (phase === "command" && items.length === 0) {
         // Just finished selector, show hint
         setGhostText(" <command>");
       } else {
