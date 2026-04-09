@@ -1,11 +1,11 @@
 import { Text } from "@fluentui/react-components";
 import { useDenicek } from "@mydenicek/react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { CommandBar } from "./CommandBar.tsx";
 import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
 import { EventGraphView } from "./EventGraphView.tsx";
-import { INITIAL_DOCUMENT } from "./initializeDocument.ts";
+import { INITIAL_DOCUMENT, initializeActions } from "./initializeDocument.ts";
 import { RawDocumentView } from "./RawDocumentView.tsx";
 import { RenderedDocument } from "./RenderedDocument.tsx";
 
@@ -56,6 +56,13 @@ function Editor(
     initialDocument: INITIAL_DOCUMENT,
     sync: { url: SYNC_SERVER_URL, roomId },
   });
+
+  // Build interactive parts (buttons, replay scripts) once
+  const initialized = useRef(false);
+  if (!initialized.current) {
+    initializeActions(dk.denicek);
+    initialized.current = true;
+  }
 
   const [syncEnabled, setSyncEnabled] = useState(true);
   const PANELS_KEY = "mydenicek-panels";

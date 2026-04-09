@@ -255,7 +255,6 @@ function EventDetail(
     onClose: () => void;
   },
 ) {
-  const record = event as Record<string, unknown>;
   const color = computePeerColor(event.peer);
   return (
     <div
@@ -336,18 +335,18 @@ function EventDetail(
       <div>
         <b>Edit:</b> {shortenEditKind(event.editKind)} → {event.target}
       </div>
-      {record.editDescription && (
+      {event.editDescription && (
         <div>
-          <b>Description:</b> {String(record.editDescription)}
+          <b>Description:</b> {event.editDescription}
         </div>
       )}
       <div>
         <b>Parents:</b>{" "}
         {event.parents.length > 0 ? event.parents.join(", ") : "none (root)"}
       </div>
-      {record.vectorClock && (
+      {event.vectorClock && (
         <div>
-          <b>Vector Clock:</b> {JSON.stringify(record.vectorClock)}
+          <b>Vector Clock:</b> {JSON.stringify(event.vectorClock)}
         </div>
       )}
     </div>
