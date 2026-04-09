@@ -113,7 +113,7 @@ export class SyncClient {
     }
   }
 
-  /** Pause syncing: closes the WebSocket but remembers the connection opts. */
+  /** Pause syncing: keeps WebSocket open but suppresses all sends/receives. */
   pause(): void {
     this._userPaused = true;
     if (this.reconnectTimer) {
@@ -122,16 +122,17 @@ export class SyncClient {
     }
     if (this.inner) {
       this.inner.pause();
-      this.inner.close();
-      this.inner = null;
     }
     this.setStatus("paused");
   }
 
-  /** Resume syncing after a pause. Reconnects and flushes pending edits. */
+  /** Resume syncing after a pause. Immediately flushes pending edits. */
   resume(): void {
     this._userPaused = false;
-    if (this.opts) {
+    if (this.inner) {
+      this.inner.resume();
+      this.setStatus("connected");
+    } else if (this.opts) {
       this.connect(this.opts);
     }
   }

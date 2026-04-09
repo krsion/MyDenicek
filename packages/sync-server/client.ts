@@ -85,27 +85,22 @@ export class SyncClient {
   }
 
   /**
-   * Pause syncing: close the WebSocket, stop auto-sync, suppress reconnect.
-   * Local edits continue to accumulate; call `resume()` to sync them later.
+   * Pause syncing: stop auto-sync and suppress all sends/receives.
+   * The WebSocket stays open — no reconnect needed on resume.
    */
   pause(): void {
     this._paused = true;
-    this.connecting = false;
     this.stopAutoSyncLoop();
-    if (this.socket) {
-      this.socket.onclose = null;
-      this.socket.close();
-      this.socket = null;
-    }
   }
 
   /**
-   * Resume syncing after a `pause()`. Reconnects and flushes pending edits.
+   * Resume syncing after a `pause()`. Immediately syncs pending edits.
    */
   resume(): void {
     if (!this._paused) return;
     this._paused = false;
-    this.connect();
+    this.startAutoSyncLoop();
+    this.syncNow();
   }
 
   /** Build the full WebSocket URL with room query parameter. */
