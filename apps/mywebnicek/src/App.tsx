@@ -21,9 +21,8 @@ function getRoomId(): string {
   if (globalThis.location?.hash && globalThis.location.hash.length > 1) {
     return globalThis.location.hash.slice(1);
   }
-  const id = crypto.randomUUID().slice(0, 8);
-  globalThis.location.hash = id;
-  return id;
+  globalThis.location.hash = "demo";
+  return "demo";
 }
 
 const PEER_SESSION_KEY = "mydenicek-peer-id";
@@ -273,18 +272,23 @@ interface DocTab {
   initActions?: boolean;
 }
 
+const DEMO_ROOM = "demo";
+
 export function App() {
   const peerId = useMemo(getOrCreatePeerId, []);
   const [tabs, setTabs] = useState<DocTab[]>(() => {
-    const roomId = getRoomId();
-    return [{
-      id: roomId,
+    const hashRoom = getRoomId();
+    const demoTab: DocTab = {
+      id: DEMO_ROOM,
       label: "Demo",
       initialDocument: INITIAL_DOCUMENT,
       initActions: true,
-    }];
+    };
+    if (hashRoom === DEMO_ROOM) return [demoTab];
+    // URL points to a different room — add it as a second tab
+    return [demoTab, { id: hashRoom, label: hashRoom.slice(0, 6) }];
   });
-  const [activeTab, setActiveTab] = useState(tabs[0]!.id);
+  const [activeTab, setActiveTab] = useState(() => getRoomId());
 
   const addDocument = () => {
     const id = crypto.randomUUID().slice(0, 8);
