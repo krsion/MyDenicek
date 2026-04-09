@@ -65,6 +65,7 @@ export class SyncClient {
   private knownServerFrontiers: string[] = [];
   private serverBootstrapped = false;
   private _paused = false;
+  private pauseBuffer: string[] = [];
 
   /** Create a sync client with the given options. */
   constructor(options: SyncClientOptions) {
@@ -94,11 +95,16 @@ export class SyncClient {
   }
 
   /**
-   * Resume syncing after a `pause()`. Immediately syncs pending edits.
+   * Resume syncing after a `pause()`. Replays buffered messages and
+   * immediately syncs pending local edits.
    */
   resume(): void {
     if (!this._paused) return;
     this._paused = false;
+    for (const msg of this.pauseBuffer) {
+      this.handleSocketMessage(msg);
+    }
+    this.pauseBuffer = [];
     this.startAutoSyncLoop();
     this.syncNow();
   }
@@ -185,7 +191,10 @@ export class SyncClient {
 
   /** Dispatch an incoming WebSocket message to the appropriate handler. */
   private handleSocketMessage(rawMessage: string): void {
-    if (this._paused) return;
+    if (this._paused) {
+      this.pauseBuffer.push(rawMessage);
+      return;
+    }
     let message: EncodedSyncMessage;
     try {
       message = JSON.parse(rawMessage) as EncodedSyncMessage;
