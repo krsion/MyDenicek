@@ -30,10 +30,7 @@ export const INITIAL_DOCUMENT: PlainNode = {
     btn: {
       $tag: "button",
       label: "Increment",
-      script: {
-        $tag: "replay-script",
-        steps: { $tag: "event-steps", $items: [] },
-      },
+      steps: { $tag: "event-steps", $items: [] },
     },
   },
 
@@ -132,15 +129,9 @@ export function initializeActions(dk: Denicek): void {
   const renameId = dk.rename("counter/value", "value", "left");
   const addRightId = dk.add("counter/value", "right", 1);
 
-  dk.pushBack("counter/btn/script/steps", { $tag: "step", eventId: wrapId });
-  dk.pushBack("counter/btn/script/steps", {
-    $tag: "step",
-    eventId: renameId,
-  });
-  dk.pushBack("counter/btn/script/steps", {
-    $tag: "step",
-    eventId: addRightId,
-  });
+  dk.pushBack("counter/btn/steps", { $tag: "step", eventId: wrapId });
+  dk.pushBack("counter/btn/steps", { $tag: "step", eventId: renameId });
+  dk.pushBack("counter/btn/steps", { $tag: "step", eventId: addRightId });
 
   // ── Todo: record the "add item from input" recipe ────────────────
   const pushId = dk.pushFront("todoList/items", {
