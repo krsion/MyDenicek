@@ -374,3 +374,64 @@ Deno.test({
     }
   },
 });
+
+Deno.test({
+  name: "paused client does not send its edits",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    const { handle, url } = startTestServer();
+    const room = `r-${crypto.randomUUID().slice(0, 6)}`;
+    const dkA = new Denicek("peerA");
+    const dkB = new Denicek("peerB");
+    const cA = new SyncClient({
+      url,
+      roomId: room,
+      document: dkA,
+      autoSyncIntervalMs: 100,
+    });
+    const cB = new SyncClient({
+      url,
+      roomId: room,
+      document: dkB,
+      autoSyncIntervalMs: 100,
+    });
+    try {
+      await cA.connect();
+      await cB.connect();
+      await delay(300);
+
+      // Verify sync works
+      dkA.add("", "x", 1);
+      await waitFor(() =>
+        (dkB.materialize() as Record<string, unknown>).x === 1
+      );
+
+      // Pause A
+      cA.pause();
+      await delay(200);
+
+      // A edits while paused
+      dkA.set("x", 999);
+      await delay(500);
+
+      // B should NOT see the edit from paused A
+      assertEquals(
+        (dkB.materialize() as Record<string, unknown>).x,
+        1,
+        "B must not see paused A's edit",
+      );
+
+      // Resume A — B should now see the edit
+      cA.resume();
+      await waitFor(() =>
+        (dkB.materialize() as Record<string, unknown>).x === 999
+      );
+      assertEquals(dkA.materialize(), dkB.materialize());
+    } finally {
+      cA.close();
+      cB.close();
+      await handle.close();
+    }
+  },
+});

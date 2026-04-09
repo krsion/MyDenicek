@@ -184,6 +184,7 @@ export class SyncClient {
 
   /** Dispatch an incoming WebSocket message to the appropriate handler. */
   private handleSocketMessage(rawMessage: string): void {
+    if (this._paused) return;
     let message: EncodedSyncMessage;
     try {
       message = JSON.parse(rawMessage) as EncodedSyncMessage;
