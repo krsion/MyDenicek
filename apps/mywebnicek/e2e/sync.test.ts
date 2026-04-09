@@ -45,9 +45,9 @@ test.describe("mydenicek E2E", () => {
     await bob.waitForTimeout(2000);
 
     // Alice makes an edit via the command bar
-    const aliceInput = alice.getByPlaceholder("Type a command");
+    const aliceInput = alice.getByPlaceholder("/path command");
     await aliceInput.click();
-    await aliceInput.fill("set /header/title/text ALICE-EDIT");
+    await aliceInput.fill("/header/title/text set ALICE-EDIT");
     await aliceInput.press("Enter");
 
     // Wait for sync — Bob should see Alice's edit

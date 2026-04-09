@@ -273,13 +273,22 @@ function parseValue(raw: string): PlainNode {
   return trimmed;
 }
 
-// ── All known commands ───────────────────────────────────────────────────
+// ── Commands by node context ─────────────────────────────────────────────
 
-const COMMANDS = [
+/** Commands that require a selector (typed first). */
+const RECORD_CMDS = [
   "add",
   "delete",
   "rename",
-  "set",
+  "updateTag",
+  "wrapRecord",
+  "wrapList",
+  "copy",
+  "formula",
+  "get",
+  "tree",
+];
+const LIST_CMDS = [
   "pushBack",
   "pushFront",
   "popBack",
@@ -288,15 +297,16 @@ const COMMANDS = [
   "wrapRecord",
   "wrapList",
   "copy",
-  "formula",
-  "undo",
-  "redo",
   "get",
   "tree",
-  "help",
 ];
+const PRIMITIVE_CMDS = ["set", "get"];
+const ANY_NODE_CMDS = ["get", "tree", "copy", "wrapRecord", "wrapList"];
 
-// Ghost hints: command → [arg after selector, ...]
+/** Commands that work without a selector. */
+const BARE_CMDS = ["undo", "redo", "help", "tree"];
+
+// Ghost hints: command → [remaining args after command]
 const ARG_HINTS: Record<string, string[]> = {
   add: ["<field>", "<value>"],
   delete: ["<field>"],
@@ -329,33 +339,44 @@ const FORMULA_OPS = [
   "countChildren",
 ];
 
-const HELP_TEXT = `Commands:
-  add <selector> <field> <value|json>   Add a field to matched records
-  delete <selector> <field>             Delete a field
-  rename <selector> <old> <new>         Rename a field
-  set <selector> <value>                Set a primitive value
-  pushBack <selector> <value|json>      Append to a list
-  pushFront <selector> <value|json>     Prepend to a list
-  popBack <selector>                    Remove last list item
-  popFront <selector>                   Remove first list item
-  updateTag <selector> <tag>            Update structural tag
-  wrapRecord <selector> <field> <tag>   Wrap in a record
-  wrapList <selector> <tag>             Wrap in a list
-  copy <target> <source>                Copy nodes
-  formula <sel> <field> <op> [args]     Add a formula node
-  undo / redo                           Undo or redo
-  get <selector>                        Show nodes at selector
-  tree [selector]                       Show document tree
-  help                                  Show this help
+const HELP_TEXT = `Syntax: /selector command [args...]   or   command
 
-Formula args: paths (e.g. /counter/value) become refs, others are literals.
-Operations: ${FORMULA_OPS.join(", ")}
+Examples:
+  /header/title set Hello         Set a value
+  /items pushBack {"$tag":"li"}   Append to a list
+  /items/* get                    Get all list items
+  /counter add total formula ...  Add a formula
 
-Selectors:
-  /path/to/node       Navigate to a specific node
-  /list/*             Wildcard — targets all list items
-  /list/*/field       Field common to every list item
-  Tab                 Auto-complete paths and commands`;
+Commands (shown after selecting a path):
+  add <field> <value|json>        Add a field
+  delete <field>                  Delete a field
+  rename <old> <new>              Rename a field
+  set <value>                     Set a primitive value
+  pushBack / pushFront <value>    Add to list
+  popBack / popFront              Remove from list
+  updateTag <tag>                 Update structural tag
+  wrapRecord <field> <tag>        Wrap in a record
+  wrapList <tag>                  Wrap in a list
+  copy <source-selector>          Copy nodes
+  formula <field> <op> [args]     Add a formula node
+  get                             Show node value
+  tree                            Show subtree
+
+Standalone:
+  undo / redo                     Undo or redo
+  tree                            Show full document tree
+  help                            Show this help
+
+Formula ops: ${FORMULA_OPS.join(", ")}
+Selectors: /path, /list/*, /list/*/field. Tab to auto-complete.`;
+
+/** Return commands valid for the given node type. */
+function commandsForNode(node: PlainNode): string[] {
+  if (isPlainList(node)) return LIST_CMDS;
+  if (isPlainRecord(node)) return RECORD_CMDS;
+  if (isPrimitive(node)) return PRIMITIVE_CMDS;
+  return ANY_NODE_CMDS;
+}
 
 // ── Component ────────────────────────────────────────────────────────────
 
@@ -386,111 +407,179 @@ export function CommandBar({ dk }: CommandBarProps) {
     return lines.join("\n");
   }, [tree]);
 
-  // ── Path completion ─────────────────────────────────────────────────────
+  // ── Completion logic (selector-first) ────────────────────────────────────
 
-  /** Get the children available at the current path being typed. */
-  const getPathCompletions = useCallback(
-    (text: string): { items: CompletionItem[]; prefix: string } => {
-      const parts = text.split(/\s+/);
-      if (parts.length <= 1) {
-        const partial = parts[0] ?? "";
-        return {
-          items: COMMANDS.filter((c) => c.startsWith(partial) && c !== partial)
-            .map((c) => ({ name: c, label: c })),
-          prefix: "",
-        };
-      }
-      const selectorArg = parts[1] ?? "";
-      if (!tree || !isPlainRecord(tree)) return { items: [], prefix: "" };
+  /**
+   * Parse input into: selector (optional), command, remaining args.
+   * Format: `/selector command args...` or `bareCommand`.
+   */
+  const parseInput = useCallback((text: string) => {
+    const parts = text.split(/\s+/);
+    const first = parts[0] ?? "";
+    if (first.startsWith("/")) {
+      return {
+        selector: first,
+        command: parts[1] ?? "",
+        argsStr: parts.slice(2).join(" "),
+        argCount: Math.max(0, parts.length - 2),
+        hasSelector: true,
+      };
+    }
+    return {
+      selector: "",
+      command: first,
+      argsStr: parts.slice(1).join(" "),
+      argCount: Math.max(0, parts.length - 1),
+      hasSelector: false,
+    };
+  }, []);
 
-      const pathStr = selectorArg.startsWith("/")
-        ? selectorArg.slice(1)
-        : selectorArg;
-      const segments = pathStr.split("/");
-      const parentSegments = segments.slice(0, -1);
-      const partial = segments[segments.length - 1] ?? "";
-
-      const parentNodes = parentSegments.length === 0
-        ? [tree]
-        : navigateToAll(tree, parentSegments);
-      if (parentNodes.length === 0) return { items: [], prefix: "" };
-
-      const all =
-        (parentNodes.length === 1
-          ? getChildCompletions(parentNodes[0]!)
-          : intersectCompletions(parentNodes)).filter((c) =>
-            c.name.startsWith(partial)
-          );
-      const prefix = "/" +
-        (parentSegments.length > 0 ? parentSegments.join("/") + "/" : "");
-      return { items: all, prefix };
+  /** Resolve the selector to its target node(s) for command suggestions. */
+  const resolveSelector = useCallback(
+    (selector: string): PlainNode[] => {
+      if (!tree || !isPlainRecord(tree)) return [];
+      const pathStr = selector.startsWith("/") ? selector.slice(1) : selector;
+      if (!pathStr) return [tree];
+      return navigateToAll(tree, pathStr.split("/"));
     },
     [tree],
   );
 
-  /** Update completions list and ghost text when input changes. */
-  const updateCompletions = useCallback((text: string) => {
-    const { items } = getPathCompletions(text);
-    const parts = text.split(/\s+/);
-    const isPathCompletion = parts.length > 1;
-    const partial = parts.length <= 1
-      ? (parts[0] ?? "")
-      : (parts[1] ?? "").split("/").pop() ?? "";
+  /** Get completions for the current input state. */
+  const getCompletions = useCallback(
+    (text: string): { items: CompletionItem[]; phase: string } => {
+      const parsed = parseInput(text);
 
-    if (items.length >= 1 && isPathCompletion) {
+      // Phase 1: bare command completion (undo, redo, help, tree)
+      if (!parsed.hasSelector && !parsed.command.startsWith("/")) {
+        const partial = parsed.command;
+        const allCmds = [...BARE_CMDS];
+        return {
+          items: allCmds
+            .filter((c) => c.startsWith(partial) && c !== partial)
+            .map((c) => ({ name: c, label: c })),
+          phase: "bare-command",
+        };
+      }
+
+      // Phase 2: typing a selector path
+      if (parsed.hasSelector && !parsed.command) {
+        const pathStr = parsed.selector.startsWith("/")
+          ? parsed.selector.slice(1)
+          : parsed.selector;
+        const segments = pathStr.split("/");
+        const parentSegments = segments.slice(0, -1);
+        const partial = segments[segments.length - 1] ?? "";
+
+        if (!tree || !isPlainRecord(tree)) {
+          return { items: [], phase: "path" };
+        }
+        const parentNodes = parentSegments.length === 0
+          ? [tree]
+          : navigateToAll(tree, parentSegments);
+        if (parentNodes.length === 0) return { items: [], phase: "path" };
+
+        const all = (parentNodes.length === 1
+          ? getChildCompletions(parentNodes[0]!)
+          : intersectCompletions(parentNodes)).filter((c) =>
+            c.name.startsWith(partial)
+          );
+        return { items: all, phase: "path" };
+      }
+
+      // Phase 3: selector done, completing command
+      if (parsed.hasSelector && parsed.command && !parsed.argsStr) {
+        const nodes = resolveSelector(parsed.selector);
+        if (nodes.length === 0) return { items: [], phase: "command" };
+        // Union of valid commands across all matched nodes
+        const cmdSet = new Set<string>();
+        for (const node of nodes) {
+          for (const cmd of commandsForNode(node)) cmdSet.add(cmd);
+        }
+        const partial = parsed.command;
+        return {
+          items: [...cmdSet]
+            .filter((c) => c.startsWith(partial) && c !== partial)
+            .map((c) => ({ name: c, label: c })),
+          phase: "command",
+        };
+      }
+
+      // Phase 4: command done, no further completions (just hints)
+      return { items: [], phase: "args" };
+    },
+    [tree, parseInput, resolveSelector],
+  );
+
+  /** Update completions and ghost text when input changes. */
+  const updateCompletions = useCallback((text: string) => {
+    const { items, phase } = getCompletions(text);
+    const parsed = parseInput(text);
+
+    if (items.length >= 1) {
       setCompletions(items);
       setCompletionIdx(-1);
+      const partial = phase === "path"
+        ? (parsed.selector.split("/").pop() ?? "")
+        : phase === "command"
+        ? parsed.command
+        : parsed.command;
       if (items.length === 1 && items[0]!.name !== partial) {
         setGhostText(items[0]!.name.slice(partial.length));
       } else {
         setGhostText("");
       }
-    } else if (items.length === 1 && !isPathCompletion) {
-      setGhostText(items[0]!.name.slice(partial.length));
-      setCompletions([]);
     } else {
       setCompletions([]);
-      const cmd = parts[0] ?? "";
-      const hints = ARG_HINTS[cmd];
-      if (hints && parts.length >= 2) {
-        const extraArgs = parts.length - 2;
-        if (extraArgs < hints.length) {
-          setGhostText(" " + hints.slice(extraArgs).join(" "));
+      // Show argument hints after command
+      if (phase === "args" && parsed.command) {
+        const hints = ARG_HINTS[parsed.command];
+        if (hints) {
+          const extraArgs = parsed.argCount;
+          if (extraArgs < hints.length) {
+            setGhostText(" " + hints.slice(extraArgs).join(" "));
+          } else {
+            setGhostText("");
+          }
         } else {
           setGhostText("");
         }
+      } else if (phase === "command" && items.length === 0 && !parsed.command) {
+        // Just finished selector, show hint
+        setGhostText(" <command>");
       } else {
         setGhostText("");
       }
     }
-  }, [getPathCompletions]);
+  }, [getCompletions, parseInput]);
 
   /** Apply a selected completion item to the input. */
   const applyCompletion = useCallback((name: string) => {
-    const parts = input.split(/\s+/);
+    const parsed = parseInput(input);
     let newVal: string;
 
-    if (parts.length <= 1) {
-      newVal = name + " ";
-    } else {
-      const selectorArg = parts[1] ?? "";
-      const pathStr = selectorArg.startsWith("/")
-        ? selectorArg.slice(1)
-        : selectorArg;
+    if (parsed.hasSelector && !parsed.command) {
+      // Completing a path segment
+      const pathStr = parsed.selector.startsWith("/")
+        ? parsed.selector.slice(1)
+        : parsed.selector;
       const segments = pathStr.split("/");
       segments[segments.length - 1] = name;
-      const newSelector = "/" + segments.join("/");
-
-      const rest = parts.slice(2).join(" ");
-      newVal = parts[0]! + " " + newSelector +
-        (rest ? " " + rest : "");
+      newVal = "/" + segments.join("/");
+    } else if (parsed.hasSelector && parsed.command) {
+      // Completing a command after selector
+      newVal = parsed.selector + " " + name +
+        (parsed.argsStr ? " " + parsed.argsStr : "");
+    } else {
+      // Completing a bare command
+      newVal = name + " ";
     }
 
     setInput(newVal);
     setCompletionIdx(-1);
     setCompletions([]);
     setGhostText("");
-  }, [input]);
+  }, [input, parseInput]);
 
   const handleTab = useCallback(() => {
     if (completions.length > 0) {
@@ -498,14 +587,14 @@ export function CommandBar({ dk }: CommandBarProps) {
       applyCompletion(completions[idx]!.name);
       return;
     }
-    const { items } = getPathCompletions(input);
+    const { items } = getCompletions(input);
     if (items.length === 1) {
       applyCompletion(items[0]!.name);
     } else if (items.length > 1) {
       setCompletions(items);
       setCompletionIdx(0);
     }
-  }, [input, completions, completionIdx, getPathCompletions, applyCompletion]);
+  }, [input, completions, completionIdx, getCompletions, applyCompletion]);
 
   // ── Command execution ──────────────────────────────────────────────────
 
@@ -520,42 +609,14 @@ export function CommandBar({ dk }: CommandBarProps) {
     setHistory((prev) => [...prev, trimmed]);
     setHistoryIndex(-1);
 
-    // Parse: first token is command, rest are args split by spaces
-    // But value args can contain spaces if they're JSON
-    const firstSpace = trimmed.indexOf(" ");
-    const command = firstSpace === -1 ? trimmed : trimmed.slice(0, firstSpace);
-    const argsStr = firstSpace === -1
-      ? ""
-      : trimmed.slice(firstSpace + 1).trim();
-
-    // User paths start with "/" (like a filesystem). Internally the CRDT
-    // uses the same paths directly.
-    const SELECTOR_CMDS = new Set([
-      "get",
-      "tree",
-      "add",
-      "delete",
-      "rename",
-      "set",
-      "pushBack",
-      "pushFront",
-      "popBack",
-      "popFront",
-      "updateTag",
-      "wrapRecord",
-      "wrapList",
-      "copy",
-      "formula",
-    ]);
-    let effectiveArgs = argsStr;
-    if (argsStr && SELECTOR_CMDS.has(command)) {
-      const spaceIdx = argsStr.indexOf(" ");
-      const selector = spaceIdx === -1 ? argsStr : argsStr.slice(0, spaceIdx);
-      const rest = spaceIdx === -1 ? "" : argsStr.slice(spaceIdx);
-      // Strip leading "/"
-      const cleaned = selector.startsWith("/") ? selector.slice(1) : selector;
-      effectiveArgs = cleaned + rest;
-    }
+    // Parse: /selector command args...  OR  bareCommand
+    const parsed = parseInput(trimmed);
+    const command = parsed.command;
+    // Strip leading "/" from selector for CRDT paths
+    const target = parsed.selector.startsWith("/")
+      ? parsed.selector.slice(1)
+      : parsed.selector;
+    const argsStr = parsed.argsStr;
 
     try {
       switch (command) {
@@ -576,14 +637,22 @@ export function CommandBar({ dk }: CommandBarProps) {
         }
 
         case "tree": {
-          if (argsStr) {
-            const nodes = dk.get(effectiveArgs);
+          if (target) {
+            const nodes = dk.get(target);
             if (nodes.length === 0) {
-              pushOutput({ text: `No nodes at '${argsStr}'`, kind: "error" });
+              pushOutput({
+                text: `No nodes at '${parsed.selector}'`,
+                kind: "error",
+              });
             } else {
               for (const n of nodes) {
                 const lines: string[] = [];
-                renderTree(n, argsStr.split("/").pop() ?? "node", 0, lines);
+                renderTree(
+                  n,
+                  parsed.selector.split("/").pop() ?? "node",
+                  0,
+                  lines,
+                );
                 pushOutput({ text: lines.join("\n"), kind: "info" });
               }
             }
@@ -594,13 +663,19 @@ export function CommandBar({ dk }: CommandBarProps) {
         }
 
         case "get": {
-          if (!argsStr) {
-            pushOutput({ text: "Usage: get <selector>", kind: "error" });
+          if (!target) {
+            pushOutput({
+              text: "Usage: /selector get",
+              kind: "error",
+            });
             break;
           }
-          const nodes = dk.get(effectiveArgs);
+          const nodes = dk.get(target);
           if (nodes.length === 0) {
-            pushOutput({ text: `No nodes at '${argsStr}'`, kind: "error" });
+            pushOutput({
+              text: `No nodes at '${parsed.selector}'`,
+              kind: "error",
+            });
           } else {
             pushOutput({ text: JSON.stringify(nodes, null, 2), kind: "info" });
           }
@@ -608,71 +683,69 @@ export function CommandBar({ dk }: CommandBarProps) {
         }
 
         case "add": {
-          const { args } = splitArgs(effectiveArgs, 3);
-          if (args.length < 2) {
+          const { args } = splitArgs(argsStr, 2);
+          if (!target || args.length < 1) {
             pushOutput({
-              text: "Usage: add <selector> <field> [value|json]",
+              text: "Usage: /selector add <field> [value|json]",
               kind: "error",
             });
             break;
           }
-          const [target, field] = args as [string, string];
-          const value = args[2] ? parseValue(args[2]) : "";
-          const id = dk.add(target!, field!, value);
+          const [field] = args as [string];
+          const value = args[1] ? parseValue(args[1]) : "";
+          const id = dk.add(target, field!, value);
           pushOutput({
-            text: `Added '${field}' to ${target} → ${id}`,
+            text: `Added '${field}' to ${parsed.selector} → ${id}`,
             kind: "success",
           });
           break;
         }
 
         case "delete": {
-          const { args } = splitArgs(effectiveArgs, 2);
-          if (args.length < 2) {
+          const { args } = splitArgs(argsStr, 1);
+          if (!target || args.length < 1) {
             pushOutput({
-              text: "Usage: delete <selector> <field>",
+              text: "Usage: /selector delete <field>",
               kind: "error",
             });
             break;
           }
-          const [target, field] = args as [string, string];
-          const id = dk.delete(target!, field!);
+          const [field] = args as [string];
+          const id = dk.delete(target, field!);
           pushOutput({
-            text: `Deleted '${field}' from ${target} → ${id}`,
+            text: `Deleted '${field}' from ${parsed.selector} → ${id}`,
             kind: "success",
           });
           break;
         }
 
         case "rename": {
-          const { args } = splitArgs(effectiveArgs, 3);
-          if (args.length < 3) {
+          const { args } = splitArgs(argsStr, 2);
+          if (!target || args.length < 2) {
             pushOutput({
-              text: "Usage: rename <selector> <old-field> <new-field>",
+              text: "Usage: /selector rename <old-field> <new-field>",
               kind: "error",
             });
             break;
           }
-          const [target, from, to] = args as [string, string, string];
-          const id = dk.rename(target!, from!, to!);
+          const [from, to] = args as [string, string];
+          const id = dk.rename(target, from!, to!);
           pushOutput({
-            text: `Renamed '${from}' → '${to}' on ${target} → ${id}`,
+            text: `Renamed '${from}' → '${to}' on ${parsed.selector} → ${id}`,
             kind: "success",
           });
           break;
         }
 
         case "set": {
-          const { args } = splitArgs(effectiveArgs, 2);
-          if (args.length < 2) {
+          if (!target || !argsStr) {
             pushOutput({
-              text: "Usage: set <selector> <value>",
+              text: "Usage: /selector set <value>",
               kind: "error",
             });
             break;
           }
-          const [target] = args as [string];
-          const value = parseValue(args[1]!);
+          const value = parseValue(argsStr);
           if (typeof value === "object") {
             pushOutput({
               text: "set expects a primitive value (string, number, boolean)",
@@ -680,167 +753,168 @@ export function CommandBar({ dk }: CommandBarProps) {
             });
             break;
           }
-          dk.set(target!, value as PrimitiveValue);
+          dk.set(target, value as PrimitiveValue);
           pushOutput({
-            text: `Set ${argsStr.split(" ")[0]} = ${JSON.stringify(value)}`,
+            text: `Set ${parsed.selector} = ${JSON.stringify(value)}`,
             kind: "success",
           });
           break;
         }
 
         case "pushBack": {
-          const { args } = splitArgs(effectiveArgs, 2);
-          if (args.length < 2) {
+          if (!target || !argsStr) {
             pushOutput({
-              text: "Usage: pushBack <selector> <value|json>",
+              text: "Usage: /selector pushBack <value|json>",
               kind: "error",
             });
             break;
           }
-          const [target] = args as [string];
-          const value = parseValue(args[1]!);
-          const id = dk.pushBack(target!, value);
+          const value = parseValue(argsStr);
+          const id = dk.pushBack(target, value);
           pushOutput({
-            text: `Pushed to back of ${target} → ${id}`,
+            text: `Pushed to back of ${parsed.selector} → ${id}`,
             kind: "success",
           });
           break;
         }
 
         case "pushFront": {
-          const { args } = splitArgs(effectiveArgs, 2);
-          if (args.length < 2) {
+          if (!target || !argsStr) {
             pushOutput({
-              text: "Usage: pushFront <selector> <value|json>",
+              text: "Usage: /selector pushFront <value|json>",
               kind: "error",
             });
             break;
           }
-          const [target] = args as [string];
-          const value = parseValue(args[1]!);
-          const id = dk.pushFront(target!, value);
+          const value = parseValue(argsStr);
+          const id = dk.pushFront(target, value);
           pushOutput({
-            text: `Pushed to front of ${target} → ${id}`,
+            text: `Pushed to front of ${parsed.selector} → ${id}`,
             kind: "success",
           });
           break;
         }
 
         case "popBack": {
-          if (!argsStr) {
-            pushOutput({ text: "Usage: popBack <selector>", kind: "error" });
+          if (!target) {
+            pushOutput({
+              text: "Usage: /selector popBack",
+              kind: "error",
+            });
             break;
           }
-          const id = dk.popBack(argsStr);
+          const id = dk.popBack(target);
           pushOutput({
-            text: `Popped back from ${argsStr} → ${id}`,
+            text: `Popped back from ${parsed.selector} → ${id}`,
             kind: "success",
           });
           break;
         }
 
         case "popFront": {
-          if (!argsStr) {
-            pushOutput({ text: "Usage: popFront <selector>", kind: "error" });
+          if (!target) {
+            pushOutput({
+              text: "Usage: /selector popFront",
+              kind: "error",
+            });
             break;
           }
-          const id = dk.popFront(argsStr);
+          const id = dk.popFront(target);
           pushOutput({
-            text: `Popped front from ${argsStr} → ${id}`,
+            text: `Popped front from ${parsed.selector} → ${id}`,
             kind: "success",
           });
           break;
         }
 
         case "updateTag": {
-          const { args } = splitArgs(effectiveArgs, 2);
-          if (args.length < 2) {
+          if (!target || !argsStr) {
             pushOutput({
-              text: "Usage: updateTag <selector> <new-tag>",
+              text: "Usage: /selector updateTag <new-tag>",
               kind: "error",
             });
             break;
           }
-          const [target, tag] = args as [string, string];
-          const id = dk.updateTag(target!, tag!);
+          const id = dk.updateTag(target, argsStr.trim());
           pushOutput({
-            text: `Updated tag on ${target} → '${tag}' (${id})`,
+            text:
+              `Updated tag on ${parsed.selector} → '${argsStr.trim()}' (${id})`,
             kind: "success",
           });
           break;
         }
 
         case "wrapRecord": {
-          const { args } = splitArgs(effectiveArgs, 3);
-          if (args.length < 3) {
+          const { args } = splitArgs(argsStr, 2);
+          if (!target || args.length < 2) {
             pushOutput({
-              text: "Usage: wrapRecord <selector> <field> <tag>",
+              text: "Usage: /selector wrapRecord <field> <tag>",
               kind: "error",
             });
             break;
           }
-          const [target, field, tag] = args as [string, string, string];
-          const id = dk.wrapRecord(target!, field!, tag!);
+          const [field, tag] = args as [string, string];
+          const id = dk.wrapRecord(target, field!, tag!);
           pushOutput({
-            text: `Wrapped ${target} in record '${field}' [${tag}] → ${id}`,
+            text:
+              `Wrapped ${parsed.selector} in record '${field}' [${tag}] → ${id}`,
             kind: "success",
           });
           break;
         }
 
         case "wrapList": {
-          const { args } = splitArgs(effectiveArgs, 2);
-          if (args.length < 2) {
+          if (!target || !argsStr) {
             pushOutput({
-              text: "Usage: wrapList <selector> <tag>",
+              text: "Usage: /selector wrapList <tag>",
               kind: "error",
             });
             break;
           }
-          const [target, tag] = args as [string, string];
-          const id = dk.wrapList(target!, tag!);
+          const id = dk.wrapList(target, argsStr.trim());
           pushOutput({
-            text: `Wrapped ${target} in list [${tag}] → ${id}`,
+            text:
+              `Wrapped ${parsed.selector} in list [${argsStr.trim()}] → ${id}`,
             kind: "success",
           });
           break;
         }
 
         case "copy": {
-          const { args } = splitArgs(effectiveArgs, 2);
-          if (args.length < 2) {
+          if (!target || !argsStr) {
             pushOutput({
-              text: "Usage: copy <target> <source>",
+              text: "Usage: /target copy <source-selector>",
               kind: "error",
             });
             break;
           }
-          const [target, source] = args as [string, string];
-          const id = dk.copy(target!, source!);
+          const source = argsStr.trim().startsWith("/")
+            ? argsStr.trim().slice(1)
+            : argsStr.trim();
+          const id = dk.copy(target, source);
           pushOutput({
-            text: `Copied ${source} → ${target} (${id})`,
+            text: `Copied ${argsStr.trim()} → ${parsed.selector} (${id})`,
             kind: "success",
           });
           break;
         }
 
         case "formula": {
-          // formula <selector> <field> <operation> [arg1] [arg2] ...
-          const { args } = splitArgs(effectiveArgs, 4);
-          if (args.length < 3) {
+          // /selector formula <field> <operation> [arg1] [arg2] ...
+          const { args } = splitArgs(argsStr, 3);
+          if (!target || args.length < 2) {
             pushOutput({
               text:
-                "Usage: formula <selector> <field> <operation> [ref|value ...]",
+                "Usage: /selector formula <field> <operation> [ref|value ...]",
               kind: "error",
             });
             break;
           }
-          const [fTarget, fField, fOp] = args as [string, string, string];
-          // Parse remaining args: paths starting with / become refs, rest are values
-          const rawArgs = args[3] ? args[3].split(/\s+/).filter(Boolean) : [];
+          const [fField, fOp] = args as [string, string];
+          const rawArgs = args[2] ? args[2].split(/\s+/).filter(Boolean) : [];
           const formulaArgs: PlainNode[] = rawArgs.map((a) => {
             if (a.startsWith("/")) {
-              const cleaned = a.startsWith("/") ? a.slice(1) : a;
+              const cleaned = a.slice(1);
               return { $ref: "/" + cleaned };
             }
             return parseValue(a);
@@ -852,14 +926,14 @@ export function CommandBar({ dk }: CommandBarProps) {
             args: { $tag: "args", $items: formulaArgs },
             result: 0,
           };
-          dk.add(fTarget!, fField!, formulaNode);
+          dk.add(target, fField!, formulaNode);
           const opsList = FORMULA_OPS.includes(fOp!)
             ? ""
             : `\n  Known ops: ${FORMULA_OPS.join(", ")}`;
           pushOutput({
             text: `Formula '${fField}' = ${fOp}(${
               rawArgs.join(", ")
-            }) added to ${argsStr.split(" ")[0]}${opsList}`,
+            }) added to ${parsed.selector}${opsList}`,
             kind: "success",
           });
           break;
@@ -878,7 +952,7 @@ export function CommandBar({ dk }: CommandBarProps) {
         kind: "error",
       });
     }
-  }, [dk, pushOutput, treeText]);
+  }, [dk, parseInput, pushOutput, treeText]);
 
   // ── Key handlers ───────────────────────────────────────────────────────
 
@@ -1045,7 +1119,7 @@ export function CommandBar({ dk }: CommandBarProps) {
             style={styles.input}
             spellCheck={false}
             autoComplete="off"
-            placeholder="Type a command (tab to complete)"
+            placeholder="/path command args... (tab to complete)"
           />
           {ghostText && (
             <span style={styles.ghost}>
