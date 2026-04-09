@@ -1,5 +1,16 @@
 import { BinaryHeap } from "@std/data-structures/binary-heap";
-import { type Edit, NoOpEdit } from "./edits.ts";
+import {
+  ApplyPrimitiveEdit,
+  CopyEdit,
+  type Edit,
+  NoOpEdit,
+  RecordAddEdit,
+  RecordDeleteEdit,
+  RecordRenameFieldEdit,
+  UpdateTagEdit,
+  WrapListEdit,
+  WrapRecordEdit,
+} from "./edits.ts";
 import { Event } from "./event.ts";
 import { EventId } from "./event-id.ts";
 import type { Node } from "./nodes.ts";
@@ -17,7 +28,47 @@ export type EventSnapshot = {
   parents: string[];
   editKind: string;
   target: string;
+  vectorClock: Record<string, number>;
+  editDescription: string;
 };
+
+/** Produces a human-readable description of what an edit does. */
+function describeEdit(edit: Edit): string {
+  const target = edit.target.format();
+  if (edit instanceof RecordAddEdit) {
+    const field = String(edit.target.lastSegment);
+    return `Add '${field}' to ${edit.target.parent.format() || "root"}`;
+  }
+  if (edit instanceof RecordDeleteEdit) {
+    const field = String(edit.target.lastSegment);
+    return `Delete '${field}' from ${edit.target.parent.format() || "root"}`;
+  }
+  if (edit instanceof RecordRenameFieldEdit) {
+    const from = String(edit.target.lastSegment);
+    return `Rename '${from}' to '${edit.to}' in ${
+      edit.target.parent.format() || "root"
+    }`;
+  }
+  if (edit instanceof ApplyPrimitiveEdit) {
+    return `Apply '${edit.editName}' at ${target}`;
+  }
+  if (edit instanceof CopyEdit) {
+    return `Copy ${edit.source.format()} to ${target}`;
+  }
+  if (edit instanceof UpdateTagEdit) {
+    return `Update tag to '${edit.tag}' at ${target}`;
+  }
+  if (edit instanceof WrapRecordEdit) {
+    return `Wrap ${target} in record '${edit.field}' (tag '${edit.tag}')`;
+  }
+  if (edit instanceof WrapListEdit) {
+    return `Wrap ${target} in list (tag '${edit.tag}')`;
+  }
+  if (edit instanceof NoOpEdit) {
+    return `No-op: ${edit.reason}`;
+  }
+  return `${edit.kind} at ${target}`;
+}
 type PendingEventsByKey = Record<string, Event>;
 type MissingParentCountsByKey = Record<string, number>;
 type ChildKeysByMissingParent = Record<string, string[]>;
@@ -401,6 +452,8 @@ export class EventGraph {
       parents: ev.parents.map((p) => p.format()),
       editKind: ev.edit.kind,
       target: ev.edit.target.format(),
+      vectorClock: ev.clock.toRecord(),
+      editDescription: describeEdit(ev.edit),
     }));
   }
 }
