@@ -105,13 +105,13 @@ export const INITIAL_DOCUMENT: PlainNode = {
       $items: [
         {
           $tag: "tr",
-          name: "Tomáš Petříček",
-          email: "tomas@tomasp.net",
+          name: { $tag: "td", text: "Tomáš Petříček" },
+          email: { $tag: "td", text: "tomas@tomasp.net" },
         },
         {
           $tag: "tr",
-          name: "Ada Lovelace",
-          email: "ada@example.com",
+          name: { $tag: "td", text: "Ada Lovelace" },
+          email: { $tag: "td", text: "ada@example.com" },
         },
       ],
     },
@@ -181,24 +181,24 @@ export function initializeActions(dk: Denicek): void {
   // ── Conferences: record the "add speaker from input" recipe ───────
   const addSpeakerId = dk.pushFront("conferences/speakers", {
     $tag: "tr",
-    name: "",
-    email: "",
+    name: { $tag: "td", text: "" },
+    email: { $tag: "td", text: "" },
   });
   const copySpeakerNameId = dk.copy(
-    "conferences/speakers/!0/name",
+    "conferences/speakers/!0/name/text",
     "conferences/composer/input/value",
   );
   const copySpeakerEmailId = dk.copy(
-    "conferences/speakers/!0/email",
+    "conferences/speakers/!0/email/text",
     "conferences/composer/input/value",
   );
   const splitNameId = dk.applyPrimitiveEdit(
-    "conferences/speakers/!0/name",
+    "conferences/speakers/!0/name/text",
     "splitFirst",
     ", ",
   );
   const splitEmailId = dk.applyPrimitiveEdit(
-    "conferences/speakers/!0/email",
+    "conferences/speakers/!0/email/text",
     "splitRest",
     ", ",
   );

@@ -212,33 +212,27 @@ function renderNode(
   }
 
   // Render children: records recurse, primitives render as text
-  // When inside a <tr>, wrap each child in <td>
-  const wrapInTd = tag === "tr";
   const children: React.ReactNode[] = [];
   for (const [key, val] of Object.entries(node)) {
     if (META.has(key) || val === undefined) continue;
-    let child: React.ReactNode;
     if (isRec(val) || isList(val) || isRef(val)) {
-      child = renderNode(
-        val as PlainNode,
-        path ? `${path}/${key}` : key,
-        formulas,
-        onAction,
-        onSetValue,
+      children.push(
+        <React.Fragment key={key}>
+          {renderNode(
+            val as PlainNode,
+            path ? `${path}/${key}` : key,
+            formulas,
+            onAction,
+            onSetValue,
+          )}
+        </React.Fragment>,
       );
     } else if (
       typeof val === "string" || typeof val === "number" ||
       typeof val === "boolean"
     ) {
-      child = String(val);
-    } else {
-      continue;
+      children.push(<React.Fragment key={key}>{String(val)}</React.Fragment>);
     }
-    children.push(
-      <React.Fragment key={key}>
-        {wrapInTd ? <td style={tableStyles.td}>{child}</td> : child}
-      </React.Fragment>,
-    );
   }
 
   // Only render known HTML tags; unknown tags become <div>
