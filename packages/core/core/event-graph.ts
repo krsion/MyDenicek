@@ -14,6 +14,7 @@ import {
 import { Event } from "./event.ts";
 import { EventId } from "./event-id.ts";
 import type { Node } from "./nodes.ts";
+import { ListNode, PrimitiveNode, RecordNode } from "./nodes.ts";
 import { VectorClock } from "./vector-clock.ts";
 
 // ── EventGraph ──────────────────────────────────────────────────────
@@ -37,7 +38,10 @@ function describeEdit(edit: Edit): string {
   const target = edit.target.format();
   if (edit instanceof RecordAddEdit) {
     const field = String(edit.target.lastSegment);
-    return `Add '${field}' to ${edit.target.parent.format() || "root"}`;
+    const valueStr = describeNode(edit.node);
+    return `Add '${field}'${valueStr} to ${
+      edit.target.parent.format() || "root"
+    }`;
   }
   if (edit instanceof RecordDeleteEdit) {
     const field = String(edit.target.lastSegment);
@@ -45,29 +49,46 @@ function describeEdit(edit: Edit): string {
   }
   if (edit instanceof RecordRenameFieldEdit) {
     const from = String(edit.target.lastSegment);
-    return `Rename '${from}' to '${edit.to}' in ${
+    return `Rename '${from}' → '${edit.to}' in ${
       edit.target.parent.format() || "root"
     }`;
   }
   if (edit instanceof ApplyPrimitiveEdit) {
-    return `Apply '${edit.editName}' at ${target}`;
+    const argsStr = edit.args.map((a) =>
+      typeof a === "string" ? `"${a}"` : String(a)
+    ).join(", ");
+    return `${edit.editName}(${argsStr}) at ${target}`;
   }
   if (edit instanceof CopyEdit) {
-    return `Copy ${edit.source.format()} to ${target}`;
+    return `Copy ${edit.source.format()} → ${target}`;
   }
   if (edit instanceof UpdateTagEdit) {
-    return `Update tag to '${edit.tag}' at ${target}`;
+    return `Update tag → '${edit.tag}' at ${target}`;
   }
   if (edit instanceof WrapRecordEdit) {
-    return `Wrap ${target} in record '${edit.field}' (tag '${edit.tag}')`;
+    return `Wrap ${target} in record '${edit.field}' <${edit.tag}>`;
   }
   if (edit instanceof WrapListEdit) {
-    return `Wrap ${target} in list (tag '${edit.tag}')`;
+    return `Wrap ${target} in list <${edit.tag}>`;
   }
   if (edit instanceof NoOpEdit) {
     return `No-op: ${edit.reason}`;
   }
   return `${edit.kind} at ${target}`;
+}
+
+function describeNode(node: Node): string {
+  if (node instanceof PrimitiveNode) {
+    const v = node.value;
+    return ` = ${typeof v === "string" ? `"${v}"` : String(v)}`;
+  }
+  if (node instanceof RecordNode) {
+    return ` <${node.tag}>`;
+  }
+  if (node instanceof ListNode) {
+    return ` [${node.tag}](${node.items.length} items)`;
+  }
+  return "";
 }
 type PendingEventsByKey = Record<string, Event>;
 type MissingParentCountsByKey = Record<string, number>;
