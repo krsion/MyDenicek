@@ -25,20 +25,15 @@ function getRoomId(): string {
   return id;
 }
 
-const PEER_ID_KEY = "mydenicek-peer-id";
+const PEER_SESSION_KEY = "mydenicek-peer-id";
 
-/** Stable device ID persisted in localStorage (for display). */
-function getDeviceId(): string {
-  const stored = globalThis.localStorage?.getItem(PEER_ID_KEY);
+/** Unique peer ID per tab, survives refreshes via sessionStorage. */
+function getOrCreatePeerId(): string {
+  const stored = globalThis.sessionStorage?.getItem(PEER_SESSION_KEY);
   if (stored) return stored;
-  const id = crypto.randomUUID().slice(0, 4);
-  globalThis.localStorage?.setItem(PEER_ID_KEY, id);
+  const id = crypto.randomUUID().slice(0, 7);
+  globalThis.sessionStorage?.setItem(PEER_SESSION_KEY, id);
   return id;
-}
-
-/** Unique peer ID per tab — combines device ID with a random session suffix. */
-function createPeerId(): string {
-  return getDeviceId() + "-" + crypto.randomUUID().slice(0, 2);
 }
 
 const statusColors: Record<string, string> = {
@@ -235,7 +230,7 @@ function Editor(
 
 export function App() {
   const roomId = useMemo(getRoomId, []);
-  const peerId = useMemo(createPeerId, []);
+  const peerId = useMemo(getOrCreatePeerId, []);
 
   return <Editor peerId={peerId} roomId={roomId} />;
 }
