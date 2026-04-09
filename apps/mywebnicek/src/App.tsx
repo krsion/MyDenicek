@@ -17,15 +17,6 @@ const SYNC_SERVER_URL: string = VITE_SYNC_URL ??
     ? "ws://localhost:8787/sync"
     : "wss://mydenicek-core-krsion-dev-sync.happyisland-d6dda219.westeurope.azurecontainerapps.io/sync");
 
-function getRoomId(): string {
-  if (globalThis.location?.hash && globalThis.location.hash.length > 1) {
-    return globalThis.location.hash.slice(1);
-  }
-  const id = "demo-" + crypto.randomUUID().slice(0, 6);
-  globalThis.location.hash = id;
-  return id;
-}
-
 const PEER_SESSION_KEY = "mydenicek-peer-id";
 
 /** Unique peer ID per tab, survives refreshes via sessionStorage. */
@@ -282,27 +273,27 @@ const TEMPLATES: Template[] = [
 
 interface DocTab {
   id: string;
-  label: string;
   template: Template;
 }
 
 function createTab(template: Template): DocTab {
   const id = crypto.randomUUID().slice(0, 8);
-  return { id, label: template.name, template };
+  return { id, template };
 }
 
 export function App() {
   const peerId = useMemo(getOrCreatePeerId, []);
+
+  // Start with no tabs; if URL has a hash, create a tab for it (empty template
+  // since we don't know which template was used — sync will populate it).
   const [tabs, setTabs] = useState<DocTab[]>(() => {
-    const hashRoom = getRoomId();
-    const defaultTab = {
-      id: hashRoom,
-      label: TEMPLATES[0]!.name,
-      template: TEMPLATES[0]!,
-    };
-    return [defaultTab];
+    const hash = globalThis.location?.hash?.slice(1);
+    if (hash) return [{ id: hash, template: TEMPLATES[1]! }];
+    return [];
   });
-  const [activeTab, setActiveTab] = useState(() => getRoomId());
+  const [activeTab, setActiveTab] = useState<string | null>(
+    () => globalThis.location?.hash?.slice(1) || null,
+  );
 
   const addFromTemplate = (template: Template) => {
     const tab = createTab(template);
@@ -311,11 +302,11 @@ export function App() {
     setActiveTab(tab.id);
   };
 
-  const tab = tabs.find((t) => t.id === activeTab) ?? tabs[0]!;
+  const tab = activeTab ? tabs.find((t) => t.id === activeTab) : null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
-      {/* Document tabs */}
+      {/* Tab bar */}
       <div
         style={{
           display: "flex",
@@ -324,6 +315,7 @@ export function App() {
           background: "#e8e8e8",
           borderBottom: "1px solid #d0d0d0",
           alignItems: "center",
+          flexWrap: "wrap",
         }}
       >
         {tabs.map((t) => (
@@ -348,9 +340,12 @@ export function App() {
               marginBottom: -1,
             }}
           >
-            {t.label}
+            {t.id.slice(0, 8)}
           </button>
         ))}
+        <span
+          style={{ borderLeft: "1px solid #ccc", height: 16, margin: "0 4px" }}
+        />
         {TEMPLATES.map((tpl) => (
           <button
             key={tpl.name}
@@ -361,8 +356,8 @@ export function App() {
               fontSize: 11,
               cursor: "pointer",
               background: "transparent",
-              color: "#666",
-              border: "1px solid transparent",
+              color: "#0078d4",
+              border: "1px solid #ccc",
               borderRadius: 4,
             }}
             title={`New ${tpl.name} document`}
@@ -372,15 +367,32 @@ export function App() {
         ))}
       </div>
 
-      {/* Active editor */}
+      {/* Active editor or landing */}
       <div style={{ flex: 1, overflow: "hidden" }}>
-        <Editor
-          key={tab.id}
-          peerId={peerId}
-          roomId={tab.id}
-          initialDocument={tab.template.initialDocument}
-          runInitActions={tab.template.initActions}
-        />
+        {tab
+          ? (
+            <Editor
+              key={tab.id}
+              peerId={peerId}
+              roomId={tab.id}
+              initialDocument={tab.template.initialDocument}
+              runInitActions={tab.template.initActions}
+            />
+          )
+          : (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                height: "100%",
+                color: "#888",
+                fontSize: 14,
+              }}
+            >
+              Create a document using a template above
+            </div>
+          )}
       </div>
     </div>
   );
