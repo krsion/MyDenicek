@@ -378,13 +378,11 @@ export function CommandBar({ dk }: CommandBarProps) {
   // The materialized tree comes from the hook (re-renders on every mutation)
   const tree = dk.doc;
 
-  // Tree text for `tree` command — start from the user root, skip CRDT wrapper
+  // Tree text for `tree` command
   const treeText = useMemo(() => {
     if (!tree || !isPlainRecord(tree)) return "(empty document)";
-    const userRoot = tree["root"];
-    if (!userRoot || !isPlainRecord(userRoot)) return "(no root node)";
     const lines: string[] = [];
-    renderTree(userRoot, "/", 0, lines);
+    renderTree(tree, "/", 0, lines);
     return lines.join("\n");
   }, [tree]);
 
@@ -405,11 +403,6 @@ export function CommandBar({ dk }: CommandBarProps) {
       const selectorArg = parts[1] ?? "";
       if (!tree || !isPlainRecord(tree)) return { items: [], prefix: "" };
 
-      const userRoot = tree["root"];
-      if (!userRoot || !isPlainRecord(userRoot)) {
-        return { items: [], prefix: "" };
-      }
-
       const pathStr = selectorArg.startsWith("/")
         ? selectorArg.slice(1)
         : selectorArg;
@@ -418,8 +411,8 @@ export function CommandBar({ dk }: CommandBarProps) {
       const partial = segments[segments.length - 1] ?? "";
 
       const parentNodes = parentSegments.length === 0
-        ? [userRoot]
-        : navigateToAll(userRoot, parentSegments);
+        ? [tree]
+        : navigateToAll(tree, parentSegments);
       if (parentNodes.length === 0) return { items: [], prefix: "" };
 
       const all =
@@ -536,7 +529,7 @@ export function CommandBar({ dk }: CommandBarProps) {
       : trimmed.slice(firstSpace + 1).trim();
 
     // User paths start with "/" (like a filesystem). Internally the CRDT
-    // stores the user root at field "root", so "/header" maps to "root/header".
+    // uses the same paths directly.
     const SELECTOR_CMDS = new Set([
       "get",
       "tree",
@@ -559,9 +552,9 @@ export function CommandBar({ dk }: CommandBarProps) {
       const spaceIdx = argsStr.indexOf(" ");
       const selector = spaceIdx === -1 ? argsStr : argsStr.slice(0, spaceIdx);
       const rest = spaceIdx === -1 ? "" : argsStr.slice(spaceIdx);
-      // Strip leading "/" and prepend "root/"
+      // Strip leading "/"
       const cleaned = selector.startsWith("/") ? selector.slice(1) : selector;
-      effectiveArgs = (cleaned ? "root/" + cleaned : "root") + rest;
+      effectiveArgs = cleaned + rest;
     }
 
     try {
@@ -847,9 +840,8 @@ export function CommandBar({ dk }: CommandBarProps) {
           const rawArgs = args[3] ? args[3].split(/\s+/).filter(Boolean) : [];
           const formulaArgs: PlainNode[] = rawArgs.map((a) => {
             if (a.startsWith("/")) {
-              // User path → CRDT path (prepend root)
               const cleaned = a.startsWith("/") ? a.slice(1) : a;
-              return { $ref: "/root/" + cleaned };
+              return { $ref: "/" + cleaned };
             }
             return parseValue(a);
           });

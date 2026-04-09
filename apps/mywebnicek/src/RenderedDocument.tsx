@@ -68,14 +68,10 @@ export function RenderedDocument({ doc }: Props) {
   if (!isRec(doc)) {
     return <div style={{ color: "#888", padding: 20 }}>Empty document</div>;
   }
-  const root = doc["root"];
-  if (!root || !isRec(root)) {
-    return <div style={{ color: "#888", padding: 20 }}>No root node</div>;
-  }
   return (
     <RenderErrorBoundary>
       <div style={{ fontFamily: "system-ui, sans-serif", lineHeight: 1.6 }}>
-        {renderNode(root)}
+        {renderNode(doc)}
       </div>
     </RenderErrorBoundary>
   );
