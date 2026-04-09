@@ -154,6 +154,15 @@ function renderNode(
 
   // Only render known HTML tags; unknown tags become <div>
   const htmlTag = HTML_TAGS.has(tag) ? tag : "div";
+
+  // Void elements (no children allowed)
+  if (
+    htmlTag === "input" || htmlTag === "img" || htmlTag === "br" ||
+    htmlTag === "hr"
+  ) {
+    return React.createElement(htmlTag, {});
+  }
+
   return React.createElement(htmlTag, {}, ...children);
 }
 
