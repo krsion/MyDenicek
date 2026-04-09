@@ -67,9 +67,9 @@ function Editor(
 
   const toggleSync = () => {
     if (syncEnabled) {
-      dk.disconnectSync();
+      dk.pauseSync();
     } else {
-      dk.connectSync({ url: SYNC_SERVER_URL, roomId });
+      dk.resumeSync();
     }
     setSyncEnabled(!syncEnabled);
   };

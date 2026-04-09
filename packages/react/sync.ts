@@ -13,7 +13,12 @@ import {
 } from "@mydenicek/sync-server";
 
 /** Reactive sync status. */
-export type SyncStatus = "idle" | "connecting" | "connected" | "disconnected";
+export type SyncStatus =
+  | "idle"
+  | "connecting"
+  | "connected"
+  | "disconnected"
+  | "paused";
 
 /** Options for connecting to a sync server. */
 export interface SyncConnectionOptions {
@@ -102,6 +107,30 @@ export class SyncClient {
     }
     if (opts) {
       this.setStatus("idle");
+    }
+  }
+
+  /** Pause syncing: closes the WebSocket but remembers the connection opts. */
+  pause(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    if (this.inner) {
+      this.inner.pause();
+    }
+    this.setStatus("paused");
+  }
+
+  /** Resume syncing after a pause. Reconnects and flushes pending edits. */
+  resume(): void {
+    if (this.inner) {
+      this.inner.resume();
+      this.setStatus("connecting");
+      // The BaseSyncClient.resume() calls connect() which resolves async
+      // We rely on the onDisconnect/onopen handlers to update status
+    } else if (this.opts) {
+      this.connect(this.opts);
     }
   }
 

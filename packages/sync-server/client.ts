@@ -63,6 +63,7 @@ export class SyncClient {
   private autoSyncTimer: ReturnType<typeof setInterval> | null = null;
   private knownServerFrontiers: string[] = [];
   private serverBootstrapped = false;
+  private _paused = false;
 
   /** Create a sync client with the given options. */
   constructor(options: SyncClientOptions) {
@@ -77,6 +78,34 @@ export class SyncClient {
     this.onDisconnect = options.onDisconnect;
   }
 
+  /** Whether sync is currently paused. */
+  get paused(): boolean {
+    return this._paused;
+  }
+
+  /**
+   * Pause syncing: close the WebSocket, stop auto-sync, suppress reconnect.
+   * Local edits continue to accumulate; call `resume()` to sync them later.
+   */
+  pause(): void {
+    this._paused = true;
+    this.stopAutoSyncLoop();
+    if (this.socket) {
+      this.socket.onclose = null;
+      this.socket.close();
+      this.socket = null;
+    }
+  }
+
+  /**
+   * Resume syncing after a `pause()`. Reconnects and flushes pending edits.
+   */
+  resume(): void {
+    if (!this._paused) return;
+    this._paused = false;
+    this.connect();
+  }
+
   /** Build the full WebSocket URL with room query parameter. */
   private buildSyncUrl(baseUrl: string, roomId: string): string {
     const url = new URL(baseUrl);
@@ -86,7 +115,7 @@ export class SyncClient {
 
   /** Open a WebSocket connection to the sync server. */
   connect(): Promise<void> {
-    if (this.socket !== null) {
+    if (this._paused || this.socket !== null) {
       return Promise.resolve();
     }
     return new Promise((resolve, reject) => {
@@ -117,7 +146,10 @@ export class SyncClient {
 
   /** Immediately send a sync request with any pending local events. */
   syncNow(): void {
-    if (this.socket === null || this.socket.readyState !== WebSocket.OPEN) {
+    if (
+      this._paused || this.socket === null ||
+      this.socket.readyState !== WebSocket.OPEN
+    ) {
       return;
     }
     const request = createSyncRequest(

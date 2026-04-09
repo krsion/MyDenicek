@@ -91,6 +91,10 @@ export interface UseDenicekReturn {
   connectSync: (opts: SyncOptions) => void;
   /** Disconnect from the sync server. */
   disconnectSync: () => void;
+  /** Pause syncing — closes WebSocket but keeps connection info for resume. */
+  pauseSync: () => void;
+  /** Resume syncing after a pause — reconnects and flushes pending edits. */
+  resumeSync: () => void;
 
   /** Monotonic version counter — increments on every mutation. */
   version: number;
@@ -215,6 +219,8 @@ export function useDenicek(options?: UseDenicekOptions): UseDenicekReturn {
       [sync],
     ),
     disconnectSync: useCallback(() => sync.disconnect(), [sync]),
+    pauseSync: useCallback(() => sync.pause(), [sync]),
+    resumeSync: useCallback(() => sync.resume(), [sync]),
 
     version,
     forceUpdate: bump,
