@@ -300,7 +300,7 @@ const LIST_CMDS = [
   "get",
   "tree",
 ];
-const PRIMITIVE_CMDS = ["set", "get"];
+const PRIMITIVE_CMDS = ["set", "get", "wrapRecord", "wrapList"];
 const ANY_NODE_CMDS = ["get", "tree", "copy", "wrapRecord", "wrapList"];
 
 /** Commands that work without a selector. */
