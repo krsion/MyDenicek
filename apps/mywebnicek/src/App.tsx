@@ -9,8 +9,9 @@ import { INITIAL_DOCUMENT } from "./initializeDocument.ts";
 import { RawDocumentView } from "./RawDocumentView.tsx";
 import { RenderedDocument } from "./RenderedDocument.tsx";
 
-// deno-lint-ignore no-explicit-any
-const SYNC_SERVER_URL: string = (import.meta as any).env?.VITE_SYNC_URL ??
+// @ts-ignore: Vite injects import.meta.env at build time
+const VITE_SYNC_URL: string | undefined = import.meta.env?.VITE_SYNC_URL;
+const SYNC_SERVER_URL: string = VITE_SYNC_URL ??
   (globalThis.location?.hostname === "localhost"
     ? "ws://localhost:8787/sync"
     : "wss://mydenicek-core-krsion-dev-sync.happyisland-d6dda219.westeurope.azurecontainerapps.io/sync");
