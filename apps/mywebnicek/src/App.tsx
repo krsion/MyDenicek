@@ -1,4 +1,5 @@
 import { Text } from "@fluentui/react-components";
+import type { PlainNode } from "@mydenicek/react";
 import { useDenicek } from "@mydenicek/react";
 import { useMemo, useRef, useState } from "react";
 
@@ -46,20 +47,22 @@ const statusColors: Record<string, string> = {
 const defaultPanels = { rendered: true, raw: false, events: false };
 
 function Editor(
-  { peerId, roomId }: {
+  { peerId, roomId, initialDocument, runInitActions }: {
     peerId: string;
     roomId: string;
+    initialDocument?: PlainNode;
+    runInitActions?: boolean;
   },
 ) {
   const dk = useDenicek({
     peer: peerId,
-    initialDocument: INITIAL_DOCUMENT,
+    initialDocument,
     sync: { url: SYNC_SERVER_URL, roomId },
   });
 
   // Build interactive parts (buttons, replay scripts) once
   const initialized = useRef(false);
-  if (!initialized.current) {
+  if (!initialized.current && runInitActions) {
     initializeActions(dk.denicek);
     initialized.current = true;
   }
@@ -263,9 +266,101 @@ function Editor(
   );
 }
 
-export function App() {
-  const roomId = useMemo(getRoomId, []);
-  const peerId = useMemo(getOrCreatePeerId, []);
+interface DocTab {
+  id: string;
+  label: string;
+  initialDocument?: PlainNode;
+  initActions?: boolean;
+}
 
-  return <Editor peerId={peerId} roomId={roomId} />;
+export function App() {
+  const peerId = useMemo(getOrCreatePeerId, []);
+  const [tabs, setTabs] = useState<DocTab[]>(() => {
+    const roomId = getRoomId();
+    return [{
+      id: roomId,
+      label: "Demo",
+      initialDocument: INITIAL_DOCUMENT,
+      initActions: true,
+    }];
+  });
+  const [activeTab, setActiveTab] = useState(tabs[0]!.id);
+
+  const addDocument = () => {
+    const id = crypto.randomUUID().slice(0, 8);
+    globalThis.location.hash = id;
+    setTabs((prev) => [...prev, { id, label: `Doc ${prev.length + 1}` }]);
+    setActiveTab(id);
+  };
+
+  const tab = tabs.find((t) => t.id === activeTab) ?? tabs[0]!;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
+      {/* Document tabs */}
+      <div
+        style={{
+          display: "flex",
+          gap: 2,
+          padding: "4px 16px",
+          background: "#e8e8e8",
+          borderBottom: "1px solid #d0d0d0",
+          alignItems: "center",
+        }}
+      >
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => {
+              setActiveTab(t.id);
+              globalThis.location.hash = t.id;
+            }}
+            style={{
+              padding: "4px 12px",
+              fontSize: 12,
+              cursor: "pointer",
+              background: t.id === activeTab ? "#fff" : "transparent",
+              color: t.id === activeTab ? "#242424" : "#666",
+              border: t.id === activeTab
+                ? "1px solid #d0d0d0"
+                : "1px solid transparent",
+              borderBottom: t.id === activeTab ? "1px solid #fff" : undefined,
+              borderRadius: "4px 4px 0 0",
+              marginBottom: -1,
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={addDocument}
+          style={{
+            padding: "4px 8px",
+            fontSize: 14,
+            cursor: "pointer",
+            background: "transparent",
+            color: "#666",
+            border: "1px solid transparent",
+            borderRadius: 4,
+          }}
+          title="New document"
+        >
+          +
+        </button>
+      </div>
+
+      {/* Active editor */}
+      <div style={{ flex: 1, overflow: "hidden" }}>
+        <Editor
+          key={tab.id}
+          peerId={peerId}
+          roomId={tab.id}
+          initialDocument={tab.initialDocument}
+          runInitActions={tab.initActions}
+        />
+      </div>
+    </div>
+  );
 }
