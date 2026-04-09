@@ -61,7 +61,17 @@ function Editor(
     sync: { url: SYNC_SERVER_URL, roomId },
   });
 
+  const [syncEnabled, setSyncEnabled] = useState(true);
   const [view, setView] = useState<ViewMode>("rendered");
+
+  const toggleSync = () => {
+    if (syncEnabled) {
+      dk.disconnectSync();
+    } else {
+      dk.connectSync({ url: SYNC_SERVER_URL, roomId });
+    }
+    setSyncEnabled(!syncEnabled);
+  };
 
   return (
     <div
@@ -116,10 +126,27 @@ function Editor(
             marginLeft: "auto",
             fontSize: 12,
             color: statusColors[dk.syncStatus] ?? "#8a8a8a",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
           }}
         >
-          ● {dk.syncStatus} — peer: {peerId.slice(0, 6)} — room: {roomId} —{" "}
-          {SYNC_SERVER_URL.replace(/^wss?:\/\//, "").split("/")[0]}
+          ● {dk.syncStatus} — peer: {peerId.slice(0, 6)} — room: {roomId}
+          <button
+            type="button"
+            onClick={toggleSync}
+            style={{
+              padding: "2px 8px",
+              fontSize: 11,
+              cursor: "pointer",
+              background: syncEnabled ? "#d13438" : "#107c10",
+              color: "#fff",
+              border: "none",
+              borderRadius: 3,
+            }}
+          >
+            {syncEnabled ? "Disconnect" : "Connect"}
+          </button>
         </span>
       </div>
 
