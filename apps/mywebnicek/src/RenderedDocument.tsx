@@ -188,61 +188,6 @@ function renderNode(
     );
   }
 
-  // Composer: render all input children + the action button
-  if (tag === "composer") {
-    const inputEntries: { key: string; inputNode: PlainRecord }[] = [];
-    for (const [key, val] of Object.entries(node)) {
-      if (META.has(key) || key === "addAction") continue;
-      if (isRec(val as PlainNode) && (val as PlainRecord).$tag === "input") {
-        inputEntries.push({ key, inputNode: val as PlainRecord });
-      }
-    }
-    return (
-      <div
-        style={{
-          display: "flex",
-          gap: 8,
-          alignItems: "center",
-          margin: "8px 0",
-        }}
-      >
-        {inputEntries.map(({ key, inputNode }) => {
-          const value = inputNode["value"];
-          const valuePath = path ? `${path}/${key}/value` : `${key}/value`;
-          return (
-            <input
-              key={key}
-              readOnly={!onSetValue}
-              placeholder={key}
-              value={typeof value === "string" || typeof value === "number"
-                ? String(value)
-                : ""}
-              onChange={onSetValue
-                ? (e) => onSetValue(valuePath, e.target.value)
-                : undefined}
-              style={{
-                padding: "4px 8px",
-                fontSize: 13,
-                border: "1px solid #ccc",
-                borderRadius: 4,
-                flex: 1,
-                maxWidth: 200,
-              }}
-            />
-          );
-        })}
-        {isRec(node["addAction"] as PlainNode) &&
-          renderNode(
-            node["addAction"] as PlainNode,
-            path ? `${path}/addAction` : "addAction",
-            formulas,
-            onAction,
-            onSetValue,
-          )}
-      </div>
-    );
-  }
-
   // Input: editable when onSetValue provided
   if (tag === "input") {
     const value = node["value"];

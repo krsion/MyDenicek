@@ -8,7 +8,24 @@
  * {@link initializeActions} after construction since they need event IDs.
  */
 
+import { registerPrimitiveEdit } from "@mydenicek/core";
 import type { Denicek, PlainNode } from "@mydenicek/core";
+
+// Split by separator, keep the part before it
+registerPrimitiveEdit("splitFirst", (current, ...args) => {
+  const separator = typeof args[0] === "string" ? args[0] : ", ";
+  const str = String(current);
+  const idx = str.indexOf(separator);
+  return idx >= 0 ? str.slice(0, idx) : str;
+});
+
+// Split by separator, keep the part after it
+registerPrimitiveEdit("splitRest", (current, ...args) => {
+  const separator = typeof args[0] === "string" ? args[0] : ", ";
+  const str = String(current);
+  const idx = str.indexOf(separator);
+  return idx >= 0 ? str.slice(idx + separator.length) : "";
+});
 
 /** The starter document tree. */
 export const INITIAL_DOCUMENT: PlainNode = {
@@ -76,8 +93,7 @@ export const INITIAL_DOCUMENT: PlainNode = {
     heading: { $tag: "h2", text: "Conferences" },
     composer: {
       $tag: "composer",
-      nameInput: { $tag: "input", value: "Jan Novák" },
-      emailInput: { $tag: "input", value: "jan@novak.cz" },
+      input: { $tag: "input", value: "Jan Novák, jan@novak.cz" },
       addAction: {
         $tag: "button",
         label: "Add Speaker",
@@ -89,13 +105,13 @@ export const INITIAL_DOCUMENT: PlainNode = {
       $items: [
         {
           $tag: "tr",
-          name: { $tag: "td", text: "Tomáš Petříček" },
-          email: { $tag: "td", text: "tomas@tomasp.net" },
+          name: "Tomáš Petříček",
+          email: "tomas@tomasp.net",
         },
         {
           $tag: "tr",
-          name: { $tag: "td", text: "Ada Lovelace" },
-          email: { $tag: "td", text: "ada@example.com" },
+          name: "Ada Lovelace",
+          email: "ada@example.com",
         },
       ],
     },
@@ -165,16 +181,26 @@ export function initializeActions(dk: Denicek): void {
   // ── Conferences: record the "add speaker from input" recipe ───────
   const addSpeakerId = dk.pushFront("conferences/speakers", {
     $tag: "tr",
-    name: { $tag: "td", text: "" },
-    email: { $tag: "td", text: "" },
+    name: "",
+    email: "",
   });
   const copySpeakerNameId = dk.copy(
-    "conferences/speakers/!0/name/text",
-    "conferences/composer/nameInput/value",
+    "conferences/speakers/!0/name",
+    "conferences/composer/input/value",
   );
   const copySpeakerEmailId = dk.copy(
-    "conferences/speakers/!0/email/text",
-    "conferences/composer/emailInput/value",
+    "conferences/speakers/!0/email",
+    "conferences/composer/input/value",
+  );
+  const splitNameId = dk.applyPrimitiveEdit(
+    "conferences/speakers/!0/name",
+    "splitFirst",
+    ", ",
+  );
+  const splitEmailId = dk.applyPrimitiveEdit(
+    "conferences/speakers/!0/email",
+    "splitRest",
+    ", ",
   );
 
   dk.pushBack("conferences/composer/addAction/steps", {
@@ -188,5 +214,13 @@ export function initializeActions(dk: Denicek): void {
   dk.pushBack("conferences/composer/addAction/steps", {
     $tag: "step",
     eventId: copySpeakerEmailId,
+  });
+  dk.pushBack("conferences/composer/addAction/steps", {
+    $tag: "step",
+    eventId: splitNameId,
+  });
+  dk.pushBack("conferences/composer/addAction/steps", {
+    $tag: "step",
+    eventId: splitEmailId,
   });
 }
