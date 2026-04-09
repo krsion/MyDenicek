@@ -33,6 +33,8 @@ export interface SyncOptions {
 export interface UseDenicekOptions {
   /** Stable peer identifier. Defaults to a random UUID. */
   peer?: string;
+  /** Initial document tree. Applied only on first mount. */
+  initialDocument?: PlainNode;
   /** Initial sync connection. Omit for local-only mode. */
   sync?: SyncOptions;
 }
@@ -104,7 +106,10 @@ export function useDenicek(options?: UseDenicekOptions): UseDenicekReturn {
   // Stable Denicek instance
   const dkRef = useRef<Denicek>(null!);
   if (!dkRef.current) {
-    dkRef.current = new Denicek(options?.peer ?? crypto.randomUUID());
+    dkRef.current = new Denicek(
+      options?.peer ?? crypto.randomUUID(),
+      options?.initialDocument,
+    );
   }
   const dk = dkRef.current;
 
