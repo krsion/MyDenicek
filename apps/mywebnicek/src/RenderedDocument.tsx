@@ -63,9 +63,10 @@ const HTML_TAGS = new Set([
 
 interface Props {
   doc: PlainNode;
+  onAction?: (scriptPath: string) => void;
 }
 
-export function RenderedDocument({ doc }: Props) {
+export function RenderedDocument({ doc, onAction }: Props) {
   if (!isRec(doc)) {
     return <div style={{ color: "#888", padding: 20 }}>Empty document</div>;
   }
@@ -73,7 +74,7 @@ export function RenderedDocument({ doc }: Props) {
   return (
     <RenderErrorBoundary>
       <div style={{ fontFamily: "system-ui, sans-serif", lineHeight: 1.6 }}>
-        {renderNode(doc, "", formulaResults)}
+        {renderNode(doc, "", formulaResults, onAction)}
       </div>
     </RenderErrorBoundary>
   );
@@ -83,6 +84,7 @@ function renderNode(
   node: PlainNode,
   path: string,
   formulas: Map<string, unknown>,
+  onAction?: (scriptPath: string) => void,
 ): React.ReactNode {
   if (typeof node === "string") return node;
   if (typeof node === "number" || typeof node === "boolean") {
@@ -93,7 +95,12 @@ function renderNode(
       <>
         {node.$items.map((item, i) => (
           <React.Fragment key={i}>
-            {renderNode(item, path ? `${path}/${i}` : String(i), formulas)}
+            {renderNode(
+              item,
+              path ? `${path}/${i}` : String(i),
+              formulas,
+              onAction,
+            )}
           </React.Fragment>
         ))}
       </>
@@ -136,16 +143,18 @@ function renderNode(
     return null;
   }
 
-  // Button: show label, skip script internals
+  // Button: show label, execute script on click
   if (tag === "button") {
     const label = node["label"];
+    const scriptPath = `${path}/script/steps`;
     return (
       <button
         type="button"
+        onClick={onAction ? () => onAction(scriptPath) : undefined}
         style={{
           padding: "4px 12px",
           fontSize: 13,
-          cursor: "default",
+          cursor: onAction ? "pointer" : "default",
           background: "#0078d4",
           color: "#fff",
           border: "none",
@@ -188,6 +197,7 @@ function renderNode(
             node["addAction"] as PlainNode,
             path ? `${path}/addAction` : "addAction",
             formulas,
+            onAction,
           )}
       </div>
     );
@@ -225,6 +235,7 @@ function renderNode(
             val as PlainNode,
             path ? `${path}/${key}` : key,
             formulas,
+            onAction,
           )}
         </React.Fragment>,
       );

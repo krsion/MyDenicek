@@ -205,7 +205,17 @@ function Editor(
             }}
           >
             <ErrorBoundary>
-              <RenderedDocument doc={dk.doc} />
+              <RenderedDocument
+                doc={dk.doc}
+                onAction={(scriptPath) => {
+                  try {
+                    dk.denicek.repeatEditsFrom(scriptPath);
+                    dk.forceUpdate();
+                  } catch (e) {
+                    console.error("Action failed:", e);
+                  }
+                }}
+              />
             </ErrorBoundary>
           </div>
         )}
