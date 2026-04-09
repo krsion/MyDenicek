@@ -70,22 +70,29 @@ export const INITIAL_DOCUMENT: PlainNode = {
     },
   },
 
-  // ── 4. Conference List (table + refs) ──────────────────────────────
+  // ── 4. Conference List (table + composer) ───────────────────────────
   conferences: {
     $tag: "article",
     heading: { $tag: "h2", text: "Conferences" },
+    composer: {
+      $tag: "composer",
+      input: { $tag: "input", value: "Jan Novák, jan@novak.cz" },
+      addAction: {
+        $tag: "button",
+        label: "Add Speaker",
+        steps: { $tag: "event-steps", $items: [] },
+      },
+    },
     speakers: {
       $tag: "table",
       $items: [
         {
           $tag: "tr",
-          name: "Tomáš Petříček",
-          affiliation: "Charles University",
+          contact: "Tomáš Petříček, tomas@tomasp.net",
         },
         {
           $tag: "tr",
-          name: "Ada Lovelace",
-          affiliation: "University of London",
+          contact: "Ada Lovelace, ada@example.com",
         },
       ],
     },
@@ -150,5 +157,24 @@ export function initializeActions(dk: Denicek): void {
   dk.pushBack("todoList/composer/addAction/steps", {
     $tag: "step",
     eventId: copyId,
+  });
+
+  // ── Conferences: record the "add speaker from input" recipe ───────
+  const addSpeakerId = dk.pushFront("conferences/speakers", {
+    $tag: "tr",
+    contact: "",
+  });
+  const copySpeakerContactId = dk.copy(
+    "conferences/speakers/!0/contact",
+    "conferences/composer/input/value",
+  );
+
+  dk.pushBack("conferences/composer/addAction/steps", {
+    $tag: "step",
+    eventId: addSpeakerId,
+  });
+  dk.pushBack("conferences/composer/addAction/steps", {
+    $tag: "step",
+    eventId: copySpeakerContactId,
   });
 }
