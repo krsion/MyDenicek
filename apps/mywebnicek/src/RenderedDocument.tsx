@@ -174,6 +174,7 @@ function renderNode(
   if (tag === "composer") {
     const inputNode = node["input"] as PlainRecord | undefined;
     const value = inputNode?.["value"];
+    const valuePath = path ? `${path}/input/value` : "input/value";
     return (
       <div
         style={{
@@ -184,8 +185,11 @@ function renderNode(
         }}
       >
         <input
-          readOnly
+          readOnly={!onSetValue}
           value={typeof value === "string" ? value : ""}
+          onChange={onSetValue
+            ? (e) => onSetValue(valuePath, e.target.value)
+            : undefined}
           style={{
             padding: "4px 8px",
             fontSize: 13,
