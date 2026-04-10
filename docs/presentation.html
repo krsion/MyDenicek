@@ -31,9 +31,7 @@
 <div class="reveal">
 <div class="slides">
 
-<!-- ═══════════════════════════════════════════════════════════════════ -->
-<!-- TITLE -->
-<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- 1. TITLE -->
 <section>
   <h1>mydenicek</h1>
   <h3>Using CRDTs to enable collaborative editing in Denicek</h3>
@@ -45,9 +43,7 @@
   <p class="small" style="margin-top: 1em;">Name inspired by <em>Webstrates → myWebstrates → Denicek → myDenicek</em></p>
 </section>
 
-<!-- ═══════════════════════════════════════════════════════════════════ -->
-<!-- WHAT IS DENICEK -->
-<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- 2. WHAT IS DENICEK -->
 <section>
   <h2>What is Denicek?</h2>
   <blockquote>A computational substrate for document-oriented end-user programming
@@ -65,17 +61,13 @@
   </ul>
 </section>
 
-<!-- ═══════════════════════════════════════════════════════════════════ -->
-<!-- PROJECT GOAL -->
-<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- 3. GOAL -->
 <section>
   <h2>Project Goal</h2>
   <p style="font-size: 1em;">Introduce <strong>CRDT principles</strong> into Denicek and implement <strong>formative examples</strong><br/> that demonstrate its end-user programming capabilities.</p>
 </section>
 
-<!-- ═══════════════════════════════════════════════════════════════════ -->
-<!-- CRDTs -->
-<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- 4. CRDTs -->
 <section>
   <h2>CRDTs</h2>
   <p><strong>Conflict-free Replicated Data Types</strong> — a foundation for <strong>local-first</strong> software.</p>
@@ -88,155 +80,18 @@
   </ul>
 </section>
 
-<!-- ═══════════════════════════════════════════════════════════════════ -->
-<!-- END RESULT: FULL APP -->
-<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- 5. PREVIEW -->
 <section>
-  <h2>The End Result</h2>
+  <h2>mywebnicek</h2>
   <img src="slides-assets/02-formative-full.png" class="screenshot" alt="mywebnicek with all three panels" />
   <p class="small">Three panels: rendered document · raw JSON tree · event DAG graph</p>
 </section>
 
 <!-- ═══════════════════════════════════════════════════════════════════ -->
-<!-- DEMO 1: COUNTER -->
+<!-- PART 2: APPROACH — how we got here                                -->
 <!-- ═══════════════════════════════════════════════════════════════════ -->
-<section>
-  <h2>Demo 1: Counter — Formulas & Replay</h2>
-  <div class="cols">
-    <div>
-      <img src="slides-assets/04-counter-4.png" class="screenshot" alt="Counter after 4 increments" />
-    </div>
-    <div>
-      <p>Each "Increment" click <strong>replays 3 recorded edits</strong>:</p>
-      <ol>
-        <li>Wrap value in <code>x-formula-plus</code></li>
-        <li>Rename field to <code>left</code></li>
-        <li>Add <code>right = 1</code></li>
-      </ol>
-      <p>Formula evaluates nested plus-tree:<br/><code>((((0 + 1) + 1) + 1) + 1) = 4</code></p>
-      <p class="small">JSON &amp; event graph show the growing structure in real time</p>
-    </div>
-  </div>
-</section>
 
-<!-- ═══════════════════════════════════════════════════════════════════ -->
-<!-- DEMO 2: CONFERENCE LIST -->
-<!-- ═══════════════════════════════════════════════════════════════════ -->
-<section>
-  <h2>Demo 2: Conference List — Composer Pattern</h2>
-  <div class="cols">
-    <div>
-      <img src="slides-assets/12-conf-list-before.png" class="screenshot-sm" alt="Conference list before add" style="margin-bottom:8px" />
-      <img src="slides-assets/13-conf-list-after.png" class="screenshot-sm" alt="Conference list after add" />
-    </div>
-    <div>
-      <p>A flat <code>&lt;ul&gt;</code> with <code>"Name, email"</code> entries.</p>
-      <p>The <strong>Add button</strong> replays a 2-step recipe:</p>
-      <ol>
-        <li><code>pushFront</code> — insert empty <code>&lt;li&gt;</code></li>
-        <li><code>copy</code> — fill it from the input field</li>
-      </ol>
-      <p>Same pattern works for any list with a composer input.</p>
-      <p class="small">This is the "before" — next we'll refactor it into a table.</p>
-    </div>
-  </div>
-</section>
-
-<!-- ═══════════════════════════════════════════════════════════════════ -->
-<!-- DEMO 3: REFACTOR LIST → TABLE -->
-<!-- ═══════════════════════════════════════════════════════════════════ -->
-<section>
-  <h2>Demo 3: List → Table Refactoring</h2>
-  <div class="cols">
-    <div>
-      <img src="slides-assets/14-conf-table.png" class="screenshot-sm" alt="Conference table with split columns" />
-    </div>
-    <div>
-      <p>Structural edits transform the list <strong>in place</strong>:</p>
-      <pre><code>/speakers updateTag table
-/speakers/* updateTag tr
-/speakers/* wrapList tr
-/speakers/*/name splitFirst ", "</code></pre>
-      <p><code>"Name, email"</code> → split into <strong>separate columns</strong></p>
-      <p>These are <strong>recorded events</strong> — a second peer receives them via sync and sees the same table.</p>
-      <p class="small">The <code>*</code> wildcard applies edits to all items at once.</p>
-    </div>
-  </div>
-</section>
-
-<!-- ═══════════════════════════════════════════════════════════════════ -->
-<!-- HOW TO BUILD: EMPTY START -->
-<!-- ═══════════════════════════════════════════════════════════════════ -->
-<section>
-  <h2>Building From Scratch</h2>
-  <p>The same conference list can be built from an empty document.</p>
-  <img src="slides-assets/20-empty-start.png" class="screenshot" alt="Empty document" />
-  <p class="small">Start: <code>{ "$tag": "root" }</code> — command bar at the bottom</p>
-</section>
-
-<!-- ═══════════════════════════════════════════════════════════════════ -->
-<!-- HOW TO BUILD: ADD HEADING + LIST -->
-<!-- ═══════════════════════════════════════════════════════════════════ -->
-<section>
-  <h2>Step 1: Add Structure</h2>
-  <div class="cols">
-    <div>
-      <img src="slides-assets/22-add-list.png" class="screenshot-sm" alt="After adding heading and list" />
-    </div>
-    <div>
-      <p><span class="step-num">1</span> Add a heading to root:</p>
-      <pre><code>/ add heading {"$tag":"h2","text":"Conference Speakers"}</code></pre>
-      <p><span class="step-num">2</span> Add an empty speakers list:</p>
-      <pre><code>/ add speakers {"$tag":"ul","$items":[]}</code></pre>
-      <p class="small">The <code>/</code> selector targets the root. JSON values create subtrees.</p>
-    </div>
-  </div>
-</section>
-
-<!-- ═══════════════════════════════════════════════════════════════════ -->
-<!-- HOW TO BUILD: ADD SPEAKERS -->
-<!-- ═══════════════════════════════════════════════════════════════════ -->
-<section>
-  <h2>Step 2: Add Speakers</h2>
-  <div class="cols">
-    <div>
-      <img src="slides-assets/23-list-with-items.png" class="screenshot-sm" alt="List with 3 speakers" />
-    </div>
-    <div>
-      <p>Push items with <code>"Name, email"</code> format:</p>
-      <pre><code>/speakers pushBack {"$tag":"li",
-  "contact":"Ada Lovelace, ada@example.com"}
-/speakers pushBack {"$tag":"li",
-  "contact":"Grace Hopper, grace@example.com"}
-/speakers pushBack {"$tag":"li",
-  "contact":"Alan Turing, alan@example.com"}</code></pre>
-      <p class="small">Each pushBack is one event in the DAG. The event graph grows.</p>
-    </div>
-  </div>
-</section>
-
-<!-- ═══════════════════════════════════════════════════════════════════ -->
-<!-- REFACTOR: LIST → TABLE -->
-<!-- ═══════════════════════════════════════════════════════════════════ -->
-<section>
-  <h2>Step 3: Refactor List → Table</h2>
-  <div class="cols">
-    <div>
-      <img src="slides-assets/25-items-tr.png" class="screenshot-sm" alt="Table with tr rows" />
-    </div>
-    <div>
-      <p>Structural edits transform the document <strong>in place</strong>:</p>
-      <pre><code>/speakers updateTag table    ← ul → table
-/speakers/* updateTag tr     ← li → tr (wildcard!)</code></pre>
-      <p>The <code>*</code> wildcard applies the edit to <strong>all children</strong> at once.</p>
-      <p>These are <strong>recorded events</strong> — a second peer receives them via sync and sees the same table.</p>
-    </div>
-  </div>
-</section>
-
-<!-- ═══════════════════════════════════════════════════════════════════ -->
-<!-- APPROACH 1: AUTOMERGE -->
-<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- 6. AUTOMERGE -->
 <section>
   <h2>Journey: Automerge</h2>
   <div class="cols">
@@ -259,9 +114,7 @@
   </div>
 </section>
 
-<!-- ═══════════════════════════════════════════════════════════════════ -->
-<!-- APPROACH 2: LORO -->
-<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- 7. LORO -->
 <section>
   <h2>Journey: Loro</h2>
   <div class="cols">
@@ -285,9 +138,7 @@
   </div>
 </section>
 
-<!-- ═══════════════════════════════════════════════════════════════════ -->
-<!-- APPROACH 3: CUSTOM OT -->
-<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- 8. CUSTOM OT -->
 <section>
   <h2>Solution: Custom OT-based Event DAG</h2>
   <p>The Denicek editing model is <strong>inherently OT-shaped</strong>.</p>
@@ -300,9 +151,7 @@
   </ul>
 </section>
 
-<!-- ═══════════════════════════════════════════════════════════════════ -->
-<!-- KEY INSIGHT: PATHS VS IDS -->
-<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- 9. PATHS VS IDS -->
 <section>
   <h2>Key Insight: Why Paths Matter</h2>
   <div class="cols">
@@ -327,9 +176,7 @@
   </div>
 </section>
 
-<!-- ═══════════════════════════════════════════════════════════════════ -->
-<!-- HOW CONVERGENCE WORKS -->
-<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- 10. HOW CONVERGENCE WORKS -->
 <section>
   <h2>How Convergence Works</h2>
   <ol>
@@ -342,9 +189,7 @@
   <p style="margin-top: 0.5em;">Validated by <strong>property-based tests</strong> (fast-check) and a <strong>random fuzzer</strong>.</p>
 </section>
 
-<!-- ═══════════════════════════════════════════════════════════════════ -->
-<!-- ARCHITECTURE -->
-<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- 11. ARCHITECTURE -->
 <section>
   <h2>Architecture</h2>
   <table>
@@ -379,8 +224,141 @@
 </section>
 
 <!-- ═══════════════════════════════════════════════════════════════════ -->
-<!-- TESTING -->
+<!-- PART 3: FORMATIVE EXAMPLES — demos with screenshots               -->
 <!-- ═══════════════════════════════════════════════════════════════════ -->
+
+<!-- 12. COUNTER -->
+<section>
+  <h2>Demo 1: Counter — Formulas & Replay</h2>
+  <div class="cols">
+    <div>
+      <img src="slides-assets/04-counter-4.png" class="screenshot" alt="Counter after 4 increments" />
+    </div>
+    <div>
+      <p>Each "Increment" click <strong>replays 3 recorded edits</strong>:</p>
+      <ol>
+        <li>Wrap value in <code>x-formula-plus</code></li>
+        <li>Rename field to <code>left</code></li>
+        <li>Add <code>right = 1</code></li>
+      </ol>
+      <p>Formula evaluates nested plus-tree:<br/><code>((((0 + 1) + 1) + 1) + 1) = 4</code></p>
+      <p class="small">JSON &amp; event graph show the growing structure in real time</p>
+    </div>
+  </div>
+</section>
+
+<!-- 13. CONFERENCE LIST -->
+<section>
+  <h2>Demo 2: Conference List — Composer Pattern</h2>
+  <div class="cols">
+    <div>
+      <img src="slides-assets/12-conf-list-before.png" class="screenshot-sm" alt="Conference list before add" style="margin-bottom:8px" />
+      <img src="slides-assets/13-conf-list-after.png" class="screenshot-sm" alt="Conference list after add" />
+    </div>
+    <div>
+      <p>A flat <code>&lt;ul&gt;</code> with <code>"Name, email"</code> entries.</p>
+      <p>The <strong>Add button</strong> replays a 2-step recipe:</p>
+      <ol>
+        <li><code>pushFront</code> — insert empty <code>&lt;li&gt;</code></li>
+        <li><code>copy</code> — fill it from the input field</li>
+      </ol>
+      <p>Same pattern works for any list with a composer input.</p>
+      <p class="small">This is the "before" — next we'll refactor it into a table.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 14. LIST → TABLE -->
+<section>
+  <h2>Demo 3: List → Table Refactoring</h2>
+  <div class="cols">
+    <div>
+      <img src="slides-assets/14-conf-table.png" class="screenshot-sm" alt="Conference table with split columns" />
+    </div>
+    <div>
+      <p>Structural edits transform the list <strong>in place</strong>:</p>
+      <pre><code>/speakers updateTag table
+/speakers/* updateTag tr
+/speakers/* wrapList tr
+/speakers/*/name splitFirst ", "</code></pre>
+      <p><code>"Name, email"</code> → split into <strong>separate columns</strong></p>
+      <p>These are <strong>recorded events</strong> — a second peer receives them via sync and sees the same table.</p>
+      <p class="small">The <code>*</code> wildcard applies edits to all items at once.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- PART 4: BUILD FROM SCRATCH                                        -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+
+<!-- 15. EMPTY START -->
+<section>
+  <h2>Building From Scratch</h2>
+  <p>The same conference list can be built from an empty document.</p>
+  <img src="slides-assets/20-empty-start.png" class="screenshot" alt="Empty document" />
+  <p class="small">Start: <code>{ "$tag": "root" }</code> — command bar at the bottom</p>
+</section>
+
+<!-- 16. ADD STRUCTURE -->
+<section>
+  <h2>Step 1: Add Structure</h2>
+  <div class="cols">
+    <div>
+      <img src="slides-assets/22-add-list.png" class="screenshot-sm" alt="After adding heading and list" />
+    </div>
+    <div>
+      <p><span class="step-num">1</span> Add a heading to root:</p>
+      <pre><code>/ add heading {"$tag":"h2","text":"Conference Speakers"}</code></pre>
+      <p><span class="step-num">2</span> Add an empty speakers list:</p>
+      <pre><code>/ add speakers {"$tag":"ul","$items":[]}</code></pre>
+      <p class="small">The <code>/</code> selector targets the root. JSON values create subtrees.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 17. ADD SPEAKERS -->
+<section>
+  <h2>Step 2: Add Speakers</h2>
+  <div class="cols">
+    <div>
+      <img src="slides-assets/23-list-with-items.png" class="screenshot-sm" alt="List with 3 speakers" />
+    </div>
+    <div>
+      <p>Push items with <code>"Name, email"</code> format:</p>
+      <pre><code>/speakers pushBack {"$tag":"li",
+  "contact":"Ada Lovelace, ada@example.com"}
+/speakers pushBack {"$tag":"li",
+  "contact":"Grace Hopper, grace@example.com"}
+/speakers pushBack {"$tag":"li",
+  "contact":"Alan Turing, alan@example.com"}</code></pre>
+      <p class="small">Each pushBack is one event in the DAG. The event graph grows.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 18. REFACTOR LIST → TABLE -->
+<section>
+  <h2>Step 3: Refactor List → Table</h2>
+  <div class="cols">
+    <div>
+      <img src="slides-assets/25-items-tr.png" class="screenshot-sm" alt="Table with tr rows" />
+    </div>
+    <div>
+      <p>Structural edits transform the document <strong>in place</strong>:</p>
+      <pre><code>/speakers updateTag table    ← ul → table
+/speakers/* updateTag tr     ← li → tr (wildcard!)</code></pre>
+      <p>The <code>*</code> wildcard applies the edit to <strong>all children</strong> at once.</p>
+      <p>These are <strong>recorded events</strong> — a second peer receives them via sync and sees the same table.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- PART 5: WRAP UP                                                   -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+
+<!-- 19. TESTING -->
 <section>
   <h2>Testing & Validation</h2>
   <ul>
@@ -393,9 +371,7 @@
   </ul>
 </section>
 
-<!-- ═══════════════════════════════════════════════════════════════════ -->
-<!-- WHAT I LEARNED -->
-<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- 20. WHAT I LEARNED -->
 <section>
   <h2>What I Learned</h2>
   <ul>
@@ -407,9 +383,7 @@
   </ul>
 </section>
 
-<!-- ═══════════════════════════════════════════════════════════════════ -->
-<!-- SUMMARY -->
-<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- 21. SUMMARY -->
 <section>
   <h2>Summary</h2>
   <table>
@@ -427,9 +401,7 @@
   </p>
 </section>
 
-<!-- ═══════════════════════════════════════════════════════════════════ -->
-<!-- FUTURE WORK -->
-<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- 22. FUTURE WORK -->
 <section>
   <h2>Future Work</h2>
   <ul>
@@ -440,9 +412,7 @@
   </ul>
 </section>
 
-<!-- ═══════════════════════════════════════════════════════════════════ -->
-<!-- THANK YOU -->
-<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- 23. THANK YOU -->
 <section>
   <h1>Thank you</h1>
   <p style="font-size: 0.9em;">Questions?</p>
