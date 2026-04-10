@@ -13,7 +13,7 @@
   .reveal li { font-size: 0.75em; margin-bottom: 0.3em; }
   .reveal p  { font-size: 0.75em; }
   .reveal code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-size: 0.85em; }
-  .reveal pre code { font-size: 0.6em; line-height: 1.4; background: #f5f5f5; color: #333; }
+  .reveal pre code { font-size: 0.6em; line-height: 1.4; background: #f8f8f8; color: #333; text-align: left; padding: 12px 16px; border-radius: 6px; }
   .reveal .small { font-size: 0.6em; color: #888; }
   .reveal table { font-size: 0.65em; margin: 0 auto; }
   .reveal table th { background: #0078d4; color: white; padding: 6px 12px; }
@@ -35,7 +35,7 @@
   .reveal .box p { margin: 4px 0; }
   .reveal .arrow-down { text-align: center; font-size: 1.5em; color: #888; margin: 8px 0; }
 </style>
-</head>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/github.min.css" />
 <body>
 <div class="reveal">
 <div class="slides">
@@ -121,16 +121,22 @@
       </ul>
     </div>
   </div>
-  <div class="box box-gray" style="font-family: Consolas, monospace; font-size: 0.6em; line-height: 1.5;">
-    <span style="color:#888">// Automerge internal representation — flat map, not a tree</span><br/>
-    { <span style="color:#0078d4">root</span>: <span style="color:#a31515">"n1"</span>, <span style="color:#0078d4">nodes</span>: {<br/>
-    &nbsp;&nbsp;<span style="color:#a31515">"n1"</span>: { <span style="color:#0078d4">kind</span>: <span style="color:#a31515">"element"</span>, <span style="color:#0078d4">tag</span>: <span style="color:#a31515">"div"</span>, <span style="color:#0078d4">children</span>: [<span style="color:#a31515">"n2"</span>, <span style="color:#a31515">"n3"</span>] },<br/>
-    &nbsp;&nbsp;<span style="color:#a31515">"n2"</span>: { <span style="color:#0078d4">kind</span>: <span style="color:#a31515">"element"</span>, <span style="color:#0078d4">tag</span>: <span style="color:#a31515">"ul"</span>, &nbsp;<span style="color:#0078d4">children</span>: [<span style="color:#a31515">"n4"</span>] },<br/>
-    &nbsp;&nbsp;<span style="color:#a31515">"n3"</span>: { <span style="color:#0078d4">kind</span>: <span style="color:#a31515">"value"</span>, &nbsp;&nbsp;<span style="color:#0078d4">value</span>: <span style="color:#a31515">"Hello"</span> },<br/>
-    &nbsp;&nbsp;<span style="color:#a31515">"n4"</span>: { <span style="color:#0078d4">kind</span>: <span style="color:#a31515">"element"</span>, <span style="color:#0078d4">tag</span>: <span style="color:#a31515">"li"</span>, &nbsp;<span style="color:#0078d4">children</span>: [<span style="color:#a31515">"n5"</span>] },<br/>
-    }}
-  </div>
   <p class="small">Kleppmann, M. &amp; Beresford, A. (2020). <em>A Conflict-Free Replicated JSON Datatype.</em></p>
+</section>
+
+<section>
+  <h2>Automerge: Internal Representation</h2>
+  <p>Flat map of nodes — parent-child relations stored as ID arrays, not a tree.</p>
+  <pre><code class="json">{
+  "root": "n1",
+  "nodes": {
+    "n1": { "kind": "element", "tag": "div", "children": ["n2", "n3"] },
+    "n2": { "kind": "element", "tag": "ul",  "children": ["n4"] },
+    "n3": { "kind": "value",   "value": "Hello" },
+    "n4": { "kind": "element", "tag": "li",  "children": ["n5"] }
+  }
+}</code></pre>
+  <p class="small">To "move" a node, you must delete it from one <code>children</code> array and insert into another — <strong>not atomic</strong>.</p>
 </section>
 
 <section>
@@ -529,6 +535,7 @@
 </div><!-- reveal -->
 
 <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/highlight/highlight.min.js"></script>
 <script>
   Reveal.initialize({
     hash: true,
@@ -536,6 +543,7 @@
     transition: 'slide',
     width: 1280,
     height: 720,
+    plugins: [ RevealHighlight ],
   });
 </script>
 </body>
