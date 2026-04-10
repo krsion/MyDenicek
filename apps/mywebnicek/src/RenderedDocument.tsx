@@ -18,7 +18,11 @@ function DebouncedInput(
 ) {
   const [local, setLocal] = useState(value);
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const valueRef = useRef(value);
   const DEBOUNCE_MS = 500;
+
+  // Track latest external value to avoid stale-closure overwrites
+  valueRef.current = value;
 
   // Sync local state when the external value changes (e.g. from a remote peer)
   useEffect(() => {
@@ -27,8 +31,8 @@ function DebouncedInput(
 
   const flush = useCallback((v: string) => {
     clearTimeout(timerRef.current);
-    if (onCommit && v !== value) onCommit(v);
-  }, [onCommit, value]);
+    if (onCommit && v !== valueRef.current) onCommit(v);
+  }, [onCommit]);
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {

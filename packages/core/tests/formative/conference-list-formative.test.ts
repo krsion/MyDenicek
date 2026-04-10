@@ -1,12 +1,5 @@
 import { assertEquals, Denicek, sync } from "../core/test-helpers.ts";
 
-// ── Types shared by both tests ─────────────────────────────────────
-
-type ReplayStep = {
-  $tag: "replay-step";
-  eventId: string;
-};
-
 // ── Conference List (before) ─────────────────────────────────────────
 // A flat <ul> where each item stores "Name, email" as a single string.
 // Two peers concurrently add speakers and converge.
