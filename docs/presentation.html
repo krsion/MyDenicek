@@ -121,13 +121,15 @@
       </ul>
     </div>
   </div>
-  <pre><code>// Automerge internal representation
-{ root: "n1", nodes: {
-    "n1": { kind: "element", tag: "div", children: ["n2","n3"] },
-    "n2": { kind: "element", tag: "ul",  children: ["n4"] },
-    "n3": { kind: "value",   value: "Hello" },
-    "n4": { kind: "element", tag: "li",  children: ["n5"] },
-}}</code></pre>
+  <div class="box box-gray" style="font-family: Consolas, monospace; font-size: 0.6em; line-height: 1.5;">
+    <span style="color:#888">// Automerge internal representation — flat map, not a tree</span><br/>
+    { <span style="color:#0078d4">root</span>: <span style="color:#a31515">"n1"</span>, <span style="color:#0078d4">nodes</span>: {<br/>
+    &nbsp;&nbsp;<span style="color:#a31515">"n1"</span>: { <span style="color:#0078d4">kind</span>: <span style="color:#a31515">"element"</span>, <span style="color:#0078d4">tag</span>: <span style="color:#a31515">"div"</span>, <span style="color:#0078d4">children</span>: [<span style="color:#a31515">"n2"</span>, <span style="color:#a31515">"n3"</span>] },<br/>
+    &nbsp;&nbsp;<span style="color:#a31515">"n2"</span>: { <span style="color:#0078d4">kind</span>: <span style="color:#a31515">"element"</span>, <span style="color:#0078d4">tag</span>: <span style="color:#a31515">"ul"</span>, &nbsp;<span style="color:#0078d4">children</span>: [<span style="color:#a31515">"n4"</span>] },<br/>
+    &nbsp;&nbsp;<span style="color:#a31515">"n3"</span>: { <span style="color:#0078d4">kind</span>: <span style="color:#a31515">"value"</span>, &nbsp;&nbsp;<span style="color:#0078d4">value</span>: <span style="color:#a31515">"Hello"</span> },<br/>
+    &nbsp;&nbsp;<span style="color:#a31515">"n4"</span>: { <span style="color:#0078d4">kind</span>: <span style="color:#a31515">"element"</span>, <span style="color:#0078d4">tag</span>: <span style="color:#a31515">"li"</span>, &nbsp;<span style="color:#0078d4">children</span>: [<span style="color:#a31515">"n5"</span>] },<br/>
+    }}
+  </div>
   <p class="small">Kleppmann, M. &amp; Beresford, A. (2020). <em>A Conflict-Free Replicated JSON Datatype.</em></p>
 </section>
 
