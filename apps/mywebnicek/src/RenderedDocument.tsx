@@ -192,21 +192,25 @@ function renderNode(
   // Formula nodes: x-formula-* or any tag with a registered evaluator
   const computed = formulas.get(path);
   if (tag.startsWith("x-formula") || computed !== undefined) {
-    const op = node["operation"];
     const hasResult = computed !== undefined &&
       !(computed instanceof FormulaError);
+    // Inside table cells, render evaluated value as plain text
+    if (hasResult) {
+      return <>{String(computed)}</>;
+    }
+    const op = node["operation"];
     return (
       <span
         style={{
           fontFamily: "Consolas, monospace",
-          background: hasResult ? "#e8f0fe" : "#fff4e5",
+          background: "#fff4e5",
           padding: "1px 6px",
           borderRadius: 3,
           fontSize: "0.9em",
         }}
-        title={`ƒ ${op ?? tag}${hasResult ? " = " + String(computed) : ""}`}
+        title={`ƒ ${op ?? tag}`}
       >
-        {hasResult ? String(computed) : `ƒ(${op ?? tag})`}
+        {`ƒ(${op ?? tag})`}
       </span>
     );
   }
