@@ -25,6 +25,15 @@
   .reveal img.screenshot { max-height: 420px; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
   .reveal img.screenshot-sm { max-height: 300px; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
   .reveal .step-num { display: inline-block; background: #0078d4; color: white; width: 28px; height: 28px; line-height: 28px; text-align: center; border-radius: 50%; font-size: 0.7em; font-weight: bold; margin-right: 8px; }
+  .reveal .box { border-radius: 8px; padding: 12px 16px; font-size: 0.7em; }
+  .reveal .box-blue { background: #e8f0fe; border: 1px solid #afc6e8; }
+  .reveal .box-green { background: #e6f4ea; border: 1px solid #a8d5b8; }
+  .reveal .box-red { background: #fce8e6; border: 1px solid #f5b7b1; }
+  .reveal .box-orange { background: #fff4e5; border: 1px solid #f5d6a0; }
+  .reveal .box-gray { background: #f5f5f5; border: 1px solid #ddd; }
+  .reveal .box h4 { margin: 0 0 6px; font-size: 0.85em; }
+  .reveal .box p { margin: 4px 0; }
+  .reveal .arrow-down { text-align: center; font-size: 1.5em; color: #888; margin: 8px 0; }
 </style>
 </head>
 <body>
@@ -124,35 +133,50 @@
 
 <section>
   <h2>The Concurrent Wrap Problem</h2>
-  <p>Alice wraps <code>&lt;li&gt;</code> in <code>&lt;ul&gt;</code>. Bob concurrently edits the <code>&lt;li&gt;</code>.</p>
-  <pre><code>// Before — flat map:
-nodes: { "li1": { tag: "li", children: ["v1"] },
-         "v1":  { value: "Talk about CRDTs" } }
-
-// Alice: wrap li1 in ul  →  delete li1, create ul, re-insert li1
-// Bob:   edit v1.value = "Talk about OT"
-
-// After merge:
-// Alice's delete removed li1 from the tree.
-// Bob's edit targets v1 — but v1's parent li1 was deleted + re-inserted.
-// Bob's edit is LOST or applied to an orphaned copy.</code></pre>
+  <div class="box box-gray" style="margin-bottom:12px">
+    <h4>Before — both peers see:</h4>
+    <p><code>&lt;div&gt;</code> → <code>&lt;li&gt;</code> "Talk about CRDTs"</p>
+  </div>
+  <div class="cols">
+    <div class="box box-blue">
+      <h4>🔵 Alice: wrap &lt;li&gt; in &lt;ul&gt;</h4>
+      <p>= delete <code>li</code> + create <code>&lt;ul&gt;</code> + re-insert <code>li</code></p>
+    </div>
+    <div class="box box-green">
+      <h4>🟢 Bob: edit the text</h4>
+      <p>= set value → "Talk about <strong>OT</strong>"</p>
+    </div>
+  </div>
+  <div class="arrow-down">⬇</div>
+  <div class="box box-red">
+    <h4>❌ After merge</h4>
+    <p>Alice's delete removed <code>li</code>. Bob's edit targets the <strong>deleted original</strong> → <strong>edit is lost</strong>.</p>
+  </div>
 </section>
 
 <section>
   <h2>Concurrent Wrap: Two Wrappers</h2>
-  <p>Alice wraps <code>&lt;li&gt;</code> in <code>&lt;ul&gt;</code>. Bob wraps same <code>&lt;li&gt;</code> in <code>&lt;ol&gt;</code>.</p>
-  <pre><code>// Both create a wrapper + move the child:
-// Alice: create "ul-wrapper", move li1 → ul-wrapper.children
-// Bob:   create "ol-wrapper", move li1 → ol-wrapper.children
-
-// After merge — TWO wrappers exist:
-nodes: { "ul-wrapper": { tag: "ul", children: ["li1"] },  // ← has the child
-         "ol-wrapper": { tag: "ol", children: [] },        // ← orphaned!
-         "li1": { tag: "li", children: ["v1"] } }
-
-// Cannot auto-delete ol-wrapper — indistinguishable from
-// an intentionally empty &lt;ol&gt; the user created.</code></pre>
-  <p>Loro's <strong>movable tree CRDT</strong> solves this with native atomic move.</p>
+  <div class="box box-gray" style="margin-bottom:12px">
+    <h4>Before — both peers see:</h4>
+    <p><code>&lt;div&gt;</code> → <code>&lt;li&gt;</code> "Talk about CRDTs"</p>
+  </div>
+  <div class="cols">
+    <div class="box box-blue">
+      <h4>🔵 Alice: wrap in &lt;ul&gt;</h4>
+      <p>create <code>&lt;ul&gt;</code>, move <code>li</code> inside</p>
+    </div>
+    <div class="box box-green">
+      <h4>🟢 Bob: wrap in &lt;ol&gt;</h4>
+      <p>create <code>&lt;ol&gt;</code>, move <code>li</code> inside</p>
+    </div>
+  </div>
+  <div class="arrow-down">⬇</div>
+  <div class="box box-red">
+    <h4>❌ After merge — two wrappers</h4>
+    <p><code>&lt;ul&gt;</code> → <code>&lt;li&gt;</code> ✅ &nbsp;&nbsp; <code>&lt;ol&gt;</code> → <em>(empty, orphaned)</em> 👻</p>
+    <p>Cannot auto-delete — indistinguishable from an intentionally empty element.</p>
+  </div>
+  <p class="small" style="margin-top:8px">Loro's <strong>movable tree CRDT</strong> solves this with native atomic move.</p>
 </section>
 
 <!-- 7. LORO -->
@@ -179,20 +203,31 @@ nodes: { "ul-wrapper": { tag: "ul", children: ["li1"] },  // ← has the child
 
 <section>
   <h2>The Retargeting Problem</h2>
-  <p>Record "add speaker" on peer A. Replay it on peer B after concurrent structural edits.</p>
-  <pre><code>// Peer A records: pushBack to /speakers → eventId "a:0"
-// Peer A records: copy input → new item  → eventId "a:1"
-// Save [a:0, a:1] as the "Add Speaker" button recipe.
-
-// Concurrently, Peer B renames /speakers → /talks
-// After sync, the list is now at /talks, not /speakers.
-
-// Loro replay: targets opaque node ID → still works for THAT node
-// But: what if Peer B also wrapped /talks in a &lt;section&gt;?
-// The recorded edit has no way to follow the structural changes.
-
-// mydenicek: OT transforms /speakers → /talks automatically.
-// Replay follows renames, wraps, and reindexing.</code></pre>
+  <div class="box box-gray" style="margin-bottom:12px">
+    <h4>Peer A records a button recipe:</h4>
+    <p><code>pushBack</code> to <code>/speakers</code> + <code>copy</code> input → new item</p>
+  </div>
+  <div class="cols">
+    <div class="box box-blue">
+      <h4>🔵 Peer A: replays "Add Speaker"</h4>
+      <p>Targets <code>/speakers</code></p>
+    </div>
+    <div class="box box-green">
+      <h4>🟢 Peer B: renames concurrently</h4>
+      <p><code>/speakers</code> → <code>/talks</code></p>
+    </div>
+  </div>
+  <div class="arrow-down">⬇</div>
+  <div class="cols">
+    <div class="box box-red">
+      <h4>❌ Loro</h4>
+      <p>Replay uses opaque node ID → works for <em>that</em> node, but can't follow renames, wraps, or reindexing</p>
+    </div>
+    <div class="box box-green">
+      <h4>✅ mydenicek</h4>
+      <p>OT transforms <code>/speakers</code> → <code>/talks</code> automatically. Replay follows all structural changes.</p>
+    </div>
+  </div>
 </section>
 
 <!-- 8. CUSTOM OT -->
