@@ -1,8 +1,9 @@
 # mydenicek
 
 **Local-first collaborative document editor built on a custom OT-based CRDT.**\
-Published on JSR as [`@mydenicek/core`](https://jsr.io/@mydenicek/core) and
-[`@mydenicek/react`](https://jsr.io/@mydenicek/react).
+Published on JSR as [`@mydenicek/core`](https://jsr.io/@mydenicek/core),
+[`@mydenicek/react`](https://jsr.io/@mydenicek/react), and
+[`@mydenicek/sync-server`](https://jsr.io/@mydenicek/sync-server).
 
 **Author**: Bc. Ondřej Krsička\
 **Supervisor**: Mgr. Tomáš Petříček, Ph.D.\
