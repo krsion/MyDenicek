@@ -106,13 +106,31 @@
     <div>
       <h3>❌ Why I moved to Loro</h3>
       <ul>
-        <li>No <strong>atomic move</strong> — "wrap node in record" = delete + insert → loses identity</li>
-        <li>Needed <strong>separate dict + list</strong> per node (data fields vs. child ordering)</li>
+        <li>No <strong>atomic move</strong> — wrap = delete + insert → loses identity</li>
+        <li>Needed <strong>separate dict + list</strong> per node</li>
+        <li><strong>Concurrent wrap was broken</strong></li>
       </ul>
-      <p class="small" style="margin-top:0.5em"><strong>Example:</strong> wrapping <code>/speakers</code> in a <code>&lt;section&gt;</code> requires moving the list into a new parent — Automerge can only delete + re-insert, losing concurrent edits to the original.</p>
     </div>
   </div>
-  <p class="small">Kleppmann, M. &amp; Beresford, A. (2020). <em>A Conflict-Free Replicated JSON Datatype.</em> — describes the move operation problem in JSON CRDTs.</p>
+  <p class="small">Kleppmann, M. &amp; Beresford, A. (2020). <em>A Conflict-Free Replicated JSON Datatype.</em></p>
+</section>
+
+<section>
+  <h2>The Concurrent Wrap Problem</h2>
+  <p>Alice wraps <code>/speakers</code> in a <code>&lt;section&gt;</code>. Bob concurrently adds a speaker.</p>
+  <pre><code>// Before:  { speakers: [Ada, Grace] }
+
+// Alice: wrap speakers in section
+// = delete speakers + insert section/speakers
+{ section: { speakers: [Ada, Grace] } }
+
+// Bob: pushBack to speakers
+{ speakers: [Ada, Grace, Alan] }
+
+// After merge — Bob's edit targets the DELETED original!
+// Automerge: Bob's "Alan" is lost or orphaned.</code></pre>
+  <p>Automerge has no atomic move → concurrent edits to moved nodes are lost.</p>
+  <p class="small">Loro's movable tree CRDT solves this — which is why I moved to Loro.</p>
 </section>
 
 <!-- 7. LORO -->
