@@ -232,7 +232,8 @@
 <!-- EG-WALKER -->
 <section>
   <h2>Inspiration: Eg-walker</h2>
-  <p><strong>Eg-walker</strong> (Gentle &amp; Kleppmann, 2024) — a new approach that combines<br/> the <strong>simplicity of OT</strong> with the <strong>robustness of CRDTs</strong>.</p>
+  <blockquote>"Existing algorithms present a trade-off: either use OT and accept that offline editing is slow, or pick a CRDT and accept much higher memory use."
+    <span class="small">— Gentle &amp; Kleppmann, EuroSys 2025</span></blockquote>
   <ul>
     <li>Store edits in a <strong>causal event graph</strong> (like CRDTs)</li>
     <li>Replay events in <strong>topological order</strong> with OT transformations</li>
