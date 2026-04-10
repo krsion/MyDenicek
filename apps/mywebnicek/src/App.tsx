@@ -35,7 +35,7 @@ const statusColors: Record<string, string> = {
   idle: "#8a8a8a",
 };
 
-const defaultPanels = { rendered: true, raw: false, events: false };
+const defaultPanels = { rendered: true, raw: true, events: true };
 
 function Editor(
   { peerId, roomId, initialDocument, runInitActions }: {
