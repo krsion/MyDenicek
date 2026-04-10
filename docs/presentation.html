@@ -106,31 +106,37 @@
     <div>
       <h3>❌ Why I moved to Loro</h3>
       <ul>
-        <li>No <strong>atomic move</strong> — wrap = delete + insert → loses identity</li>
-        <li>Needed <strong>separate dict + list</strong> per node</li>
+        <li><strong>Flat map</strong> — nodes in a dict, children as ID lists (no tree)</li>
+        <li>No <strong>atomic move</strong> — wrap = delete + re-insert</li>
         <li><strong>Concurrent wrap was broken</strong></li>
       </ul>
     </div>
   </div>
+  <pre><code>// Automerge internal representation
+{ root: "n1", nodes: {
+    "n1": { kind: "element", tag: "div", children: ["n2","n3"] },
+    "n2": { kind: "element", tag: "ul",  children: ["n4"] },
+    "n3": { kind: "value",   value: "Hello" },
+    "n4": { kind: "element", tag: "li",  children: ["n5"] },
+}}</code></pre>
   <p class="small">Kleppmann, M. &amp; Beresford, A. (2020). <em>A Conflict-Free Replicated JSON Datatype.</em></p>
 </section>
 
 <section>
   <h2>The Concurrent Wrap Problem</h2>
-  <p>Alice wraps <code>/speakers</code> in a <code>&lt;section&gt;</code>. Bob concurrently adds a speaker.</p>
-  <pre><code>// Before:  { speakers: [Ada, Grace] }
+  <p>Alice wraps <code>&lt;li&gt;</code> in <code>&lt;ul&gt;</code>. Bob concurrently wraps same <code>&lt;li&gt;</code> in <code>&lt;ol&gt;</code>.</p>
+  <pre><code>// Wrap = create wrapper + move child into it
+// Alice: create "ul", move li into ul
+// Bob:   create "ol", move li into ol
 
-// Alice: wrap speakers in section
-// = delete speakers + insert section/speakers
-{ section: { speakers: [Ada, Grace] } }
+// Automerge has no atomic move — it's delete + insert.
+// After merge: TWO wrappers created, only ONE gets the child.
+// The other wrapper is an orphaned empty element.
+// Cannot auto-delete — indistinguishable from intentional empty element.
 
-// Bob: pushBack to speakers
-{ speakers: [Ada, Grace, Alan] }
-
-// After merge — Bob's edit targets the DELETED original!
-// Automerge: Bob's "Alan" is lost or orphaned.</code></pre>
-  <p>Automerge has no atomic move → concurrent edits to moved nodes are lost.</p>
-  <p class="small">Loro's movable tree CRDT solves this — which is why I moved to Loro.</p>
+// Workaround: deterministic wrapper ID + LWW on tag
+// → only one wrapper, but still fragile</code></pre>
+  <p>Loro's <strong>movable tree CRDT</strong> solves this with native move operations.</p>
 </section>
 
 <!-- 7. LORO -->
@@ -140,7 +146,7 @@
     <div>
       <h3>✅ Pros</h3>
       <ul>
-        <li>Has a <strong>movable tree CRDT</strong></li>
+        <li>Has a <strong>movable tree CRDT</strong> — move is atomic</li>
         <li>Built-in undo manager</li>
         <li>Event subscriptions for recording</li>
       </ul>
@@ -148,12 +154,29 @@
     <div>
       <h3>❌ Why I moved to custom</h3>
       <ul>
-        <li><strong>Programming by demonstration</strong> was weak — no retargeting</li>
-        <li>Opaque IDs, not selector paths</li>
+        <li><strong>Programming by demonstration</strong> — replay used opaque IDs (<code>$0</code>, <code>$1</code>), no path retargeting after structural changes</li>
+        <li>Opaque IDs, not selector paths — no wildcards, no <code>speakers/*</code></li>
       </ul>
-      <p class="small" style="margin-top:0.5em"><strong>Example:</strong> record "add speaker to list" then replay it. After a concurrent <code>rename speakers→talks</code>, the replay must retarget from <code>/speakers</code> to <code>/talks</code>. Loro has no selector OT — replay breaks.</p>
     </div>
   </div>
+</section>
+
+<section>
+  <h2>The Retargeting Problem</h2>
+  <p>Record "add speaker" on peer A. Replay it on peer B after concurrent structural edits.</p>
+  <pre><code>// Peer A records: pushBack to /speakers → eventId "a:0"
+// Peer A records: copy input → new item  → eventId "a:1"
+// Save [a:0, a:1] as the "Add Speaker" button recipe.
+
+// Concurrently, Peer B renames /speakers → /talks
+// After sync, the list is now at /talks, not /speakers.
+
+// Loro replay: targets opaque node ID → still works for THAT node
+// But: what if Peer B also wrapped /talks in a &lt;section&gt;?
+// The recorded edit has no way to follow the structural changes.
+
+// mydenicek: OT transforms /speakers → /talks automatically.
+// Replay follows renames, wraps, and reindexing.</code></pre>
 </section>
 
 <!-- 8. CUSTOM OT -->
