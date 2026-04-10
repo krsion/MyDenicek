@@ -157,9 +157,9 @@
   </div>
   <div class="arrow-down">⬇</div>
   <div class="box box-red">
-    <h4>❌ Problem: only the reference is removed</h4>
-    <p>The <code>children</code> array is a CRDT list — concurrent removes + inserts of the same ID cause <strong>duplicates</strong> or <strong>missing references</strong>. The node still exists in <code>nodes</code> dict but the tree structure is inconsistent.</p>
-    <p>Deterministic ID pattern (<code>wrapper-${id}</code>) was fragile — doesn't scale to nested wraps.</p>
+    <h4>❌ Problem: node appears under two parents</h4>
+    <p>Both wrappers add <code>"li1"</code> to their <code>children</code> → <code>li1</code> is referenced from <strong>two parents</strong>. Tree invariant broken — a node should have exactly one parent.</p>
+    <p>Deterministic ID pattern (<code>wrapper-${id}</code>) was a fragile workaround — doesn't scale to nested wraps.</p>
   </div>
 </section>
 
