@@ -1,14 +1,11 @@
 # Technical Documentation
 
-**Project**: mywebnicek — Local-First Collaborative Document Editor\
+**Project**: mydenicek — Local-First Collaborative Document Editor\
 **Course**: NPRG070, Charles University, Faculty of Mathematics and Physics\
 **Author**: Bc. Ondřej Krsička\
 **Supervisor**: Mgr. Tomáš Petříček, Ph.D.\
-**Repositories**:
-
-- Core engine: [krsion/mydenicek](https://github.com/krsion/mydenicek) —
-  published on JSR as `@mydenicek/core`
-- Web application: [krsion/mydenicek](https://github.com/krsion/mydenicek)
+**Repository**: [krsion/mydenicek](https://github.com/krsion/mydenicek) —
+published on JSR as `@mydenicek/core` and `@mydenicek/react`
 
 ---
 
@@ -30,10 +27,8 @@ that all peers converge to the same document state regardless of event delivery
 order. The approach is validated through property-based convergence testing and
 a standalone random fuzzer.
 
-The system is split into two repositories: `mywebnicek-core` (a pure TypeScript
-CRDT engine with zero external dependencies) and `mywebnicek` (a React 19 +
-Fluent UI web application providing the user-facing editor). Both repositories
-are open-source and deployed live.
+The project is a unified Deno monorepo containing the core CRDT engine, React
+bindings, sync server, and the web application.
 
 ---
 
@@ -87,48 +82,38 @@ undo/redo, formula evaluation, reference integrity, and event graph compaction.
 
 ## 3. System Overview
 
-### 3.1 Two-Repository Architecture
+### 3.1 Monorepo Architecture
 
-The project is split into two independent repositories with complementary roles:
+The project is a unified Deno monorepo:
 
-**mywebnicek-core** (`@mydenicek/core` on JSR)\
-A pure TypeScript CRDT engine with zero external runtime dependencies. It
-implements the event DAG, document model, edit operations, operational
-transformation, undo/redo, formula engine, and sync protocol. It is published on
-the JSR (JavaScript Registry) and can be consumed by any Deno, Node.js, or
-browser application.
-
-**mywebnicek** (web application)\
-A React 19 monorepo that provides a polished collaborative document editor. It
-uses Loro CRDTs (via `loro-crdt` v1.9.0) as its internal CRDT substrate and
-wraps them with a `DenicekDocument` class that hides Loro internals behind a
-clean TypeScript API. The UI is built with Fluent UI v9 components and deployed
-to GitHub Pages.
-
-> **Note on the two CRDT approaches**: The two repositories implement different
-> CRDT strategies. The core engine (`mywebnicek-core`) uses a custom OT-based
-> event DAG with path-based selectors — a direct descendant of the original
-> Denicek paper's architecture. The web application (`mywebnicek`) uses Loro
-> CRDTs with ID-addressed nodes — the approach originally prescribed by the
-> project specification. This dual implementation is itself a research
-> contribution: it allows comparison of both approaches and demonstrates the
-> trade-offs between OT-based and pure-CRDT architectures for document-oriented
-> editing. See Section 5.1 for a detailed comparison.
+- `packages/core` — `@mydenicek/core` on JSR. Pure TypeScript CRDT engine with
+  zero external runtime dependencies. Implements the event DAG, document model,
+  edit operations, operational transformation, undo/redo, formula engine, and
+  sync protocol.
+- `packages/react` — `@mydenicek/react` on JSR. React hook for reactive Denicek
+  usage.
+- `packages/sync-server` — Sync protocol, sync room, and WebSocket
+  client/server. The server runs in **relay mode** — it stores and forwards
+  events without materializing documents.
+- `apps/mywebnicek` — React 19 web application with command bar, event graph
+  visualization, and formative examples. Deployed to GitHub Pages.
+- `apps/sync-server` — The runnable WebSocket sync server. Deployed to Azure
+  Container Apps.
 
 ### 3.2 Technology Stack
 
-| Component            | mywebnicek-core             | mywebnicek (UI)                                     |
-| -------------------- | --------------------------- | --------------------------------------------------- |
-| **Runtime**          | Deno 2.x                    | Node.js (npm workspaces)                            |
-| **Language**         | TypeScript (strict)         | TypeScript ~5.9.3 (strict)                          |
-| **CRDT strategy**    | Custom OT-based event DAG   | Loro CRDTs (loro-crdt v1.9.0)                       |
-| **UI framework**     | —                           | React 19.2 + Fluent UI v9.72                        |
-| **Build tool**       | Deno workspaces             | Vite (rolldown-vite v7.2.2)                         |
-| **Testing**          | Deno test + fast-check      | Vitest + Playwright 1.57                            |
-| **Linting**          | deno lint + deno fmt        | ESLint 9 + typescript-eslint                        |
-| **Package registry** | JSR (`jsr:@mydenicek/core`) | npm (private workspace)                             |
-| **Sync server**      | Deno HTTP + WebSocket       | Node.js + WebSocket + Azure Blob Storage            |
-| **Deployment**       | JSR publish                 | GitHub Pages (app), Azure App Service (sync server) |
+| Component            | Details                                         |
+| -------------------- | ----------------------------------------------- |
+| **Runtime**          | Deno 2.x                                        |
+| **Language**         | TypeScript (strict)                             |
+| **CRDT strategy**    | Custom OT-based event DAG                       |
+| **UI framework**     | React 19 + Fluent UI v9                         |
+| **Build tool**       | Deno workspaces + Vite                          |
+| **Testing**          | Deno test + fast-check + Playwright             |
+| **Linting**          | deno lint + deno fmt                            |
+| **Package registry** | JSR (`@mydenicek/core`, `@mydenicek/react`)     |
+| **Sync server**      | Deno HTTP + WebSocket (relay mode)              |
+| **Deployment**       | GitHub Pages (app), Azure Container Apps (sync) |
 
 ### 3.3 Main Features
 
@@ -282,24 +267,27 @@ packages/sync-server/
 └── tests/         # Sync protocol tests
 ```
 
-#### React Integration (`@mydenicek/react` in mywebnicek repo)
+#### React Integration (`@mydenicek/react`)
 
 ```
-packages/mywebnicek-react/
-├── src/
-│   ├── DenicekProvider.tsx    # React context provider
-│   ├── useDenicekDocument.ts  # Document read/write hooks
-│   ├── useSelection.ts       # Node selection management
-│   ├── useFormulaViewMode.ts  # Formula display mode
-│   └── constants.ts           # Shared constants
+packages/react/
+├── useDenicek.ts        # Main hook: reactive doc, mutate, sync
+├── sync.ts              # React SyncClient wrapper
+└── mod.ts               # Public entrypoint
 ```
 
-#### Web Application (`mywebnicek` in mywebnicek repo)
+#### Web Application (`apps/mywebnicek`)
 
 ```
 apps/mywebnicek/
-├── src/                # React 19 + Fluent UI application
-├── tests/              # 5 Playwright E2E test files
+├── src/
+│   ├── App.tsx                # Multi-document tabs, template system
+│   ├── CommandBar.tsx         # Terminal-style /path command args
+│   ├── RenderedDocument.tsx   # Tag-based HTML renderer with formulas
+│   ├── EventGraphView.tsx     # SVG DAG visualization
+│   ├── RawDocumentView.tsx    # Syntax-highlighted JSON view
+│   └── initializeDocument.ts  # Formative example templates
+├── e2e/                # Playwright E2E tests
 └── playwright.config.ts
 ```
 
@@ -319,8 +307,9 @@ event DAG. Key divergences:
 | **Dependencies**     | Loro (2 MB WASM)       | Zero external CRDT deps   | Pure TypeScript; no WASM compatibility concerns                                                                      |
 | **Package registry** | npm                    | JSR                       | Deno-native registry with first-class TypeScript support                                                             |
 
-The mywebnicek web application repository still uses Loro CRDTs, making it
-possible to compare both approaches empirically. See the
+The previous web application (archived at
+[krsion/mywebnicek](https://github.com/krsion/mywebnicek)) used Loro CRDTs. It
+has been superseded by the unified monorepo. See the
 [specification divergence document](https://github.com/krsion/mydenicek/blob/main/docs/specification-divergence.md)
 for a requirement-by-requirement mapping.
 
