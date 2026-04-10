@@ -268,35 +268,32 @@
   </div>
 </section>
 
-<!-- 14. CONCURRENT EDITING: 4 STEPS -->
+<!-- 14. CONCURRENT EDITING -->
 <section>
-  <h2>Demo 3: Concurrent Editing</h2>
+  <h2>Demo 3: Initial State</h2>
+  <img src="slides-assets/30-initial.png" class="screenshot" alt="Initial state — both peers synced with a flat list" />
+  <p class="small">Both peers synced — a flat <code>&lt;ul&gt;</code> with "Name, email" contacts. They go offline.</p>
+</section>
+
+<section>
+  <h2>Demo 3: Concurrent Edits</h2>
   <div class="cols">
     <div style="flex:1">
-      <p class="small" style="text-align:center"><strong>① Initial</strong> — both peers synced</p>
-      <img src="slides-assets/30-initial.png" class="screenshot-sm" alt="Initial state — synced list" />
-    </div>
-    <div style="flex:1">
-      <p class="small" style="text-align:center"><strong>② Alice</strong> — refactors to table (offline)</p>
+      <p class="small" style="text-align:center"><strong>Alice</strong> — refactors to table (offline)</p>
       <img src="slides-assets/31-alice-refactored.png" class="screenshot-sm" alt="Alice refactored list to table" />
     </div>
+    <div style="flex:1">
+      <p class="small" style="text-align:center"><strong>Bob</strong> — adds speakers (offline)</p>
+      <img src="slides-assets/32-bob-added.png" class="screenshot-sm" alt="Bob added speakers to list" />
+    </div>
   </div>
-  <p class="small">Alice: <code>updateTag</code> → <code>wrapList tr</code> → <code>pushBack td</code> + <code>copy</code> → <code>splitFirst</code> / <code>splitRest</code> → <code>rename</code></p>
+  <p class="small">Alice: <code>updateTag</code> → <code>wrapList</code> → <code>wrapRecord split-first</code> → <code>pushBack split-rest</code> · Bob: <code>pushBack</code> × 2</p>
 </section>
 
 <section>
   <h2>Demo 3: After Merge</h2>
-  <div class="cols">
-    <div style="flex:1">
-      <p class="small" style="text-align:center"><strong>③ Bob</strong> — adds speakers (offline)</p>
-      <img src="slides-assets/32-bob-added.png" class="screenshot-sm" alt="Bob added speakers to list" />
-    </div>
-    <div style="flex:1">
-      <p class="small" style="text-align:center"><strong>④ Merged</strong> — all speakers in table</p>
-      <img src="slides-assets/33-merged.png" class="screenshot-sm" alt="After merge — concurrent edits converged" />
-    </div>
-  </div>
-  <p class="small">Bob's <code>&lt;li&gt;</code> items were OT-transformed into <code>&lt;tr&gt;/&lt;td&gt;</code> rows with split-first name columns. Event graph shows the fork.</p>
+  <img src="slides-assets/33-merged.png" class="screenshot" alt="After merge — all speakers in table, event graph shows fork" />
+  <p class="small">Both reconnect → events merge → all speakers in the table. Event graph shows the concurrent fork merging into a single frontier.</p>
 </section>
 
 <!-- ═══════════════════════════════════════════════════════════════════ -->
