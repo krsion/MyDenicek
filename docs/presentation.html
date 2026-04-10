@@ -268,24 +268,36 @@
   </div>
 </section>
 
-<!-- 14. LIST → TABLE + AFTER MERGE -->
+<!-- 14. LIST → TABLE -->
 <section>
   <h2>Demo 3: List → Table Refactoring</h2>
   <div class="cols">
     <div>
-      <img src="slides-assets/14-conf-table.png" class="screenshot-sm" alt="Conference table after add" style="margin-bottom:8px" />
-      <img src="slides-assets/15-after-merge.png" class="screenshot-sm" alt="Full app after merge — table with new speaker + event graph" />
+      <img src="slides-assets/14-conf-table.png" class="screenshot" alt="Conference table" />
     </div>
     <div>
-      <p>Structural edits transform the list <strong>in place</strong>:</p>
+      <p><strong>Alice</strong> transforms the list in place:</p>
       <pre><code>/speakers updateTag table
-/speakers/* updateTag tr
-/speakers/* wrapList tr
-/speakers/*/name splitFirst ", "</code></pre>
-      <p>A concurrent <code>pushBack</code> by another peer merges into the table — OT retargets through the structural changes.</p>
-      <p class="small">Bottom: after merge — the new speaker appears as a table row,<br/>event graph shows the full causal history.</p>
+/speakers/* updateTag tr</code></pre>
+      <p>Meanwhile, <strong>Bob</strong> adds speakers concurrently:</p>
+      <pre><code>/speakers pushBack {"$tag":"li",
+  "contact":"Alan Turing, ..."}
+/speakers pushBack {"$tag":"li",
+  "contact":"Margaret Hamilton, ..."}</code></pre>
+      <p class="small">Alice and Bob are offline — their edits are concurrent.</p>
     </div>
   </div>
+</section>
+
+<!-- 14b. AFTER MERGE -->
+<section>
+  <h2>Demo 3: After Merge</h2>
+  <img src="slides-assets/15-after-merge.png" class="screenshot" alt="Full app after merge — concurrent edits converged" />
+  <p>Both peers reconnect → events merge → <strong>all speakers in the table</strong>.</p>
+  <p class="small">
+    Bob's <code>&lt;li&gt;</code> items were OT-transformed to <code>&lt;tr&gt;</code> by Alice's structural edits.<br/>
+    Event graph shows the <strong>concurrent fork</strong> — two branches from the same parent, merged at the frontier.
+  </p>
 </section>
 
 <!-- ═══════════════════════════════════════════════════════════════════ -->
