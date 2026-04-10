@@ -189,9 +189,10 @@ function renderNode(
   const tag = String(node.$tag);
 
   // Formula nodes: show computed result inline
-  if (tag.startsWith("x-formula")) {
+  // Formula nodes: x-formula-* or any tag with a registered evaluator
+  const computed = formulas.get(path);
+  if (tag.startsWith("x-formula") || computed !== undefined) {
     const op = node["operation"];
-    const computed = formulas.get(path);
     const hasResult = computed !== undefined &&
       !(computed instanceof FormulaError);
     return (

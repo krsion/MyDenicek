@@ -43,8 +43,9 @@ function isPlainRecord(node: PlainNode): node is PlainRecord {
 }
 
 function isFormulaNode(node: PlainNode): node is PlainRecord {
-  return isPlainRecord(node) && typeof node.$tag === "string" &&
-    (node.$tag as string).startsWith("x-formula");
+  if (!isPlainRecord(node) || typeof node.$tag !== "string") return false;
+  const tag = node.$tag as string;
+  return tag.startsWith("x-formula") || tagEvaluators.has(tag);
 }
 
 function isPrimitive(node: PlainNode): node is PrimitiveValue {
@@ -76,7 +77,7 @@ function lookupOperation(name: string): FormulaOperation | undefined {
  */
 export type FormulaTagEvaluator = (
   node: PlainRecord,
-  evaluate: (child: PlainNode) => FormulaResult,
+  evaluate: (child: PlainNode, fieldName?: string) => FormulaResult,
 ) => FormulaResult;
 
 const tagEvaluators = new Map<string, FormulaTagEvaluator>();
@@ -218,31 +219,31 @@ registerFormulaOperation("countChildren", (args) => {
 // ── Built-in tag evaluators ─────────────────────────────────────────────
 
 registerFormulaTagEvaluator("x-formula-plus", (node, evaluate) => {
-  const left = evaluate(node.left as PlainNode);
-  const right = evaluate(node.right as PlainNode);
+  const left = evaluate(node.left as PlainNode, "left");
+  const right = evaluate(node.right as PlainNode, "right");
   if (left instanceof FormulaError) return left;
   if (right instanceof FormulaError) return right;
   return Number(left) + Number(right);
 });
 
 registerFormulaTagEvaluator("x-formula-minus", (node, evaluate) => {
-  const left = evaluate(node.left as PlainNode);
-  const right = evaluate(node.right as PlainNode);
+  const left = evaluate(node.left as PlainNode, "left");
+  const right = evaluate(node.right as PlainNode, "right");
   if (left instanceof FormulaError) return left;
   if (right instanceof FormulaError) return right;
   return Number(left) - Number(right);
 });
 
 registerFormulaTagEvaluator("x-formula-times", (node, evaluate) => {
-  const left = evaluate(node.left as PlainNode);
-  const right = evaluate(node.right as PlainNode);
+  const left = evaluate(node.left as PlainNode, "left");
+  const right = evaluate(node.right as PlainNode, "right");
   if (left instanceof FormulaError) return left;
   if (right instanceof FormulaError) return right;
   return Number(left) * Number(right);
 });
 
 registerFormulaTagEvaluator("x-formula-split-first", (node, evaluate) => {
-  const source = evaluate(node.source as PlainNode);
+  const source = evaluate(node.source as PlainNode, "source");
   if (source instanceof FormulaError) return source;
   const separator = typeof node.separator === "string" ? node.separator : ", ";
   const str = String(source);
@@ -251,7 +252,26 @@ registerFormulaTagEvaluator("x-formula-split-first", (node, evaluate) => {
 });
 
 registerFormulaTagEvaluator("x-formula-split-rest", (node, evaluate) => {
-  const source = evaluate(node.source as PlainNode);
+  const source = evaluate(node.source as PlainNode, "source");
+  if (source instanceof FormulaError) return source;
+  const separator = typeof node.separator === "string" ? node.separator : ", ";
+  const str = String(source);
+  const idx = str.indexOf(separator);
+  return idx >= 0 ? str.slice(idx + separator.length) : "";
+});
+
+// Short aliases (used when the $ref must survive CRDT validation)
+registerFormulaTagEvaluator("split-first", (node, evaluate) => {
+  const source = evaluate(node.source as PlainNode, "source");
+  if (source instanceof FormulaError) return source;
+  const separator = typeof node.separator === "string" ? node.separator : ", ";
+  const str = String(source);
+  const idx = str.indexOf(separator);
+  return idx >= 0 ? str.slice(0, idx) : str;
+});
+
+registerFormulaTagEvaluator("split-rest", (node, evaluate) => {
+  const source = evaluate(node.source as PlainNode, "source");
   if (source instanceof FormulaError) return source;
   const separator = typeof node.separator === "string" ? node.separator : ", ";
   const str = String(source);
@@ -414,11 +434,35 @@ function evaluateFormulaInner(
   // Check for a tag-based evaluator first
   const tagEvaluator = lookupTagEvaluator(tag);
   if (tagEvaluator) {
-    return tagEvaluator(formula, (child: PlainNode) => {
+    return tagEvaluator(formula, (child: PlainNode, fieldName?: string) => {
       if (isPrimitive(child)) return child;
+      // Resolve $ref relative to the field that contains it, not the formula
+      const childRefPath = fieldName
+        ? formulaPath + "/" + fieldName
+        : formulaPath;
+      if (isPlainRef(child)) {
+        const resolved = resolveRefArgument(
+          child,
+          root,
+          childRefPath,
+          tag,
+          visiting,
+          depth,
+        );
+        if (resolved instanceof FormulaError) return resolved;
+        if (resolved.length === 1) return resolved[0];
+        return new FormulaError(
+          `reference '${child.$ref}' resolved to ${resolved.length} values, expected 1`,
+        );
+      }
       if (isFormulaNode(child)) {
-        const childPath = formulaPath + "/?";
-        return evaluateFormulaNode(child, root, childPath, visiting, depth + 1);
+        return evaluateFormulaNode(
+          child,
+          root,
+          childRefPath,
+          visiting,
+          depth + 1,
+        );
       }
       return new FormulaError("non-primitive, non-formula child");
     });
