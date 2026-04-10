@@ -277,17 +277,18 @@
       <img src="slides-assets/30-initial.png" class="screenshot-sm" alt="Initial state — synced list" />
     </div>
     <div style="flex:1">
-      <p class="small" style="text-align:center"><strong>② Alice</strong> — refactors to table</p>
+      <p class="small" style="text-align:center"><strong>② Alice</strong> — refactors to table (offline)</p>
       <img src="slides-assets/31-alice-refactored.png" class="screenshot-sm" alt="Alice refactored list to table" />
     </div>
   </div>
+  <p class="small">Alice: <code>updateTag table</code> → <code>updateTag td</code> → <code>wrapList tr</code> → <code>pushBack split-first</code></p>
 </section>
 
 <section>
   <h2>Demo 3: After Merge</h2>
   <div class="cols">
     <div style="flex:1">
-      <p class="small" style="text-align:center"><strong>③ Bob</strong> — adds speakers (concurrent)</p>
+      <p class="small" style="text-align:center"><strong>③ Bob</strong> — adds speakers (offline)</p>
       <img src="slides-assets/32-bob-added.png" class="screenshot-sm" alt="Bob added speakers to list" />
     </div>
     <div style="flex:1">
@@ -295,7 +296,7 @@
       <img src="slides-assets/33-merged.png" class="screenshot-sm" alt="After merge — concurrent edits converged" />
     </div>
   </div>
-  <p class="small">Bob's <code>&lt;li&gt;</code> items were OT-transformed to <code>&lt;tr&gt;</code>. Event graph shows the concurrent fork.</p>
+  <p class="small">Bob's <code>&lt;li&gt;</code> items were OT-transformed into <code>&lt;tr&gt;/&lt;td&gt;</code> rows with split-first name columns. Event graph shows the fork.</p>
 </section>
 
 <!-- ═══════════════════════════════════════════════════════════════════ -->
