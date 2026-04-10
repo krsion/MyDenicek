@@ -141,50 +141,52 @@
 
 <section>
   <h2>The Concurrent Wrap Problem</h2>
-  <div class="box box-gray" style="margin-bottom:12px">
-    <h4>Before — both peers see:</h4>
-    <p><code>&lt;div&gt;</code> → <code>&lt;li&gt;</code> "Talk about CRDTs"</p>
-  </div>
+  <p>Wrap = move <code>li1</code> from parent's <code>children</code> to a new wrapper's <code>children</code>.</p>
   <div class="cols">
     <div class="box box-blue">
       <h4>🔵 Alice: wrap &lt;li&gt; in &lt;ul&gt;</h4>
-      <p>= delete <code>li</code> + create <code>&lt;ul&gt;</code> + re-insert <code>li</code></p>
+      <p>1. Create <code>"wrapper-li1"</code> in <code>nodes</code></p>
+      <p>2. Remove <code>"li1"</code> from parent <code>children</code></p>
+      <p>3. Add <code>"li1"</code> to wrapper <code>children</code></p>
     </div>
     <div class="box box-green">
-      <h4>🟢 Bob: edit the text</h4>
-      <p>= set value → "Talk about <strong>OT</strong>"</p>
+      <h4>🟢 Bob: also wraps &lt;li&gt;</h4>
+      <p>Same 3 steps — same deterministic ID</p>
+      <p>LWW resolves the tag (<code>ul</code> vs <code>ol</code>)</p>
     </div>
   </div>
   <div class="arrow-down">⬇</div>
   <div class="box box-red">
-    <h4>❌ After merge</h4>
-    <p>Alice's delete removed <code>li</code>. Bob's edit targets the <strong>deleted original</strong> → <strong>edit is lost</strong>.</p>
+    <h4>❌ Problem: only the reference is removed</h4>
+    <p>The <code>children</code> array is a CRDT list — concurrent removes + inserts of the same ID cause <strong>duplicates</strong> or <strong>missing references</strong>. The node still exists in <code>nodes</code> dict but the tree structure is inconsistent.</p>
+    <p>Deterministic ID pattern (<code>wrapper-${id}</code>) was fragile — doesn't scale to nested wraps.</p>
   </div>
 </section>
 
 <section>
-  <h2>Concurrent Wrap: Two Wrappers</h2>
+  <h2>Concurrent Wrap: Lost Edits</h2>
   <div class="box box-gray" style="margin-bottom:12px">
-    <h4>Before — both peers see:</h4>
-    <p><code>&lt;div&gt;</code> → <code>&lt;li&gt;</code> "Talk about CRDTs"</p>
+    <h4>Before:</h4>
+    <p><code>parent.children: ["li1"]</code> &nbsp; <code>nodes["li1"]: { tag: "li", value: "CRDTs" }</code></p>
   </div>
   <div class="cols">
     <div class="box box-blue">
-      <h4>🔵 Alice: wrap in &lt;ul&gt;</h4>
-      <p>create <code>&lt;ul&gt;</code>, move <code>li</code> inside</p>
+      <h4>🔵 Alice: wrap li1 in &lt;ul&gt;</h4>
+      <p>Remove <code>"li1"</code> from parent<br/>
+      Add to <code>wrapper.children</code></p>
     </div>
     <div class="box box-green">
-      <h4>🟢 Bob: wrap in &lt;ol&gt;</h4>
-      <p>create <code>&lt;ol&gt;</code>, move <code>li</code> inside</p>
+      <h4>🟢 Bob: edit li1's value</h4>
+      <p>Set value → "OT"</p>
+      <p><em>(targets node by ID — works)</em></p>
     </div>
   </div>
   <div class="arrow-down">⬇</div>
-  <div class="box box-red">
-    <h4>❌ After merge — two wrappers</h4>
-    <p><code>&lt;ul&gt;</code> → <code>&lt;li&gt;</code> ✅ &nbsp;&nbsp; <code>&lt;ol&gt;</code> → <em>(empty, orphaned)</em> 👻</p>
-    <p>Cannot auto-delete — indistinguishable from an intentionally empty element.</p>
+  <div class="box box-orange">
+    <h4>⚠️ After merge</h4>
+    <p>Bob's edit <em>does</em> reach the node (it's in the dict). But <code>li1</code> may appear in <strong>both</strong> parent's and wrapper's <code>children</code> — or in <strong>neither</strong>, depending on CRDT list merge order.</p>
   </div>
-  <p class="small" style="margin-top:8px">Loro's <strong>movable tree CRDT</strong> solves this with native atomic move.</p>
+  <p class="small" style="margin-top:8px">Loro's <strong>movable tree CRDT</strong> solves this with a native atomic move operation.</p>
 </section>
 
 <!-- 7. LORO -->
