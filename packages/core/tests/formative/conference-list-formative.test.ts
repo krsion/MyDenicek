@@ -1,5 +1,5 @@
 import { assertEquals, Denicek, sync } from "../core/test-helpers.ts";
-import { evaluateAllFormulas, FormulaError } from "../../mod.ts";
+import { evaluateAllFormulas } from "../../mod.ts";
 
 // ── Conference List (before) ─────────────────────────────────────────
 // A flat <ul> where each item stores "Name, email" as a single string.
@@ -33,7 +33,7 @@ Deno.test("Formative: Conference List", () => {
   sync(alice, bob);
 
   // Both peers converge — all four speakers present
-  const speakers = (alice.toPlain() as {
+  const speakers = (alice.toPlain() as unknown as {
     $tag: string;
     speakers: { $tag: string; $items: { contact: string }[] };
   }).speakers.$items.map((s) => s.contact);
