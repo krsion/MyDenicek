@@ -161,31 +161,6 @@
     <p>Both wrappers add <code>"li1"</code> to their <code>children</code> → <code>li1</code> is referenced from <strong>two parents</strong>. Tree invariant broken — a node should have exactly one parent.</p>
     <p>Deterministic ID pattern (<code>wrapper-${id}</code>) was a fragile workaround — doesn't scale to nested wraps.</p>
   </div>
-</section>
-
-<section>
-  <h2>Concurrent Wrap: Lost Edits</h2>
-  <div class="box box-gray" style="margin-bottom:12px">
-    <h4>Before:</h4>
-    <p><code>parent.children: ["li1"]</code> &nbsp; <code>nodes["li1"]: { tag: "li", value: "CRDTs" }</code></p>
-  </div>
-  <div class="cols">
-    <div class="box box-blue">
-      <h4>🔵 Alice: wrap li1 in &lt;ul&gt;</h4>
-      <p>Remove <code>"li1"</code> from parent<br/>
-      Add to <code>wrapper.children</code></p>
-    </div>
-    <div class="box box-green">
-      <h4>🟢 Bob: edit li1's value</h4>
-      <p>Set value → "OT"</p>
-      <p><em>(targets node by ID — works)</em></p>
-    </div>
-  </div>
-  <div class="arrow-down">⬇</div>
-  <div class="box box-orange">
-    <h4>⚠️ After merge</h4>
-    <p>Bob's edit <em>does</em> reach the node (it's in the dict). But <code>li1</code> may appear in <strong>both</strong> parent's and wrapper's <code>children</code> — or in <strong>neither</strong>, depending on CRDT list merge order.</p>
-  </div>
   <p class="small" style="margin-top:8px">Loro's <strong>movable tree CRDT</strong> solves this with a native atomic move operation.</p>
 </section>
 
