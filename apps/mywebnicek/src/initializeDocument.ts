@@ -50,13 +50,13 @@ export const INITIAL_DOCUMENT: PlainNode = {
     },
   },
 
-  // ── 2. Todo List (composer + list) ─────────────────────────────────
-  todoList: {
+  // ── 2. Conference List (composer + list) ─────────────────────────────
+  conferenceList: {
     $tag: "article",
-    heading: { $tag: "h2", text: "Todo List" },
+    heading: { $tag: "h2", text: "Conference List" },
     composer: {
       $tag: "composer",
-      input: { $tag: "input", value: "New task" },
+      input: { $tag: "input", value: "New Speaker, speaker@example.com" },
       addAction: {
         $tag: "button",
         label: "Add",
@@ -66,8 +66,8 @@ export const INITIAL_DOCUMENT: PlainNode = {
     items: {
       $tag: "ul",
       $items: [
-        { $tag: "li", text: "Write paper" },
-        { $tag: "li", text: "Ship prototype" },
+        { $tag: "li", text: "Tomáš Petříček, tomas@tomasp.net" },
+        { $tag: "li", text: "Ada Lovelace, ada@example.com" },
       ],
     },
   },
@@ -117,21 +117,21 @@ export function initializeActions(dk: Denicek): void {
   dk.pushBack("counter/btn/steps", { $tag: "step", eventId: renameId });
   dk.pushBack("counter/btn/steps", { $tag: "step", eventId: addRightId });
 
-  // ── Todo: record the "add item from input" recipe ────────────────
-  const pushId = dk.pushFront("todoList/items", {
+  // ── Conference List: record the "add speaker from input" recipe ────
+  const pushId = dk.pushFront("conferenceList/items", {
     $tag: "li",
     text: "",
   });
   const copyId = dk.copy(
-    "todoList/items/!0/text",
-    "todoList/composer/input/value",
+    "conferenceList/items/!0/text",
+    "conferenceList/composer/input/value",
   );
 
-  dk.pushBack("todoList/composer/addAction/steps", {
+  dk.pushBack("conferenceList/composer/addAction/steps", {
     $tag: "step",
     eventId: pushId,
   });
-  dk.pushBack("todoList/composer/addAction/steps", {
+  dk.pushBack("conferenceList/composer/addAction/steps", {
     $tag: "step",
     eventId: copyId,
   });
