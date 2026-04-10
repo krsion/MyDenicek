@@ -50,6 +50,11 @@ export function applyRegisteredPrimitiveEdit(
   return implementation(value, ...args);
 }
 
+/** Returns the names of all currently registered primitive edits. */
+export function listRegisteredPrimitiveEdits(): string[] {
+  return [...registeredPrimitiveEdits.keys()];
+}
+
 registerPrimitiveEdit("set", (_value, ...args) => {
   if (args.length !== 1) {
     throw new Error("Primitive edit 'set' expects exactly 1 argument.");

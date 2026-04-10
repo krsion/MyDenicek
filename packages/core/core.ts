@@ -21,7 +21,10 @@ export type {
   PlainRecord,
   PlainRef,
 } from "./core/nodes.ts";
-export { registerPrimitiveEdit } from "./core/primitive-edits.ts";
+export {
+  listRegisteredPrimitiveEdits,
+  registerPrimitiveEdit,
+} from "./core/primitive-edits.ts";
 export type { PrimitiveEditImplementation } from "./core/primitive-edits.ts";
 export type { PrimitiveValue } from "./core/selector.ts";
 export type { EventSnapshot } from "./core/event-graph.ts";

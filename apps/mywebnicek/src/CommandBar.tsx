@@ -5,6 +5,7 @@ import type {
   PlainRef,
   PrimitiveValue,
 } from "@mydenicek/core";
+import { listRegisteredPrimitiveEdits } from "@mydenicek/core";
 import type { UseDenicekReturn } from "@mydenicek/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -302,7 +303,15 @@ const LIST_CMDS = [
   "get",
   "tree",
 ];
-const PRIMITIVE_CMDS = ["set", "get", "wrapRecord", "wrapList", "repeat"];
+function getPrimitiveCommands(): string[] {
+  return [
+    ...listRegisteredPrimitiveEdits(),
+    "get",
+    "wrapRecord",
+    "wrapList",
+    "repeat",
+  ];
+}
 const ANY_NODE_CMDS = [
   "get",
   "tree",
@@ -369,6 +378,7 @@ Commands (shown after selecting a path):
   wrapList <tag>                  Wrap in a list
   copy <source-selector>          Copy nodes
   formula <field> <op> [args]     Add a formula node
+  <primitiveEdit> [args]         Any registered edit (set, splitFirst, ...)
   get                             Show node value
   tree                            Show subtree
 
@@ -385,7 +395,7 @@ Selectors: /path, /list/*, /list/*/field. Tab to auto-complete.`;
 function commandsForNode(node: PlainNode): string[] {
   if (isPlainList(node)) return LIST_CMDS;
   if (isPlainRecord(node)) return RECORD_CMDS;
-  if (isPrimitive(node)) return PRIMITIVE_CMDS;
+  if (isPrimitive(node)) return getPrimitiveCommands();
   return ANY_NODE_CMDS;
 }
 
@@ -1008,12 +1018,33 @@ export function CommandBar({ dk }: CommandBarProps) {
           break;
         }
 
-        default:
-          pushOutput({
-            text:
-              `Unknown command: '${command}'. Type 'help' for available commands.`,
-            kind: "error",
-          });
+        default: {
+          // Check if command is a registered primitive edit
+          const registeredEdits = listRegisteredPrimitiveEdits();
+          if (registeredEdits.includes(command) && target !== null) {
+            const editArgs = argsStr
+              ? argsStr.split(/\s+/).filter(Boolean).map((a) => parseValue(a))
+              : [];
+            const id = dk.denicek.applyPrimitiveEdit(
+              target,
+              command,
+              ...(editArgs as PrimitiveValue[]),
+            );
+            dk.forceUpdate();
+            pushOutput({
+              text: `${command}(${
+                editArgs.map((a) => JSON.stringify(a)).join(", ")
+              }) at ${parsed.selector} → ${id}`,
+              kind: "success",
+            });
+          } else {
+            pushOutput({
+              text:
+                `Unknown command: '${command}'. Type 'help' for available commands.`,
+              kind: "error",
+            });
+          }
+        }
       }
     } catch (err) {
       pushOutput({
