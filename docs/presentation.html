@@ -229,6 +229,23 @@
   </div>
 </section>
 
+<!-- EG-WALKER -->
+<section>
+  <h2>Inspiration: Eg-walker</h2>
+  <blockquote>What if we combine the <strong>simplicity of OT</strong> with the <strong>robustness of CRDTs</strong>?
+    <span class="small">— Gentle &amp; Kleppmann, 2024</span></blockquote>
+  <ul>
+    <li>Store edits in a <strong>causal event graph</strong> (like CRDTs)</li>
+    <li>Replay events in <strong>topological order</strong> with OT transformations</li>
+    <li>No central server needed — peers exchange events, not states</li>
+    <li>OT is only applied locally during replay — <strong>no server-side transformation</strong></li>
+  </ul>
+  <div class="box box-blue" style="margin-top: 12px">
+    <p><strong>Eg-walker</strong> does this for <em>text</em> (character insertions/deletions).<br/>
+    <strong>mydenicek</strong> applies the same principle to <em>tree-structured documents</em> — with structural edits (wrap, rename, copy) that transform selector paths.</p>
+  </div>
+</section>
+
 <!-- 8. CUSTOM OT -->
 <section>
   <h2>Solution: Custom OT-based Event DAG</h2>
@@ -240,7 +257,6 @@
     <li>Rename, wrap, unwrap, delete, copy — each has hand-written OT rules</li>
     <li>Zero external dependencies — pure TypeScript</li>
   </ul>
-  <p class="small">Inspired by <strong>Eg-walker</strong> (Gentle &amp; Kleppmann, 2024) — OT over a causal event graph, combining<br/>the simplicity of OT with the robustness of CRDTs. We apply the same idea to tree-structured documents.</p>
 </section>
 
 <!-- 9. PATHS VS IDS -->
