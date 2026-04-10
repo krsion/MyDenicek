@@ -189,29 +189,22 @@
 
 <section>
   <h2>The Retargeting Problem</h2>
+  <p>Conference table: wrap contact in <code>split-first</code>, then add <code>split-rest</code> referencing the wrapped source.</p>
   <div class="box box-gray" style="margin-bottom:12px">
-    <h4>Record an edit:</h4>
-    <p><code>set /speakers/0/name "Ada"</code> → saved as event for replay</p>
+    <h4>Record on row 0:</h4>
+    <p>1. <code>wrapRecord /speakers/0/contact → split-first</code><br/>
+    2. <code>pushBack /speakers/0 {split-rest, source: <strong>../../0/contact/source</strong>}</code></p>
   </div>
   <div class="cols">
-    <div class="box box-blue">
-      <h4>🔵 Peer A: replays the edit</h4>
-      <p>Targets <code>/speakers/0/name</code></p>
+    <div class="box box-red" style="flex:1">
+      <h4>❌ Loro: opaque ID replay</h4>
+      <p>The reference <code>source: nodeId_abc</code> points to the <strong>original</strong> contact node — not to the wrapped <code>split-first/source</code> child.</p>
+      <p>After wrap, the data moved one level deeper. Loro's ID still targets the old location.</p>
     </div>
-    <div class="box box-green">
-      <h4>🟢 Peer B: concurrently renames</h4>
-      <p><code>/speakers</code> → <code>/talks</code></p>
-    </div>
-  </div>
-  <div class="arrow-down">⬇</div>
-  <div class="cols">
-    <div class="box box-red">
-      <h4>❌ Loro</h4>
-      <p>Replay uses opaque node ID — works for <em>that</em> node, but <strong>can't follow renames, wraps, or reindexing</strong></p>
-    </div>
-    <div class="box box-green">
-      <h4>✅ mydenicek</h4>
-      <p>OT transforms <code>/speakers/0/name</code> → <code>/talks/0/name</code> automatically</p>
+    <div class="box box-green" style="flex:1">
+      <h4>✅ mydenicek: relative path replay</h4>
+      <p>The reference <code>../../0/contact/source</code> navigates <strong>relative to where it is</strong>.</p>
+      <p>After wrap, OT updates the path. After replay on row 1, the ref still finds the right data.</p>
     </div>
   </div>
 </section>
