@@ -293,7 +293,7 @@
     <li>Concurrent structural edits → <strong>OT transforms selectors</strong></li>
     <li>Same events → same sort → same transforms → <strong>same document</strong></li>
   </ol>
-  <p style="margin-top: 0.5em;">Validated by <strong>property-based tests</strong> (fast-check) and a <strong>random fuzzer</strong>.</p>
+  <p style="margin-top: 0.5em;">Each edit is <strong>transformed against the previously materialized state</strong> at its causal parents — not against the current frontier.</p>
 </section>
 
 <!-- 11. ARCHITECTURE -->
@@ -356,7 +356,7 @@
 
 <!-- 13. CONFERENCE LIST -->
 <section>
-  <h2>Demo 2: Conference List — Composer Pattern</h2>
+  <h2>Demo 2: Conference List</h2>
   <div class="cols">
     <div>
       <img src="slides-assets/12-conf-list-before.png" class="screenshot-sm" alt="Conference list before add" style="margin-bottom:8px" />
@@ -369,7 +369,6 @@
         <li><code>pushFront</code> — insert empty <code>&lt;li&gt;</code></li>
         <li><code>copy</code> — fill it from the input field</li>
       </ol>
-      <p>Same pattern works for any list with a composer input.</p>
       <p class="small">This is the "before" — next we'll refactor it into a table.</p>
     </div>
   </div>
@@ -478,8 +477,7 @@
   <h2>Testing & Validation</h2>
   <ul>
     <li><strong>205+ unit tests</strong> — core operations, OT rules, edge cases</li>
-    <li><strong>Property-based tests</strong> (fast-check) — random concurrent edit sequences, verify convergence</li>
-    <li><strong>Random fuzzer</strong> — long-running stress test with arbitrary operations</li>
+    <li><strong>6 formative example tests</strong> — counter, conference list/table, todo, budget, hello world</li>
     <li><strong>11 sync E2E tests</strong> — basic sync, late join, concurrent edits, reconnect, pause/resume</li>
     <li><strong>Playwright E2E</strong> — browser tests for the full UI flow</li>
     <li><strong>CI/CD</strong> — GitHub Actions: lint, check, test, build, deploy on every push</li>
@@ -494,7 +492,6 @@
     <li><strong>Compound operations can't be atomic</strong> in local-first — wrap = create + move → design for partial application</li>
     <li><strong>Deterministic replay</strong> is the core of convergence — get the sort right, get OT right, everything follows</li>
     <li><strong>The sync server should be dumb</strong> — pure relay, no materialization, no edit knowledge</li>
-    <li><strong>Property testing</strong> catches bugs that hand-written tests miss</li>
   </ul>
 </section>
 
