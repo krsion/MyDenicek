@@ -179,8 +179,9 @@
     <div>
       <h3>❌ Why I moved to custom</h3>
       <ul>
-        <li><strong>Programming by demonstration</strong> — replay used opaque IDs (<code>$0</code>, <code>$1</code>), no path retargeting after structural changes</li>
-        <li>Opaque IDs, not selector paths — no wildcards, no <code>speakers/*</code></li>
+        <li><strong>Replay needs relative references</strong> — copy from <code>../input/value</code> into a new item</li>
+        <li>Loro uses <strong>opaque IDs</strong> — no paths, no wildcards, no <code>speakers/*</code></li>
+        <li>Replay can't <strong>retarget</strong> after structural changes</li>
       </ul>
     </div>
   </div>
@@ -189,16 +190,16 @@
 <section>
   <h2>The Retargeting Problem</h2>
   <div class="box box-gray" style="margin-bottom:12px">
-    <h4>Peer A records a button recipe:</h4>
-    <p><code>pushBack</code> to <code>/speakers</code> + <code>copy</code> input → new item</p>
+    <h4>Record an edit:</h4>
+    <p><code>set /speakers/0/name "Ada"</code> → saved as event for replay</p>
   </div>
   <div class="cols">
     <div class="box box-blue">
-      <h4>🔵 Peer A: replays "Add Speaker"</h4>
-      <p>Targets <code>/speakers</code></p>
+      <h4>🔵 Peer A: replays the edit</h4>
+      <p>Targets <code>/speakers/0/name</code></p>
     </div>
     <div class="box box-green">
-      <h4>🟢 Peer B: renames concurrently</h4>
+      <h4>🟢 Peer B: concurrently renames</h4>
       <p><code>/speakers</code> → <code>/talks</code></p>
     </div>
   </div>
@@ -206,11 +207,11 @@
   <div class="cols">
     <div class="box box-red">
       <h4>❌ Loro</h4>
-      <p>Replay uses opaque node ID → works for <em>that</em> node, but can't follow renames, wraps, or reindexing</p>
+      <p>Replay uses opaque node ID — works for <em>that</em> node, but <strong>can't follow renames, wraps, or reindexing</strong></p>
     </div>
     <div class="box box-green">
       <h4>✅ mydenicek</h4>
-      <p>OT transforms <code>/speakers</code> → <code>/talks</code> automatically. Replay follows all structural changes.</p>
+      <p>OT transforms <code>/speakers/0/name</code> → <code>/talks/0/name</code> automatically</p>
     </div>
   </div>
 </section>
