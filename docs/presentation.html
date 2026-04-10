@@ -124,19 +124,35 @@
 
 <section>
   <h2>The Concurrent Wrap Problem</h2>
-  <p>Alice wraps <code>&lt;li&gt;</code> in <code>&lt;ul&gt;</code>. Bob concurrently wraps same <code>&lt;li&gt;</code> in <code>&lt;ol&gt;</code>.</p>
-  <pre><code>// Wrap = create wrapper + move child into it
-// Alice: create "ul", move li into ul
-// Bob:   create "ol", move li into ol
+  <p>Alice wraps <code>&lt;li&gt;</code> in <code>&lt;ul&gt;</code>. Bob concurrently edits the <code>&lt;li&gt;</code>.</p>
+  <pre><code>// Before — flat map:
+nodes: { "li1": { tag: "li", children: ["v1"] },
+         "v1":  { value: "Talk about CRDTs" } }
 
-// Automerge has no atomic move — it's delete + insert.
-// After merge: TWO wrappers created, only ONE gets the child.
-// The other wrapper is an orphaned empty element.
-// Cannot auto-delete — indistinguishable from intentional empty element.
+// Alice: wrap li1 in ul  →  delete li1, create ul, re-insert li1
+// Bob:   edit v1.value = "Talk about OT"
 
-// Workaround: deterministic wrapper ID + LWW on tag
-// → only one wrapper, but still fragile</code></pre>
-  <p>Loro's <strong>movable tree CRDT</strong> solves this with native move operations.</p>
+// After merge:
+// Alice's delete removed li1 from the tree.
+// Bob's edit targets v1 — but v1's parent li1 was deleted + re-inserted.
+// Bob's edit is LOST or applied to an orphaned copy.</code></pre>
+</section>
+
+<section>
+  <h2>Concurrent Wrap: Two Wrappers</h2>
+  <p>Alice wraps <code>&lt;li&gt;</code> in <code>&lt;ul&gt;</code>. Bob wraps same <code>&lt;li&gt;</code> in <code>&lt;ol&gt;</code>.</p>
+  <pre><code>// Both create a wrapper + move the child:
+// Alice: create "ul-wrapper", move li1 → ul-wrapper.children
+// Bob:   create "ol-wrapper", move li1 → ol-wrapper.children
+
+// After merge — TWO wrappers exist:
+nodes: { "ul-wrapper": { tag: "ul", children: ["li1"] },  // ← has the child
+         "ol-wrapper": { tag: "ol", children: [] },        // ← orphaned!
+         "li1": { tag: "li", children: ["v1"] } }
+
+// Cannot auto-delete ol-wrapper — indistinguishable from
+// an intentionally empty &lt;ol&gt; the user created.</code></pre>
+  <p>Loro's <strong>movable tree CRDT</strong> solves this with native atomic move.</p>
 </section>
 
 <!-- 7. LORO -->
