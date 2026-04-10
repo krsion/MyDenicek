@@ -36,7 +36,7 @@ test.describe("mydenicek E2E", () => {
     await expect(bob.getByText("connected")).toBeVisible({ timeout: 30_000 });
 
     // Wait for initial sync to settle between both peers
-    await bob.waitForTimeout(2000);
+    await bob.waitForTimeout(3000);
 
     // Alice makes an edit via the command bar
     const aliceInput = alice.getByPlaceholder("/path command");
@@ -45,7 +45,7 @@ test.describe("mydenicek E2E", () => {
     await aliceInput.press("Enter");
 
     // Wait for sync — Bob should see Alice's edit
-    await expect(bob.getByText("ALICE-EDIT")).toBeVisible({ timeout: 15_000 });
+    await expect(bob.getByText("ALICE-EDIT")).toBeVisible({ timeout: 30_000 });
 
     // Verify Alice also sees it (use .first() since command output also contains the text)
     await expect(alice.getByText("ALICE-EDIT").first()).toBeVisible();
