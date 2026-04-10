@@ -209,6 +209,26 @@
   </div>
 </section>
 
+<!-- WHY NOT LAYER ON LORO -->
+<section>
+  <h2>Why not add path OT on top of Loro?</h2>
+  <div class="cols">
+    <div class="box box-orange" style="flex:1">
+      <h4>⚠️ Two conflict resolution layers</h4>
+      <p>Loro resolves conflicts with its internal CRDT semantics.<br/>
+      Path OT resolves conflicts by transforming selectors.</p>
+      <p><strong>They could disagree</strong> — producing unexpected results that are hard to debug.</p>
+    </div>
+    <div class="box box-green" style="flex:1">
+      <h4>✅ One coherent system</h4>
+      <p>Paths are the <strong>native addressing mode</strong>.<br/>
+      OT operates directly on them.<br/>
+      No translation layer, no leaky abstraction.</p>
+      <p>+ zero dependencies, no WASM, full control.</p>
+    </div>
+  </div>
+</section>
+
 <!-- 8. CUSTOM OT -->
 <section>
   <h2>Solution: Custom OT-based Event DAG</h2>
