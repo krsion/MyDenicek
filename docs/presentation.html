@@ -268,12 +268,13 @@
   </div>
 </section>
 
-<!-- 14. LIST → TABLE -->
+<!-- 14. LIST → TABLE + AFTER MERGE -->
 <section>
   <h2>Demo 3: List → Table Refactoring</h2>
   <div class="cols">
     <div>
-      <img src="slides-assets/14-conf-table.png" class="screenshot-sm" alt="Conference table with split columns" />
+      <img src="slides-assets/14-conf-table.png" class="screenshot-sm" alt="Conference table after add" style="margin-bottom:8px" />
+      <img src="slides-assets/15-after-merge.png" class="screenshot-sm" alt="Full app after merge — table with new speaker + event graph" />
     </div>
     <div>
       <p>Structural edits transform the list <strong>in place</strong>:</p>
@@ -281,9 +282,8 @@
 /speakers/* updateTag tr
 /speakers/* wrapList tr
 /speakers/*/name splitFirst ", "</code></pre>
-      <p><code>"Name, email"</code> → split into <strong>separate columns</strong></p>
-      <p>These are <strong>recorded events</strong> — a second peer receives them via sync and sees the same table.</p>
-      <p class="small">The <code>*</code> wildcard applies edits to all items at once.</p>
+      <p>A concurrent <code>pushBack</code> by another peer merges into the table — OT retargets through the structural changes.</p>
+      <p class="small">Bottom: after merge — the new speaker appears as a table row,<br/>event graph shows the full causal history.</p>
     </div>
   </div>
 </section>
