@@ -21,6 +21,11 @@ transformation of selector paths** to achieve strong eventual consistency.
 Documents are modeled as tagged trees of records, lists, primitives, and
 references — addressed by filesystem-style selectors like `/header/title/text`.
 
+## Presentation
+
+**[📊 View Presentation](https://krsion.github.io/mydenicek/presentation.html)**
+— project overview, architecture, formative examples, and live demo screenshots.
+
 ## Live Demo
 
 https://krsion.github.io/mydenicek/
