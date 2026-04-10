@@ -104,15 +104,15 @@
       </ul>
     </div>
     <div>
-      <h3>❌ Why I moved on</h3>
+      <h3>❌ Why I moved to Loro</h3>
       <ul>
-        <li>No <strong>move operation</strong> — moving a node = delete + insert → loses identity</li>
-        <li>Structural edits (wrap, rename) don't map naturally</li>
-        <li>Opaque IDs, not Denicek's path selectors</li>
+        <li>No <strong>atomic move</strong> — "wrap node in record" = delete + insert → loses identity</li>
+        <li>Needed <strong>separate dict + list</strong> per node (data fields vs. child ordering)</li>
       </ul>
+      <p class="small" style="margin-top:0.5em"><strong>Example:</strong> wrapping <code>/speakers</code> in a <code>&lt;section&gt;</code> requires moving the list into a new parent — Automerge can only delete + re-insert, losing concurrent edits to the original.</p>
     </div>
   </div>
-  <p class="small">Kleppmann, M. & Beresford, A. (2020). <em>A Conflict-Free Replicated JSON Datatype.</em> — describes the move operation problem in JSON CRDTs.</p>
+  <p class="small">Kleppmann, M. &amp; Beresford, A. (2020). <em>A Conflict-Free Replicated JSON Datatype.</em> — describes the move operation problem in JSON CRDTs.</p>
 </section>
 
 <!-- 7. LORO -->
@@ -128,13 +128,12 @@
       </ul>
     </div>
     <div>
-      <h3>❌ Why I moved on</h3>
+      <h3>❌ Why I moved to custom</h3>
       <ul>
-        <li>Still uses <strong>opaque node IDs</strong>, not paths</li>
-        <li>Custom structural edits (wrap, rename fields, update tags) — not natively supported</li>
-        <li>Replay with retargeting requires selector OT — Loro doesn't provide it</li>
-        <li><strong>We actually need paths.</strong></li>
+        <li><strong>Programming by demonstration</strong> was weak — no retargeting</li>
+        <li>Opaque IDs, not selector paths</li>
       </ul>
+      <p class="small" style="margin-top:0.5em"><strong>Example:</strong> record "add speaker to list" then replay it. After a concurrent <code>rename speakers→talks</code>, the replay must retarget from <code>/speakers</code> to <code>/talks</code>. Loro has no selector OT — replay breaks.</p>
     </div>
   </div>
 </section>
