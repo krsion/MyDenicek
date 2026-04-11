@@ -119,6 +119,8 @@ export class EventGraph {
   private events: Map<string, Event>;
   private _frontierIds: EventId[];
   private cachedOrder: string[] | null = null;
+  /** Cached resolved edits from the last full materialization (same lifetime as cachedOrder). */
+  private cachedApplied: { ev: Event; edit: Edit }[] | null = null;
   private bufferedEvents: Event[] = [];
   private readonly relayMode: boolean;
 
@@ -166,14 +168,11 @@ export class EventGraph {
         `Unknown event '${key}'. Events must be recorded locally or received before they can be replayed.`,
       );
     }
-    const ordered = this.cachedOrder ??= this.computeTopologicalOrder();
-    const doc = this.initial.clone();
-    const applied: { ev: Event; edit: Edit }[] = [];
+    const applied = this.ensureCachedApplied();
     let replayEdit: Edit | null = null;
     let replayTransformationCount = 0;
-    for (const orderedKey of ordered) {
-      const event = this.events.get(orderedKey) as Event;
-      const edit = event.resolveAgainst(applied, doc);
+    for (const { ev, edit } of applied) {
+      const orderedKey = ev.id.format();
       if (orderedKey === key) {
         if (edit instanceof NoOpEdit) {
           throw new Error(
@@ -195,11 +194,6 @@ export class EventGraph {
           );
         }
       }
-      if (edit instanceof NoOpEdit) {
-        continue;
-      }
-      edit.apply(doc);
-      applied.push({ ev: event, edit });
     }
     if (replayEdit === null) {
       throw new Error(
@@ -221,6 +215,7 @@ export class EventGraph {
       event.id,
     ].sort((a, b) => a.compareTo(b));
     this.cachedOrder = null;
+    this.cachedApplied = null;
   }
 
   private validateEventAgainstCausalState(event: Event): void {
@@ -422,6 +417,28 @@ export class EventGraph {
     return ordered;
   }
 
+  /**
+   * Returns the cached list of resolved edits from a full-frontier
+   * materialization. Builds the cache on first call; subsequent calls
+   * reuse it until the graph changes (new events invalidate the cache).
+   */
+  private ensureCachedApplied(): { ev: Event; edit: Edit }[] {
+    if (this.cachedApplied !== null) return this.cachedApplied;
+    const ordered = this.cachedOrder ??= this.computeTopologicalOrder();
+    const doc = this.initial.clone();
+    const applied: { ev: Event; edit: Edit }[] = [];
+    for (const key of ordered) {
+      const ev = this.events.get(key) as Event;
+      const edit = ev.resolveAgainst(applied, doc);
+      applied.push({ ev, edit });
+      if (!(edit instanceof NoOpEdit)) {
+        edit.apply(doc);
+      }
+    }
+    this.cachedApplied = applied;
+    return applied;
+  }
+
   materialize(frontier?: EventId[]): MaterializeResult {
     const ordered = frontier
       ? this.computeTopologicalOrder(frontier)
@@ -477,6 +494,7 @@ export class EventGraph {
     this.events = new Map();
     this._frontierIds = [];
     this.cachedOrder = null;
+    this.cachedApplied = null;
   }
 
   /** Returns a serializable snapshot of all known events for UI inspection. */
