@@ -18,6 +18,6 @@
   "imports": {
     "react": "npm:react@^19.0.0",
     "@mydenicek/core": "jsr:@mydenicek/core@^0.2",
-    "@mydenicek/sync-server": "jsr:@mydenicek/sync-server@^0.1"
+    "@mydenicek/sync": "jsr:@mydenicek/sync@^0.1"
   }
 }

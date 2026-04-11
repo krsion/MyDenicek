@@ -1,7 +1,7 @@
 /**
  * WebSocket sync for the Denicek CRDT.
  *
- * Wraps the {@linkcode SyncClient} from `@mydenicek/sync-server` with
+ * Wraps the {@linkcode SyncClient} from `@mydenicek/sync` with
  * React-specific features: reactive status tracking and automatic
  * reconnection with exponential backoff.
  */
@@ -10,7 +10,7 @@ import type { Denicek, PlainNode } from "@mydenicek/core";
 import {
   computeDocumentHash,
   SyncClient as BaseSyncClient,
-} from "@mydenicek/sync-server";
+} from "@mydenicek/sync";
 
 /** Reactive sync status. */
 export type SyncStatus =

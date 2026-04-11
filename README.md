@@ -3,7 +3,7 @@
 **Local-first collaborative document editor built on a custom OT-based CRDT.**\
 Published on JSR as [`@mydenicek/core`](https://jsr.io/@mydenicek/core),
 [`@mydenicek/react`](https://jsr.io/@mydenicek/react), and
-[`@mydenicek/sync-server`](https://jsr.io/@mydenicek/sync-server).
+[`@mydenicek/sync`](https://jsr.io/@mydenicek/sync).
 
 **Author**: Bc. Ondřej Krsička\
 **Supervisor**: Mgr. Tomáš Petříček, Ph.D.\
@@ -61,7 +61,7 @@ clients:
   ([`@mydenicek/core`](https://jsr.io/@mydenicek/core))
 - `packages/react` — React hook for reactive Denicek usage
   ([`@mydenicek/react`](https://jsr.io/@mydenicek/react))
-- `packages/sync-server` — sync protocol, sync room, and server/client helpers
+- `packages/sync` — sync protocol, sync room, and server/client helpers
 - `apps/sync-server` — the runnable WebSocket sync server
 - `apps/playground` — experimental playground for multi-peer DAG exploration
 - `apps/mywebnicek` — production web app (Deno + Vite + React + Fluent UI)
@@ -160,7 +160,7 @@ deno task mywebnicek:dev
 From the repository root:
 
 ```sh
-deno lint packages/core packages/sync-server apps/sync-server
+deno lint packages/core packages/sync apps/sync-server
 deno task check
 deno task test
 cd apps/playground && deno install && deno task build && deno task test
@@ -171,7 +171,7 @@ cd apps/mywebnicek && deno install && deno task build && deno task test
 
 - [Core package README](./packages/core/README.md)
 - [React package README](./packages/react/README.md)
-- [Sync server README](./packages/sync-server/README.md)
+- [Sync server README](./packages/sync/README.md)
 - [Sync server app README](./apps/sync-server/README.md)
 - [Playground README](./apps/playground/README.md)
 - [MyWebnicek README](./apps/mywebnicek/README.md)

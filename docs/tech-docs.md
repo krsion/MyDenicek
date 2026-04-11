@@ -47,7 +47,7 @@ The documentation covers:
 
 - The `@mydenicek/core` library (CRDT engine, document model, edit operations,
   formula engine)
-- The `@mydenicek/sync-server` package (WebSocket sync protocol)
+- The `@mydenicek/sync` package (WebSocket sync protocol)
 - The `mywebnicek` web application (React UI, Loro-based CRDT integration)
 - Testing methodology (unit tests, property-based tests, random fuzzer,
   Playwright E2E)
@@ -92,7 +92,7 @@ The project is a unified Deno monorepo:
   sync protocol.
 - `packages/react` — `@mydenicek/react` on JSR. React hook for reactive Denicek
   usage.
-- `packages/sync-server` — Sync protocol, sync room, and WebSocket
+- `packages/sync` — Sync protocol, sync room, and WebSocket
   client/server. The server runs in **relay mode** — it stores and forwards
   events without materializing documents.
 - `apps/mywebnicek` — React 19 web application with command bar, event graph
@@ -255,10 +255,10 @@ packages/core/
     └── core-random-fuzzer.ts    # Standalone random fuzzer
 ```
 
-#### Sync Server (`@mydenicek/sync-server`)
+#### Sync Server (`@mydenicek/sync`)
 
 ```
-packages/sync-server/
+packages/sync/
 ├── mod.ts         # Package entry point
 ├── server.ts      # createSyncServer(): Deno HTTP + WebSocket
 ├── room.ts        # SyncRoom: per-room Denicek peer for event relay
@@ -619,7 +619,7 @@ automatically. All peers converge on the undone state through normal replay.
 The sync protocol uses WebSocket connections with a simple message-based
 protocol:
 
-**Message types** (defined in `packages/sync-server/protocol.ts`):
+**Message types** (defined in `packages/sync/protocol.ts`):
 
 | Message           | Direction       | Fields                          | Purpose                                        |
 | ----------------- | --------------- | ------------------------------- | ---------------------------------------------- |
@@ -628,7 +628,7 @@ protocol:
 | `sync` (response) | Server → Client | `roomId`, `frontiers`, `events` | Returns events unknown to the client           |
 | `error`           | Server → Client | `message`                       | Error notification                             |
 
-**Server architecture** (`packages/sync-server/server.ts`):
+**Server architecture** (`packages/sync/server.ts`):
 
 - Room-based isolation: each document has a `roomId`. Clients connect to
   `ws://host/sync?room=<id>`.
@@ -641,7 +641,7 @@ protocol:
 - Persistence: events are serialized to JSON files (one per room). Writes are
   queued sequentially with atomic rename to prevent corruption.
 
-**Client architecture** (`packages/sync-server/client.ts`):
+**Client architecture** (`packages/sync/client.ts`):
 
 - `SyncClient` manages a WebSocket connection with configurable auto-sync
   interval (default: 1000ms).
@@ -826,7 +826,7 @@ npm run dev
 
 # Or run individually:
 npm run dev -w mywebnicek              # Web app at localhost:5174
-npm run dev -w @mydenicek/sync-server  # Sync server at port 3001
+npm run dev -w @mydenicek/sync  # Sync server at port 3001
 
 # Run tests:
 npm run test --workspaces              # All tests

@@ -6,7 +6,7 @@ COPY deno.json deno.lock ./
 COPY apps/sync-server ./apps/sync-server
 COPY packages/core ./packages/core
 COPY packages/react ./packages/react
-COPY packages/sync-server ./packages/sync-server
+COPY packages/sync ./packages/sync
 
 # Create stub workspace members that the sync server doesn't need
 RUN mkdir -p apps/playground apps/mywebnicek && \

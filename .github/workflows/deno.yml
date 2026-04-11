@@ -23,7 +23,7 @@ jobs:
       - run: deno fmt --check mod.ts internal.ts core tests tools deno.json
         working-directory: packages/core
       - run: deno fmt --check .
-        working-directory: packages/sync-server
+        working-directory: packages/sync
       - run: deno fmt --check .
         working-directory: apps/sync-server
       - run: deno fmt --check deno.json README.md index.html src vite.config.ts tsconfig.json tsconfig.node.json
@@ -39,7 +39,7 @@ jobs:
       - run: deno lint . && deno doc --lint mod.ts
         working-directory: packages/core
       - run: deno lint .
-        working-directory: packages/sync-server
+        working-directory: packages/sync
       - run: deno lint .
         working-directory: apps/sync-server
       - run: deno lint src vite.config.ts
@@ -55,7 +55,7 @@ jobs:
       - run: deno check mod.ts tests/**/*.ts
         working-directory: packages/core
       - run: deno check mod.ts
-        working-directory: packages/sync-server
+        working-directory: packages/sync
       - run: deno check main.ts
         working-directory: apps/sync-server
       - run: deno check src/main.tsx src/tests/peer-session.test.ts src/tests/sync-service.test.ts
@@ -71,7 +71,7 @@ jobs:
       - run: deno test --allow-all --no-check tests
         working-directory: packages/core
       - run: deno test --allow-read --allow-write tests
-        working-directory: packages/sync-server
+        working-directory: packages/sync
       - run: deno test --allow-all src/tests
         working-directory: apps/playground
 

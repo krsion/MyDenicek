@@ -21,7 +21,7 @@ deno run packages/core/tools/core-random-fuzzer.ts               # Standalone lo
      missing `type` on buttons)
   2. `deno check src/main.tsx` from `apps/mywebnicek` (catches type errors in
      the web app)
-  3. `deno check mod.ts` from `packages/core` and `packages/sync-server`
+  3. `deno check mod.ts` from `packages/core` and `packages/sync`
   4. `deno task build` from the repo root (catches Vite build issues)
 - The root `deno task check` and `deno task lint` chains are too slow and hit
   ARG_MAX on Linux CI. Use the per-package commands above instead.

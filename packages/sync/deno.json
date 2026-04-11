@@ -1,5 +1,5 @@
 {
-  "name": "@mydenicek/sync-server",
+  "name": "@mydenicek/sync",
   "version": "0.1.2",
   "description": "WebSocket sync server and client helpers for mydenicek.",
   "license": "MIT",

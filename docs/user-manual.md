@@ -68,7 +68,7 @@ If you want to run the application on your own machine:
 You can also run only specific parts:
 
 - `npm run dev -w mywebnicek` — Web app only (no sync server)
-- `npm run dev -w @mydenicek/sync-server` — Sync server only (port 3001)
+- `npm run dev -w @mydenicek/sync` — Sync server only (port 3001)
 
 ### 2.3 Interface Overview
 

@@ -12,8 +12,8 @@ export default defineConfig({
       "@mydenicek/core": fileURLToPath(
         new URL("../../packages/core/mod.ts", import.meta.url),
       ),
-      "@mydenicek/sync-server": fileURLToPath(
-        new URL("../../packages/sync-server/mod.ts", import.meta.url),
+      "@mydenicek/sync": fileURLToPath(
+        new URL("../../packages/sync/mod.ts", import.meta.url),
       ),
       "@std/data-structures/binary-heap": fileURLToPath(
         new URL("src/shims/binary-heap.ts", import.meta.url),

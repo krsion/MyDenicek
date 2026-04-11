@@ -4,7 +4,7 @@ import {
   computeDocumentHash,
   createSyncServer,
   SyncClient,
-} from "@mydenicek/sync-server";
+} from "@mydenicek/sync";
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));

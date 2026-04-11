@@ -4,7 +4,7 @@
  * Usage: deno task dev
  */
 
-import { createSyncServer } from "@mydenicek/sync-server";
+import { createSyncServer } from "@mydenicek/sync";
 
 // Start sync server on a dynamic port
 const persistencePath = Deno.env.get("PERSISTENCE_PATH") ?? "./data";

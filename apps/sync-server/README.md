@@ -21,7 +21,7 @@ Environment variables:
 ## Run the container
 
 Build from the repository root so the Docker build context includes both
-`apps/sync-server`, `packages/sync-server`, and `packages/core`.
+`apps/sync-server`, `packages/sync`, and `packages/core`.
 
 ```sh
 docker build -f apps/sync-server/Dockerfile -t mydenicek-sync-server .

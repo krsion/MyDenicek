@@ -1,4 +1,4 @@
-# @mydenicek/sync-server
+# @mydenicek/sync
 
 A reusable sync package for `@mydenicek/core`.
 
@@ -18,7 +18,7 @@ Azure deployment workflow.
 
 ```ts
 import { Denicek } from "jsr:@mydenicek/core";
-import { computeDocumentHash, SyncClient } from "jsr:@mydenicek/sync-server";
+import { computeDocumentHash, SyncClient } from "jsr:@mydenicek/sync";
 
 const initialDoc = { $tag: "root", title: "Shared note" };
 const peer = new Denicek("alice", initialDoc);

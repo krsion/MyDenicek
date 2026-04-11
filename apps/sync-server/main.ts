@@ -1,4 +1,4 @@
-import { createSyncServer } from "@mydenicek/sync-server";
+import { createSyncServer } from "@mydenicek/sync";
 
 const port = Number(Deno.env.get("PORT") ?? "8787");
 const hostname = Deno.env.get("HOSTNAME") ?? "0.0.0.0";

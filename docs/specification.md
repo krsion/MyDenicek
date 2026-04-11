@@ -247,7 +247,7 @@ The system follows a monorepo structure with clear separation between packages:
 ```
 apps/
   mywebnicek/               # React 19 + Fluent UI web application
-  mydenicek-sync-server/    # WebSocket sync server
+  mydenicek-sync/    # WebSocket sync server
 packages/
   mydenicek-core/           # Core CRDT logic (Loro wrapper)
   mydenicek-react/          # React hooks and context

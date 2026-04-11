@@ -7,7 +7,7 @@
  * underlying protocol types for custom integrations.
  *
  * ```ts
- * import { createSyncServer } from "@mydenicek/sync-server";
+ * import { createSyncServer } from "@mydenicek/sync";
  *
  * createSyncServer({ port: 8787, persistencePath: "./data" });
  * ```
