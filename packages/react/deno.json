@@ -1,6 +1,6 @@
 {
   "name": "@mydenicek/react",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "React hook for the Denicek collaborative CRDT.",
   "license": "MIT",
   "exports": {
