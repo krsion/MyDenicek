@@ -475,3 +475,50 @@ Deno.test("concurrent refactor rewrites a replayed appended row payload", () => 
   assertEquals(alice.toPlain(), expected);
   assertEquals(bob.toPlain(), expected);
 });
+
+Deno.test("wrapRecord with wildcard affects concurrently inserted item", () => {
+  const doc = {
+    $tag: "root",
+    items: {
+      $tag: "ul",
+      $items: [
+        { $tag: "li", contact: "Ada, ada@example.com" },
+      ],
+    },
+  };
+  const alice = new Denicek("alice", doc);
+  const bob = new Denicek("bob", doc);
+
+  // Alice wraps every item's contact in a split-first formula
+  alice.wrapRecord("items/*/contact", "source", "split-first");
+
+  // Bob concurrently inserts a new item
+  bob.pushBack("items", { $tag: "li", contact: "Bob, bob@example.com" });
+
+  sync(alice, bob);
+
+  const expected = {
+    $tag: "root",
+    items: {
+      $tag: "ul",
+      $items: [
+        {
+          $tag: "li",
+          contact: {
+            $tag: "split-first",
+            source: "Ada, ada@example.com",
+          },
+        },
+        {
+          $tag: "li",
+          contact: {
+            $tag: "split-first",
+            source: "Bob, bob@example.com",
+          },
+        },
+      ],
+    },
+  };
+  assertEquals(alice.toPlain(), expected);
+  assertEquals(bob.toPlain(), expected);
+});

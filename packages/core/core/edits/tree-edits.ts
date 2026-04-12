@@ -367,6 +367,30 @@ export class WrapRecordEdit extends NoOpOnRemovedTargetEdit {
   withTarget(target: Selector): WrapRecordEdit {
     return new WrapRecordEdit(target, this.field, this.tag);
   }
+
+  override transformLaterConcurrentEdit(concurrent: Edit): Edit {
+    if (!(concurrent instanceof ListInsertEdit)) {
+      return super.transformLaterConcurrentEdit(concurrent);
+    }
+    const rewritten = concurrent.rewriteInsertedNode(
+      this.target,
+      (insertedNode, relativeTarget) => {
+        if (relativeTarget.length === 0) {
+          return new RecordNode(this.tag, { [this.field]: insertedNode });
+        }
+        // Navigate into the inserted node to wrap a nested child
+        const targets = insertedNode.navigate(relativeTarget);
+        if (targets.length === 0) return null;
+        insertedNode.wrapAtPath(
+          relativeTarget,
+          (child) => new RecordNode(this.tag, { [this.field]: child }),
+        );
+        return insertedNode;
+      },
+    );
+    return rewritten ?? super.transformLaterConcurrentEdit(concurrent);
+  }
+
   encodeRemoteEdit(): EncodedWrapRecordEdit {
     return {
       kind: "WrapRecordEdit",
