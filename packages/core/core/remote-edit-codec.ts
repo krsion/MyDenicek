@@ -23,6 +23,7 @@ export type EncodedRemoteEdit =
   | { kind: "CopyEdit"; target: string; source: string }
   | { kind: "UnwrapRecordEdit"; target: string; field: string }
   | { kind: "UnwrapListEdit"; target: string }
+  | { kind: "RestoreSnapshotEdit"; target: string; snapshot: PlainNode }
   | { kind: "NoOpEdit"; target: string; reason: string };
 
 type RemoteEditDecoder<

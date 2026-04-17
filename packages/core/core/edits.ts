@@ -17,6 +17,7 @@ export {
 } from "./edits/record-edits.ts";
 export {
   CopyEdit,
+  RestoreSnapshotEdit,
   UpdateTagEdit,
   WrapListEdit,
   WrapRecordEdit,

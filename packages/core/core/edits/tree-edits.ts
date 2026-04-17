@@ -7,7 +7,7 @@ import {
 } from "./base.ts";
 import { ListInsertEdit } from "./list-edits.ts";
 import { mapSelector, Selector, type SelectorTransform } from "../selector.ts";
-import { ListNode, type Node, RecordNode } from "../nodes.ts";
+import { ListNode, Node, type PlainNode, RecordNode } from "../nodes.ts";
 import {
   type EncodedRemoteEdit,
   registerRemoteEditDecoder,
@@ -277,8 +277,21 @@ export class CopyEdit extends Edit {
     return selector.segments.filter((segment) => segment === "*").length;
   }
 
-  computeInverse(_preDoc: Node): Edit {
-    throw new Error("CopyEdit does not support computeInverse.");
+  computeInverse(preDoc: Node): Edit {
+    const targetEntries = preDoc.navigateWithPaths(this.target);
+    if (targetEntries.length === 0) {
+      throw new Error("CopyEdit.computeInverse: no targets found.");
+    }
+
+    const restoreEdits: Edit[] = targetEntries.map((entry) => {
+      return new RestoreSnapshotEdit(
+        new Selector(entry.path.segments),
+        entry.node.clone(),
+      );
+    });
+
+    if (restoreEdits.length === 1) return restoreEdits[0]!;
+    return createCompositeEdit(restoreEdits[0]!, restoreEdits.slice(1));
   }
 
   equals(other: Edit): boolean {
@@ -516,4 +529,78 @@ registerRemoteEditDecoder<EncodedWrapListEdit>(
   "WrapListEdit",
   (encodedEdit) =>
     new WrapListEdit(Selector.parse(encodedEdit.target), encodedEdit.tag),
+);
+
+type EncodedRestoreSnapshotEdit = Extract<
+  EncodedRemoteEdit,
+  { kind: "RestoreSnapshotEdit" }
+>;
+
+/**
+ * Edit that restores a previously snapshotted node at a target path.
+ * Used by `CopyEdit.computeInverse` to undo copy operations.
+ */
+export class RestoreSnapshotEdit extends NoOpOnRemovedTargetEdit {
+  /** @inheritDoc */
+  readonly isStructural = false;
+  /** @inheritDoc */
+  readonly kind = "RestoreSnapshot";
+
+  constructor(readonly target: Selector, readonly snapshot: Node) {
+    super();
+  }
+
+  apply(doc: Node): void {
+    this.navigateOrThrow(doc, this.target);
+    doc.replaceAtPath(this.target, this.snapshot.clone());
+  }
+
+  canApply(doc: Node): boolean {
+    return this.canFindNodes(doc, this.target);
+  }
+
+  transformSelector(sel: Selector): SelectorTransform {
+    return mapSelector(sel);
+  }
+
+  computeInverse(preDoc: Node): Edit {
+    const entries = preDoc.navigateWithPaths(this.target);
+    if (entries.length === 0) {
+      throw new Error(
+        "RestoreSnapshotEdit.computeInverse: no targets found.",
+      );
+    }
+    return new RestoreSnapshotEdit(this.target, entries[0]!.node.clone());
+  }
+
+  equals(other: Edit): boolean {
+    return other instanceof RestoreSnapshotEdit &&
+      this.target.equals(other.target) &&
+      this.snapshot.equals(other.snapshot);
+  }
+
+  withTarget(target: Selector): RestoreSnapshotEdit {
+    return new RestoreSnapshotEdit(target, this.snapshot);
+  }
+
+  encodeRemoteEdit(): EncodedRestoreSnapshotEdit {
+    return {
+      kind: "RestoreSnapshotEdit",
+      target: this.target.format(),
+      snapshot: this.snapshot.toPlain() as PlainNode,
+    };
+  }
+
+  override describe(): string {
+    return `Restore snapshot at ${this.target.format()}`;
+  }
+}
+
+registerRemoteEditDecoder<EncodedRestoreSnapshotEdit>(
+  "RestoreSnapshotEdit",
+  (encodedEdit) =>
+    new RestoreSnapshotEdit(
+      Selector.parse(encodedEdit.target),
+      Node.fromPlain(encodedEdit.snapshot),
+    ),
 );
