@@ -73,6 +73,12 @@ export interface EventGraphOptions {
    * pathological event graphs.
    */
   maxReplayTransformations?: number;
+  /**
+   * When true, every checkpoint-based materialization is validated against
+   * a full replay from the initial document. Useful for testing incremental
+   * materialization correctness. Defaults to false.
+   */
+  debugValidateCheckpoints?: boolean;
 }
 
 export class EventGraph {
@@ -86,6 +92,7 @@ export class EventGraph {
   private readonly relayMode: boolean;
   private readonly maxBufferedRemoteEvents: number;
   private readonly maxReplayTransformations: number;
+  private readonly debugValidateCheckpoints: boolean;
   /**
    * Cached materialized document that matches `cachedApplied`. Kept alongside
    * so that linear-extension inserts can validate against, and mutate, the
@@ -108,6 +115,7 @@ export class EventGraph {
       DEFAULT_MAX_BUFFERED_REMOTE_EVENTS;
     this.maxReplayTransformations = options?.maxReplayTransformations ??
       DEFAULT_MAX_REPLAY_TRANSFORMATIONS;
+    this.debugValidateCheckpoints = options?.debugValidateCheckpoints ?? false;
   }
 
   get frontiers(): EventId[] {

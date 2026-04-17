@@ -2,11 +2,7 @@ import { assertEquals } from "@std/assert";
 
 import { Denicek } from "@mydenicek/core";
 import type { PlainNode } from "@mydenicek/core";
-import {
-  applySyncResponse,
-  createSyncRequest,
-  SyncRoom,
-} from "../mod.ts";
+import { applySyncResponse, createSyncRequest, SyncRoom } from "../mod.ts";
 import { computeDocumentHash } from "../client.ts";
 
 // ── Helper: sync a peer with the room and return updated frontiers ─────

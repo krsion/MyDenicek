@@ -1,6 +1,5 @@
 import {
   assertEquals,
-  createRecordAddEvent,
   Denicek,
   EventGraph,
   EventId,
@@ -58,7 +57,7 @@ Deno.test("oracle: debug mode validates checkpoint against full replay", () => {
     "alice",
     new RecordAddEdit(Selector.parse("a"), new PrimitiveNode("A")),
   );
-  const evB = graph.createEvent(
+  const _evB = graph.createEvent(
     "alice",
     new RecordAddEdit(Selector.parse("b"), new PrimitiveNode("B")),
   );

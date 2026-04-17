@@ -1,7 +1,4 @@
-import {
-  type SelectorSegment,
-  Selector,
-} from "../selector.ts";
+import { Selector, type SelectorSegment } from "../selector.ts";
 import type { Node } from "../nodes/base.ts";
 import { ReferenceNode } from "../nodes/reference-node.ts";
 import { RecordAddEdit } from "./record-edits.ts";

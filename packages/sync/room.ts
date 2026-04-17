@@ -139,7 +139,8 @@ export class SyncRoom {
       !this.peersResetAfterCompaction.has(peerId)
     ) {
       const peerReferencesCompactedEvents = request.frontiers.some(
-        (f) => !this.roomPeer.frontiers.includes(f) &&
+        (f) =>
+          !this.roomPeer.frontiers.includes(f) &&
           !this.roomPeerHasEvent(f),
       );
       if (peerReferencesCompactedEvents) {
@@ -188,9 +189,7 @@ export class SyncRoom {
    */
   private roomPeerHasEvent(eventKey: string): boolean {
     const allEvents = collectRemoteEventsSince(this.roomPeer, []);
-    return allEvents.some((ev) =>
-      `${ev.id.peer}:${ev.id.seq}` === eventKey
-    );
+    return allEvents.some((ev) => `${ev.id.peer}:${ev.id.seq}` === eventKey);
   }
 
   /**

@@ -69,7 +69,7 @@ Deno.test("rename + concurrent ListPushBack with $ref: ref is rewritten", () => 
     data: {
       $tag: "data",
       input: "hello",
-      items: { $tag: "list", $items: [] as unknown[] },
+      items: { $tag: "list", $items: [] as const },
     },
   };
   const alice = new Denicek("alice", doc);
@@ -225,7 +225,7 @@ Deno.test("convergence: rename + two concurrent inserts with $ref", () => {
     data: {
       $tag: "data",
       input: "hello",
-      items: { $tag: "list", $items: [] as unknown[] },
+      items: { $tag: "list", $items: [] as const },
     },
   };
   const alice = new Denicek("alice", doc);
@@ -266,7 +266,7 @@ Deno.test("convergence: wrapRecord + rename + concurrent insert with $ref", () =
     data: {
       $tag: "data",
       input: "hello",
-      items: { $tag: "list", $items: [] as unknown[] },
+      items: { $tag: "list", $items: [] as const },
     },
   };
   const alice = new Denicek("alice", doc);
@@ -294,7 +294,7 @@ Deno.test("transitive sync: rename + insert with $ref via chain A↔B, B↔C, A�
     form: {
       $tag: "form",
       input: { $tag: "field", value: "hello" },
-      items: { $tag: "list", $items: [] as unknown[] },
+      items: { $tag: "list", $items: [] as const },
     },
   };
   const alice = new Denicek("alice", doc);
