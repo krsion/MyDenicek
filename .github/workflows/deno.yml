@@ -173,6 +173,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Wake sync-server (cold-start Azure Container App)
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://mydenicek-core-krsion-dev-sync.happyisland-d6dda219.westeurope.azurecontainerapps.io/healthz"
+          echo "Polling $URL until it returns 200 (timeout 180s)..."
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "$URL" || echo "000")
+            if [ "$code" = "200" ]; then
+              echo "sync-server ready after ${i} attempt(s)"
+              exit 0
+            fi
+            echo "  attempt $i: status=$code, retrying in 3s"
+            sleep 3
+          done
+          echo "sync-server did not become healthy in time" >&2
+          exit 1
       - run: npm install @playwright/test
         working-directory: apps/mywebnicek
       - run: npx playwright install chromium
