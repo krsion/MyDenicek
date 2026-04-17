@@ -1,20 +1,11 @@
 import { BinaryHeap } from "@std/data-structures/binary-heap";
 import {
-  ApplyPrimitiveEdit,
-  CopyEdit,
   type Edit,
   NoOpEdit,
-  RecordAddEdit,
-  RecordDeleteEdit,
-  RecordRenameFieldEdit,
-  UpdateTagEdit,
-  WrapListEdit,
-  WrapRecordEdit,
 } from "./edits.ts";
 import { Event } from "./event.ts";
 import { EventId } from "./event-id.ts";
 import type { Node } from "./nodes.ts";
-import { ListNode, PrimitiveNode, RecordNode } from "./nodes.ts";
 import { VectorClock } from "./vector-clock.ts";
 
 // ── EventGraph ──────────────────────────────────────────────────────
@@ -33,63 +24,6 @@ export type EventSnapshot = {
   editDescription: string;
 };
 
-/** Produces a human-readable description of what an edit does. */
-function describeEdit(edit: Edit): string {
-  const target = edit.target.format();
-  if (edit instanceof RecordAddEdit) {
-    const field = String(edit.target.lastSegment);
-    const valueStr = describeNode(edit.node);
-    return `Add '${field}'${valueStr} to ${
-      edit.target.parent.format() || "root"
-    }`;
-  }
-  if (edit instanceof RecordDeleteEdit) {
-    const field = String(edit.target.lastSegment);
-    return `Delete '${field}' from ${edit.target.parent.format() || "root"}`;
-  }
-  if (edit instanceof RecordRenameFieldEdit) {
-    const from = String(edit.target.lastSegment);
-    return `Rename '${from}' → '${edit.to}' in ${
-      edit.target.parent.format() || "root"
-    }`;
-  }
-  if (edit instanceof ApplyPrimitiveEdit) {
-    const argsStr = edit.args.map((a) =>
-      typeof a === "string" ? `"${a}"` : String(a)
-    ).join(", ");
-    return `${edit.editName}(${argsStr}) at ${target}`;
-  }
-  if (edit instanceof CopyEdit) {
-    return `Copy ${edit.source.format()} → ${target}`;
-  }
-  if (edit instanceof UpdateTagEdit) {
-    return `Update tag → '${edit.tag}' at ${target}`;
-  }
-  if (edit instanceof WrapRecordEdit) {
-    return `Wrap ${target} in record '${edit.field}' <${edit.tag}>`;
-  }
-  if (edit instanceof WrapListEdit) {
-    return `Wrap ${target} in list <${edit.tag}>`;
-  }
-  if (edit instanceof NoOpEdit) {
-    return `No-op: ${edit.reason}`;
-  }
-  return `${edit.kind} at ${target}`;
-}
-
-function describeNode(node: Node): string {
-  if (node instanceof PrimitiveNode) {
-    const v = node.value;
-    return ` = ${typeof v === "string" ? `"${v}"` : String(v)}`;
-  }
-  if (node instanceof RecordNode) {
-    return ` <${node.tag}>`;
-  }
-  if (node instanceof ListNode) {
-    return ` [${node.tag}](${node.items.length} items)`;
-  }
-  return "";
-}
 type PendingEventsByKey = Record<string, Event>;
 type MissingParentCountsByKey = Record<string, number>;
 type ChildKeysByMissingParent = Record<string, string[]>;
@@ -101,8 +35,8 @@ type PendingDependencyIndex = {
 // These limits bound pathological remote input. Hitting them already means a
 // peer is far outside normal interactive-editing behavior, so rejecting the
 // input is safer than letting buffering or replay work grow without bound.
-const MAX_BUFFERED_REMOTE_EVENTS = 10_000;
-const MAX_REPLAY_TRANSFORMATIONS = 10_000;
+const DEFAULT_MAX_BUFFERED_REMOTE_EVENTS = 10_000;
+const DEFAULT_MAX_REPLAY_TRANSFORMATIONS = 10_000;
 
 /** Options for configuring an {@linkcode EventGraph}. */
 export interface EventGraphOptions {
@@ -112,6 +46,19 @@ export interface EventGraphOptions {
    * without needing to understand edit semantics.
    */
   relayMode?: boolean;
+  /**
+   * Upper bound on the number of remote events buffered while waiting for
+   * missing parents. Defaults to 10_000. Once this limit is exceeded,
+   * {@linkcode EventGraph.ingestEvents} throws rather than letting the
+   * buffer grow without bound.
+   */
+  maxBufferedRemoteEvents?: number;
+  /**
+   * Upper bound on the number of concurrent-transformation steps any single
+   * replay resolution may take. Defaults to 10_000. Guards against
+   * pathological event graphs.
+   */
+  maxReplayTransformations?: number;
 }
 
 export class EventGraph {
@@ -123,6 +70,15 @@ export class EventGraph {
   private cachedApplied: { ev: Event; edit: Edit }[] | null = null;
   private bufferedEvents: Event[] = [];
   private readonly relayMode: boolean;
+  private readonly maxBufferedRemoteEvents: number;
+  private readonly maxReplayTransformations: number;
+  /**
+   * Cached materialized document that matches `cachedApplied`. Kept alongside
+   * so that linear-extension inserts can validate against, and mutate, the
+   * current doc in place instead of re-materializing from scratch.
+   */
+  private cachedDoc: Node | null = null;
+  private cachedConflicts: Node[] | null = null;
 
   constructor(
     initial: Node,
@@ -134,6 +90,10 @@ export class EventGraph {
     this.events = events ?? new Map();
     this._frontierIds = frontiers ?? [];
     this.relayMode = options?.relayMode ?? false;
+    this.maxBufferedRemoteEvents = options?.maxBufferedRemoteEvents ??
+      DEFAULT_MAX_BUFFERED_REMOTE_EVENTS;
+    this.maxReplayTransformations = options?.maxReplayTransformations ??
+      DEFAULT_MAX_REPLAY_TRANSFORMATIONS;
   }
 
   get frontiers(): EventId[] {
@@ -182,9 +142,9 @@ export class EventGraph {
         replayEdit = edit;
       } else if (replayEdit !== null && edit.isStructural) {
         replayTransformationCount++;
-        if (replayTransformationCount > MAX_REPLAY_TRANSFORMATIONS) {
+        if (replayTransformationCount > this.maxReplayTransformations) {
           throw new Error(
-            `Cannot replay event '${key}' through more than ${MAX_REPLAY_TRANSFORMATIONS} structural transformations.`,
+            `Cannot replay event '${key}' through more than ${this.maxReplayTransformations} structural transformations.`,
           );
         }
         replayEdit = edit.transformLaterConcurrentEdit(replayEdit);
@@ -205,10 +165,45 @@ export class EventGraph {
 
   insertEvent(event: Event): void {
     event.validate(this.events);
-    if (!this.relayMode) {
-      this.validateEventAgainstCausalState(event);
+
+    // Track whether this insertion is a strict linear extension of the
+    // current state, i.e. event.parents exactly equals this._frontierIds.
+    // When it is, we can (a) validate the edit against the cached doc
+    // instead of re-materializing from scratch, and (b) extend the cache
+    // in place afterwards so the next insert can reuse it. This turns
+    // N back-to-back linear inserts (the common case during local editing
+    // and live sync) from O(N^2) into amortized O(N).
+    const linearExtension = this.isLinearExtension(event);
+
+    // Prime the cache on first linear extension so subsequent inserts can
+    // reuse it. This is cheap because materialize() without frontier would
+    // need to run on the very next read anyway.
+    if (linearExtension && this.cachedDoc === null) {
+      this.materialize();
     }
+
+    if (!this.relayMode) {
+      if (linearExtension && this.cachedDoc !== null) {
+        event.edit.validate(this.cachedDoc);
+      } else {
+        this.validateEventAgainstCausalState(event);
+      }
+    }
+
     this.events.set(event.id.format(), event);
+
+    if (linearExtension && this.cachedDoc !== null && this.cachedOrder !== null) {
+      // In-place extension: the new event is concurrent with nothing in the
+      // cache, so resolveAgainst would return the edit unchanged.
+      this._frontierIds = [event.id];
+      this.cachedOrder.push(event.id.format());
+      if (this.cachedApplied !== null) {
+        this.cachedApplied.push({ ev: event, edit: event.edit });
+      }
+      event.edit.apply(this.cachedDoc);
+      return;
+    }
+
     const parentKeys = new Set(event.parents.map((p) => p.format()));
     this._frontierIds = [
       ...this._frontierIds.filter((h) => !parentKeys.has(h.format())),
@@ -216,6 +211,24 @@ export class EventGraph {
     ].sort((a, b) => a.compareTo(b));
     this.cachedOrder = null;
     this.cachedApplied = null;
+    this.cachedDoc = null;
+    this.cachedConflicts = null;
+  }
+
+  private isLinearExtension(event: Event): boolean {
+    if (event.parents.length !== this._frontierIds.length) return false;
+    const parentKeys = new Set(event.parents.map((p) => p.format()));
+    for (const h of this._frontierIds) {
+      if (!parentKeys.has(h.format())) return false;
+    }
+    return true;
+  }
+
+  private canExtendCacheLinearly(event: Event): boolean {
+    if (this.cachedApplied === null) return false;
+    if (this.cachedOrder === null) return false;
+    if (this.cachedDoc === null) return false;
+    return this.isLinearExtension(event);
   }
 
   private validateEventAgainstCausalState(event: Event): void {
@@ -335,9 +348,9 @@ export class EventGraph {
       childKeysByMissingParent,
       readyKeys,
     );
-    if (this.bufferedEvents.length > MAX_BUFFERED_REMOTE_EVENTS) {
+    if (this.bufferedEvents.length > this.maxBufferedRemoteEvents) {
       throw new Error(
-        `Cannot buffer more than ${MAX_BUFFERED_REMOTE_EVENTS} out-of-order remote events.`,
+        `Cannot buffer more than ${this.maxBufferedRemoteEvents} out-of-order remote events.`,
       );
     }
     return [...this.bufferedEvents];
@@ -436,10 +449,20 @@ export class EventGraph {
       }
     }
     this.cachedApplied = applied;
+    this.cachedDoc = doc;
     return applied;
   }
 
   materialize(frontier?: EventId[]): MaterializeResult {
+    if (
+      frontier === undefined && this.cachedDoc !== null &&
+      this.cachedConflicts !== null
+    ) {
+      return {
+        doc: this.cachedDoc.clone(),
+        conflicts: this.cachedConflicts.map((c) => c.clone()),
+      };
+    }
     const ordered = frontier
       ? this.computeTopologicalOrder(frontier)
       : (this.cachedOrder ??= this.computeTopologicalOrder());
@@ -455,6 +478,10 @@ export class EventGraph {
       }
       edit.apply(doc);
       applied.push({ ev, edit });
+    }
+    if (frontier === undefined) {
+      this.cachedDoc = doc.clone();
+      this.cachedConflicts = conflicts.map((c) => c.clone());
     }
     return { doc, conflicts };
   }
@@ -495,6 +522,8 @@ export class EventGraph {
     this._frontierIds = [];
     this.cachedOrder = null;
     this.cachedApplied = null;
+    this.cachedDoc = null;
+    this.cachedConflicts = null;
   }
 
   /** Returns a serializable snapshot of all known events for UI inspection. */
@@ -507,7 +536,7 @@ export class EventGraph {
       editKind: ev.edit.kind,
       target: ev.edit.target.format(),
       vectorClock: ev.clock.toRecord(),
-      editDescription: describeEdit(ev.edit),
+      editDescription: ev.edit.describe(),
     }));
   }
 }

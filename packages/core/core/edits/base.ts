@@ -47,6 +47,11 @@ export abstract class Edit {
   /** Computes the inverse edit that undoes this edit given the pre-edit document state. */
   abstract computeInverse(preDoc: Node): Edit;
 
+  /** Returns a human-readable description of what this edit does. */
+  describe(): string {
+    return `${this.kind} at ${this.target.format()}`;
+  }
+
   /** All selectors involved in this edit (target and any secondary selectors). */
   get selectors(): Selector[] {
     return [this.target];
@@ -257,6 +262,25 @@ export class NoOpEdit extends Edit {
       reason: this.reason,
     };
   }
+
+  override describe(): string {
+    return `No-op: ${this.reason}`;
+  }
+}
+
+/** Returns a human-readable snippet describing a node for edit descriptions. */
+export function describeNodeForEdit(node: Node): string {
+  if (node instanceof PrimitiveNode) {
+    const v = node.value;
+    return ` = ${typeof v === "string" ? `"${v}"` : String(v)}`;
+  }
+  if (node instanceof RecordNode) {
+    return ` <${node.tag}>`;
+  }
+  if (node instanceof ListNode) {
+    return ` [${node.tag}](${node.items.length} items)`;
+  }
+  return "";
 }
 
 /**

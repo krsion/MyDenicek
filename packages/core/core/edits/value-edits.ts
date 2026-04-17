@@ -116,6 +116,13 @@ export class ApplyPrimitiveEdit extends NoOpOnRemovedTargetEdit {
       args: this.args,
     };
   }
+
+  override describe(): string {
+    const argsStr = this.args.map((a) =>
+      typeof a === "string" ? `"${a}"` : String(a)
+    ).join(", ");
+    return `${this.editName}(${argsStr}) at ${this.target.format()}`;
+  }
 }
 
 registerRemoteEditDecoder<EncodedApplyPrimitiveEdit>(

@@ -97,6 +97,10 @@ export class UpdateTagEdit extends NoOpOnRemovedTargetEdit {
       tag: this.tag,
     };
   }
+
+  override describe(): string {
+    return `Update tag → '${this.tag}' at ${this.target.format()}`;
+  }
 }
 
 registerRemoteEditDecoder<EncodedUpdateTagEdit>(
@@ -292,6 +296,10 @@ export class CopyEdit extends Edit {
       source: this.source.format(),
     };
   }
+
+  override describe(): string {
+    return `Copy ${this.source.format()} → ${this.target.format()}`;
+  }
 }
 
 registerRemoteEditDecoder<EncodedCopyEdit>(
@@ -399,6 +407,10 @@ export class WrapRecordEdit extends NoOpOnRemovedTargetEdit {
       tag: this.tag,
     };
   }
+
+  override describe(): string {
+    return `Wrap ${this.target.format()} in record '${this.field}' <${this.tag}>`;
+  }
 }
 
 registerRemoteEditDecoder<EncodedWrapRecordEdit>(
@@ -493,6 +505,10 @@ export class WrapListEdit extends NoOpOnRemovedTargetEdit {
       target: this.target.format(),
       tag: this.tag,
     };
+  }
+
+  override describe(): string {
+    return `Wrap ${this.target.format()} in list <${this.tag}>`;
   }
 }
 

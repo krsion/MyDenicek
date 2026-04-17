@@ -77,6 +77,11 @@ export function validateFieldName(field: string): void {
   if (STRICT_INDEX_SEGMENT.test(field)) {
     throw new Error(`Field name '${field}' is reserved by selector syntax.`);
   }
+  if (field.startsWith("*") || field.startsWith("!") || field.startsWith("..")) {
+    throw new Error(
+      `Field name '${field}' is reserved by selector syntax (cannot start with '*', '!', or '..').`,
+    );
+  }
   const numericField = Number(field);
   if (
     numericField >= 0 && Number.isInteger(numericField) &&
@@ -104,7 +109,8 @@ export class Selector {
       );
     }
     const trimmed = path.trim();
-    if (trimmed === "" || trimmed === "/") return new Selector([]);
+    if (trimmed === "") return new Selector([]);
+    if (trimmed === "/") return new Selector(["/"]);
     const isAbs = trimmed.startsWith("/");
     const parts = trimmed
       .replace(/^\//, "")

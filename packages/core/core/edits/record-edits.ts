@@ -1,4 +1,4 @@
-import { type Edit, NoOpOnRemovedTargetEdit } from "./base.ts";
+import { describeNodeForEdit, type Edit, NoOpOnRemovedTargetEdit } from "./base.ts";
 import {
   mapSelector,
   REMOVED_SELECTOR,
@@ -88,6 +88,13 @@ export class RecordAddEdit extends NoOpOnRemovedTargetEdit {
       node: this.node.toPlain() as PlainNode,
     };
   }
+
+  override describe(): string {
+    const field = String(this.target.lastSegment);
+    return `Add '${field}'${describeNodeForEdit(this.node)} to ${
+      this.target.parent.format() || "root"
+    }`;
+  }
 }
 
 registerRemoteEditDecoder<EncodedRecordAddEdit>(
@@ -156,6 +163,11 @@ export class RecordDeleteEdit extends NoOpOnRemovedTargetEdit {
   }
   encodeRemoteEdit(): EncodedRecordDeleteEdit {
     return { kind: "RecordDeleteEdit", target: this.target.format() };
+  }
+
+  override describe(): string {
+    const field = String(this.target.lastSegment);
+    return `Delete '${field}' from ${this.target.parent.format() || "root"}`;
   }
 }
 
@@ -232,6 +244,13 @@ export class RecordRenameFieldEdit extends NoOpOnRemovedTargetEdit {
       target: this.target.format(),
       to: this.to,
     };
+  }
+
+  override describe(): string {
+    const from = String(this.target.lastSegment);
+    return `Rename '${from}' → '${this.to}' in ${
+      this.target.parent.format() || "root"
+    }`;
   }
 }
 

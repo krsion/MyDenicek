@@ -1,6 +1,6 @@
 {
   "name": "@mydenicek/core",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "CRDT for collaborative editing of tagged document trees.",
   "license": "MIT",
   "exports": {

@@ -95,16 +95,14 @@ export class Event {
   resolveAgainst(applied: { ev: Event; edit: Edit }[], doc: Node): Edit {
     let edit: Edit = this.edit;
     let sawConcurrentEdit = false;
-    let sawConcurrentTransform = false;
     for (const prior of applied) {
       if (this.clock.dominates(prior.ev.clock)) continue;
       if (this.isConcurrentWith(prior.ev)) {
         sawConcurrentEdit = true;
-        sawConcurrentTransform = true;
         edit = transformLaterConcurrentEdit(prior.edit, edit);
       }
     }
-    if (sawConcurrentTransform && !edit.canApply(doc)) {
+    if (sawConcurrentEdit && !edit.canApply(doc)) {
       return new NoOpEdit(
         edit.target,
         `Concurrent replay left '${edit.target.format()}' unavailable before ${this.edit.constructor.name} could replay.`,
