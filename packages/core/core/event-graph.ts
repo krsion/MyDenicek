@@ -380,7 +380,7 @@ export class EventGraph {
     const { missingParentCountsByKey, childKeysByMissingParent, readyKeys } =
       this.computePendingDependencyIndex(pendingByKey);
 
-    // Stage 4: flush causally ready events, decrementing their dependents until
+    // Stage 3: flush causally ready events, decrementing their dependents until
     // no more buffered events can be inserted in this pass.
     // Anything left still depends on parents we have not seen yet.
     this.bufferedEvents = this.drainReadyEvents(
