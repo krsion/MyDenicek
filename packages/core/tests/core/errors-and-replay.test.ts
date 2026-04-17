@@ -870,9 +870,6 @@ Deno.test("commit throws on pop-back from empty list", () => {
   assertThrows(() => core.popBack("items"), Error, "list is empty");
 });
 
-
-
-
 Deno.test("replay of a set edit follows a later rename of its own target field", () => {
   // Regression: resolveReplayEdit must rewrite an event's target through
   // every later structural edit, including those authored by the same peer.

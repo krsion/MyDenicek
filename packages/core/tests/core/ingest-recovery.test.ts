@@ -42,7 +42,7 @@ Deno.test("ingestEvents: conflicting payloads throw ConflictingEventPayloadError
   const err = assertThrows(
     () => graph.ingestEvents([a, aPrime]),
     ConflictingEventPayloadError,
-  );
+  ) as ConflictingEventPayloadError;
   assertEquals(err.key, "alice:0");
 });
 
@@ -70,4 +70,3 @@ Deno.test("discardBufferedEvent recovers from a poisoned buffer", () => {
   graph.ingestEvents([]);
   assertEquals(graph.discardBufferedEvent("alice:5"), false);
 });
-
