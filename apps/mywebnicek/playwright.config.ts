@@ -9,6 +9,9 @@ export default defineConfig({
   use: {
     baseURL: BASE_URL,
     headless: true,
+    screenshot: "only-on-failure",
+    trace: "retain-on-failure",
+    video: "retain-on-failure",
   },
   projects: [
     { name: "chromium", use: { browserName: "chromium" } },

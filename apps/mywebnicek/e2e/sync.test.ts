@@ -44,13 +44,15 @@ test.describe("mydenicek E2E", () => {
     await aliceInput.fill("/header/title/text set ALICE-EDIT");
     await aliceInput.press("Enter");
 
+    // Alice should see her own edit immediately (localizes UI vs. sync failures)
+    await expect(alice.locator("text=ALICE-EDIT").first()).toBeVisible({
+      timeout: 10_000,
+    });
+
     // Wait for sync — Bob should see Alice's edit
     await expect(bob.locator("text=ALICE-EDIT").first()).toBeVisible({
       timeout: 30_000,
     });
-
-    // Verify Alice also sees it
-    await expect(alice.locator("text=ALICE-EDIT").first()).toBeVisible();
 
     await aliceCtx.close();
     await bobCtx.close();
