@@ -869,3 +869,25 @@ Deno.test("commit throws on pop-back from empty list", () => {
   });
   assertThrows(() => core.popBack("items"), Error, "list is empty");
 });
+
+
+
+
+Deno.test("replay of a set edit follows a later rename of its own target field", () => {
+  // Regression: resolveReplayEdit must rewrite an event's target through
+  // every later structural edit, including those authored by the same peer.
+  const core = new Denicek("alice", {
+    $tag: "root",
+    person: { $tag: "person", name: "Bob" },
+  });
+
+  const setEventId = core.set("person/name", "Carol");
+  core.rename("person", "name", "fullName");
+
+  core.repeatEditFromEventId(setEventId);
+
+  assertEquals(core.toPlain(), {
+    $tag: "root",
+    person: { $tag: "person", fullName: "Carol" },
+  });
+});

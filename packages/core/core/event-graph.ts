@@ -9,6 +9,23 @@ import { VectorClock } from "./vector-clock.ts";
 
 export type MaterializeResult = { doc: Node; conflicts: Node[] };
 
+/**
+ * Thrown by {@link EventGraph.ingestEvents} when two events share an
+ * `EventId` but carry different payloads (either between the buffer and an
+ * incoming batch, or between two events in the same incoming batch).
+ *
+ * Recovery: callers may drop the offending event from their retry set and
+ * use {@link EventGraph.discardBufferedEvent} to remove any buffered copy
+ * before re-ingesting. The key of the conflicting event is exposed on the
+ * error so sync-layer code can act on it without re-parsing the message.
+ */
+export class ConflictingEventPayloadError extends Error {
+  constructor(readonly key: string) {
+    super(`Conflicting payload for event '${key}'.`);
+    this.name = "ConflictingEventPayloadError";
+  }
+}
+
 /** A serializable snapshot of a single event for UI inspection. */
 export type EventSnapshot = {
   id: string;
@@ -114,6 +131,13 @@ export class EventGraph {
    * that changed the document shape after the source event was recorded. This
    * lets replay follow renamed, wrapped, or reindexed targets instead of using
    * the source event's stale original selectors.
+   *
+   * Notably, this transformation applies even when the later structural edit
+   * was authored by the *same* peer as the source event. A user who records a
+   * `set` against `person/name`, then renames `name` to `fullName`, and then
+   * replays the original event, will see the replay hit `person/fullName`.
+   * Selector rewriting is agnostic to authorship; only the topological order
+   * of structural edits matters.
    *
    * Throws when the source event is unknown, already resolves to a conflict, or
    * later structural history has removed the replay target entirely.
@@ -274,13 +298,13 @@ export class EventGraph {
       const existing = this.events.get(key);
       if (existing != null) {
         if (!existing.equals(event)) {
-          throw new Error(`Conflicting payload for event '${key}'.`);
+          throw new ConflictingEventPayloadError(key);
         }
         continue;
       }
       const pendingEvent = pendingByKey[key];
       if (pendingEvent !== undefined && !pendingEvent.equals(event)) {
-        throw new Error(`Conflicting payload for event '${key}'.`);
+        throw new ConflictingEventPayloadError(key);
       }
       pendingByKey[key] = event;
     }
@@ -371,6 +395,23 @@ export class EventGraph {
       );
     }
     return [...this.bufferedEvents];
+  }
+
+  /**
+   * Removes a buffered out-of-order event by its id key, if present.
+   *
+   * Intended as a recovery hook for sync-layer code that has caught a
+   * {@link ConflictingEventPayloadError} or otherwise decided that a
+   * specific buffered event is poisoned and will never become applicable.
+   * Returns `true` when an event was dropped. Events already inserted into
+   * the graph cannot be discarded through this method.
+   */
+  discardBufferedEvent(key: string): boolean {
+    const before = this.bufferedEvents.length;
+    this.bufferedEvents = this.bufferedEvents.filter(
+      (ev) => ev.id.format() !== key,
+    );
+    return this.bufferedEvents.length !== before;
   }
 
   /** Returns events not known by a peer with the given frontiers. */

@@ -26,6 +26,14 @@ export abstract class Edit {
    * Mutates `doc` in place to apply this edit.
    * Concrete edits throw on type mismatch or missing path.
    * Explicit replay no-ops are surfaced by materialization as conflicts.
+   *
+   * **Atomicity contract.** Implementations must be effectively atomic: if
+   * `apply` throws, the document passed in MUST be left observationally
+   * unchanged. `EventGraph`'s incremental cache path relies on this to
+   * decide whether to keep or invalidate the cached document when an edit
+   * fails mid-replay. Edits that perform multiple mutations (e.g.
+   * `CompositeEdit`) should therefore either validate all preconditions
+   * up-front (via `canApply`/`validate`) or operate on a staged copy.
    */
   abstract apply(doc: Node): void;
   /** Returns whether this edit can be applied to `doc` without throwing. */
