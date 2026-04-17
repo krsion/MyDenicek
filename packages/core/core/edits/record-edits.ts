@@ -15,10 +15,7 @@ import {
   type EncodedRemoteEdit,
   registerRemoteEditDecoder,
 } from "../remote-edit-codec.ts";
-import {
-  rewriteFormulaArgReferences,
-  rewriteInsertEditRefs,
-} from "./ref-rewriting.ts";
+import { rewriteInsertEditRefs } from "./ref-rewriting.ts";
 
 type EncodedRecordAddEdit = Extract<
   EncodedRemoteEdit,
@@ -207,10 +204,6 @@ export class RecordRenameFieldEdit extends NoOpOnRemovedTargetEdit {
     doc.updateReferences(
       (abs) => this.transformSelectorOrThrow(abs),
       referenceTargets,
-    );
-    rewriteFormulaArgReferences(
-      doc,
-      (abs) => this.transformSelectorOrThrow(abs),
     );
   }
 

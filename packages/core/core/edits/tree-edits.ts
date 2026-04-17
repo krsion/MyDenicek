@@ -14,7 +14,6 @@ import {
 } from "../remote-edit-codec.ts";
 import { UnwrapListEdit, UnwrapRecordEdit } from "./unwrap-edits.ts";
 import {
-  rewriteFormulaArgReferences,
   rewriteInsertEditRefs,
 } from "./ref-rewriting.ts";
 
@@ -354,10 +353,6 @@ export class WrapRecordEdit extends NoOpOnRemovedTargetEdit {
       (abs) => this.transformSelectorOrThrow(abs),
       referenceTargets,
     );
-    rewriteFormulaArgReferences(
-      doc,
-      (abs) => this.transformSelectorOrThrow(abs),
-    );
   }
 
   canApply(doc: Node): boolean {
@@ -472,10 +467,6 @@ export class WrapListEdit extends NoOpOnRemovedTargetEdit {
     doc.updateReferences(
       (abs) => this.transformReferenceSelector(abs),
       referenceTargets,
-    );
-    rewriteFormulaArgReferences(
-      doc,
-      (abs) => this.transformReferenceSelector(abs),
     );
   }
 

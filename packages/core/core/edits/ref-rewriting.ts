@@ -1,7 +1,6 @@
 import { Selector, type SelectorSegment } from "../selector.ts";
 import type { Node } from "../nodes/base.ts";
 import { ReferenceNode } from "../nodes/reference-node.ts";
-import { RecordNode } from "../nodes/record-node.ts";
 import { RecordAddEdit } from "./record-edits.ts";
 import { ListPushBackEdit, ListPushFrontEdit } from "./list-edits.ts";
 import type { Edit } from "./base.ts";
@@ -83,59 +82,6 @@ export function rewriteRefsInPayload(
       "..",
     ) as SelectorSegment[];
     current.selector = new Selector([...ups, ...match.rest.segments]);
-  });
-}
-
-/**
- * Rewrites `$ref` selectors inside operation-based formula argument lists
- * (`$tag: "x-formula"`) after a structural edit has been applied to the
- * document.
- *
- * The formula engine resolves `$ref` paths in `args` relative to the
- * **formula node's path**, not the `$ref` node's tree position. The regular
- * `updateReferences()` mechanism resolves from the tree position, which for
- * a ref at `formulaPath/args/i` produces an incorrect absolute path.  This
- * function corrects the mismatch by re-resolving from the formula's path.
- *
- * **Must be called after `updateReferences()`** — the regular pass is a
- * no-op for these refs (the tree-position-based resolution doesn't match
- * the structural edit's target), so this second pass is safe.
- */
-export function rewriteFormulaArgReferences(
-  doc: Node,
-  transform: (abs: Selector) => Selector,
-): void {
-  doc.forEach((path, node) => {
-    if (!(node instanceof RecordNode)) return;
-    if (node.tag !== "x-formula") return;
-
-    const argsNode = node.fields["args"];
-    if (argsNode === undefined) return;
-
-    // Walk all descendants of the args subtree, rewriting any
-    // ReferenceNode using the formula's path as resolution base.
-    const formulaPath = path;
-    argsNode.forEach((_relativePath, descendant) => {
-      if (!(descendant instanceof ReferenceNode)) return;
-
-      const resolved = ReferenceNode.resolveReference(
-        formulaPath,
-        descendant.selector,
-      );
-      if (resolved === null) return;
-
-      const mappedBase = transform(formulaPath);
-      const mappedRef = transform(resolved);
-
-      if (descendant.selector.isAbsolute) {
-        descendant.selector = new Selector(["/", ...mappedRef.segments]);
-      } else {
-        descendant.selector = ReferenceNode.makeRelative(
-          mappedBase,
-          mappedRef,
-        );
-      }
-    });
   });
 }
 

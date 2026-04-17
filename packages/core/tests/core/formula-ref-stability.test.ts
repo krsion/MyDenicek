@@ -19,7 +19,7 @@ Deno.test("formula $ref is rewritten when concurrent rename changes referenced f
       output: {
         $tag: "x-formula",
         operation: "uppercase",
-        args: { $tag: "args", $items: [{ $ref: "../input" }] },
+        args: { $tag: "args", $items: [{ $ref: "../../../input" }] },
       },
     },
   } as const;
@@ -68,7 +68,7 @@ Deno.test("formula $ref works when concurrent edit changes referenced value", ()
       output: {
         $tag: "x-formula",
         operation: "uppercase",
-        args: { $tag: "args", $items: [{ $ref: "../input" }] },
+        args: { $tag: "args", $items: [{ $ref: "../../../input" }] },
       },
     },
   } as const;
@@ -109,7 +109,7 @@ Deno.test("formula $ref is rewritten when concurrent wrap changes path structure
       output: {
         $tag: "x-formula",
         operation: "uppercase",
-        args: { $tag: "args", $items: [{ $ref: "../input" }] },
+        args: { $tag: "args", $items: [{ $ref: "../../../input" }] },
       },
     },
   } as const;

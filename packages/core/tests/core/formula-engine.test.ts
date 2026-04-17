@@ -154,7 +154,7 @@ Deno.test("$ref with relative path using ..", () => {
     value: 7,
     group: {
       $tag: "group",
-      formula: makeFormula("sum", [{ $ref: "../../value" }]),
+      formula: makeFormula("sum", [{ $ref: "../../../../value" }]),
     } as PlainRecord,
   };
   const innerGroup = doc.group as PlainRecord;

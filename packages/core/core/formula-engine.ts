@@ -488,11 +488,16 @@ function evaluateFormulaInner(
   // Resolve each argument into primitive values
   const resolvedArgs: PrimitiveValue[] = [];
 
-  for (const argNode of argNodes) {
+  for (let i = 0; i < argNodes.length; i++) {
+    const argNode = argNodes[i]!;
+    // Resolve from the arg's tree position (formulaPath/args/i) so that
+    // relative $ref paths use the same base as ReferenceNode, allowing
+    // updateReferences() to retarget them through structural edits.
+    const argTreePath = formulaPath + "/args/" + i;
     const result = resolveArgument(
       argNode,
       root,
-      formulaPath,
+      argTreePath,
       opName as string,
       visiting,
       depth,
