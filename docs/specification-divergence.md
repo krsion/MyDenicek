@@ -88,7 +88,7 @@ original Denicek paper.
 | **FR-18** | Recording controls               | ⚠️ **Partial** | Core replay API exists; no dedicated recording UI controls.                                                                                        |
 | **FR-19** | Replay controls                  | ⚠️ **Partial** | Core replay API exists; no dedicated replay UI controls.                                                                                           |
 | **FR-20** | Keyboard shortcuts               | ✅ **Met**     | `Ctrl+Z` (undo), `Ctrl+Shift+Z` / `Ctrl+Y` (redo) implemented in `MyWebnicekApp`[^48].                                                             |
-| **FR-21** | WebSocket synchronization        | ✅ **Met**     | `packages/sync` with room-based WebSocket sync[^49].                                                                                        |
+| **FR-21** | WebSocket synchronization        | ✅ **Met**     | `packages/sync` with room-based WebSocket sync[^49].                                                                                               |
 | **FR-22** | Formula rendering                | ✅ **Met**     | Formula nodes display with purple `ƒ operation = result` styling. Formula results panel shows all evaluated formulas with error highlighting[^50]. |
 | **FR-23** | Action node rendering as buttons | ❌ **Not met** | No button rendering for action nodes.                                                                                                              |
 

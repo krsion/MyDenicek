@@ -77,7 +77,9 @@ export function validateFieldName(field: string): void {
   if (STRICT_INDEX_SEGMENT.test(field)) {
     throw new Error(`Field name '${field}' is reserved by selector syntax.`);
   }
-  if (field.startsWith("*") || field.startsWith("!") || field.startsWith("..")) {
+  if (
+    field.startsWith("*") || field.startsWith("!") || field.startsWith("..")
+  ) {
     throw new Error(
       `Field name '${field}' is reserved by selector syntax (cannot start with '*', '!', or '..').`,
     );

@@ -1,4 +1,8 @@
-import { describeNodeForEdit, type Edit, NoOpOnRemovedTargetEdit } from "./base.ts";
+import {
+  describeNodeForEdit,
+  type Edit,
+  NoOpOnRemovedTargetEdit,
+} from "./base.ts";
 import {
   mapSelector,
   REMOVED_SELECTOR,

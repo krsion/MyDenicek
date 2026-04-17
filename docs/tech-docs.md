@@ -92,9 +92,9 @@ The project is a unified Deno monorepo:
   sync protocol.
 - `packages/react` — `@mydenicek/react` on JSR. React hook for reactive Denicek
   usage.
-- `packages/sync` — Sync protocol, sync room, and WebSocket
-  client/server. The server runs in **relay mode** — it stores and forwards
-  events without materializing documents.
+- `packages/sync` — Sync protocol, sync room, and WebSocket client/server. The
+  server runs in **relay mode** — it stores and forwards events without
+  materializing documents.
 - `apps/mywebnicek` — React 19 web application with command bar, event graph
   visualization, and formative examples. Deployed to GitHub Pages.
 - `apps/sync-server` — The runnable WebSocket sync server. Deployed to Azure

@@ -1,8 +1,5 @@
 import { BinaryHeap } from "@std/data-structures/binary-heap";
-import {
-  type Edit,
-  NoOpEdit,
-} from "./edits.ts";
+import { type Edit, NoOpEdit } from "./edits.ts";
 import { Event } from "./event.ts";
 import { EventId } from "./event-id.ts";
 import type { Node } from "./nodes.ts";
@@ -192,7 +189,9 @@ export class EventGraph {
 
     this.events.set(event.id.format(), event);
 
-    if (linearExtension && this.cachedDoc !== null && this.cachedOrder !== null) {
+    if (
+      linearExtension && this.cachedDoc !== null && this.cachedOrder !== null
+    ) {
       // In-place extension: the new event is concurrent with nothing in the
       // cache, so resolveAgainst would return the edit unchanged.
       this._frontierIds = [event.id];
