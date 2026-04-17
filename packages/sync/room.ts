@@ -228,7 +228,13 @@ export class SyncRoom {
     const roomFrontiers = this.roomPeer.frontiers;
     if (roomFrontiers.length === 0) return null;
 
-    // All active peers must have acknowledged the same frontier as the room
+    // All active peers must have acknowledged the same frontier as the room.
+    // This is conservative: compaction only triggers when all peers are fully
+    // synchronized. A more aggressive approach could compute the causal-past
+    // intersection across all peers, allowing compaction of the common prefix
+    // even when peers have slightly different frontiers. The conservative
+    // approach is chosen for safety — it guarantees no peer loses events that
+    // only they have seen.
     const roomFrontierSet = new Set(roomFrontiers);
     for (const peerFrontier of peerFrontierSets) {
       const peerSet = new Set(peerFrontier);
