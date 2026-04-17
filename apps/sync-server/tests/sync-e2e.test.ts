@@ -158,7 +158,7 @@ Deno.test({
     const room = `r-${crypto.randomUUID().slice(0, 6)}`;
     const dkA = new Denicek("peerA");
     const dkB = new Denicek("peerB");
-    const initialHash = computeDocumentHash(dkA.materialize());
+    const initialHash = await computeDocumentHash(dkA.materialize());
     const cA = new SyncClient({
       url,
       roomId: room,
@@ -265,7 +265,7 @@ Deno.test({
     const room = `r-${crypto.randomUUID().slice(0, 6)}`;
 
     const initial = { $tag: "app", counter: { $tag: "p", count: 0 } };
-    const hash = computeDocumentHash(initial);
+    const hash = await computeDocumentHash(initial);
 
     const dkA = new Denicek("peerA", initial);
     const dkB = new Denicek("peerB", initial);
@@ -505,7 +505,7 @@ Deno.test({
     const room = `r-${crypto.randomUUID().slice(0, 6)}`;
     const dkA = new Denicek("peerA");
     const dkB = new Denicek("peerB");
-    const hash = computeDocumentHash(dkA.materialize());
+    const hash = await computeDocumentHash(dkA.materialize());
     const cA = new SyncClient({
       url,
       roomId: room,
@@ -580,7 +580,7 @@ Deno.test({
     const room = `r-${crypto.randomUUID().slice(0, 6)}`;
     const dkA = new Denicek("peerA");
     const dkB = new Denicek("peerB");
-    const hash = computeDocumentHash(dkA.materialize());
+    const hash = await computeDocumentHash(dkA.materialize());
     const cA = new SyncClient({
       url,
       roomId: room,

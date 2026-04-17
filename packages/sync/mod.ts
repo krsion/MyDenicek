@@ -31,7 +31,11 @@ export type {
 export { SyncRoom } from "./room.ts";
 export { createSyncServer } from "./server.ts";
 export type { SyncServerHandle, SyncServerOptions } from "./server.ts";
-export { computeDocumentHash, SyncClient } from "./client.ts";
+export {
+  computeDocumentHash,
+  computeDocumentHashSync,
+  SyncClient,
+} from "./client.ts";
 export type { SyncClientOptions } from "./client.ts";
 
 // Re-export core types used in the public API so deno doc --lint is satisfied.

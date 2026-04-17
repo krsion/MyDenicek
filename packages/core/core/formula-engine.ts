@@ -173,7 +173,7 @@ registerFormulaOperation("abs", (args) => {
 });
 
 registerFormulaOperation("concat", (args) => {
-  return args.map(String).join("");
+  return args.map((a) => a == null ? "" : String(a)).join("");
 });
 
 registerFormulaOperation("uppercase", (args) => {

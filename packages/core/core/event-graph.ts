@@ -317,13 +317,6 @@ export class EventGraph {
     return true;
   }
 
-  private canExtendCacheLinearly(event: Event): boolean {
-    if (this.cachedApplied === null) return false;
-    if (this.cachedOrder === null) return false;
-    if (this.cachedDoc === null) return false;
-    return this.isLinearExtension(event);
-  }
-
   private validateEventAgainstCausalState(event: Event): void {
     const { doc } = this.materialize(event.parents);
     event.edit.validate(doc);
@@ -583,7 +576,8 @@ export class EventGraph {
 
   /**
    * Find the best checkpoint: the longest cached prefix of the current
-   * topological order.
+   * topological order. Promotes the chosen checkpoint to most-recently-used
+   * so that eviction (which deletes the oldest Map entry) behaves as LRU.
    */
   private findBestCheckpoint(ordered: string[]): {
     doc: Node;
@@ -595,8 +589,9 @@ export class EventGraph {
       applied: { ev: Event; edit: Edit }[];
       startIndex: number;
     } | null = null;
+    let bestKey: string | null = null;
 
-    for (const [, cached] of this.checkpointCache) {
+    for (const [key, cached] of this.checkpointCache) {
       if (cached.order.length >= ordered.length) continue;
       // Verify the cached order is a prefix of our current order
       let isPrefix = true;
@@ -614,8 +609,18 @@ export class EventGraph {
           applied: [...cached.applied],
           startIndex: cached.order.length,
         };
+        bestKey = key;
       }
     }
+
+    // Promote the used checkpoint to most-recently-used (end of Map) so
+    // that the FIFO eviction in insertEvent() behaves as LRU.
+    if (bestKey !== null) {
+      const entry = this.checkpointCache.get(bestKey)!;
+      this.checkpointCache.delete(bestKey);
+      this.checkpointCache.set(bestKey, entry);
+    }
+
     return best;
   }
 

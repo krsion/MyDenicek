@@ -8,12 +8,50 @@ import {
 } from "./protocol.ts";
 
 /**
- * Compute a short hash of a PlainNode for initial document validation.
+ * Produce a canonical JSON string with deterministically sorted object keys.
+ * This ensures two peers that construct the same logical document always
+ * produce the same hash, regardless of property insertion order.
+ */
+function canonicalStringify(value: unknown): string {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return "[" + value.map(canonicalStringify).join(",") + "]";
+  }
+  const keys = Object.keys(value).sort();
+  const pairs = keys.map((k) =>
+    JSON.stringify(k) + ":" +
+    canonicalStringify((value as Record<string, unknown>)[k])
+  );
+  return "{" + pairs.join(",") + "}";
+}
+
+/**
+ * Compute a SHA-256 hash of a PlainNode for initial document validation.
  * Call this on your initial document BEFORE any edits and pass the result
  * to `SyncClientOptions.initialDocumentHash`.
+ *
+ * Uses the Web Crypto API (`crypto.subtle.digest`), which is available in
+ * both Deno and modern browsers. The input is canonicalized (sorted keys)
+ * so that logically identical documents always produce the same hash.
  */
-export function computeDocumentHash(doc: PlainNode): string {
-  const json = JSON.stringify(doc);
+export async function computeDocumentHash(doc: PlainNode): Promise<string> {
+  const json = canonicalStringify(doc);
+  const data = new TextEncoder().encode(json);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = new Uint8Array(hashBuffer);
+  return Array.from(hashArray, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * Synchronous hash for use in contexts where async is not possible
+ * (e.g. test helpers). Uses the same canonical serialization as the
+ * async version but with a simple DJB2 hash.
+ * @deprecated Prefer {@link computeDocumentHash} for production use.
+ */
+export function computeDocumentHashSync(doc: PlainNode): string {
+  const json = canonicalStringify(doc);
   let h = 0;
   for (let i = 0; i < json.length; i++) {
     h = ((h << 5) - h + json.charCodeAt(i)) | 0;
@@ -57,7 +95,7 @@ export class SyncClient {
   private readonly roomId: string;
   private readonly document: Denicek;
   private readonly autoSyncIntervalMs: number;
-  private initialDocumentHash: string;
+  private initialDocumentHash: string | null;
   private initialDocument: PlainNode;
   private readonly onRemoteChange?: (
     document: Denicek,
@@ -80,8 +118,8 @@ export class SyncClient {
     this.autoSyncIntervalMs = options.autoSyncIntervalMs ?? 1000;
     this.initialDocument = options.initialDocument ??
       options.document.materialize();
-    this.initialDocumentHash = options.initialDocumentHash ??
-      computeDocumentHash(this.initialDocument);
+    // If caller provided a hash, use it. Otherwise, compute async on first sync.
+    this.initialDocumentHash = options.initialDocumentHash ?? null;
     this.onRemoteChange = options.onRemoteChange;
     this.onDisconnect = options.onDisconnect;
   }
@@ -104,15 +142,15 @@ export class SyncClient {
    * Resume syncing after a `pause()`. Replays buffered messages and
    * immediately syncs pending local edits.
    */
-  resume(): void {
+  async resume(): Promise<void> {
     if (!this._paused) return;
     this._paused = false;
     for (const msg of this.pauseBuffer) {
-      this.handleSocketMessage(msg);
+      await this.handleSocketMessage(msg);
     }
     this.pauseBuffer = [];
     this.startAutoSyncLoop();
-    this.syncNow();
+    await this.syncNow();
   }
 
   /** Build the full WebSocket URL with room query parameter. */
@@ -158,12 +196,17 @@ export class SyncClient {
   }
 
   /** Immediately send a sync request with any pending local events. */
-  syncNow(): void {
+  async syncNow(): Promise<void> {
     if (
       this._paused || this.socket === null ||
       this.socket.readyState !== WebSocket.OPEN
     ) {
       return;
+    }
+    if (this.initialDocumentHash === null) {
+      this.initialDocumentHash = await computeDocumentHash(
+        this.initialDocument,
+      );
     }
     const request = createSyncRequest(
       this.document,
@@ -196,7 +239,7 @@ export class SyncClient {
   }
 
   /** Dispatch an incoming WebSocket message to the appropriate handler. */
-  private handleSocketMessage(rawMessage: string): void {
+  private async handleSocketMessage(rawMessage: string): Promise<void> {
     if (this._paused) {
       this.pauseBuffer.push(rawMessage);
       return;
@@ -225,7 +268,9 @@ export class SyncClient {
     this.serverBootstrapped = true;
     if (syncResponse.compactedDocument !== undefined) {
       this.initialDocument = syncResponse.compactedDocument;
-      this.initialDocumentHash = computeDocumentHash(this.initialDocument);
+      this.initialDocumentHash = await computeDocumentHash(
+        this.initialDocument,
+      );
     }
     this.onRemoteChange?.(this.document, syncResponse);
   }

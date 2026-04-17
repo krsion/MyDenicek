@@ -15,17 +15,21 @@ collaborative tree-structured document editing.
 ### Model overview
 
 The document is abstracted as a flat record `[FieldName → Value ∪ {NULL}]`.
-Three edit types are modelled:
+Five edit types are modelled:
 
 | Edit | Semantics |
 |---|---|
 | `RecordAdd(field, value)` | Set a field to a value |
 | `RecordRename(from, to)` | Move the value from one field to another |
 | `ListPushBack(field, value)` | Set a field value (flat-model simplification of list append) |
+| `RecordDelete(field)` | Remove a field (set to NULL) |
+| `WrapRecord(field)` | Wrap a field's value (produces `"wrapped"` sentinel) |
 
 The key **transformation rule** mirrors the real implementation:
 when a `RecordRename(from → to)` is concurrent with another edit that
-targets field `from`, the target is rewritten to `to`.
+targets field `from`, the target is rewritten to `to`.  Delete and Wrap
+edits model the corresponding structural operations from the TypeScript
+implementation.
 
 Peers synchronize by sending their full event set (G-Set) to other peers.
 The receiver merges via set union — events are immutable and never deleted.
@@ -71,41 +75,56 @@ Model checking completed. No error has been found.
 
 All three invariants hold in every reachable state.
 
-### Verified configuration (2 peers, MaxSeq = 2, 2 fields)
+### Verified configurations
+
+**Default (2 peers, MaxSeq = 1, 2 fields, 5 edit types):**
 
 ```
-Peers = {p1, p2}, MaxSeq = 2, FieldNames = {"a", "b"}
-  → 34,735,481 states generated
-  → 11,461,961 distinct states
-  → depth 16, completed in ~7 minutes (20 workers)
+Peers = {p1, p2}, MaxSeq = 1, FieldNames = {"a", "b"}
+  → 4,593 distinct states
+  → depth 8, completed in ~1 second
   → No errors found
 ```
 
-The default `MydenicekCRDT.cfg` uses 3 peers / MaxSeq = 3 / 3 fields
-for broader coverage.  This configuration exercises far more concurrent
-scenarios but requires substantially more time (hours+).
+Covers all 14 × 14 = 196 concurrent pairwise edit interactions across
+5 edit types (Add, Rename, PushBack, Delete, WrapRecord).
+
+**Extended (2 peers, MaxSeq = 2, 1 field, 5 edit types):**
+
+```
+Peers = {p1, p2}, MaxSeq = 2, FieldNames = {"a"}
+  → 1,507,825 distinct states
+  → depth 16, completed in ~63 seconds (20 workers)
+  → No errors found
+```
+
+Covers multi-event sequences with all structural interactions
+(chains of wrap→add, delete→rename, etc.).
 
 ## Bounds and state-space estimates
 
 | Parameter | Default | Notes |
 |---|---|---|
-| Peers | 3 | Number of replicas |
-| MaxSeq | 3 | Max events per peer (9 total) |
-| FieldNames | 3 | `{"a", "b", "c"}` |
+| Peers | 2 | Number of replicas |
+| MaxSeq | 1 | Max events per peer (2 total) |
+| FieldNames | 2 | `{"a", "b"}` |
 | ValueSet | 2 | `{"v1", "v2"}` (hard-coded) |
-| Edit types | 3 | Add, Rename, PushBack |
+| Edit types | 5 | Add, Rename, PushBack, Delete, Wrap |
 
 Each peer can produce up to `MaxSeq` events, choosing from
 `|FieldNames| × |ValueSet|` Add edits +
 `|FieldNames| × (|FieldNames|-1)` Rename edits +
-`|FieldNames| × |ValueSet|` PushBack edits = **18 edits** per step
-(with 3 fields / 2 values).
+`|FieldNames| × |ValueSet|` PushBack edits +
+`|FieldNames|` Delete edits +
+`|FieldNames|` Wrap edits = **14 edits** per step
+(with 2 fields / 2 values).
 
 | Configuration | Distinct states | Time estimate |
 |---|---|---|
-| 2 peers, MaxSeq=2, 2 fields | ~11.5M | ~7 min |
-| 3 peers, MaxSeq=2, 2 fields | very large | hours |
-| 3 peers, MaxSeq=3, 3 fields | enormous | days+ |
+| 2 peers, MaxSeq=1, 2 fields | 4,593 | ~1 sec |
+| 2 peers, MaxSeq=2, 1 field | 1,507,825 | ~1 min |
+| 2 peers, MaxSeq=2, 2 fields | ~40M+ | ~1 hour+ |
+| 3 peers, MaxSeq=1, 2 fields | ~20M+ | ~1 hour+ |
 
 For a quick check, reduce bounds in the `.cfg` file.  Going beyond
 MaxSeq=3 is not recommended without symmetry reduction or distributed

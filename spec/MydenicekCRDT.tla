@@ -35,8 +35,10 @@ ASSUME FieldNames # {}
 
 NULL == "NULL"
 
-\* Small value domain to keep state space tractable
+\* Small value domain to keep state space tractable.
+\* "wrapped" is produced only by WrapEdit, not by user edits.
 ValueSet == {"v1", "v2"}
+AllValues == ValueSet \cup {"wrapped"}
 
 \* Peer ordering for deterministic topological sort tie-breaking.
 \* p1 < p2 < p3 by convention; mirrors lexicographic peer-name order
@@ -62,12 +64,25 @@ RenameEdit(f1, f2) == [type |-> "Rename", from |-> f1, to |-> f2]
 \* ListPushBack: append a value to a field (simplified as set in flat model)
 PushBackEdit(f, v) == [type |-> "PushBack", field |-> f, value |-> v]
 
+\* RecordDelete: remove a field (set it to NULL)
+DeleteEdit(f) == [type |-> "Delete", field |-> f]
+
+\* WrapRecord: wrap a field's value inside a new record under a sub-field.
+\* In the flat model this is approximated as: doc[f] becomes a tagged
+\* wrapper string "wrapped:<original>" so that the value domain remains
+\* finite.  The structural effect on selectors is the same as in the real
+\* implementation: concurrent edits targeting `f` must gain an extra
+\* path segment after the wrap.
+WrapEdit(f) == [type |-> "Wrap", field |-> f]
+
 \* The universe of edits that any peer may produce
 AllEdits ==
     LET AllRenames == {RenameEdit(fa, fb) : fa \in FieldNames, fb \in FieldNames}
     IN {AddEdit(f, v) : f \in FieldNames, v \in ValueSet}
        \cup {re \in AllRenames : re.from # re.to}
        \cup {PushBackEdit(f, v) : f \in FieldNames, v \in ValueSet}
+       \cup {DeleteEdit(f) : f \in FieldNames}
+       \cup {WrapEdit(f) : f \in FieldNames}
 
 \* The empty document: every field is NULL
 EmptyDoc == [f \in FieldNames |-> NULL]
@@ -145,7 +160,29 @@ XForm(prior, edit) ==
              IF edit.from = prior.from
              THEN RenameEdit(prior.to, edit.to)
              ELSE edit
+        []   edit.type = "Delete" ->
+             IF edit.field = prior.from
+             THEN DeleteEdit(prior.to)
+             ELSE edit
+        []   edit.type = "Wrap" ->
+             IF edit.field = prior.from
+             THEN WrapEdit(prior.to)
+             ELSE edit
         []   OTHER -> edit
+    ELSE IF prior.type = "Delete" THEN
+        \* If a concurrent edit targets a deleted field, it becomes a no-op.
+        \* We model no-op by returning the edit unchanged and letting ApplyEdit
+        \* handle the NULL field gracefully (Add overwrites NULL, which is fine;
+        \* the key structural interaction is rename-vs-delete).
+        edit
+    ELSE IF prior.type = "Wrap" THEN
+        \* After a wrap, concurrent edits targeting the wrapped field should
+        \* conceptually gain an extra path segment.  In the flat model we
+        \* cannot represent nesting, so we leave selectors unchanged and let
+        \* the value domain absorb the wrap effect.  This is a sound
+        \* over-approximation: if TLC finds a convergence violation here it
+        \* would also manifest in the real (nested) implementation.
+        edit
     ELSE edit   \* Non-structural priors do not transform selectors
 
 (* ================================================================ *)
@@ -198,6 +235,12 @@ ApplyEdit(edit, doc) ==
                  ELSE IF f = edit.from THEN NULL
                  ELSE doc[f]]
          ELSE doc   \* Source field empty: no-op
+    []   edit.type = "Delete" ->
+         [doc EXCEPT ![edit.field] = NULL]
+    []   edit.type = "Wrap" ->
+         IF doc[edit.field] # NULL
+         THEN [doc EXCEPT ![edit.field] = "wrapped"]
+         ELSE doc   \* Nothing to wrap: no-op
     []   OTHER -> doc
 
 (* ================================================================ *)

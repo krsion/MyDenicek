@@ -780,6 +780,66 @@ Deno.test("Converge: long operation sequences", () => {
   );
 });
 
+// ── 5-peer convergence ──────────────────────────────────────────────
+
+const NUM_PEERS_5 = 5;
+
+function runOps5(doc: PlainNode, ops: Op[]): Denicek[] {
+  const peers = Array.from(
+    { length: NUM_PEERS_5 },
+    (_, i) => new Denicek(`peer${i}`, doc),
+  );
+  for (const op of ops) {
+    if (op.kind === "sync") {
+      const a = op.a % NUM_PEERS_5;
+      const b = op.b % NUM_PEERS_5;
+      if (a !== b) sync(peers[a]!, peers[b]!);
+    } else {
+      const p = op.peer % NUM_PEERS_5;
+      applyEditOpWithExplicitRejection(peers[p]!, op.op);
+    }
+  }
+  return peers;
+}
+
+function syncAll5(peers: Denicek[]): void {
+  for (let pass = 0; pass < 3; pass++) {
+    for (let i = 0; i < peers.length; i++) {
+      for (let j = i + 1; j < peers.length; j++) {
+        sync(peers[i]!, peers[j]!);
+      }
+    }
+  }
+}
+
+Deno.test("Converge: 5-peer nested list-of-records + wildcards", () => {
+  fc.assert(
+    fc.property(
+      fc.array(arbNestedOp, { minLength: 10, maxLength: 50 }),
+      (ops) => {
+        const peers = runOps5(NESTED_DOC, ops);
+        syncAll5(peers);
+        assertConvergence(peers);
+      },
+    ),
+    { numRuns: 1000 },
+  );
+});
+
+Deno.test("Converge: 5-peer flat record ops", () => {
+  fc.assert(
+    fc.property(
+      fc.array(arbFlatRecordOp, { minLength: 10, maxLength: 50 }),
+      (ops) => {
+        const peers = runOps5(FLAT_RECORD_DOC, ops);
+        syncAll5(peers);
+        assertConvergence(peers);
+      },
+    ),
+    { numRuns: 1000 },
+  );
+});
+
 // ══════════════════════════════════════════════════════════════════════
 // 2. SYNC ORDER PERMUTATION
 //    Same edits, all N! sync pair orderings → same final state
