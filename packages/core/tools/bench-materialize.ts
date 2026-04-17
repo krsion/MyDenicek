@@ -95,6 +95,53 @@ function benchMergeFan(n: number): Row {
   };
 }
 
+function benchMergeForkFromShared(n: number): Row {
+  // Realistic scenario: both peers share N events of history, then diverge
+  // for a short branch. Checkpointing should help here: resume from the
+  // shared prefix instead of replaying all N+branch events.
+  const branchSize = Math.min(50, Math.floor(n / 10));
+  const sharedSize = n - branchSize * 2;
+  const initial: PlainNode = {
+    $tag: "root",
+    items: { $tag: "ul", $items: [] },
+    la: { $tag: "ul", $items: [] },
+    lb: { $tag: "ul", $items: [] },
+  };
+  const a = new Denicek("a", initial);
+  const b = new Denicek("b", initial);
+  // Build shared linear history
+  for (let i = 0; i < sharedSize; i++) {
+    a.pushBack("items", { $tag: "li", text: `shared${i}` });
+  }
+  // Sync shared history to b
+  for (const e of a.eventsSince(b.frontiers)) b.applyRemote(e);
+  // Prime caches (this is where the checkpoint will be saved)
+  a.materialize();
+  b.materialize();
+  // Both diverge
+  for (let i = 0; i < branchSize; i++) {
+    a.pushBack("la", { $tag: "li", text: `a${i}` });
+    b.pushBack("lb", { $tag: "li", text: `b${i}` });
+  }
+  // Merge
+  const t0 = now();
+  const fromA = a.eventsSince(b.frontiers);
+  const fromB = b.eventsSince(a.frontiers);
+  for (const e of fromA) b.applyRemote(e);
+  for (const e of fromB) a.applyRemote(e);
+  const total = now() - t0;
+  const m0 = now();
+  a.materialize();
+  const mat = now() - m0;
+  return {
+    workload: "merge-fork-shared",
+    n,
+    total_ms: total,
+    per_event_us: (total / n) * 1000,
+    materialize_ms: mat,
+  };
+}
+
 function main(): void {
   const sizes = [100, 500, 1000, 2000];
   const rows: Row[] = [];
@@ -102,6 +149,7 @@ function main(): void {
     rows.push(benchLocalAppend(n));
     rows.push(benchSyncLinear(n));
     rows.push(benchMergeFan(n));
+    rows.push(benchMergeForkFromShared(n));
   }
   console.log("workload,n,total_ms,per_event_us,materialize_ms");
   for (const r of rows) {

@@ -101,6 +101,18 @@ export class EventGraph {
   private cachedDoc: Node | null = null;
   private cachedConflicts: Node[] | null = null;
 
+  /**
+   * Checkpoint cache for incremental materialization. Stores document
+   * snapshots indexed by frontier hash so that merges can resume from
+   * the most recent fork point instead of replaying from scratch.
+   */
+  private checkpointCache: Map<string, {
+    doc: Node;
+    applied: { ev: Event; edit: Edit }[];
+    order: string[];
+  }> = new Map();
+  private static readonly MAX_CHECKPOINTS = 16;
+
   constructor(
     initial: Node,
     events?: Map<string, Event>,
@@ -263,6 +275,33 @@ export class EventGraph {
       ...this._frontierIds.filter((h) => !parentKeys.has(h.format())),
       event.id,
     ].sort((a, b) => a.compareTo(b));
+
+    // Save a checkpoint of the current cached state before invalidation.
+    // On the next materialize(), we can resume from this checkpoint
+    // instead of replaying from scratch.
+    if (
+      this.cachedDoc !== null && this.cachedApplied !== null &&
+      this.cachedOrder !== null
+    ) {
+      const fHash = this.frontierHash(
+        parentKeys.size > 0
+          ? event.parents
+          : this._frontierIds.filter((id) => id.format() !== event.id.format()),
+      );
+      if (!this.checkpointCache.has(fHash)) {
+        this.checkpointCache.set(fHash, {
+          doc: this.cachedDoc.clone(),
+          applied: [...this.cachedApplied],
+          order: [...this.cachedOrder],
+        });
+        // Evict oldest if over limit
+        while (this.checkpointCache.size > EventGraph.MAX_CHECKPOINTS) {
+          const oldest = this.checkpointCache.keys().next().value;
+          if (oldest !== undefined) this.checkpointCache.delete(oldest);
+        }
+      }
+    }
+
     this.cachedOrder = null;
     this.cachedApplied = null;
     this.cachedDoc = null;
@@ -509,9 +548,17 @@ export class EventGraph {
   private ensureCachedApplied(): { ev: Event; edit: Edit }[] {
     if (this.cachedApplied !== null) return this.cachedApplied;
     const ordered = this.cachedOrder ??= this.computeTopologicalOrder();
-    const doc = this.initial.clone();
-    const applied: { ev: Event; edit: Edit }[] = [];
-    for (const key of ordered) {
+
+    // Try to resume from a checkpoint instead of replaying from scratch
+    const checkpoint = this.findBestCheckpoint(ordered);
+    const doc = checkpoint ? checkpoint.doc : this.initial.clone();
+    const applied: { ev: Event; edit: Edit }[] = checkpoint
+      ? checkpoint.applied
+      : [];
+    const startIndex = checkpoint ? checkpoint.startIndex : 0;
+
+    for (let i = startIndex; i < ordered.length; i++) {
+      const key = ordered[i]!;
       const ev = this.events.get(key) as Event;
       const edit = ev.resolveAgainst(applied, doc);
       applied.push({ ev, edit });
@@ -519,9 +566,85 @@ export class EventGraph {
         edit.apply(doc);
       }
     }
+
+    if (this.debugValidateCheckpoints && checkpoint !== null) {
+      this.validateAgainstFullReplay(ordered, doc);
+    }
+
     this.cachedApplied = applied;
     this.cachedDoc = doc;
     return applied;
+  }
+
+  /** Compute a stable hash for a frontier (sorted, joined event IDs). */
+  private frontierHash(frontier: EventId[]): string {
+    return [...frontier].map((id) => id.format()).sort().join("|");
+  }
+
+  /**
+   * Find the best checkpoint: the longest cached prefix of the current
+   * topological order.
+   */
+  private findBestCheckpoint(ordered: string[]): {
+    doc: Node;
+    applied: { ev: Event; edit: Edit }[];
+    startIndex: number;
+  } | null {
+    let best: {
+      doc: Node;
+      applied: { ev: Event; edit: Edit }[];
+      startIndex: number;
+    } | null = null;
+
+    for (const [, cached] of this.checkpointCache) {
+      if (cached.order.length >= ordered.length) continue;
+      // Verify the cached order is a prefix of our current order
+      let isPrefix = true;
+      for (let i = 0; i < cached.order.length; i++) {
+        if (cached.order[i] !== ordered[i]) {
+          isPrefix = false;
+          break;
+        }
+      }
+      if (
+        isPrefix && (best === null || cached.order.length > best.startIndex)
+      ) {
+        best = {
+          doc: cached.doc.clone(),
+          applied: [...cached.applied],
+          startIndex: cached.order.length,
+        };
+      }
+    }
+    return best;
+  }
+
+  /**
+   * Oracle validation: run full replay from scratch and assert the result
+   * matches the checkpoint-based result.
+   */
+  private validateAgainstFullReplay(
+    ordered: string[],
+    checkpointDoc: Node,
+  ): void {
+    const oracleDoc = this.initial.clone();
+    const oracleApplied: { ev: Event; edit: Edit }[] = [];
+    for (const key of ordered) {
+      const ev = this.events.get(key) as Event;
+      const edit = ev.resolveAgainst(oracleApplied, oracleDoc);
+      oracleApplied.push({ ev, edit });
+      if (!(edit instanceof NoOpEdit)) {
+        edit.apply(oracleDoc);
+      }
+    }
+    const checkpointPlain = JSON.stringify(checkpointDoc.toPlain());
+    const oraclePlain = JSON.stringify(oracleDoc.toPlain());
+    if (checkpointPlain !== oraclePlain) {
+      throw new Error(
+        "Incremental materialization diverged from full-replay oracle!\n" +
+          `Checkpoint: ${checkpointPlain}\nOracle: ${oraclePlain}`,
+      );
+    }
   }
 
   materialize(frontier?: EventId[]): MaterializeResult {
@@ -537,10 +660,22 @@ export class EventGraph {
     const ordered = frontier
       ? this.computeTopologicalOrder(frontier)
       : (this.cachedOrder ??= this.computeTopologicalOrder());
-    const doc = this.initial.clone();
-    const applied: { ev: Event; edit: Edit }[] = [];
+
+    // Try to resume from a checkpoint instead of replaying from scratch.
+    // Only for the default frontier path (custom frontier used by undo
+    // always replays fully to avoid checkpoint staleness issues).
+    const checkpoint = frontier === undefined
+      ? this.findBestCheckpoint(ordered)
+      : null;
+    const doc = checkpoint ? checkpoint.doc : this.initial.clone();
+    const applied: { ev: Event; edit: Edit }[] = checkpoint
+      ? checkpoint.applied
+      : [];
+    const startIndex = checkpoint ? checkpoint.startIndex : 0;
+
     const conflicts: Node[] = [];
-    for (const key of ordered) {
+    for (let i = startIndex; i < ordered.length; i++) {
+      const key = ordered[i]!;
       const ev = this.events.get(key) as Event;
       const edit = ev.resolveAgainst(applied, doc);
       if (edit instanceof NoOpEdit) {
@@ -550,6 +685,11 @@ export class EventGraph {
       edit.apply(doc);
       applied.push({ ev, edit });
     }
+
+    if (this.debugValidateCheckpoints && checkpoint !== null) {
+      this.validateAgainstFullReplay(ordered, doc);
+    }
+
     if (frontier === undefined) {
       this.cachedDoc = doc.clone();
       this.cachedConflicts = conflicts.map((c) => c.clone());
@@ -595,6 +735,7 @@ export class EventGraph {
     this.cachedApplied = null;
     this.cachedDoc = null;
     this.cachedConflicts = null;
+    this.checkpointCache.clear();
   }
 
   /** Returns a serializable snapshot of all known events for UI inspection. */
