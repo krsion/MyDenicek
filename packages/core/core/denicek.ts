@@ -98,6 +98,13 @@ export class Denicek {
    * assigned to the newly created local event. It can later be passed to
    * {@link replayEditFromEventId}, {@link repeatEditFromEventId}, or persisted
    * in application data.
+   *
+   * **Threading assumption.** This method is synchronous and assumes single-threaded
+   * execution (Deno / browser event loop). The cached document (`cachedDoc`) is read
+   * and written within a single synchronous call, so no interleaving with
+   * {@link applyRemote} is possible as long as both callers are on the same thread.
+   * If this assumption is ever relaxed (e.g. Web Workers sharing a `Denicek`),
+   * the cache must be protected by a lock or made immutable-snapshot-based.
    */
   private commit(edit: Edit): string {
     const doc = this.cachedDoc ?? this.rematerialize();
@@ -208,7 +215,13 @@ export class Denicek {
     ).map(encodeRemoteEvent);
   }
 
-  /** Ingests an opaque event payload produced by another peer. Buffers out-of-order events. */
+  /**
+   * Ingests an opaque event payload produced by another peer. Buffers out-of-order events.
+   *
+   * **Threading assumption.** Invalidates `cachedDoc` unconditionally. Safe because
+   * Deno is single-threaded: no concurrent `commit()` can observe a stale cache
+   * between `ingestEvents` and the cache reset.
+   */
   applyRemote(event: EncodedRemoteEvent): void {
     this.graph.ingestEvents([decodeRemoteEvent(event)]);
     this.cachedDoc = null;
