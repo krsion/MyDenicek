@@ -13,6 +13,7 @@ import {
   registerRemoteEditDecoder,
 } from "../remote-edit-codec.ts";
 import { UnwrapListEdit, UnwrapRecordEdit } from "./unwrap-edits.ts";
+import { rewriteInsertEditRefs } from "./ref-rewriting.ts";
 
 type EncodedUpdateTagEdit = Extract<
   EncodedRemoteEdit,
@@ -391,7 +392,12 @@ export class WrapRecordEdit extends NoOpOnRemovedTargetEdit {
 
   override transformLaterConcurrentEdit(concurrent: Edit): Edit {
     if (!(concurrent instanceof ListInsertEdit)) {
-      return super.transformLaterConcurrentEdit(concurrent);
+      const transformed = super.transformLaterConcurrentEdit(concurrent);
+      if (transformed instanceof NoOpEdit) return transformed;
+      return rewriteInsertEditRefs(
+        transformed,
+        (abs) => this.transformSelectorOrThrow(abs),
+      );
     }
     const rewritten = concurrent.rewriteInsertedNode(
       this.target,
@@ -409,7 +415,12 @@ export class WrapRecordEdit extends NoOpOnRemovedTargetEdit {
         return insertedNode;
       },
     );
-    return rewritten ?? super.transformLaterConcurrentEdit(concurrent);
+    const result = rewritten ?? super.transformLaterConcurrentEdit(concurrent);
+    if (result instanceof NoOpEdit) return result;
+    return rewriteInsertEditRefs(
+      result,
+      (abs) => this.transformSelectorOrThrow(abs),
+    );
   }
 
   encodeRemoteEdit(): EncodedWrapRecordEdit {
@@ -478,7 +489,12 @@ export class WrapListEdit extends NoOpOnRemovedTargetEdit {
 
   override transformLaterConcurrentEdit(concurrent: Edit): Edit {
     if (!(concurrent instanceof ListInsertEdit)) {
-      return super.transformLaterConcurrentEdit(concurrent);
+      const transformed = super.transformLaterConcurrentEdit(concurrent);
+      if (transformed instanceof NoOpEdit) return transformed;
+      return rewriteInsertEditRefs(
+        transformed,
+        (abs) => this.transformSelectorOrThrow(abs),
+      );
     }
     const rewritten = concurrent.rewriteInsertedNode(
       this.target,
@@ -487,7 +503,12 @@ export class WrapListEdit extends NoOpOnRemovedTargetEdit {
           ? null
           : new ListNode(this.tag, [insertedNode]),
     );
-    return rewritten ?? super.transformLaterConcurrentEdit(concurrent);
+    const result = rewritten ?? super.transformLaterConcurrentEdit(concurrent);
+    if (result instanceof NoOpEdit) return result;
+    return rewriteInsertEditRefs(
+      result,
+      (abs) => this.transformSelectorOrThrow(abs),
+    );
   }
 
   private transformReferenceSelector(sel: Selector): Selector {

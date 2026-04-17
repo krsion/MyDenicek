@@ -1,6 +1,7 @@
 import {
   describeNodeForEdit,
   type Edit,
+  NoOpEdit,
   NoOpOnRemovedTargetEdit,
 } from "./base.ts";
 import {
@@ -14,6 +15,7 @@ import {
   type EncodedRemoteEdit,
   registerRemoteEditDecoder,
 } from "../remote-edit-codec.ts";
+import { rewriteInsertEditRefs } from "./ref-rewriting.ts";
 
 type EncodedRecordAddEdit = Extract<
   EncodedRemoteEdit,
@@ -222,6 +224,15 @@ export class RecordRenameFieldEdit extends NoOpOnRemovedTargetEdit {
         this.to,
         ...m.rest.segments,
       ]),
+    );
+  }
+
+  override transformLaterConcurrentEdit(concurrent: Edit): Edit {
+    const transformed = super.transformLaterConcurrentEdit(concurrent);
+    if (transformed instanceof NoOpEdit) return transformed;
+    return rewriteInsertEditRefs(
+      transformed,
+      (abs) => this.transformSelectorOrThrow(abs),
     );
   }
 
