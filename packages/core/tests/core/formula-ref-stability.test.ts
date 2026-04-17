@@ -8,14 +8,9 @@ function sync(a: Denicek, b: Denicek): void {
   for (const event of b.eventsSince(aFrontiers)) a.applyRemote(event);
 }
 
-// ── Formula reference breaks on concurrent rename (known limitation) ───
+// ── Formula reference survives concurrent rename ─────────────────────
 
-Deno.test("formula $ref breaks when concurrent rename changes referenced field", () => {
-  // This test documents a known limitation: formula references ($ref paths)
-  // are not retargeted through concurrent structural edits. The OT
-  // selector-rewriting rules transform edit selectors, not values already
-  // stored in the document tree. See thesis §6.7 (Limitations).
-
+Deno.test("formula $ref is rewritten when concurrent rename changes referenced field", () => {
   const initial = {
     $tag: "root",
     data: {
@@ -44,17 +39,21 @@ Deno.test("formula $ref breaks when concurrent rename changes referenced field",
   // Both peers converge on the same document
   assertEquals(alice.toPlain(), bob.toPlain());
 
-  // The formula still references "../input" which no longer exists.
-  // This is the known limitation: $ref paths are not rewritten by OT.
+  // The formula's $ref should be rewritten from "../input" to "../source"
+  // so the formula still evaluates correctly.
   const afterResults = evaluateAllFormulas(alice.toPlain());
   const formulaResult = afterResults.get("data/output");
 
-  // The formula either returns a FormulaError or the old reference fails.
-  // Document the actual behavior — this is a known limitation, not a bug.
+  // After LWW resolution, the value is either "hello" or "world";
+  // the formula should uppercase whichever value won.
   assert(
-    formulaResult instanceof FormulaError ||
-      formulaResult !== "WORLD",
-    `Expected formula to break after rename, but got: ${formulaResult}`,
+    formulaResult === "HELLO" || formulaResult === "WORLD" ||
+      formulaResult === "ALICE-VALUE" || formulaResult === "BOB-VALUE",
+    `Expected formula to produce an uppercase string, but got: ${formulaResult}`,
+  );
+  assert(
+    !(formulaResult instanceof FormulaError),
+    `Formula should not produce an error after rename, but got: ${formulaResult}`,
   );
 });
 
@@ -99,9 +98,9 @@ Deno.test("formula $ref works when concurrent edit changes referenced value", ()
   );
 });
 
-// ── Formula reference breaks on concurrent wrap (known limitation) ─────
+// ── Formula reference survives concurrent wrap ───────────────────────
 
-Deno.test("formula $ref breaks when concurrent wrap changes path structure", () => {
+Deno.test("formula $ref is rewritten when concurrent wrap changes path structure", () => {
   const initial = {
     $tag: "root",
     data: {
@@ -126,16 +125,17 @@ Deno.test("formula $ref breaks when concurrent wrap changes path structure", () 
   // Both peers converge
   assertEquals(alice.toPlain(), bob.toPlain());
 
-  // The formula references "../input" but after wrap, the value is at
-  // "../input/value". The $ref is not rewritten — known limitation.
+  // The formula's $ref should be rewritten from "../input" to
+  // "../input/value" so it still points to the actual value after wrap.
   const results = evaluateAllFormulas(alice.toPlain());
   const formulaResult = results.get("data/output");
 
-  // The formula may evaluate the wrapper record (not a string) or error
   assert(
-    formulaResult instanceof FormulaError ||
-      typeof formulaResult !== "string" ||
-      formulaResult !== "WORLD",
-    `Expected formula to break or produce non-string after wrap, got: ${formulaResult}`,
+    typeof formulaResult === "string",
+    `Expected formula to produce a string after wrap, got: ${formulaResult}`,
+  );
+  assert(
+    !(formulaResult instanceof FormulaError),
+    `Formula should not produce an error after wrap, but got: ${formulaResult}`,
   );
 });
