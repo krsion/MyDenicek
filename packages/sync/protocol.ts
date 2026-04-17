@@ -11,6 +11,8 @@ export interface EncodedSyncRequest {
   type: "sync";
   /** Room to sync with. */
   roomId: string;
+  /** Stable identifier of the sending peer. */
+  peerId?: string;
   /** Client's current frontier event IDs. */
   frontiers: string[];
   /** New events the client wants to send. */
@@ -31,6 +33,12 @@ export interface EncodedSyncResponse {
   frontiers: string[];
   /** Events the client hasn't seen yet. */
   events: EncodedEvent[];
+  /**
+   * Present when the peer needs to reset after server-side compaction.
+   * The peer should replace its event graph with one bootstrapped from
+   * this document, then ingest the events in the same response.
+   */
+  compactedDocument?: PlainNode;
 }
 
 /** Server greeting sent when a WebSocket connection is established. */
@@ -86,6 +94,7 @@ export function createSyncRequest(
   return {
     type: "sync",
     roomId,
+    peerId: document.peer,
     frontiers: document.frontiers,
     events: collectRemoteEventsSince(document, knownServerFrontiers).map(
       encodeEvent,
@@ -100,6 +109,13 @@ export function applySyncResponse(
   document: Denicek,
   response: EncodedSyncResponse,
 ): void {
+  if (response.compactedDocument !== undefined) {
+    document.resetToCompactedState(
+      response.compactedDocument,
+      response.events.map(decodeEvent),
+    );
+    return;
+  }
   for (const encodedEvent of response.events) {
     document.applyRemote(decodeEvent(encodedEvent));
   }

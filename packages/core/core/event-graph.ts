@@ -114,6 +114,11 @@ export class EventGraph {
     return [...this._frontierIds];
   }
 
+  /** Number of committed events in the graph (excludes buffered out-of-order events). */
+  get eventCount(): number {
+    return this.events.size;
+  }
+
   hasEvent(key: string): boolean {
     return this.events.has(key);
   }

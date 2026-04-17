@@ -57,8 +57,8 @@ export class SyncClient {
   private readonly roomId: string;
   private readonly document: Denicek;
   private readonly autoSyncIntervalMs: number;
-  private readonly initialDocumentHash: string;
-  private readonly initialDocument: PlainNode;
+  private initialDocumentHash: string;
+  private initialDocument: PlainNode;
   private readonly onRemoteChange?: (
     document: Denicek,
     response: EncodedSyncResponse,
@@ -219,10 +219,15 @@ export class SyncClient {
       console.error(message.message);
       return;
     }
-    applySyncResponse(this.document, message);
-    this.knownServerFrontiers = message.frontiers;
+    const syncResponse = message as EncodedSyncResponse;
+    applySyncResponse(this.document, syncResponse);
+    this.knownServerFrontiers = syncResponse.frontiers;
     this.serverBootstrapped = true;
-    this.onRemoteChange?.(this.document, message);
+    if (syncResponse.compactedDocument !== undefined) {
+      this.initialDocument = syncResponse.compactedDocument;
+      this.initialDocumentHash = computeDocumentHash(this.initialDocument);
+    }
+    this.onRemoteChange?.(this.document, syncResponse);
   }
 
   /** Handle the server hello message by triggering an initial sync. */

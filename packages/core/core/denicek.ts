@@ -208,6 +208,11 @@ export class Denicek {
     return this.graph.frontiers.map((eventId) => eventId.format());
   }
 
+  /** Number of committed events in the underlying graph. */
+  get eventCount(): number {
+    return this.graph.eventCount;
+  }
+
   /** Returns opaque event payloads unknown to a peer with the given frontier strings. */
   eventsSince(remoteFrontiers: string[]): EncodedRemoteEvent[] {
     return this.graph.eventsSince(
@@ -485,6 +490,45 @@ export class Denicek {
     this.graph.compact(
       acknowledgedFrontiers.map((frontier) => EventId.parse(frontier)),
     );
+    this.cachedDoc = null;
+  }
+
+  /**
+   * Resets this peer to a compacted state received from the server.
+   *
+   * Replaces the internal event graph with one bootstrapped from the
+   * compacted initial document, then ingests all remaining events the
+   * server sent. Pending local edits that haven't been synced yet are
+   * re-applied against the new state when possible. Undo/redo stacks
+   * are cleared since the original events no longer exist.
+   */
+  resetToCompactedState(
+    compactedDocument: PlainNode,
+    remainingEvents: EncodedRemoteEvent[],
+  ): void {
+    // Save pending local edits before resetting the graph
+    const savedEdits = this.pendingEvents.map((ev) => ev.edit);
+
+    this.graph = new EventGraph(
+      Node.fromPlain(compactedDocument),
+    );
+    for (const event of remainingEvents) {
+      this.graph.ingestEvents([decodeRemoteEvent(event)]);
+    }
+    this.cachedDoc = null;
+    this.pendingEvents = [];
+    this.undoStack = [];
+    this.redoStack = [];
+
+    // Re-apply saved edits against the new graph state
+    for (const edit of savedEdits) {
+      try {
+        const event = this.graph.createEvent(this.peer, edit);
+        this.pendingEvents.push(event);
+      } catch {
+        // Edit no longer applicable against compacted state
+      }
+    }
     this.cachedDoc = null;
   }
 
