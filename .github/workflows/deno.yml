@@ -116,7 +116,12 @@ jobs:
       id-token: write
     env:
       IMAGE_REPOSITORY: sync-server
-      IMAGE_TAG: latest
+      # Using the commit SHA as the image tag ensures every deployment
+      # produces a new ARM template, which forces Azure Container Apps
+      # to create a new revision and pull the freshly built image.
+      # A static tag like "latest" leaves the ARM template unchanged and
+      # Azure therefore keeps running the previous image.
+      IMAGE_TAG: ${{ github.sha }}
       NAME_PREFIX: mydenicek-core-krsion-dev
     steps:
       - uses: actions/checkout@v4

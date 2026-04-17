@@ -1,6 +1,6 @@
 import { assertEquals } from "@std/assert";
 
-import { Denicek, registerPrimitiveEdit } from "@mydenicek/core";
+import { Denicek } from "@mydenicek/core";
 import { collectRemoteEventsSince } from "../internal-events.ts";
 import {
   applySyncResponse,
@@ -118,31 +118,50 @@ Deno.test("SyncRoom converges after concurrent edits from both peers", () => {
 });
 
 Deno.test("SyncRoom relays events using app-specific primitive edits without registering them", () => {
-  // Register a custom primitive edit only on the client side. The server
-  // must be able to relay events that carry this edit name without
-  // requiring the same registration, because in relay mode it never
-  // materializes the document.
+  // Simulate a peer using a primitive edit name (e.g. mywebnicek's
+  // "splitFirst") that the sync server process has never registered.
+  // The server runs Denicek in relayMode and therefore must forward
+  // such events without ever calling the edit implementation — only
+  // the recipient peers (who do register the edit) will apply it.
   const initial = { $tag: "root", text: "hello, world" } as const;
-  const room = new SyncRoom("demo");
+  const unknownEditName = `__never_registered_${
+    crypto.randomUUID().slice(0, 8)
+  }`;
 
-  // Use a unique name per test run to avoid "already registered" errors.
-  const editName = `__test_upper_${crypto.randomUUID().slice(0, 8)}`;
-  registerPrimitiveEdit(editName, (value) => String(value).toUpperCase());
+  // Use an already-registered edit ("set") to build a valid event,
+  // then rewrite the wire payload so the edit name is unknown to the
+  // relay process. This mirrors exactly what happens in production:
+  // the wire payload references a name the server has never seen.
   const alice = new Denicek("alice", initial);
-  const bob = new Denicek("bob", initial);
+  alice.applyPrimitiveEdit("text", "set", "HELLO");
+  const [aliceWire] = collectRemoteEventsSince(alice, []).map(encodeEvent);
+  const mutatedWire: typeof aliceWire = {
+    ...aliceWire,
+    edit: { ...aliceWire.edit, editName: unknownEditName } as typeof aliceWire[
+      "edit"
+    ],
+  };
 
-  alice.applyPrimitiveEdit("text", editName);
+  // The SyncRoom must ingest the event without throwing — it is a relay,
+  // not an applier.
+  const room = new SyncRoom("demo");
+  room.computeSyncResponse({
+    type: "sync",
+    roomId: "demo",
+    frontiers: [],
+    events: [mutatedWire],
+  });
 
-  // Relay Alice's events through the server to Bob.
-  const aliceResponse = room.computeSyncResponse(
-    createSyncRequest(alice, "demo", []),
+  // And another peer can fetch the same event from the room.
+  const response = room.computeSyncResponse({
+    type: "sync",
+    roomId: "demo",
+    frontiers: [],
+    events: [],
+  });
+  assertEquals(response.events.length, 1);
+  assertEquals(
+    (response.events[0].edit as { editName?: string }).editName,
+    unknownEditName,
   );
-  applySyncResponse(alice, aliceResponse);
-
-  const bobResponse = room.computeSyncResponse(
-    createSyncRequest(bob, "demo", []),
-  );
-  applySyncResponse(bob, bobResponse);
-
-  assertEquals(alice.toPlain(), bob.toPlain());
 });
