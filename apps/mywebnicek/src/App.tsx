@@ -53,21 +53,54 @@ function Editor(
 
   useEffect(() => {
     if (initialDocument) return;
-    const url = new URL(SYNC_SERVER_URL);
-    url.searchParams.set("room", roomId);
-    const ws = new WebSocket(url.toString());
-    ws.onmessage = (ev) => {
-      try {
-        const msg = JSON.parse(ev.data);
-        if (msg.type === "hello") {
-          setResolvedDoc(msg.initialDocument ?? undefined);
-          setLoading(false);
-          ws.close();
+    let cancelled = false;
+    let currentWs: WebSocket | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    // Poll the server until the room has been bootstrapped (i.e. the hello
+    // message carries a non-undefined initialDocument). Without this, a second
+    // peer who arrives before the first peer's initial sync round-trip would
+    // get hello.initialDocument === undefined, instantiate a Denicek with an
+    // empty default document, and then fail hash validation on its first
+    // sync — after which the server silently excludes it from broadcasts.
+    const openOnce = () => {
+      if (cancelled) return;
+      const url = new URL(SYNC_SERVER_URL);
+      url.searchParams.set("room", roomId);
+      const ws = new WebSocket(url.toString());
+      currentWs = ws;
+      ws.onmessage = (ev) => {
+        try {
+          const msg = JSON.parse(ev.data);
+          if (msg.type === "hello") {
+            if (msg.initialDocument) {
+              if (cancelled) return;
+              setResolvedDoc(msg.initialDocument);
+              setLoading(false);
+              ws.close();
+            } else {
+              // Room not yet bootstrapped — close and retry shortly.
+              ws.close();
+              if (!cancelled) {
+                retryTimer = setTimeout(openOnce, 500);
+              }
+            }
+          }
+        } catch { /* ignore */ }
+      };
+      ws.onerror = () => {
+        if (!cancelled) {
+          retryTimer = setTimeout(openOnce, 1000);
         }
-      } catch { /* ignore */ }
+      };
     };
-    ws.onerror = () => setLoading(false);
-    return () => ws.close();
+    openOnce();
+
+    return () => {
+      cancelled = true;
+      if (retryTimer !== null) clearTimeout(retryTimer);
+      currentWs?.close();
+    };
   }, [initialDocument, roomId]);
 
   if (loading) {
