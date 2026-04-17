@@ -172,14 +172,18 @@ export class EventGraph {
     // and live sync) from O(N^2) into amortized O(N).
     const linearExtension = this.isLinearExtension(event);
 
-    // Prime the cache on first linear extension so subsequent inserts can
-    // reuse it. This is cheap because materialize() without frontier would
-    // need to run on the very next read anyway.
-    if (linearExtension && this.cachedDoc === null) {
-      this.materialize();
-    }
-
+    // In relay mode we never materialize the document, so we don't need to
+    // prime any cache. Skipping this also means the relay never calls edit
+    // implementations, so it does not need app-specific primitive edits to
+    // be registered.
     if (!this.relayMode) {
+      // Prime the cache on first linear extension so subsequent inserts can
+      // reuse it. This is cheap because materialize() without frontier would
+      // need to run on the very next read anyway.
+      if (linearExtension && this.cachedDoc === null) {
+        this.materialize();
+      }
+
       if (linearExtension && this.cachedDoc !== null) {
         event.edit.validate(this.cachedDoc);
       } else {
@@ -190,6 +194,7 @@ export class EventGraph {
     this.events.set(event.id.format(), event);
 
     if (
+      !this.relayMode &&
       linearExtension && this.cachedDoc !== null && this.cachedOrder !== null
     ) {
       // In-place extension: the new event is a strict linear extension of

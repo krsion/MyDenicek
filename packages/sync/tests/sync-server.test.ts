@@ -1,6 +1,6 @@
 import { assertEquals } from "@std/assert";
 
-import { Denicek } from "@mydenicek/core";
+import { Denicek, registerPrimitiveEdit } from "@mydenicek/core";
 import { collectRemoteEventsSince } from "../internal-events.ts";
 import {
   applySyncResponse,
@@ -113,6 +113,36 @@ Deno.test("SyncRoom converges after concurrent edits from both peers", () => {
     createSyncRequest(bob, "demo", bobServerFrontiers),
   );
   applySyncResponse(bob, finalBobResponse);
+
+  assertEquals(alice.toPlain(), bob.toPlain());
+});
+
+Deno.test("SyncRoom relays events using app-specific primitive edits without registering them", () => {
+  // Register a custom primitive edit only on the client side. The server
+  // must be able to relay events that carry this edit name without
+  // requiring the same registration, because in relay mode it never
+  // materializes the document.
+  const initial = { $tag: "root", text: "hello, world" } as const;
+  const room = new SyncRoom("demo");
+
+  // Use a unique name per test run to avoid "already registered" errors.
+  const editName = `__test_upper_${crypto.randomUUID().slice(0, 8)}`;
+  registerPrimitiveEdit(editName, (value) => String(value).toUpperCase());
+  const alice = new Denicek("alice", initial);
+  const bob = new Denicek("bob", initial);
+
+  alice.applyPrimitiveEdit("text", editName);
+
+  // Relay Alice's events through the server to Bob.
+  const aliceResponse = room.computeSyncResponse(
+    createSyncRequest(alice, "demo", []),
+  );
+  applySyncResponse(alice, aliceResponse);
+
+  const bobResponse = room.computeSyncResponse(
+    createSyncRequest(bob, "demo", []),
+  );
+  applySyncResponse(bob, bobResponse);
 
   assertEquals(alice.toPlain(), bob.toPlain());
 });
