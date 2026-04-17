@@ -192,14 +192,27 @@ export class EventGraph {
     if (
       linearExtension && this.cachedDoc !== null && this.cachedOrder !== null
     ) {
-      // In-place extension: the new event is concurrent with nothing in the
-      // cache, so resolveAgainst would return the edit unchanged.
+      // In-place extension: the new event is a strict linear extension of
+      // the current frontier, so resolveAgainst is a no-op (every prior is
+      // a causal ancestor and gets skipped). We can apply directly — but
+      // edit.apply() may still throw on some remote events whose default
+      // validate() was too permissive (e.g. ApplyPrimitiveEdit against a
+      // missing target). In that case the event is a conflict: drop all
+      // caches so the next materialize() rebuilds with proper NoOp
+      // resolution.
       this._frontierIds = [event.id];
       this.cachedOrder.push(event.id.format());
       if (this.cachedApplied !== null) {
         this.cachedApplied.push({ ev: event, edit: event.edit });
       }
-      event.edit.apply(this.cachedDoc);
+      try {
+        event.edit.apply(this.cachedDoc);
+      } catch {
+        this.cachedOrder = null;
+        this.cachedApplied = null;
+        this.cachedDoc = null;
+        this.cachedConflicts = null;
+      }
       return;
     }
 
