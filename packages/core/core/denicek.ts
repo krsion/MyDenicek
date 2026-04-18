@@ -3,10 +3,6 @@ import {
   CopyEdit,
   type Edit,
   ListInsertAtEdit,
-  ListPopBackEdit,
-  ListPopFrontEdit,
-  ListPushBackEdit,
-  ListPushFrontEdit,
   ListRemoveAtEdit,
   ListReorderEdit,
   RecordAddEdit,
@@ -377,7 +373,7 @@ export class Denicek {
    */
   pushBack(target: string, value: PlainNode): string {
     return this.commit(
-      new ListPushBackEdit(Selector.parse(target), Node.fromPlain(value)),
+      new ListInsertAtEdit(Selector.parse(target), 0, Node.fromPlain(value), "back"),
     );
   }
 
@@ -388,7 +384,7 @@ export class Denicek {
    */
   pushFront(target: string, value: PlainNode): string {
     return this.commit(
-      new ListPushFrontEdit(Selector.parse(target), Node.fromPlain(value)),
+      new ListInsertAtEdit(Selector.parse(target), 0, Node.fromPlain(value), "front"),
     );
   }
 
@@ -398,7 +394,7 @@ export class Denicek {
    * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
    */
   popBack(target: string): string {
-    return this.commit(new ListPopBackEdit(Selector.parse(target)));
+    return this.commit(new ListRemoveAtEdit(Selector.parse(target), 0, "back"));
   }
 
   /**
@@ -407,7 +403,7 @@ export class Denicek {
    * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
    */
   popFront(target: string): string {
-    return this.commit(new ListPopFrontEdit(Selector.parse(target)));
+    return this.commit(new ListRemoveAtEdit(Selector.parse(target), 0, "front"));
   }
 
   /**

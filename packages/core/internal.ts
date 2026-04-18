@@ -10,10 +10,6 @@ export {
   ApplyPrimitiveEdit,
   CopyEdit,
   Edit,
-  ListPopBackEdit,
-  ListPopFrontEdit,
-  ListPushBackEdit,
-  ListPushFrontEdit,
   NoOpEdit,
   RecordAddEdit,
   RecordDeleteEdit,
@@ -23,6 +19,12 @@ export {
   UpdateTagEdit,
   WrapListEdit,
   WrapRecordEdit,
+} from "./core/edits.ts";
+export type { ListAnchor } from "./core/edits.ts";
+export {
+  ListInsertAtEdit,
+  ListRemoveAtEdit,
+  ListReorderEdit,
 } from "./core/edits.ts";
 export { Event } from "./core/event.ts";
 export { EventId } from "./core/event-id.ts";

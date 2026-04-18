@@ -11,22 +11,9 @@ import {
   registerRemoteEditDecoder,
 } from "../remote-edit-codec.ts";
 
-type EncodedListPushBackEdit = Extract<
-  EncodedRemoteEdit,
-  { kind: "ListPushBackEdit" }
->;
-type EncodedListPushFrontEdit = Extract<
-  EncodedRemoteEdit,
-  { kind: "ListPushFrontEdit" }
->;
-type EncodedListPopBackEdit = Extract<
-  EncodedRemoteEdit,
-  { kind: "ListPopBackEdit" }
->;
-type EncodedListPopFrontEdit = Extract<
-  EncodedRemoteEdit,
-  { kind: "ListPopFrontEdit" }
->;
+/** Anchor mode for end-relative list operations. */
+export type ListAnchor = "front" | "back";
+
 type EncodedListInsertAtEdit = Extract<
   EncodedRemoteEdit,
   { kind: "ListInsertAtEdit" }
@@ -67,359 +54,17 @@ export abstract class ListInsertEdit extends NoOpOnRemovedTargetEdit {
   protected abstract withInsertedNode(node: Node): ListInsertEdit;
 }
 
-/** Appends a node to the end of every list matched by the target selector. */
-export class ListPushBackEdit extends ListInsertEdit {
-  /** @inheritDoc */
-  readonly kind = "ListPushBack";
-
-  constructor(readonly target: Selector, readonly node: Node) {
-    super();
-  }
-
-  override validate(doc: Node): void {
-    const insertions = doc.navigateWithPaths(this.target)
-      .map(({ path, node }) => {
-        const list = this.assertList(node);
-        return {
-          path: new Selector([...path.segments, list.items.length]),
-          node: this.node,
-        };
-      });
-    this.assertInsertedReferencesResolve(doc, insertions);
-  }
-
-  apply(doc: Node): void {
-    this.validate(doc);
-    const nodes = this.navigateOrThrow(doc, this.target);
-    for (const n of nodes) {
-      n.pushBack(this.node.clone());
-    }
-  }
-
-  canApply(doc: Node): boolean {
-    return this.canFindNodesOfType(
-      doc,
-      this.target,
-      (node) => node instanceof ListNode,
-    );
-  }
-
-  transformSelector(sel: Selector): SelectorTransform {
-    return mapSelector(sel);
-  }
-
-  override transformLaterConcurrentEdit(concurrent: Edit): Edit {
-    if (!(concurrent instanceof ListInsertEdit)) {
-      return super.transformLaterConcurrentEdit(concurrent);
-    }
-    const rewritten = concurrent.rewriteInsertedNode(
-      this.target,
-      (transformedNode, relativeTarget) => {
-        if (
-          relativeTarget.length !== 0 || !(transformedNode instanceof ListNode)
-        ) {
-          return null;
-        }
-        transformedNode.pushBack(this.node.clone());
-        return transformedNode;
-      },
-    );
-    if (rewritten === null) {
-      return super.transformLaterConcurrentEdit(concurrent);
-    }
-    return rewritten;
-  }
-
-  computeInverse(_preDoc: Node): Edit {
-    return new ListPopBackEdit(this.target);
-  }
-
-  equals(other: Edit): boolean {
-    return other instanceof ListPushBackEdit &&
-      this.target.equals(other.target) && this.node.equals(other.node);
-  }
-
-  withTarget(target: Selector): ListPushBackEdit {
-    return new ListPushBackEdit(target, this.node);
-  }
-
-  protected withInsertedNode(node: Node): ListPushBackEdit {
-    return new ListPushBackEdit(this.target, node);
-  }
-
-  encodeRemoteEdit(): EncodedListPushBackEdit {
-    return {
-      kind: "ListPushBackEdit",
-      target: this.target.format(),
-      node: this.node.toPlain() as PlainNode,
-    };
-  }
-}
-
-registerRemoteEditDecoder<EncodedListPushBackEdit>(
-  "ListPushBackEdit",
-  (encodedEdit) =>
-    new ListPushBackEdit(
-      Selector.parse(encodedEdit.target),
-      Node.fromPlain(encodedEdit.node),
-    ),
-);
-
-/** Prepends a node to the beginning of every list matched by the target selector. */
-export class ListPushFrontEdit extends ListInsertEdit {
-  /** @inheritDoc */
-  readonly kind = "ListPushFront";
-
-  constructor(readonly target: Selector, readonly node: Node) {
-    super();
-  }
-
-  override validate(doc: Node): void {
-    const insertions = doc.navigateWithPaths(this.target)
-      .map(({ path, node }) => {
-        this.assertList(node);
-        return { path: new Selector([...path.segments, 0]), node: this.node };
-      });
-    this.assertInsertedReferencesResolve(doc, insertions);
-  }
-
-  apply(doc: Node): void {
-    const referenceTargets = doc.captureReferenceTransformTargets();
-    this.validate(doc);
-    const nodes = this.navigateOrThrow(doc, this.target);
-    for (const n of nodes) {
-      n.pushFront(this.node.clone());
-    }
-    doc.updateReferences(
-      (abs) => this.transformSelectorOrThrow(abs),
-      referenceTargets,
-    );
-  }
-
-  canApply(doc: Node): boolean {
-    return this.canFindNodesOfType(
-      doc,
-      this.target,
-      (node) => node instanceof ListNode,
-    );
-  }
-
-  transformSelector(sel: Selector): SelectorTransform {
-    return this.target.shiftIndex(sel, 0, +1);
-  }
-
-  computeInverse(_preDoc: Node): Edit {
-    return new ListPopFrontEdit(this.target);
-  }
-
-  equals(other: Edit): boolean {
-    return other instanceof ListPushFrontEdit &&
-      this.target.equals(other.target) && this.node.equals(other.node);
-  }
-
-  withTarget(target: Selector): ListPushFrontEdit {
-    return new ListPushFrontEdit(target, this.node);
-  }
-
-  protected withInsertedNode(node: Node): ListPushFrontEdit {
-    return new ListPushFrontEdit(this.target, node);
-  }
-
-  encodeRemoteEdit(): EncodedListPushFrontEdit {
-    return {
-      kind: "ListPushFrontEdit",
-      target: this.target.format(),
-      node: this.node.toPlain() as PlainNode,
-    };
-  }
-}
-
-registerRemoteEditDecoder<EncodedListPushFrontEdit>(
-  "ListPushFrontEdit",
-  (encodedEdit) =>
-    new ListPushFrontEdit(
-      Selector.parse(encodedEdit.target),
-      Node.fromPlain(encodedEdit.node),
-    ),
-);
-
-/** Removes the last item from every list matched by the target selector. */
-export class ListPopBackEdit extends NoOpOnRemovedTargetEdit {
-  /** @inheritDoc */
-  readonly isStructural = true;
-  /** @inheritDoc */
-  readonly kind = "ListPopBack";
-
-  constructor(readonly target: Selector) {
-    super();
-  }
-
-  override validate(doc: Node): void {
-    const removedPaths = doc.navigateWithPaths(this.target)
-      .flatMap(({ path, node }) => {
-        const list = this.assertList(node);
-        return list.items.length === 0
-          ? []
-          : [new Selector([...path.segments, list.items.length - 1])];
-      });
-    this.assertRemovedPathsAreUnreferenced(doc, removedPaths);
-  }
-
-  apply(doc: Node): void {
-    this.validate(doc);
-    const nodes = this.navigateOrThrow(doc, this.target);
-    for (const n of nodes) {
-      n.popBack();
-    }
-  }
-
-  canApply(doc: Node): boolean {
-    const nodes = doc.navigate(this.target);
-    return nodes.length > 0 &&
-      nodes.every((node) => node instanceof ListNode && node.items.length > 0);
-  }
-
-  transformSelector(sel: Selector): SelectorTransform {
-    return mapSelector(sel);
-  }
-
-  override transform(prior: Edit): Edit {
-    // Two concurrent pops of the same list edge collapse to one removal.
-    // Otherwise replay could remove a second item that neither peer observed
-    // as the last element when they issued their pop.
-    if (
-      (prior instanceof ListPopBackEdit || prior instanceof ListPopFrontEdit) &&
-      prior.target.equals(this.target)
-    ) {
-      return new NoOpEdit(
-        this.target,
-        `${prior.constructor.name} already removed the list item targeted by ${this.constructor.name}.`,
-      );
-    }
-    return super.transform(prior);
-  }
-
-  computeInverse(preDoc: Node): Edit {
-    const nodes = this.navigateOrThrow(preDoc, this.target);
-    const list = this.assertList(nodes[0]!);
-    return new ListPushBackEdit(
-      this.target,
-      list.items[list.items.length - 1]!.clone(),
-    );
-  }
-
-  equals(other: Edit): boolean {
-    return other instanceof ListPopBackEdit && this.target.equals(other.target);
-  }
-
-  withTarget(target: Selector): ListPopBackEdit {
-    return new ListPopBackEdit(target);
-  }
-  encodeRemoteEdit(): EncodedListPopBackEdit {
-    return { kind: "ListPopBackEdit", target: this.target.format() };
-  }
-}
-
-registerRemoteEditDecoder<EncodedListPopBackEdit>(
-  "ListPopBackEdit",
-  (encodedEdit) => new ListPopBackEdit(Selector.parse(encodedEdit.target)),
-);
-
-/** Removes the first item from every list matched by the target selector. */
-export class ListPopFrontEdit extends NoOpOnRemovedTargetEdit {
-  /** @inheritDoc */
-  readonly isStructural = true;
-  /** @inheritDoc */
-  readonly kind = "ListPopFront";
-
-  constructor(readonly target: Selector) {
-    super();
-  }
-
-  override validate(doc: Node): void {
-    const removedPaths = doc.navigateWithPaths(this.target)
-      .flatMap(({ path, node }) => {
-        const list = this.assertList(node);
-        return list.items.length === 0
-          ? []
-          : [new Selector([...path.segments, 0])];
-      });
-    this.assertRemovedPathsAreUnreferenced(doc, removedPaths);
-  }
-
-  apply(doc: Node): void {
-    const referenceTargets = doc.captureReferenceTransformTargets();
-    this.validate(doc);
-    const nodes = this.navigateOrThrow(doc, this.target);
-    for (const n of nodes) {
-      n.popFront();
-    }
-    doc.updateReferences(
-      (abs) => {
-        const t = this.transformSelector(abs);
-        return t.kind === "mapped" ? t.selector : abs;
-      },
-      referenceTargets,
-    );
-  }
-
-  canApply(doc: Node): boolean {
-    const nodes = doc.navigate(this.target);
-    return nodes.length > 0 &&
-      nodes.every((node) => node instanceof ListNode && node.items.length > 0);
-  }
-
-  transformSelector(sel: Selector): SelectorTransform {
-    const m = this.target.matchPrefix(sel);
-    if (m.kind === "matched" && m.rest.length > 0 && m.rest.segments[0] === 0) {
-      return REMOVED_SELECTOR;
-    }
-    return this.target.shiftIndex(sel, 1, -1);
-  }
-
-  override transform(prior: Edit): Edit {
-    // Two concurrent pops of the same list edge collapse to one removal.
-    // Otherwise replay could remove a second item that neither peer observed
-    // as the first element when they issued their pop.
-    if (
-      (prior instanceof ListPopBackEdit || prior instanceof ListPopFrontEdit) &&
-      prior.target.equals(this.target)
-    ) {
-      return new NoOpEdit(
-        this.target,
-        `${prior.constructor.name} already removed the list item targeted by ${this.constructor.name}.`,
-      );
-    }
-    return super.transform(prior);
-  }
-
-  computeInverse(preDoc: Node): Edit {
-    const nodes = this.navigateOrThrow(preDoc, this.target);
-    const list = this.assertList(nodes[0]!);
-    return new ListPushFrontEdit(this.target, list.items[0]!.clone());
-  }
-
-  equals(other: Edit): boolean {
-    return other instanceof ListPopFrontEdit &&
-      this.target.equals(other.target);
-  }
-
-  withTarget(target: Selector): ListPopFrontEdit {
-    return new ListPopFrontEdit(target);
-  }
-  encodeRemoteEdit(): EncodedListPopFrontEdit {
-    return { kind: "ListPopFrontEdit", target: this.target.format() };
-  }
-}
-
-registerRemoteEditDecoder<EncodedListPopFrontEdit>(
-  "ListPopFrontEdit",
-  (encodedEdit) => new ListPopFrontEdit(Selector.parse(encodedEdit.target)),
-);
-
 // ── Index-based list edits ──────────────────────────────────────────
 
-/** Inserts a node at a specific index in every list matched by the target selector. */
+/**
+ * Inserts a node at a specific index (or an anchored end) of every list
+ * matched by the target selector.
+ *
+ * When `anchor` is set the `index` field is ignored at apply-time and the
+ * actual insertion position is computed from the list:
+ * - `"front"` → index 0
+ * - `"back"`  → `list.items.length` (append)
+ */
 export class ListInsertAtEdit extends ListInsertEdit {
   /** @inheritDoc */
   readonly kind = "ListInsertAt";
@@ -428,16 +73,25 @@ export class ListInsertAtEdit extends ListInsertEdit {
     readonly target: Selector,
     readonly index: number,
     readonly node: Node,
+    readonly anchor?: ListAnchor,
   ) {
     super();
+  }
+
+  /** Resolve the effective insertion index from a list. */
+  private resolveIndex(list: ListNode): number {
+    if (this.anchor === "front") return 0;
+    if (this.anchor === "back") return list.items.length;
+    return this.index;
   }
 
   override validate(doc: Node): void {
     const insertions = doc.navigateWithPaths(this.target)
       .map(({ path, node }) => {
-        this.assertList(node);
+        const list = this.assertList(node);
+        const idx = this.resolveIndex(list);
         return {
-          path: new Selector([...path.segments, this.index]),
+          path: new Selector([...path.segments, idx]),
           node: this.node,
         };
       });
@@ -445,6 +99,30 @@ export class ListInsertAtEdit extends ListInsertEdit {
   }
 
   apply(doc: Node): void {
+    if (this.anchor === "front") {
+      // Front insert shifts references — same as old ListPushFrontEdit.
+      const referenceTargets = doc.captureReferenceTransformTargets();
+      this.validate(doc);
+      const nodes = this.navigateOrThrow(doc, this.target);
+      for (const n of nodes) {
+        n.pushFront(this.node.clone());
+      }
+      doc.updateReferences(
+        (abs) => this.transformSelectorOrThrow(abs),
+        referenceTargets,
+      );
+      return;
+    }
+    if (this.anchor === "back") {
+      // Back insert (append) — no reference shift needed.
+      this.validate(doc);
+      const nodes = this.navigateOrThrow(doc, this.target);
+      for (const n of nodes) {
+        n.pushBack(this.node.clone());
+      }
+      return;
+    }
+    // Non-anchored indexed insert.
     const referenceTargets = doc.captureReferenceTransformTargets();
     this.validate(doc);
     const nodes = this.navigateOrThrow(doc, this.target);
@@ -465,6 +143,13 @@ export class ListInsertAtEdit extends ListInsertEdit {
 
   canApply(doc: Node): boolean {
     const nodes = doc.navigate(this.target);
+    if (this.anchor) {
+      return this.canFindNodesOfType(
+        doc,
+        this.target,
+        (node) => node instanceof ListNode,
+      );
+    }
     return nodes.length > 0 &&
       nodes.every((node) =>
         node instanceof ListNode && this.index >= 0 &&
@@ -473,12 +158,92 @@ export class ListInsertAtEdit extends ListInsertEdit {
   }
 
   transformSelector(sel: Selector): SelectorTransform {
+    if (this.anchor === "front") {
+      return this.target.shiftIndex(sel, 0, +1);
+    }
+    if (this.anchor === "back") {
+      // Appending doesn't shift existing indices.
+      return mapSelector(sel);
+    }
     return this.target.shiftIndex(sel, this.index, +1);
   }
 
+  override transform(prior: Edit): Edit {
+    // Anchored inserts never adjust their own index through prior edits —
+    // the anchor resolves at apply-time.
+    if (this.anchor) {
+      // Still need to let the base class handle selector transformation.
+      return super.transform(prior);
+    }
+    // Non-anchored: delegate to base (default OT).
+    return super.transform(prior);
+  }
+
   override transformLaterConcurrentEdit(concurrent: Edit): Edit {
+    if (this.anchor === "back") {
+      // Back-anchored insert: doesn't shift concurrent indexed edits
+      // (appending at end doesn't affect existing positions).
+      // But when another insert is concurrent, use rewriteInsertedNode.
+      if (!(concurrent instanceof ListInsertEdit)) {
+        return super.transformLaterConcurrentEdit(concurrent);
+      }
+      const rewritten = concurrent.rewriteInsertedNode(
+        this.target,
+        (transformedNode, relativeTarget) => {
+          if (
+            relativeTarget.length !== 0 ||
+            !(transformedNode instanceof ListNode)
+          ) {
+            return null;
+          }
+          transformedNode.pushBack(this.node.clone());
+          return transformedNode;
+        },
+      );
+      if (rewritten === null) {
+        return super.transformLaterConcurrentEdit(concurrent);
+      }
+      return rewritten;
+    }
+
+    if (this.anchor === "front") {
+      // Front-anchored insert at index 0: shifts all concurrent indexed edits.
+      if (
+        concurrent instanceof ListInsertAtEdit &&
+        !concurrent.anchor &&
+        this.target.equals(concurrent.target)
+      ) {
+        return new ListInsertAtEdit(
+          concurrent.target,
+          concurrent.index + 1,
+          concurrent.node,
+        );
+      }
+      if (
+        concurrent instanceof ListRemoveAtEdit &&
+        !concurrent.anchor &&
+        this.target.equals(concurrent.target)
+      ) {
+        return new ListRemoveAtEdit(concurrent.target, concurrent.index + 1);
+      }
+      if (
+        concurrent instanceof ListReorderEdit &&
+        this.target.equals(concurrent.target)
+      ) {
+        return new ListReorderEdit(
+          concurrent.target,
+          concurrent.fromIndex + 1,
+          concurrent.toIndex + 1,
+        );
+      }
+      // For other ListInsertEdits (e.g. another anchored insert), delegate.
+      return super.transformLaterConcurrentEdit(concurrent);
+    }
+
+    // Non-anchored indexed insert — original logic.
     if (
       concurrent instanceof ListInsertAtEdit &&
+      !concurrent.anchor &&
       this.target.equals(concurrent.target)
     ) {
       if (concurrent.index >= this.index) {
@@ -492,6 +257,7 @@ export class ListInsertAtEdit extends ListInsertEdit {
     }
     if (
       concurrent instanceof ListRemoveAtEdit &&
+      !concurrent.anchor &&
       this.target.equals(concurrent.target)
     ) {
       if (concurrent.index >= this.index) {
@@ -514,7 +280,7 @@ export class ListInsertAtEdit extends ListInsertEdit {
       }
       return new ListReorderEdit(concurrent.target, newFrom, newTo);
     }
-    // Handle concurrent ListInsertEdit (pushFront/pushBack inserting into our target)
+    // Handle concurrent ListInsertEdit inserting into our target
     if (!(concurrent instanceof ListInsertEdit)) {
       return super.transformLaterConcurrentEdit(concurrent);
     }
@@ -537,6 +303,12 @@ export class ListInsertAtEdit extends ListInsertEdit {
   }
 
   computeInverse(_preDoc: Node): Edit {
+    if (this.anchor === "front") {
+      return new ListRemoveAtEdit(this.target, 0, "front");
+    }
+    if (this.anchor === "back") {
+      return new ListRemoveAtEdit(this.target, 0, "back");
+    }
     return new ListRemoveAtEdit(this.target, this.index);
   }
 
@@ -544,24 +316,29 @@ export class ListInsertAtEdit extends ListInsertEdit {
     return other instanceof ListInsertAtEdit &&
       this.target.equals(other.target) &&
       this.index === other.index &&
-      this.node.equals(other.node);
+      this.node.equals(other.node) &&
+      this.anchor === other.anchor;
   }
 
   withTarget(target: Selector): ListInsertAtEdit {
-    return new ListInsertAtEdit(target, this.index, this.node);
+    return new ListInsertAtEdit(target, this.index, this.node, this.anchor);
   }
 
   protected withInsertedNode(node: Node): ListInsertAtEdit {
-    return new ListInsertAtEdit(this.target, this.index, node);
+    return new ListInsertAtEdit(this.target, this.index, node, this.anchor);
   }
 
   encodeRemoteEdit(): EncodedListInsertAtEdit {
-    return {
+    const encoded: EncodedListInsertAtEdit = {
       kind: "ListInsertAtEdit",
       target: this.target.format(),
       index: this.index,
       node: this.node.toPlain() as PlainNode,
     };
+    if (this.anchor) {
+      (encoded as Record<string, unknown>).anchor = this.anchor;
+    }
+    return encoded;
   }
 }
 
@@ -572,24 +349,77 @@ registerRemoteEditDecoder<EncodedListInsertAtEdit>(
       Selector.parse(encodedEdit.target),
       encodedEdit.index,
       Node.fromPlain(encodedEdit.node),
+      (encodedEdit as Record<string, unknown>).anchor as
+        | ListAnchor
+        | undefined,
     ),
 );
 
-/** Removes the item at a specific index from every list matched by the target selector. */
+// Backward-compat decoders for old wire format kinds.
+registerRemoteEditDecoder(
+  "ListPushBackEdit" as EncodedRemoteEdit["kind"],
+  (e: Record<string, unknown>) =>
+    new ListInsertAtEdit(
+      Selector.parse(e.target as string),
+      0,
+      Node.fromPlain(e.node as PlainNode),
+      "back",
+    ),
+);
+registerRemoteEditDecoder(
+  "ListPushFrontEdit" as EncodedRemoteEdit["kind"],
+  (e: Record<string, unknown>) =>
+    new ListInsertAtEdit(
+      Selector.parse(e.target as string),
+      0,
+      Node.fromPlain(e.node as PlainNode),
+      "front",
+    ),
+);
+
+/**
+ * Removes an item at a specific index (or an anchored end) from every list
+ * matched by the target selector.
+ *
+ * When `anchor` is set the `index` field is ignored at apply-time:
+ * - `"front"` → removes index 0
+ * - `"back"`  → removes `list.items.length - 1` (last)
+ */
 export class ListRemoveAtEdit extends NoOpOnRemovedTargetEdit {
   /** @inheritDoc */
   readonly isStructural = true;
   /** @inheritDoc */
   readonly kind = "ListRemoveAt";
 
-  constructor(readonly target: Selector, readonly index: number) {
+  constructor(
+    readonly target: Selector,
+    readonly index: number,
+    readonly anchor?: ListAnchor,
+  ) {
     super();
+  }
+
+  /** Resolve the effective removal index from a list. */
+  private resolveIndex(list: ListNode): number {
+    if (this.anchor === "front") return 0;
+    if (this.anchor === "back") return list.items.length - 1;
+    return this.index;
   }
 
   override validate(doc: Node): void {
     const removedPaths = doc.navigateWithPaths(this.target)
       .flatMap(({ path, node }) => {
         const list = this.assertList(node);
+        if (this.anchor) {
+          return list.items.length === 0
+            ? []
+            : [
+              new Selector([
+                ...path.segments,
+                this.resolveIndex(list),
+              ]),
+            ];
+        }
         return this.index >= 0 && this.index < list.items.length
           ? [new Selector([...path.segments, this.index])]
           : [];
@@ -598,6 +428,33 @@ export class ListRemoveAtEdit extends NoOpOnRemovedTargetEdit {
   }
 
   apply(doc: Node): void {
+    if (this.anchor === "front") {
+      // Front remove shifts references — same as old ListPopFrontEdit.
+      const referenceTargets = doc.captureReferenceTransformTargets();
+      this.validate(doc);
+      const nodes = this.navigateOrThrow(doc, this.target);
+      for (const n of nodes) {
+        n.popFront();
+      }
+      doc.updateReferences(
+        (abs) => {
+          const t = this.transformSelector(abs);
+          return t.kind === "mapped" ? t.selector : abs;
+        },
+        referenceTargets,
+      );
+      return;
+    }
+    if (this.anchor === "back") {
+      // Back remove — no reference shift.
+      this.validate(doc);
+      const nodes = this.navigateOrThrow(doc, this.target);
+      for (const n of nodes) {
+        n.popBack();
+      }
+      return;
+    }
+    // Non-anchored indexed remove.
     const referenceTargets = doc.captureReferenceTransformTargets();
     this.validate(doc);
     const nodes = this.navigateOrThrow(doc, this.target);
@@ -621,6 +478,12 @@ export class ListRemoveAtEdit extends NoOpOnRemovedTargetEdit {
 
   canApply(doc: Node): boolean {
     const nodes = doc.navigate(this.target);
+    if (this.anchor) {
+      return nodes.length > 0 &&
+        nodes.every((node) =>
+          node instanceof ListNode && node.items.length > 0
+        );
+    }
     return nodes.length > 0 &&
       nodes.every((node) =>
         node instanceof ListNode && this.index >= 0 &&
@@ -629,9 +492,24 @@ export class ListRemoveAtEdit extends NoOpOnRemovedTargetEdit {
   }
 
   transformSelector(sel: Selector): SelectorTransform {
+    if (this.anchor === "front") {
+      const m = this.target.matchPrefix(sel);
+      if (
+        m.kind === "matched" && m.rest.length > 0 && m.rest.segments[0] === 0
+      ) {
+        return REMOVED_SELECTOR;
+      }
+      return this.target.shiftIndex(sel, 1, -1);
+    }
+    if (this.anchor === "back") {
+      // Removing last doesn't shift existing indices.
+      return mapSelector(sel);
+    }
+    // Non-anchored.
     const m = this.target.matchPrefix(sel);
     if (
-      m.kind === "matched" && m.rest.length > 0 && m.rest.segments[0] === this.index
+      m.kind === "matched" && m.rest.length > 0 &&
+      m.rest.segments[0] === this.index
     ) {
       return REMOVED_SELECTOR;
     }
@@ -639,10 +517,40 @@ export class ListRemoveAtEdit extends NoOpOnRemovedTargetEdit {
   }
 
   override transform(prior: Edit): Edit {
+    if (this.anchor) {
+      // Two concurrent anchored removes of the same list collapse to one removal.
+      if (
+        prior instanceof ListRemoveAtEdit &&
+        prior.anchor !== undefined &&
+        prior.target.equals(this.target)
+      ) {
+        return new NoOpEdit(
+          this.target,
+          `${prior.anchor}-anchored ListRemoveAtEdit already removed the list item targeted by ${this.anchor}-anchored ListRemoveAtEdit.`,
+        );
+      }
+      // Anchored removes don't adjust their index through prior edits.
+      return super.transform(prior);
+    }
+    // Non-anchored indexed remove — original OT logic.
     if (
       prior instanceof ListRemoveAtEdit &&
       prior.target.equals(this.target)
     ) {
+      if (prior.anchor === "front") {
+        if (this.index === 0) {
+          return new NoOpEdit(
+            this.target,
+            `front-anchored ListRemoveAtEdit already removed item at index 0.`,
+          );
+        }
+        return new ListRemoveAtEdit(this.target, this.index - 1);
+      }
+      if (prior.anchor === "back") {
+        // Back remove doesn't affect indices below the last element.
+        return this;
+      }
+      // Prior is also non-anchored.
       if (prior.index < this.index) {
         return new ListRemoveAtEdit(this.target, this.index - 1);
       }
@@ -658,39 +566,87 @@ export class ListRemoveAtEdit extends NoOpOnRemovedTargetEdit {
       prior instanceof ListInsertAtEdit &&
       prior.target.equals(this.target)
     ) {
+      if (prior.anchor === "front") {
+        return new ListRemoveAtEdit(this.target, this.index + 1);
+      }
+      if (prior.anchor === "back") {
+        // Back insert (append) doesn't affect existing indices.
+        return this;
+      }
       if (prior.index <= this.index) {
         return new ListRemoveAtEdit(this.target, this.index + 1);
       }
-      return this;
-    }
-    if (
-      prior instanceof ListPushFrontEdit &&
-      prior.target.equals(this.target)
-    ) {
-      return new ListRemoveAtEdit(this.target, this.index + 1);
-    }
-    if (
-      (prior instanceof ListPopFrontEdit || prior instanceof ListPopBackEdit) &&
-      prior.target.equals(this.target)
-    ) {
-      if (prior instanceof ListPopFrontEdit) {
-        if (this.index === 0) {
-          return new NoOpEdit(
-            this.target,
-            `ListPopFrontEdit already removed item at index 0.`,
-          );
-        }
-        return new ListRemoveAtEdit(this.target, this.index - 1);
-      }
-      // ListPopBackEdit — doesn't affect indices below the last element
       return this;
     }
     return super.transform(prior);
   }
 
   override transformLaterConcurrentEdit(concurrent: Edit): Edit {
+    if (this.anchor === "front") {
+      // Front-anchored remove at index 0: shift concurrent indexed edits.
+      if (
+        concurrent instanceof ListInsertAtEdit &&
+        !concurrent.anchor &&
+        this.target.equals(concurrent.target)
+      ) {
+        if (concurrent.index > 0) {
+          return new ListInsertAtEdit(
+            concurrent.target,
+            concurrent.index - 1,
+            concurrent.node,
+          );
+        }
+        return concurrent;
+      }
+      if (
+        concurrent instanceof ListRemoveAtEdit &&
+        !concurrent.anchor &&
+        this.target.equals(concurrent.target)
+      ) {
+        if (concurrent.index > 0) {
+          return new ListRemoveAtEdit(concurrent.target, concurrent.index - 1);
+        }
+        if (concurrent.index === 0) {
+          return new NoOpEdit(
+            concurrent.target,
+            `ListRemoveAtEdit already removed item at index 0.`,
+          );
+        }
+        return concurrent;
+      }
+      if (
+        concurrent instanceof ListReorderEdit &&
+        this.target.equals(concurrent.target)
+      ) {
+        if (concurrent.fromIndex === 0) {
+          return new NoOpEdit(
+            concurrent.target,
+            `ListRemoveAtEdit removed the item being reordered at index 0.`,
+          );
+        }
+        const newFrom = concurrent.fromIndex > 0
+          ? concurrent.fromIndex - 1
+          : concurrent.fromIndex;
+        const newTo = concurrent.toIndex > 0
+          ? concurrent.toIndex - 1
+          : concurrent.toIndex;
+        if (newFrom === concurrent.fromIndex && newTo === concurrent.toIndex) {
+          return super.transformLaterConcurrentEdit(concurrent);
+        }
+        return new ListReorderEdit(concurrent.target, newFrom, newTo);
+      }
+      return super.transformLaterConcurrentEdit(concurrent);
+    }
+
+    if (this.anchor === "back") {
+      // Back-anchored remove: removing last doesn't shift existing indices.
+      return super.transformLaterConcurrentEdit(concurrent);
+    }
+
+    // Non-anchored indexed remove — original logic.
     if (
       concurrent instanceof ListInsertAtEdit &&
+      !concurrent.anchor &&
       this.target.equals(concurrent.target)
     ) {
       if (concurrent.index > this.index) {
@@ -704,6 +660,7 @@ export class ListRemoveAtEdit extends NoOpOnRemovedTargetEdit {
     }
     if (
       concurrent instanceof ListRemoveAtEdit &&
+      !concurrent.anchor &&
       this.target.equals(concurrent.target)
     ) {
       if (concurrent.index > this.index) {
@@ -744,6 +701,22 @@ export class ListRemoveAtEdit extends NoOpOnRemovedTargetEdit {
   computeInverse(preDoc: Node): Edit {
     const nodes = this.navigateOrThrow(preDoc, this.target);
     const list = this.assertList(nodes[0]!);
+    if (this.anchor === "front") {
+      return new ListInsertAtEdit(
+        this.target,
+        0,
+        list.items[0]!.clone(),
+        "front",
+      );
+    }
+    if (this.anchor === "back") {
+      return new ListInsertAtEdit(
+        this.target,
+        0,
+        list.items[list.items.length - 1]!.clone(),
+        "back",
+      );
+    }
     return new ListInsertAtEdit(
       this.target,
       this.index,
@@ -754,19 +727,24 @@ export class ListRemoveAtEdit extends NoOpOnRemovedTargetEdit {
   equals(other: Edit): boolean {
     return other instanceof ListRemoveAtEdit &&
       this.target.equals(other.target) &&
-      this.index === other.index;
+      this.index === other.index &&
+      this.anchor === other.anchor;
   }
 
   withTarget(target: Selector): ListRemoveAtEdit {
-    return new ListRemoveAtEdit(target, this.index);
+    return new ListRemoveAtEdit(target, this.index, this.anchor);
   }
 
   encodeRemoteEdit(): EncodedListRemoveAtEdit {
-    return {
+    const encoded: EncodedListRemoveAtEdit = {
       kind: "ListRemoveAtEdit",
       target: this.target.format(),
       index: this.index,
     };
+    if (this.anchor) {
+      (encoded as Record<string, unknown>).anchor = this.anchor;
+    }
+    return encoded;
   }
 }
 
@@ -776,7 +754,22 @@ registerRemoteEditDecoder<EncodedListRemoveAtEdit>(
     new ListRemoveAtEdit(
       Selector.parse(encodedEdit.target),
       encodedEdit.index,
+      (encodedEdit as Record<string, unknown>).anchor as
+        | ListAnchor
+        | undefined,
     ),
+);
+
+// Backward-compat decoders for old wire format kinds.
+registerRemoteEditDecoder(
+  "ListPopBackEdit" as EncodedRemoteEdit["kind"],
+  (e: Record<string, unknown>) =>
+    new ListRemoveAtEdit(Selector.parse(e.target as string), 0, "back"),
+);
+registerRemoteEditDecoder(
+  "ListPopFrontEdit" as EncodedRemoteEdit["kind"],
+  (e: Record<string, unknown>) =>
+    new ListRemoveAtEdit(Selector.parse(e.target as string), 0, "front"),
 );
 
 /** Moves an item from one index to another in every list matched by the target selector. */
@@ -859,6 +852,18 @@ export class ListReorderEdit extends NoOpOnRemovedTargetEdit {
       prior instanceof ListInsertAtEdit &&
       prior.target.equals(this.target)
     ) {
+      if (prior.anchor === "front") {
+        // Front insert always inserts at 0, shifts everything +1.
+        return new ListReorderEdit(
+          this.target,
+          this.fromIndex + 1,
+          this.toIndex + 1,
+        );
+      }
+      if (prior.anchor === "back") {
+        // Back insert appends — doesn't affect existing indices.
+        return super.transform(prior);
+      }
       const newFrom = this.fromIndex >= prior.index
         ? this.fromIndex + 1
         : this.fromIndex;
@@ -874,6 +879,24 @@ export class ListReorderEdit extends NoOpOnRemovedTargetEdit {
       prior instanceof ListRemoveAtEdit &&
       prior.target.equals(this.target)
     ) {
+      if (prior.anchor === "front") {
+        // Front remove always removes index 0.
+        if (this.fromIndex === 0) {
+          return new NoOpEdit(
+            this.target,
+            `front-anchored ListRemoveAtEdit removed the item being reordered at index 0.`,
+          );
+        }
+        return new ListReorderEdit(
+          this.target,
+          this.fromIndex - 1,
+          this.toIndex > 0 ? this.toIndex - 1 : this.toIndex,
+        );
+      }
+      if (prior.anchor === "back") {
+        // Back remove removes last — doesn't affect indices below the last.
+        return super.transform(prior);
+      }
       if (prior.index === this.fromIndex) {
         return new NoOpEdit(
           this.target,
@@ -890,32 +913,6 @@ export class ListReorderEdit extends NoOpOnRemovedTargetEdit {
         return super.transform(prior);
       }
       return new ListReorderEdit(this.target, newFrom, newTo);
-    }
-    if (
-      prior instanceof ListPushFrontEdit &&
-      prior.target.equals(this.target)
-    ) {
-      return new ListReorderEdit(
-        this.target,
-        this.fromIndex + 1,
-        this.toIndex + 1,
-      );
-    }
-    if (
-      prior instanceof ListPopFrontEdit &&
-      prior.target.equals(this.target)
-    ) {
-      if (this.fromIndex === 0) {
-        return new NoOpEdit(
-          this.target,
-          `ListPopFrontEdit removed the item being reordered at index 0.`,
-        );
-      }
-      return new ListReorderEdit(
-        this.target,
-        this.fromIndex - 1,
-        this.toIndex > 0 ? this.toIndex - 1 : this.toIndex,
-      );
     }
     return super.transform(prior);
   }

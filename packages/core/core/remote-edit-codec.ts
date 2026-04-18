@@ -13,10 +13,6 @@ export type EncodedRemoteEdit =
     editName: string;
     args: PrimitiveValue[];
   }
-  | { kind: "ListPushBackEdit"; target: string; node: PlainNode }
-  | { kind: "ListPushFrontEdit"; target: string; node: PlainNode }
-  | { kind: "ListPopBackEdit"; target: string }
-  | { kind: "ListPopFrontEdit"; target: string }
   | { kind: "UpdateTagEdit"; target: string; tag: string }
   | { kind: "WrapRecordEdit"; target: string; field: string; tag: string }
   | { kind: "WrapListEdit"; target: string; tag: string }

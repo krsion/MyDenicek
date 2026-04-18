@@ -2,18 +2,19 @@ import { Selector, type SelectorSegment } from "../selector.ts";
 import type { Node } from "../nodes/base.ts";
 import { ReferenceNode } from "../nodes/reference-node.ts";
 import { RecordAddEdit } from "./record-edits.ts";
-import { ListPushBackEdit, ListPushFrontEdit } from "./list-edits.ts";
+import { ListInsertAtEdit } from "./list-edits.ts";
 import type { Edit } from "./base.ts";
 
 /**
- * Sentinel index used as the payload base for {@link ListPushBackEdit}.
+ * Sentinel index used as the payload base for back-anchored inserts.
  *
- * PushBack appends at the **end** of the list, so the real insertion index is
- * always ≥ the current list length.  Using `0` as a placeholder would cause
- * `makeRelative` to find a false common prefix with explicit index-0 refs,
- * producing a shorter (and incorrect) relative path.  A very large sentinel
- * avoids accidental prefix matching with any realistic index while still
- * being recognised as a numeric index segment by the selector machinery.
+ * Back-anchored inserts append at the **end** of the list, so the real
+ * insertion index is always ≥ the current list length.  Using `0` as a
+ * placeholder would cause `makeRelative` to find a false common prefix
+ * with explicit index-0 refs, producing a shorter (and incorrect) relative
+ * path.  A very large sentinel avoids accidental prefix matching with any
+ * realistic index while still being recognised as a numeric index segment
+ * by the selector machinery.
  */
 const PUSH_BACK_SENTINEL_INDEX = Number.MAX_SAFE_INTEGER;
 
@@ -86,10 +87,10 @@ export function rewriteRefsInPayload(
 }
 
 /**
- * If `edit` carries an inserted payload ({@link RecordAddEdit},
- * {@link ListPushBackEdit}, or {@link ListPushFrontEdit}), returns a copy of
- * the edit whose payload has all {@link ReferenceNode} selectors rewritten
- * through `transformSelector`. Other edit types are returned unchanged.
+ * If `edit` carries an inserted payload ({@link RecordAddEdit} or
+ * {@link ListInsertAtEdit}), returns a copy of the edit whose payload has
+ * all {@link ReferenceNode} selectors rewritten through `transformSelector`.
+ * Other edit types are returned unchanged.
  */
 export function rewriteInsertEditRefs(
   edit: Edit,
@@ -100,23 +101,24 @@ export function rewriteInsertEditRefs(
     rewriteRefsInPayload(node, edit.target, transformSelector);
     return new RecordAddEdit(edit.target, node);
   }
-  if (edit instanceof ListPushBackEdit) {
+  if (edit instanceof ListInsertAtEdit) {
     const node = edit.node.clone();
-    rewriteRefsInPayload(
-      node,
-      new Selector([...edit.target.segments, PUSH_BACK_SENTINEL_INDEX]),
-      transformSelector,
-    );
-    return new ListPushBackEdit(edit.target, node);
-  }
-  if (edit instanceof ListPushFrontEdit) {
-    const node = edit.node.clone();
-    rewriteRefsInPayload(
-      node,
-      new Selector([...edit.target.segments, 0]),
-      transformSelector,
-    );
-    return new ListPushFrontEdit(edit.target, node);
+    if (edit.anchor === "back") {
+      rewriteRefsInPayload(
+        node,
+        new Selector([...edit.target.segments, PUSH_BACK_SENTINEL_INDEX]),
+        transformSelector,
+      );
+    } else {
+      // Front-anchored or non-anchored: use actual index (0 for front).
+      const idx = edit.anchor === "front" ? 0 : edit.index;
+      rewriteRefsInPayload(
+        node,
+        new Selector([...edit.target.segments, idx]),
+        transformSelector,
+      );
+    }
+    return new ListInsertAtEdit(edit.target, edit.index, node, edit.anchor);
   }
   return edit;
 }

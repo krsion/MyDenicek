@@ -6,13 +6,10 @@ export {
 } from "./edits/base.ts";
 export {
   ListInsertAtEdit,
-  ListPopBackEdit,
-  ListPopFrontEdit,
-  ListPushBackEdit,
-  ListPushFrontEdit,
   ListRemoveAtEdit,
   ListReorderEdit,
 } from "./edits/list-edits.ts";
+export type { ListAnchor } from "./edits/list-edits.ts";
 export {
   RecordAddEdit,
   RecordDeleteEdit,
