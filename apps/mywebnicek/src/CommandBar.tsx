@@ -291,6 +291,8 @@ const RECORD_CMDS = [
   "tree",
 ];
 const LIST_CMDS = [
+  "insert",
+  "remove",
   "pushBack",
   "pushFront",
   "popBack",
@@ -330,6 +332,8 @@ const ARG_HINTS: Record<string, string[]> = {
   delete: ["<field>"],
   rename: ["<old>", "<new>"],
   set: ["<value>"],
+  insert: ["<index>", "<value>"],
+  remove: ["<index>"],
   pushBack: ["<value>"],
   pushFront: ["<value>"],
   updateTag: ["<tag>"],
@@ -371,8 +375,10 @@ Commands (shown after selecting a path):
   delete <field>                  Delete a field
   rename <old> <new>              Rename a field
   set <value>                     Set a primitive value
-  pushBack / pushFront <value>    Add to list
-  popBack / popFront              Remove from list
+  insert <index> <value|json>     Insert at index (!idx for strict)
+  remove <index>                  Remove at index (!idx for strict)
+  pushBack / pushFront <value>    Add to list (end / start)
+  popBack / popFront              Remove from list (end / start)
   updateTag <tag>                 Update structural tag
   wrapRecord <field> <tag>        Wrap in a record
   wrapList <tag>                  Wrap in a list
@@ -817,6 +823,84 @@ export function CommandBar({ dk }: CommandBarProps) {
           break;
         }
 
+        case "insert": {
+          if (target === null || !argsStr) {
+            pushOutput({
+              text:
+                "Usage: /selector insert <index> <value|json>  (prefix index with ! for strict)",
+              kind: "error",
+            });
+            break;
+          }
+          const { args: insertArgs } = splitArgs(argsStr, 2);
+          if (insertArgs.length < 2) {
+            pushOutput({
+              text:
+                "Usage: /selector insert <index> <value|json>  (prefix index with ! for strict)",
+              kind: "error",
+            });
+            break;
+          }
+          const strictInsert = insertArgs[0].startsWith("!");
+          const insertIdx = Number(
+            strictInsert ? insertArgs[0].slice(1) : insertArgs[0],
+          );
+          if (Number.isNaN(insertIdx)) {
+            pushOutput({
+              text: `Invalid index: ${insertArgs[0]}`,
+              kind: "error",
+            });
+            break;
+          }
+          const insertVal = parseValue(insertArgs[1]);
+          const insertId = dk.insert(
+            target,
+            insertIdx,
+            insertVal,
+            strictInsert || undefined,
+          );
+          pushOutput({
+            text:
+              `Inserted at ${insertIdx}${strictInsert ? " (strict)" : ""} in ${parsed.selector} → ${insertId}`,
+            kind: "success",
+          });
+          break;
+        }
+
+        case "remove": {
+          if (target === null || !argsStr) {
+            pushOutput({
+              text:
+                "Usage: /selector remove <index>  (prefix index with ! for strict)",
+              kind: "error",
+            });
+            break;
+          }
+          const rawIdx = argsStr.trim();
+          const strictRemove = rawIdx.startsWith("!");
+          const removeIdx = Number(
+            strictRemove ? rawIdx.slice(1) : rawIdx,
+          );
+          if (Number.isNaN(removeIdx)) {
+            pushOutput({
+              text: `Invalid index: ${rawIdx}`,
+              kind: "error",
+            });
+            break;
+          }
+          const removeId = dk.remove(
+            target,
+            removeIdx,
+            strictRemove || undefined,
+          );
+          pushOutput({
+            text:
+              `Removed index ${removeIdx}${strictRemove ? " (strict)" : ""} from ${parsed.selector} → ${removeId}`,
+            kind: "success",
+          });
+          break;
+        }
+
         case "pushBack": {
           if (target === null || !argsStr) {
             pushOutput({
@@ -826,7 +910,7 @@ export function CommandBar({ dk }: CommandBarProps) {
             break;
           }
           const value = parseValue(argsStr);
-          const id = dk.pushBack(target, value);
+          const id = dk.insert(target, -1, value, true);
           pushOutput({
             text: `Pushed to back of ${parsed.selector} → ${id}`,
             kind: "success",
@@ -843,7 +927,7 @@ export function CommandBar({ dk }: CommandBarProps) {
             break;
           }
           const value = parseValue(argsStr);
-          const id = dk.pushFront(target, value);
+          const id = dk.insert(target, 0, value, true);
           pushOutput({
             text: `Pushed to front of ${parsed.selector} → ${id}`,
             kind: "success",
@@ -859,7 +943,7 @@ export function CommandBar({ dk }: CommandBarProps) {
             });
             break;
           }
-          const id = dk.popBack(target);
+          const id = dk.remove(target, -1, true);
           pushOutput({
             text: `Popped back from ${parsed.selector} → ${id}`,
             kind: "success",
@@ -875,7 +959,7 @@ export function CommandBar({ dk }: CommandBarProps) {
             });
             break;
           }
-          const id = dk.popFront(target);
+          const id = dk.remove(target, 0, true);
           pushOutput({
             text: `Popped front from ${parsed.selector} → ${id}`,
             kind: "success",

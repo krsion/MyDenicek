@@ -1,6 +1,6 @@
 {
   "name": "@mydenicek/react",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "description": "React hook for the Denicek collaborative CRDT.",
   "license": "MIT",
   "exports": {
@@ -17,7 +17,7 @@
   },
   "imports": {
     "react": "npm:react@^19.0.0",
-    "@mydenicek/core": "jsr:@mydenicek/core@^0.2",
+    "@mydenicek/core": "jsr:@mydenicek/core@^0.3",
     "@mydenicek/sync": "jsr:@mydenicek/sync@^0.1"
   }
 }
