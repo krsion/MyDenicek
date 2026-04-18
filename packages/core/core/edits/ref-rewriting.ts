@@ -103,22 +103,22 @@ export function rewriteInsertEditRefs(
   }
   if (edit instanceof ListInsertAtEdit) {
     const node = edit.node.clone();
-    if (edit.anchor === "back") {
+    if (edit.strict && edit.index === -1) {
       rewriteRefsInPayload(
         node,
         new Selector([...edit.target.segments, PUSH_BACK_SENTINEL_INDEX]),
         transformSelector,
       );
     } else {
-      // Front-anchored or non-anchored: use actual index (0 for front).
-      const idx = edit.anchor === "front" ? 0 : edit.index;
+      // Strict front or non-strict: use actual index (0 for strict front).
+      const idx = (edit.strict && edit.index === 0) ? 0 : edit.index;
       rewriteRefsInPayload(
         node,
         new Selector([...edit.target.segments, idx]),
         transformSelector,
       );
     }
-    return new ListInsertAtEdit(edit.target, edit.index, node, edit.anchor);
+    return new ListInsertAtEdit(edit.target, edit.index, node, edit.strict);
   }
   return edit;
 }

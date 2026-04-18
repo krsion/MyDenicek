@@ -373,7 +373,7 @@ export class Denicek {
    */
   pushBack(target: string, value: PlainNode): string {
     return this.commit(
-      new ListInsertAtEdit(Selector.parse(target), 0, Node.fromPlain(value), "back"),
+      new ListInsertAtEdit(Selector.parse(target), -1, Node.fromPlain(value), true),
     );
   }
 
@@ -384,7 +384,7 @@ export class Denicek {
    */
   pushFront(target: string, value: PlainNode): string {
     return this.commit(
-      new ListInsertAtEdit(Selector.parse(target), 0, Node.fromPlain(value), "front"),
+      new ListInsertAtEdit(Selector.parse(target), 0, Node.fromPlain(value), true),
     );
   }
 
@@ -394,7 +394,7 @@ export class Denicek {
    * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
    */
   popBack(target: string): string {
-    return this.commit(new ListRemoveAtEdit(Selector.parse(target), 0, "back"));
+    return this.commit(new ListRemoveAtEdit(Selector.parse(target), -1, true));
   }
 
   /**
@@ -403,7 +403,7 @@ export class Denicek {
    * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
    */
   popFront(target: string): string {
-    return this.commit(new ListRemoveAtEdit(Selector.parse(target), 0, "front"));
+    return this.commit(new ListRemoveAtEdit(Selector.parse(target), 0, true));
   }
 
   /**

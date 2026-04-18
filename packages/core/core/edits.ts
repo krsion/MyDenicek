@@ -9,7 +9,6 @@ export {
   ListRemoveAtEdit,
   ListReorderEdit,
 } from "./edits/list-edits.ts";
-export type { ListAnchor } from "./edits/list-edits.ts";
 export {
   RecordAddEdit,
   RecordDeleteEdit,

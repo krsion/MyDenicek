@@ -20,7 +20,6 @@ export {
   WrapListEdit,
   WrapRecordEdit,
 } from "./core/edits.ts";
-export type { ListAnchor } from "./core/edits.ts";
 export {
   ListInsertAtEdit,
   ListRemoveAtEdit,
