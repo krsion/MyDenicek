@@ -860,8 +860,9 @@ export function CommandBar({ dk }: CommandBarProps) {
             strictInsert || undefined,
           );
           pushOutput({
-            text:
-              `Inserted at ${insertIdx}${strictInsert ? " (strict)" : ""} in ${parsed.selector} → ${insertId}`,
+            text: `Inserted at ${insertIdx}${
+              strictInsert ? " (strict)" : ""
+            } in ${parsed.selector} → ${insertId}`,
             kind: "success",
           });
           break;
@@ -894,8 +895,9 @@ export function CommandBar({ dk }: CommandBarProps) {
             strictRemove || undefined,
           );
           pushOutput({
-            text:
-              `Removed index ${removeIdx}${strictRemove ? " (strict)" : ""} from ${parsed.selector} → ${removeId}`,
+            text: `Removed index ${removeIdx}${
+              strictRemove ? " (strict)" : ""
+            } from ${parsed.selector} → ${removeId}`,
             kind: "success",
           });
           break;
