@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "@std/assert";
-import { Denicek, evaluateAllFormulas } from "../../mod.ts";
+import { Denicek } from "../../mod.ts";
 
 function sync(a: Denicek, b: Denicek): void {
   const aFrontiers = a.frontiers;
@@ -28,7 +28,7 @@ Deno.test("formula $ref is rewritten when concurrent rename changes referenced f
   const bob = new Denicek("bob", initial);
 
   // Before any concurrent edits, the formula works
-  const beforeResults = evaluateAllFormulas(alice.toPlain());
+  const beforeResults = alice.evaluateFormulas();
   assertEquals(beforeResults.get("data/output"), "HELLO");
 
   // Alice renames "input" → "source" concurrently with Bob editing the value
@@ -41,7 +41,7 @@ Deno.test("formula $ref is rewritten when concurrent rename changes referenced f
 
   // The formula's $ref should be rewritten from "../input" to "../source"
   // so the formula still evaluates correctly.
-  const afterResults = evaluateAllFormulas(alice.toPlain());
+  const afterResults = alice.evaluateFormulas();
   const formulaResult = afterResults.get("data/output");
 
   // After LWW resolution, the value is either "hello" or "world";
@@ -80,7 +80,7 @@ Deno.test("formula $ref works when concurrent edit changes referenced value", ()
   assertEquals(alice.toPlain(), bob.toPlain());
 
   // Formula still works — the $ref path is still valid
-  const results = evaluateAllFormulas(alice.toPlain());
+  const results = alice.evaluateFormulas();
   const formulaResult = results.get("data/output");
   assert(
     typeof formulaResult === "string",
@@ -122,7 +122,7 @@ Deno.test("formula $ref is rewritten when concurrent wrap changes path structure
 
   // The formula's $ref should be rewritten from "../input" to
   // "../input/value" so it still points to the actual value after wrap.
-  const results = evaluateAllFormulas(alice.toPlain());
+  const results = alice.evaluateFormulas();
   const formulaResult = results.get("data/output");
 
   assert(

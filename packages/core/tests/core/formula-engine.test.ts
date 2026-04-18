@@ -1,8 +1,8 @@
 import { assert, assertEquals } from "@std/assert";
 import {
   evaluateAllFormulas,
-  evaluateFormulaNode,
   FormulaError,
+  Node,
   registerFormulaOperation,
 } from "../../mod.ts";
 import type { FormulaResult, PlainNode, PlainRecord } from "../../mod.ts";
@@ -25,16 +25,25 @@ function makeFormula(operation: string, args: PlainNode[]): PlainRecord {
   };
 }
 
+/** Build a Node tree from plain and evaluate all formulas, returning the results map. */
+function evalAll(plain: PlainNode): Map<string, FormulaResult> {
+  return evaluateAllFormulas(Node.fromPlain(plain));
+}
+
+/** Evaluate a standalone formula (possibly with a doc root). */
 function evalStandalone(
   formula: PlainRecord,
   root?: PlainNode,
-  path?: string,
 ): FormulaResult {
-  return evaluateFormulaNode(
-    formula,
-    root ?? formula,
-    path ?? "",
-  );
+  const doc = root ?? formula;
+  const results = evalAll(doc);
+  // Find the formula result — for a standalone formula the root IS the formula
+  if (doc === formula) {
+    return results.get("/") ?? new FormulaError("formula not found in results");
+  }
+  // For a doc with formulas, return the first formula result
+  for (const [, v] of results) return v;
+  return new FormulaError("no formula found");
 }
 
 // ── 1. Built-in math operations ─────────────────────────────────────────
@@ -129,9 +138,8 @@ Deno.test("$ref resolves sibling primitive value", () => {
     b: 20,
     result: makeFormula("sum", [{ $ref: "/a" }, { $ref: "/b" }]),
   };
-  const formula = doc.result as PlainRecord;
-  const result = evaluateFormulaNode(formula, doc, "result");
-  assertEquals(result, 30);
+  const results = evalAll(doc);
+  assertEquals(results.get("result"), 30);
 });
 
 Deno.test("$ref with absolute path starting with /", () => {
@@ -143,9 +151,8 @@ Deno.test("$ref with absolute path starting with /", () => {
     } as PlainRecord,
     result: makeFormula("sum", [{ $ref: "/nested/value" }]),
   };
-  const formula = doc.result as PlainRecord;
-  const result = evaluateFormulaNode(formula, doc, "result");
-  assertEquals(result, 42);
+  const results = evalAll(doc);
+  assertEquals(results.get("result"), 42);
 });
 
 Deno.test("$ref with relative path using ..", () => {
@@ -157,10 +164,8 @@ Deno.test("$ref with relative path using ..", () => {
       formula: makeFormula("sum", [{ $ref: "../../../../value" }]),
     } as PlainRecord,
   };
-  const innerGroup = doc.group as PlainRecord;
-  const formula = innerGroup.formula as PlainRecord;
-  const result = evaluateFormulaNode(formula, doc, "group/formula");
-  assertEquals(result, 7);
+  const results = evalAll(doc);
+  assertEquals(results.get("group/formula"), 7);
 });
 
 Deno.test("$ref with wildcard expands to multiple values", () => {
@@ -176,9 +181,8 @@ Deno.test("$ref with wildcard expands to multiple values", () => {
     },
     result: makeFormula("sum", [{ $ref: "/items/*/value" }]),
   };
-  const formula = doc.result as PlainRecord;
-  const result = evaluateFormulaNode(formula, doc, "result");
-  assertEquals(result, 6);
+  const results = evalAll(doc);
+  assertEquals(results.get("result"), 6);
 });
 
 Deno.test("sum over wildcard-expanded refs", () => {
@@ -190,9 +194,8 @@ Deno.test("sum over wildcard-expanded refs", () => {
     },
     total: makeFormula("sum", [{ $ref: "/scores" }]),
   };
-  const formula = doc.total as PlainRecord;
-  const result = evaluateFormulaNode(formula, doc, "total");
-  assertEquals(result, 60);
+  const results = evalAll(doc);
+  assertEquals(results.get("total"), 60);
 });
 
 // ── 4. countChildren ────────────────────────────────────────────────────
@@ -206,9 +209,8 @@ Deno.test("countChildren with $ref to a list", () => {
     },
     count: makeFormula("countChildren", [{ $ref: "/items" }]),
   };
-  const formula = doc.count as PlainRecord;
-  const result = evaluateFormulaNode(formula, doc, "count");
-  assertEquals(result, 3);
+  const results = evalAll(doc);
+  assertEquals(results.get("count"), 3);
 });
 
 Deno.test("countChildren with wildcard ref counts matched items", () => {
@@ -223,9 +225,8 @@ Deno.test("countChildren with wildcard ref counts matched items", () => {
     },
     count: makeFormula("countChildren", [{ $ref: "/items/*/name" }]),
   };
-  const formula = doc.count as PlainRecord;
-  const result = evaluateFormulaNode(formula, doc, "count");
-  assertEquals(result, 2);
+  const results = evalAll(doc);
+  assertEquals(results.get("count"), 2);
 });
 
 // ── 5. Nested formulas ──────────────────────────────────────────────────
@@ -243,9 +244,8 @@ Deno.test("formula referencing another formula via $ref", () => {
     partial: makeFormula("sum", [3, 4]),
     total: makeFormula("product", [{ $ref: "/partial" }, 2]),
   };
-  const formula = doc.total as PlainRecord;
-  const result = evaluateFormulaNode(formula, doc, "total");
-  assertEquals(result, 14);
+  const results = evalAll(doc);
+  assertEquals(results.get("total"), 14);
 });
 
 // ── 6. Error cases ──────────────────────────────────────────────────────
@@ -283,8 +283,8 @@ Deno.test("circular reference returns FormulaError", () => {
     a: formulaA,
     b: formulaB,
   };
-  const result = evaluateFormulaNode(formulaA, doc, "a");
-  assertFormulaError(result, "circular reference");
+  const results = evalAll(doc);
+  assertFormulaError(results.get("a")!, "circular reference");
 });
 
 Deno.test("reference to non-existent path returns FormulaError", () => {
@@ -292,9 +292,8 @@ Deno.test("reference to non-existent path returns FormulaError", () => {
     $tag: "root",
     result: makeFormula("sum", [{ $ref: "/missing/path" }]),
   };
-  const formula = doc.result as PlainRecord;
-  const result = evaluateFormulaNode(formula, doc, "result");
-  assertFormulaError(result, "reference '/missing/path' not found");
+  const results = evalAll(doc);
+  assertFormulaError(results.get("result")!, "reference '/missing/path' not found");
 });
 
 Deno.test("max depth exceeded returns FormulaError", () => {
@@ -322,7 +321,7 @@ Deno.test("evaluateAllFormulas finds and evaluates all formulas", () => {
     sumAB: makeFormula("sum", [{ $ref: "/a" }, { $ref: "/b" }]),
     doubled: makeFormula("product", [{ $ref: "/a" }, 2]),
   };
-  const results = evaluateAllFormulas(doc);
+  const results = evalAll(doc);
   assertEquals(results.get("sumAB"), 30);
   assertEquals(results.get("doubled"), 20);
   assertEquals(results.size, 2);
@@ -336,7 +335,7 @@ Deno.test("evaluateAllFormulas result keys match paths", () => {
       inner: makeFormula("sum", [1, 2]),
     } as PlainRecord,
   };
-  const results = evaluateAllFormulas(doc);
+  const results = evalAll(doc);
   assertEquals(results.has("group/inner"), true);
   assertEquals(results.get("group/inner"), 3);
 });
@@ -352,7 +351,7 @@ Deno.test("evaluateAllFormulas handles nested document structures", () => {
       ],
     },
   };
-  const results = evaluateAllFormulas(doc);
+  const results = evalAll(doc);
   assertEquals(results.get("items/0"), 10);
   assertEquals(results.get("items/1"), 9);
 });
@@ -407,7 +406,6 @@ Deno.test("reference to record field returns FormulaError for non-primitive", ()
     } as PlainRecord,
     result: makeFormula("sum", [{ $ref: "/nested" }]),
   };
-  const formula = doc.result as PlainRecord;
-  const result = evaluateFormulaNode(formula, doc, "result");
-  assert(result instanceof FormulaError, "expected FormulaError");
+  const results = evalAll(doc);
+  assert(results.get("result") instanceof FormulaError, "expected FormulaError");
 });

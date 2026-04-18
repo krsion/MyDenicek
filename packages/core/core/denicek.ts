@@ -617,7 +617,9 @@ export class Denicek {
    * Results are returned as a map from formula path to computed value or error.
    */
   evaluateFormulas(): Map<string, FormulaResult> {
-    return evaluateAllFormulas(this.materialize());
+    const doc = this.cachedDoc ?? this.rematerialize();
+    this.cachedDoc = doc;
+    return evaluateAllFormulas(doc);
   }
 
   /**

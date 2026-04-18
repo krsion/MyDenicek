@@ -1,10 +1,9 @@
-import type {
-  PlainList,
-  PlainNode,
-  PlainRecord,
-  PlainRef,
-} from "./nodes/plain.ts";
-import type { PrimitiveValue } from "./selector.ts";
+import { Node } from "./nodes/base.ts";
+import { ListNode } from "./nodes/list-node.ts";
+import { PrimitiveNode } from "./nodes/primitive-node.ts";
+import { RecordNode } from "./nodes/record-node.ts";
+import { ReferenceNode } from "./nodes/reference-node.ts";
+import { type PrimitiveValue, Selector } from "./selector.ts";
 
 // ── FormulaError ────────────────────────────────────────────────────────
 
@@ -25,32 +24,11 @@ export type FormulaOperation = (args: PrimitiveValue[]) => PrimitiveValue;
 /** The result of evaluating a formula: either a value or a {@link FormulaError}. */
 export type FormulaResult = PrimitiveValue | FormulaError;
 
-// ── Type guards ─────────────────────────────────────────────────────────
+// ── Type guard ──────────────────────────────────────────────────────────
 
-function isPlainRef(node: PlainNode): node is PlainRef {
-  return typeof node === "object" && node !== null && "$ref" in node &&
-    typeof (node as PlainRef).$ref === "string";
-}
-
-function isPlainList(node: PlainNode): node is PlainList {
-  return typeof node === "object" && node !== null && "$tag" in node &&
-    "$items" in node;
-}
-
-function isPlainRecord(node: PlainNode): node is PlainRecord {
-  return typeof node === "object" && node !== null && "$tag" in node &&
-    !("$items" in node);
-}
-
-function isFormulaNode(node: PlainNode): node is PlainRecord {
-  if (!isPlainRecord(node) || typeof node.$tag !== "string") return false;
-  const tag = node.$tag as string;
-  return tag.startsWith("x-formula") || tagEvaluators.has(tag);
-}
-
-function isPrimitive(node: PlainNode): node is PrimitiveValue {
-  return typeof node === "string" || typeof node === "number" ||
-    typeof node === "boolean";
+function isFormulaNode(node: Node): node is RecordNode {
+  return node instanceof RecordNode &&
+    (node.tag.startsWith("x-formula") || tagEvaluators.has(node.tag));
 }
 
 // ── Operation Registry ──────────────────────────────────────────────────
@@ -73,11 +51,11 @@ function lookupOperation(name: string): FormulaOperation | undefined {
 
 /**
  * A tag evaluator computes a result from a formula record's own fields.
- * The `evaluate` callback recursively evaluates child formula nodes.
+ * The `evaluate` callback recursively evaluates child nodes.
  */
 export type FormulaTagEvaluator = (
-  node: PlainRecord,
-  evaluate: (child: PlainNode, fieldName?: string) => FormulaResult,
+  node: RecordNode,
+  evaluate: (child: Node, fieldName?: string) => FormulaResult,
 ) => FormulaResult;
 
 const tagEvaluators = new Map<string, FormulaTagEvaluator>();
@@ -219,42 +197,50 @@ registerFormulaOperation("countChildren", (args) => {
 // ── Built-in tag evaluators ─────────────────────────────────────────────
 
 registerFormulaTagEvaluator("x-formula-plus", (node, evaluate) => {
-  const left = evaluate(node.left as PlainNode, "left");
-  const right = evaluate(node.right as PlainNode, "right");
+  const left = evaluate(node.fields["left"]!, "left");
+  const right = evaluate(node.fields["right"]!, "right");
   if (left instanceof FormulaError) return left;
   if (right instanceof FormulaError) return right;
   return Number(left) + Number(right);
 });
 
 registerFormulaTagEvaluator("x-formula-minus", (node, evaluate) => {
-  const left = evaluate(node.left as PlainNode, "left");
-  const right = evaluate(node.right as PlainNode, "right");
+  const left = evaluate(node.fields["left"]!, "left");
+  const right = evaluate(node.fields["right"]!, "right");
   if (left instanceof FormulaError) return left;
   if (right instanceof FormulaError) return right;
   return Number(left) - Number(right);
 });
 
 registerFormulaTagEvaluator("x-formula-times", (node, evaluate) => {
-  const left = evaluate(node.left as PlainNode, "left");
-  const right = evaluate(node.right as PlainNode, "right");
+  const left = evaluate(node.fields["left"]!, "left");
+  const right = evaluate(node.fields["right"]!, "right");
   if (left instanceof FormulaError) return left;
   if (right instanceof FormulaError) return right;
   return Number(left) * Number(right);
 });
 
 registerFormulaTagEvaluator("x-formula-split-first", (node, evaluate) => {
-  const source = evaluate(node.source as PlainNode, "source");
+  const source = evaluate(node.fields["source"]!, "source");
   if (source instanceof FormulaError) return source;
-  const separator = typeof node.separator === "string" ? node.separator : ", ";
+  const sepNode = node.fields["separator"];
+  const separator = sepNode instanceof PrimitiveNode &&
+      typeof sepNode.value === "string"
+    ? sepNode.value
+    : ", ";
   const str = String(source);
   const idx = str.indexOf(separator);
   return idx >= 0 ? str.slice(0, idx) : str;
 });
 
 registerFormulaTagEvaluator("x-formula-split-rest", (node, evaluate) => {
-  const source = evaluate(node.source as PlainNode, "source");
+  const source = evaluate(node.fields["source"]!, "source");
   if (source instanceof FormulaError) return source;
-  const separator = typeof node.separator === "string" ? node.separator : ", ";
+  const sepNode = node.fields["separator"];
+  const separator = sepNode instanceof PrimitiveNode &&
+      typeof sepNode.value === "string"
+    ? sepNode.value
+    : ", ";
   const str = String(source);
   const idx = str.indexOf(separator);
   return idx >= 0 ? str.slice(idx + separator.length) : "";
@@ -262,183 +248,91 @@ registerFormulaTagEvaluator("x-formula-split-rest", (node, evaluate) => {
 
 // Short aliases (used when the $ref must survive CRDT validation)
 registerFormulaTagEvaluator("split-first", (node, evaluate) => {
-  const source = evaluate(node.source as PlainNode, "source");
+  const source = evaluate(node.fields["source"]!, "source");
   if (source instanceof FormulaError) return source;
-  const separator = typeof node.separator === "string" ? node.separator : ", ";
+  const sepNode = node.fields["separator"];
+  const separator = sepNode instanceof PrimitiveNode &&
+      typeof sepNode.value === "string"
+    ? sepNode.value
+    : ", ";
   const str = String(source);
   const idx = str.indexOf(separator);
   return idx >= 0 ? str.slice(0, idx) : str;
 });
 
 registerFormulaTagEvaluator("split-rest", (node, evaluate) => {
-  const source = evaluate(node.source as PlainNode, "source");
+  const source = evaluate(node.fields["source"]!, "source");
   if (source instanceof FormulaError) return source;
-  const separator = typeof node.separator === "string" ? node.separator : ", ";
+  const sepNode = node.fields["separator"];
+  const separator = sepNode instanceof PrimitiveNode &&
+      typeof sepNode.value === "string"
+    ? sepNode.value
+    : ", ";
   const str = String(source);
   const idx = str.indexOf(separator);
   return idx >= 0 ? str.slice(idx + separator.length) : "";
 });
 
-// ── Reference resolution ────────────────────────────────────────────────
+// ── Child evaluation (transparent reference resolution) ─────────────────
 
 /**
- * Resolve an absolute path string to matching nodes in the plain tree.
- * Supports record field access, list index access, wildcard `*`, and `..`
- * (parent navigation via an explicit parent stack).
- */
-function navigatePlainNode(root: PlainNode, segments: string[]): PlainNode[] {
-  // Each entry is [currentNode, parentStack] where parentStack lets us go up.
-  type NavEntry = { node: PlainNode; parents: PlainNode[] };
-  let current: NavEntry[] = [{ node: root, parents: [] }];
-
-  for (const seg of segments) {
-    const next: NavEntry[] = [];
-
-    for (const entry of current) {
-      const { node, parents } = entry;
-
-      if (seg === "..") {
-        if (parents.length > 0) {
-          const parent = parents[parents.length - 1];
-          next.push({ node: parent, parents: parents.slice(0, -1) });
-        }
-        continue;
-      }
-
-      if (seg === "*") {
-        if (isPlainList(node)) {
-          for (const item of node.$items) {
-            next.push({ node: item, parents: [...parents, node] });
-          }
-        } else if (isPlainRecord(node)) {
-          for (const key of Object.keys(node)) {
-            if (key === "$tag") continue;
-            next.push({
-              node: node[key],
-              parents: [...parents, node],
-            });
-          }
-        }
-        continue;
-      }
-
-      if (isPlainRecord(node) && seg in node && seg !== "$tag") {
-        next.push({
-          node: node[seg],
-          parents: [...parents, node],
-        });
-      } else if (isPlainList(node)) {
-        const idx = Number(seg);
-        if (!Number.isNaN(idx) && idx >= 0 && idx < node.$items.length) {
-          next.push({
-            node: node.$items[idx],
-            parents: [...parents, node],
-          });
-        }
-      }
-    }
-
-    current = next;
-  }
-
-  return current.map((e) => e.node);
-}
-
-/** Split a `$ref` path string into navigation segments. */
-function parseRefPath(refPath: string): string[] {
-  const cleaned = refPath.startsWith("/") ? refPath.slice(1) : refPath;
-  if (cleaned === "") return [];
-  return cleaned.split("/");
-}
-
-/**
- * Resolve a `$ref` path relative to the formula's own position.
- * Absolute paths start with `/` and resolve from root.
- * Relative paths (containing `..`) resolve from the formula's location.
- */
-function resolveRefPath(
-  refPath: string,
-  root: PlainNode,
-  formulaPath: string,
-): PlainNode[] {
-  if (refPath.startsWith("/")) {
-    return navigatePlainNode(root, parseRefPath(refPath));
-  }
-
-  // Relative path: start from the formula's parent location
-  const formulaSegments = formulaPath === "" ? [] : formulaPath.split("/");
-  const refSegments = parseRefPath(refPath);
-
-  // Combine: navigate to formula location, then apply relative segments
-  const combined = [...formulaSegments, ...refSegments];
-
-  // Resolve ".." statically in the combined path
-  const resolved: string[] = [];
-  for (const seg of combined) {
-    if (seg === "..") {
-      resolved.pop();
-    } else {
-      resolved.push(seg);
-    }
-  }
-
-  return navigatePlainNode(root, resolved);
-}
-
-// ── Child evaluation (transparent $ref resolution) ──────────────────────
-
-/**
- * Resolve a `$ref` to a single evaluated value.
- * If the target is a formula, it is evaluated recursively.
- * Wildcards that expand to multiple values are an error
- * (single-value context).
- */
-function resolveRefToValue(
-  ref: PlainRef,
-  root: PlainNode,
-  contextPath: string,
-  visiting: Set<string>,
-  depth: number,
-): FormulaResult {
-  const targets = resolveRefPath(ref.$ref, root, contextPath);
-  if (targets.length === 0) {
-    return new FormulaError(`reference '${ref.$ref}' not found`);
-  }
-  if (targets.length > 1) {
-    return new FormulaError(
-      `reference '${ref.$ref}' resolved to ${targets.length} values, expected 1`,
-    );
-  }
-  const target = targets[0];
-  if (isPrimitive(target)) return target;
-  if (isFormulaNode(target)) {
-    const targetPath = computeTargetPath(ref.$ref, contextPath);
-    return evaluateFormulaNode(target, root, targetPath, visiting, depth + 1);
-  }
-  return new FormulaError(
-    `reference '${ref.$ref}' resolved to non-primitive value`,
-  );
-}
-
-/**
- * Evaluate a child node, transparently resolving `$ref` references.
+ * Evaluate a child node, transparently resolving references.
  * Callers never need to distinguish between a reference and an inline
  * value — references are navigated, and formula targets are evaluated,
  * before any type checking occurs.
  */
 function evaluateChild(
-  child: PlainNode,
-  root: PlainNode,
-  contextPath: string,
+  child: Node,
+  root: Node,
+  contextPath: Selector,
   visiting: Set<string>,
   depth: number,
 ): FormulaResult {
-  if (isPlainRef(child)) {
-    return resolveRefToValue(child, root, contextPath, visiting, depth);
+  if (child instanceof PrimitiveNode) return child.value;
+  if (child instanceof ReferenceNode) {
+    const targetPath = ReferenceNode.resolveReference(
+      contextPath,
+      child.selector,
+    );
+    if (targetPath === null) {
+      return new FormulaError(
+        `reference '${child.selector.format()}' could not be resolved`,
+      );
+    }
+    const targets = root.navigate(targetPath);
+    if (targets.length === 0) {
+      return new FormulaError(
+        `reference '${child.selector.format()}' not found`,
+      );
+    }
+    if (targets.length > 1) {
+      return new FormulaError(
+        `reference '${child.selector.format()}' resolved to ${targets.length} values, expected 1`,
+      );
+    }
+    const target = targets[0]!;
+    if (target instanceof PrimitiveNode) return target.value;
+    if (isFormulaNode(target)) {
+      return evaluateFormulaNode(
+        target as RecordNode,
+        root,
+        targetPath,
+        visiting,
+        depth + 1,
+      );
+    }
+    return new FormulaError(
+      `reference '${child.selector.format()}' resolved to non-primitive value`,
+    );
   }
-  if (isPrimitive(child)) return child;
   if (isFormulaNode(child)) {
-    return evaluateFormulaNode(child, root, contextPath, visiting, depth + 1);
+    return evaluateFormulaNode(
+      child as RecordNode,
+      root,
+      contextPath,
+      visiting,
+      depth + 1,
+    );
   }
   return new FormulaError("non-primitive, non-formula child");
 }
@@ -449,9 +343,9 @@ const MAX_DEPTH = 100;
 
 /** Evaluate a single formula node given the full document root. */
 export function evaluateFormulaNode(
-  formula: PlainRecord,
-  root: PlainNode,
-  formulaPath: string,
+  formula: RecordNode,
+  root: Node,
+  formulaPath: Selector,
   visiting: Set<string> = new Set(),
   depth: number = 0,
 ): FormulaResult {
@@ -459,10 +353,11 @@ export function evaluateFormulaNode(
     return new FormulaError("max depth exceeded");
   }
 
-  if (visiting.has(formulaPath)) {
+  const pathKey = formulaPath.format();
+  if (visiting.has(pathKey)) {
     return new FormulaError("circular reference");
   }
-  visiting.add(formulaPath);
+  visiting.add(pathKey);
 
   const result = evaluateFormulaInner(
     formula,
@@ -472,7 +367,7 @@ export function evaluateFormulaNode(
     depth,
   );
 
-  visiting.delete(formulaPath);
+  visiting.delete(pathKey);
   return result;
 }
 
@@ -481,40 +376,39 @@ export function evaluateFormulaNode(
  * outer function always runs regardless of early returns.
  */
 function evaluateFormulaInner(
-  formula: PlainRecord,
-  root: PlainNode,
-  formulaPath: string,
+  formula: RecordNode,
+  root: Node,
+  formulaPath: Selector,
   visiting: Set<string>,
   depth: number,
 ): FormulaResult {
-  const tag = formula.$tag as string;
+  const tag = formula.tag;
 
   // Check for a tag-based evaluator first
-  // Tag-based evaluator: the evaluate callback transparently resolves
-  // $ref references so that evaluators only ever see values or formulas.
   const tagEvaluator = lookupTagEvaluator(tag);
   if (tagEvaluator) {
-    return tagEvaluator(formula, (child: PlainNode, fieldName?: string) => {
-      const childRefPath = fieldName
-        ? formulaPath + "/" + fieldName
+    return tagEvaluator(formula, (child: Node, fieldName?: string) => {
+      const childPath = fieldName
+        ? new Selector([...formulaPath.segments, fieldName])
         : formulaPath;
-      return evaluateChild(child, root, childRefPath, visiting, depth);
+      return evaluateChild(child, root, childPath, visiting, depth);
     });
   }
 
   // Default path: operation + args
-  const opName = formula.operation;
-  if (typeof opName !== "string") {
+  const opField = formula.fields["operation"];
+  if (!(opField instanceof PrimitiveNode) || typeof opField.value !== "string") {
     return new FormulaError("formula missing 'operation' field");
   }
+  const opName = opField.value;
 
   // Collect raw argument nodes
-  const argsField = formula.args;
-  let argNodes: readonly PlainNode[];
+  const argsField = formula.fields["args"];
+  let argNodes: readonly Node[];
   if (argsField === undefined) {
     argNodes = [];
-  } else if (isPlainList(argsField)) {
-    argNodes = argsField.$items;
+  } else if (argsField instanceof ListNode) {
+    argNodes = argsField.items;
   } else {
     return new FormulaError("formula 'args' must be a list node");
   }
@@ -524,15 +418,12 @@ function evaluateFormulaInner(
 
   for (let i = 0; i < argNodes.length; i++) {
     const argNode = argNodes[i]!;
-    // Resolve from the arg's tree position (formulaPath/args/i) so that
-    // relative $ref paths use the same base as ReferenceNode, allowing
-    // updateReferences() to retarget them through structural edits.
-    const argTreePath = formulaPath + "/args/" + i;
+    const argTreePath = new Selector([...formulaPath.segments, "args", i]);
     const result = resolveArgument(
       argNode,
       root,
       argTreePath,
-      opName as string,
+      opName,
       visiting,
       depth,
     );
@@ -543,7 +434,7 @@ function evaluateFormulaInner(
   }
 
   // Look up and invoke the operation
-  const op = lookupOperation(opName as string);
+  const op = lookupOperation(opName);
   if (!op) {
     return new FormulaError(`unknown operation '${opName}'`);
   }
@@ -559,39 +450,37 @@ function evaluateFormulaInner(
 
 /**
  * Resolve a single argument node into one or more primitive values.
- * References are resolved first — argument processing never sees `$ref`.
+ * References are resolved first — argument processing never sees raw refs.
  * Returns an array because wildcard refs can expand to multiple values.
  */
 function resolveArgument(
-  argNode: PlainNode,
-  root: PlainNode,
-  formulaPath: string,
+  argNode: Node,
+  root: Node,
+  argPath: Selector,
   opName: string,
   visiting: Set<string>,
   depth: number,
 ): PrimitiveValue[] | FormulaError {
-  // Resolve references transparently before any type checking
-  if (isPlainRef(argNode)) {
+  if (argNode instanceof ReferenceNode) {
     return resolveRefArgument(
       argNode,
       root,
-      formulaPath,
+      argPath,
       opName,
       visiting,
       depth,
     );
   }
 
-  if (isPrimitive(argNode)) {
-    return [argNode];
+  if (argNode instanceof PrimitiveNode) {
+    return [argNode.value];
   }
 
   if (isFormulaNode(argNode)) {
-    const nestedPath = formulaPath + "/$nested";
     const result = evaluateFormulaNode(
-      argNode,
+      argNode as RecordNode,
       root,
-      nestedPath,
+      argPath,
       visiting,
       depth + 1,
     );
@@ -599,11 +488,9 @@ function resolveArgument(
     return [result];
   }
 
-  // List or record that isn't a formula — can't use as arg directly
-  if (isPlainList(argNode)) {
-    // For countChildren, return the count
+  if (argNode instanceof ListNode) {
     if (opName === "countChildren") {
-      return [argNode.$items.length];
+      return [argNode.items.length];
     }
     return new FormulaError("cannot use list node as formula argument");
   }
@@ -612,28 +499,40 @@ function resolveArgument(
 }
 
 /**
- * Resolve a `$ref` argument. If the reference points to a formula, evaluate
- * it recursively. Wildcards expand to multiple values.
+ * Resolve a reference argument. If the reference points to a formula,
+ * evaluate it recursively. Wildcards expand to multiple values.
  */
 function resolveRefArgument(
-  ref: PlainRef,
-  root: PlainNode,
-  formulaPath: string,
+  ref: ReferenceNode,
+  root: Node,
+  contextPath: Selector,
   opName: string,
   visiting: Set<string>,
   depth: number,
 ): PrimitiveValue[] | FormulaError {
-  const targets = resolveRefPath(ref.$ref, root, formulaPath);
+  const targetPath = ReferenceNode.resolveReference(
+    contextPath,
+    ref.selector,
+  );
+  if (targetPath === null) {
+    return new FormulaError(
+      `reference '${ref.selector.format()}' could not be resolved`,
+    );
+  }
+
+  const targets = root.navigate(targetPath);
 
   if (targets.length === 0) {
-    return new FormulaError(`reference '${ref.$ref}' not found`);
+    return new FormulaError(
+      `reference '${ref.selector.format()}' not found`,
+    );
   }
 
   // countChildren: return the count of resolved targets for wildcards,
-  // or the $items length for a list node
+  // or the items length for a list node
   if (opName === "countChildren") {
-    if (targets.length === 1 && isPlainList(targets[0])) {
-      return [targets[0].$items.length];
+    if (targets.length === 1 && targets[0] instanceof ListNode) {
+      return [(targets[0] as ListNode).items.length];
     }
     return [targets.length];
   }
@@ -641,9 +540,8 @@ function resolveRefArgument(
   const values: PrimitiveValue[] = [];
   for (const target of targets) {
     if (isFormulaNode(target)) {
-      const targetPath = computeTargetPath(ref.$ref, formulaPath);
       const result = evaluateFormulaNode(
-        target,
+        target as RecordNode,
         root,
         targetPath,
         visiting,
@@ -651,22 +549,21 @@ function resolveRefArgument(
       );
       if (result instanceof FormulaError) return result;
       values.push(result);
-    } else if (isPrimitive(target)) {
-      values.push(target);
-    } else if (isPlainList(target)) {
-      // Flatten list items that are primitives
-      for (const item of target.$items) {
-        if (isPrimitive(item)) {
-          values.push(item);
+    } else if (target instanceof PrimitiveNode) {
+      values.push(target.value);
+    } else if (target instanceof ListNode) {
+      for (const item of target.items) {
+        if (item instanceof PrimitiveNode) {
+          values.push(item.value);
         } else {
           return new FormulaError(
-            `reference '${ref.$ref}' resolved to non-primitive list item`,
+            `reference '${ref.selector.format()}' resolved to non-primitive list item`,
           );
         }
       }
     } else {
       return new FormulaError(
-        `reference '${ref.$ref}' resolved to non-primitive value`,
+        `reference '${ref.selector.format()}' resolved to non-primitive value`,
       );
     }
   }
@@ -674,66 +571,35 @@ function resolveRefArgument(
   return values;
 }
 
-/** Compute a canonical path string for a referenced formula node. */
-function computeTargetPath(refPath: string, formulaPath: string): string {
-  if (refPath.startsWith("/")) {
-    const cleaned = refPath.startsWith("/") ? refPath.slice(1) : refPath;
-    return cleaned;
-  }
-  const formulaSegments = formulaPath === "" ? [] : formulaPath.split("/");
-  const refSegments = parseRefPath(refPath);
-  const combined = [...formulaSegments, ...refSegments];
-  const resolved: string[] = [];
-  for (const seg of combined) {
-    if (seg === "..") {
-      resolved.pop();
-    } else {
-      resolved.push(seg);
-    }
-  }
-  return resolved.join("/");
-}
-
 // ── Evaluate all formulas ───────────────────────────────────────────────
 
 /**
- * Walk the entire PlainNode tree, find every formula node, evaluate it,
+ * Walk the entire Node tree, find every formula node, evaluate it,
  * and return a map from path to result.
  */
 export function evaluateAllFormulas(
-  doc: PlainNode,
+  root: Node,
 ): Map<string, FormulaResult> {
   const results = new Map<string, FormulaResult>();
   const visiting = new Set<string>();
 
-  function walk(node: PlainNode, path: string): void {
-    if (isPrimitive(node) || isPlainRef(node)) return;
-
+  root.forEach((path, node) => {
     if (isFormulaNode(node)) {
-      if (!results.has(path)) {
+      const pathKey = path.format();
+      if (!results.has(pathKey)) {
         results.set(
-          path,
-          evaluateFormulaNode(node, doc, path, visiting, 0),
-        );
-      }
-      // Still walk children — a formula record may have nested structure
-    }
-
-    if (isPlainList(node)) {
-      for (let i = 0; i < node.$items.length; i++) {
-        walk(node.$items[i], path === "" ? String(i) : `${path}/${i}`);
-      }
-    } else if (isPlainRecord(node)) {
-      for (const key of Object.keys(node)) {
-        if (key === "$tag") continue;
-        walk(
-          node[key],
-          path === "" ? key : `${path}/${key}`,
+          pathKey,
+          evaluateFormulaNode(
+            node as RecordNode,
+            root,
+            path,
+            visiting,
+            0,
+          ),
         );
       }
     }
-  }
+  });
 
-  walk(doc, "");
   return results;
 }

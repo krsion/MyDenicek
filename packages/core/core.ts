@@ -22,6 +22,13 @@ export type {
   PlainRef,
 } from "./core/nodes.ts";
 export {
+  ListNode,
+  Node,
+  PrimitiveNode,
+  RecordNode,
+  ReferenceNode,
+} from "./core/nodes.ts";
+export {
   listRegisteredPrimitiveEdits,
   registerPrimitiveEdit,
 } from "./core/primitive-edits.ts";
@@ -30,7 +37,6 @@ export type { PrimitiveValue } from "./core/selector.ts";
 export type { EventSnapshot } from "./core/event-graph.ts";
 export {
   evaluateAllFormulas,
-  evaluateFormulaNode,
   FormulaError,
   registerFormulaOperation,
   registerFormulaTagEvaluator,
