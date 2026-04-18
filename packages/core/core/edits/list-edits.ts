@@ -184,11 +184,16 @@ export class ListPushFrontEdit extends ListInsertEdit {
   }
 
   apply(doc: Node): void {
+    const referenceTargets = doc.captureReferenceTransformTargets();
     this.validate(doc);
     const nodes = this.navigateOrThrow(doc, this.target);
     for (const n of nodes) {
       n.pushFront(this.node.clone());
     }
+    doc.updateReferences(
+      (abs) => this.transformSelectorOrThrow(abs),
+      referenceTargets,
+    );
   }
 
   canApply(doc: Node): boolean {
@@ -343,11 +348,19 @@ export class ListPopFrontEdit extends NoOpOnRemovedTargetEdit {
   }
 
   apply(doc: Node): void {
+    const referenceTargets = doc.captureReferenceTransformTargets();
     this.validate(doc);
     const nodes = this.navigateOrThrow(doc, this.target);
     for (const n of nodes) {
       n.popFront();
     }
+    doc.updateReferences(
+      (abs) => {
+        const t = this.transformSelector(abs);
+        return t.kind === "mapped" ? t.selector : abs;
+      },
+      referenceTargets,
+    );
   }
 
   canApply(doc: Node): boolean {
@@ -432,6 +445,7 @@ export class ListInsertAtEdit extends ListInsertEdit {
   }
 
   apply(doc: Node): void {
+    const referenceTargets = doc.captureReferenceTransformTargets();
     this.validate(doc);
     const nodes = this.navigateOrThrow(doc, this.target);
     for (const n of nodes) {
@@ -443,6 +457,10 @@ export class ListInsertAtEdit extends ListInsertEdit {
       }
       n.insertAt(this.index, this.node.clone());
     }
+    doc.updateReferences(
+      (abs) => this.transformSelectorOrThrow(abs),
+      referenceTargets,
+    );
   }
 
   canApply(doc: Node): boolean {
@@ -580,6 +598,7 @@ export class ListRemoveAtEdit extends NoOpOnRemovedTargetEdit {
   }
 
   apply(doc: Node): void {
+    const referenceTargets = doc.captureReferenceTransformTargets();
     this.validate(doc);
     const nodes = this.navigateOrThrow(doc, this.target);
     for (const n of nodes) {
@@ -591,6 +610,13 @@ export class ListRemoveAtEdit extends NoOpOnRemovedTargetEdit {
       }
       n.removeAt(this.index);
     }
+    doc.updateReferences(
+      (abs) => {
+        const t = this.transformSelector(abs);
+        return t.kind === "mapped" ? t.selector : abs;
+      },
+      referenceTargets,
+    );
   }
 
   canApply(doc: Node): boolean {
@@ -771,6 +797,7 @@ export class ListReorderEdit extends NoOpOnRemovedTargetEdit {
   override validate(_doc: Node): void {}
 
   apply(doc: Node): void {
+    const referenceTargets = doc.captureReferenceTransformTargets();
     const nodes = this.navigateOrThrow(doc, this.target);
     for (const n of nodes) {
       const list = this.assertList(n);
@@ -787,6 +814,10 @@ export class ListReorderEdit extends NoOpOnRemovedTargetEdit {
       }
       n.reorder(this.fromIndex, this.toIndex);
     }
+    doc.updateReferences(
+      (abs) => this.transformSelectorOrThrow(abs),
+      referenceTargets,
+    );
   }
 
   canApply(doc: Node): boolean {
