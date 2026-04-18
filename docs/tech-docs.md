@@ -736,8 +736,8 @@ testing to verify the core convergence invariant:
 edits, after full bidirectional sync, all peers must produce identical
 materialized documents. This property is tested with:
 
-- Random edit generation (all edit types: add, delete, rename, set, pushBack,
-  pushFront, popBack, popFront, updateTag, wrapRecord, wrapList, copy)
+- Random edit generation (all edit types: add, delete, rename, set, insert,
+  remove, updateTag, wrapRecord, wrapList, copy)
 - Random peer counts (2–4 peers)
 - Random edit sequences (5–20 edits per peer)
 - Random sync orderings (partial sync, full sync, delayed sync)

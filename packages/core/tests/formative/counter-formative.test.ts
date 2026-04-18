@@ -36,18 +36,18 @@ Deno.test("Formative: Counter App", () => {
   const renameEventId = peer.rename("formula", "formula", "left");
   const addRightEventId = peer.add("formula", "right", 1);
 
-  peer.pushBack("btn/script/steps", {
+  peer.insert("btn/script/steps", -1, {
     $tag: "replay-step",
     eventId: wrapEventId,
-  });
-  peer.pushBack("btn/script/steps", {
+  }, true);
+  peer.insert("btn/script/steps", -1, {
     $tag: "replay-step",
     eventId: renameEventId,
-  });
-  peer.pushBack("btn/script/steps", {
+  }, true);
+  peer.insert("btn/script/steps", -1, {
     $tag: "replay-step",
     eventId: addRightEventId,
-  });
+  }, true);
 
   {
     const plainDocument = peer.toPlain() as unknown as {

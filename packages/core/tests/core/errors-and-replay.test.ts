@@ -504,7 +504,7 @@ Deno.test("repeatEdit keeps a strict list index at the same coordinate through p
   });
 
   const eventId = core.applyPrimitiveEdit("items/!0", "append-bang-strict");
-  core.pushFront("items", "new");
+  core.insert("items", 0, "new", true);
   core.repeatEditFromEventId(eventId);
 
   assertEquals(core.toPlain(), {
@@ -520,7 +520,7 @@ Deno.test("repeatEdit fails before recording when a strict replay target no long
   });
 
   const eventId = core.set("items/!1", "updated");
-  core.popBack("items");
+  core.remove("items", -1, true);
 
   assertThrows(
     () => core.repeatEditFromEventId(eventId),
@@ -553,19 +553,19 @@ Deno.test("repeatEditsFrom replays stored step lists directly", () => {
     },
   });
 
-  const insertItemEventId = core.pushFront("items", {
+  const insertItemEventId = core.insert("items", 0, {
     $tag: "li",
     $items: [""],
-  });
+  }, true);
   const copyInputEventId = core.copy("items/!0/0", "composer/input/value");
-  core.pushBack("composer/addAction/steps", {
+  core.insert("composer/addAction/steps", -1, {
     $tag: "replay-step",
     eventId: insertItemEventId,
-  });
-  core.pushBack("composer/addAction/steps", {
+  }, true);
+  core.insert("composer/addAction/steps", -1, {
     $tag: "replay-step",
     eventId: copyInputEventId,
-  });
+  }, true);
 
   core.set("composer/input/value", "Book venue");
   core.repeatEditsFrom("composer/addAction/steps");
@@ -867,7 +867,7 @@ Deno.test("commit throws on pop-back from empty list", () => {
     $tag: "root",
     items: { $tag: "ul", $items: [] as string[] },
   });
-  assertThrows(() => core.popBack("items"), Error, "list is empty");
+  assertThrows(() => core.remove("items", -1, true), Error, "list is empty");
 });
 
 Deno.test("replay of a set edit follows a later rename of its own target field", () => {

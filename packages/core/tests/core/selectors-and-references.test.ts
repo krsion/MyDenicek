@@ -179,7 +179,7 @@ Deno.test("wildcard edit affects concurrently inserted item", () => {
   const bob = new Denicek("bob", doc);
 
   alice.set("items/*/status", "done");
-  bob.pushBack("items", { $tag: "task", status: "todo" });
+  bob.insert("items", -1, { $tag: "task", status: "todo" }, true);
 
   sync(alice, bob);
 
@@ -222,22 +222,22 @@ Deno.test("concurrent refactor rewrites a replayed inserted row payload", () => 
   const alice = new Denicek("alice", doc);
   const bob = new Denicek("bob", doc);
 
-  const insertListSpeakerEventId = alice.pushFront("speakers", {
+  const insertListSpeakerEventId = alice.insert("speakers", 0, {
     $tag: "li",
     contact: "",
-  });
+  }, true);
   const copyListInputEventId = alice.copy(
     "speakers/!0/contact",
     "controls/input/value",
   );
-  alice.pushBack("controls/addSpeakerFromInput/steps", {
+  alice.insert("controls/addSpeakerFromInput/steps", -1, {
     $tag: "replay-step",
     eventId: insertListSpeakerEventId,
-  });
-  alice.pushBack("controls/addSpeakerFromInput/steps", {
+  }, true);
+  alice.insert("controls/addSpeakerFromInput/steps", -1, {
     $tag: "replay-step",
     eventId: copyListInputEventId,
-  });
+  }, true);
 
   sync(alice, bob);
 
@@ -247,14 +247,14 @@ Deno.test("concurrent refactor rewrites a replayed inserted row payload", () => 
   alice.updateTag("speakers", "table");
   alice.updateTag("speakers/*", "td");
   alice.wrapList("speakers/*", "tr");
-  alice.pushBack("speakers/*", {
+  alice.insert("speakers/*", -1, {
     $tag: "td",
     name: {
       $tag: "split-first",
       source: { $ref: "../../../0/contact" },
       separator: ", ",
     },
-  });
+  }, true);
 
   sync(alice, bob);
 
@@ -368,23 +368,23 @@ Deno.test("concurrent refactor rewrites a replayed appended row payload", () => 
   const alice = new Denicek("alice", doc);
   const bob = new Denicek("bob", doc);
 
-  const insertListSpeakerEventId = alice.pushBack("speakers", {
+  const insertListSpeakerEventId = alice.insert("speakers", -1, {
     $tag: "li",
     contact: "",
-  });
+  }, true);
   const copyListInputEventId = alice.copy(
     "speakers/!2/contact",
     "controls/input/value",
   );
-  alice.pushBack("controls/addSpeakerFromInput/steps", {
+  alice.insert("controls/addSpeakerFromInput/steps", -1, {
     $tag: "replay-step",
     eventId: insertListSpeakerEventId,
-  });
-  alice.pushBack("controls/addSpeakerFromInput/steps", {
+  }, true);
+  alice.insert("controls/addSpeakerFromInput/steps", -1, {
     $tag: "replay-step",
     eventId: copyListInputEventId,
-  });
-  alice.popBack("speakers");
+  }, true);
+  alice.remove("speakers", -1, true);
 
   sync(alice, bob);
 
@@ -394,14 +394,14 @@ Deno.test("concurrent refactor rewrites a replayed appended row payload", () => 
   alice.updateTag("speakers", "table");
   alice.updateTag("speakers/*", "td");
   alice.wrapList("speakers/*", "tr");
-  alice.pushBack("speakers/*", {
+  alice.insert("speakers/*", -1, {
     $tag: "td",
     name: {
       $tag: "split-first",
       source: { $ref: "../../../0/contact" },
       separator: ", ",
     },
-  });
+  }, true);
 
   sync(alice, bob);
 
@@ -493,7 +493,7 @@ Deno.test("wrapRecord with wildcard affects concurrently inserted item", () => {
   alice.wrapRecord("items/*/contact", "source", "split-first");
 
   // Bob concurrently inserts a new item
-  bob.pushBack("items", { $tag: "li", contact: "Bob, bob@example.com" });
+  bob.insert("items", -1, { $tag: "li", contact: "Bob, bob@example.com" }, true);
 
   sync(alice, bob);
 

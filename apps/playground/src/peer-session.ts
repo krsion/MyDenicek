@@ -71,17 +71,11 @@ export class PeerSession {
   set(target: string, value: PrimitiveValue): void {
     this.denicek.set(target, value);
   }
-  pushBack(target: string, value: PlainNode): void {
-    this.denicek.pushBack(target, value);
+  insert(target: string, index: number, value: PlainNode, strict?: boolean): void {
+    this.denicek.insert(target, index, value, strict);
   }
-  pushFront(target: string, value: PlainNode): void {
-    this.denicek.pushFront(target, value);
-  }
-  popBack(target: string): void {
-    this.denicek.popBack(target);
-  }
-  popFront(target: string): void {
-    this.denicek.popFront(target);
+  remove(target: string, index: number, strict?: boolean): void {
+    this.denicek.remove(target, index, strict);
   }
   updateTag(target: string, tag: string): void {
     this.denicek.updateTag(target, tag);

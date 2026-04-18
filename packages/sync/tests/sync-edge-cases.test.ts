@@ -50,9 +50,9 @@ Deno.test("SyncRoom late-joining peer receives full history", () => {
   const alice = new Denicek("alice", initial);
 
   // Alice makes several edits and syncs
-  alice.pushBack("items", { $tag: "li", text: "A" });
-  alice.pushBack("items", { $tag: "li", text: "B" });
-  alice.pushBack("items", { $tag: "li", text: "C" });
+  alice.insert("items", -1, { $tag: "li", text: "A" }, true);
+  alice.insert("items", -1, { $tag: "li", text: "B" }, true);
+  alice.insert("items", -1, { $tag: "li", text: "C" }, true);
 
   room.computeSyncResponse(
     createSyncRequest(alice, "late-join", []),
@@ -173,7 +173,7 @@ Deno.test("SyncRoom reconnection: offline peer catches up", () => {
   const bob = new Denicek("bob", initial);
 
   // Alice syncs first edit
-  alice.pushBack("items", { $tag: "li", text: "First" });
+  alice.insert("items", -1, { $tag: "li", text: "First" }, true);
   let aFrontiers: string[] = [];
   const aResp1 = room.computeSyncResponse(
     createSyncRequest(alice, "reconnect", aFrontiers),
@@ -190,8 +190,8 @@ Deno.test("SyncRoom reconnection: offline peer catches up", () => {
   bFrontiers = bResp1.frontiers;
 
   // Bob goes offline. Alice makes two more edits.
-  alice.pushBack("items", { $tag: "li", text: "Second" });
-  alice.pushBack("items", { $tag: "li", text: "Third" });
+  alice.insert("items", -1, { $tag: "li", text: "Second" }, true);
+  alice.insert("items", -1, { $tag: "li", text: "Third" }, true);
   const aResp2 = room.computeSyncResponse(
     createSyncRequest(alice, "reconnect", aFrontiers),
   );

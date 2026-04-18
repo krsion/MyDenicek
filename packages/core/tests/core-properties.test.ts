@@ -46,10 +46,8 @@ function assertConvergence(peers: Denicek[], msg?: string): void {
 const NUM_PEERS = 3;
 
 type EditOp =
-  | { type: "pushBack"; target: string; value: PlainNode }
-  | { type: "pushFront"; target: string; value: PlainNode }
-  | { type: "popBack"; target: string }
-  | { type: "popFront"; target: string }
+  | { type: "insert"; target: string; index: number; value: PlainNode; strict?: boolean }
+  | { type: "remove"; target: string; index: number; strict?: boolean }
   | { type: "add"; target: string; field: string; value: PlainNode }
   | { type: "delete"; target: string; field: string }
   | { type: "rename"; target: string; from: string; to: string }
@@ -65,17 +63,11 @@ type Op =
 
 function applyEditOp(peer: Denicek, op: EditOp): void {
   switch (op.type) {
-    case "pushBack":
-      peer.pushBack(op.target, op.value);
+    case "insert":
+      peer.insert(op.target, op.index, op.value, op.strict);
       break;
-    case "pushFront":
-      peer.pushFront(op.target, op.value);
-      break;
-    case "popBack":
-      peer.popBack(op.target);
-      break;
-    case "popFront":
-      peer.popFront(op.target);
+    case "remove":
+      peer.remove(op.target, op.index, op.strict);
       break;
     case "add":
       peer.add(op.target, op.field, op.value);
@@ -199,26 +191,30 @@ const arbFlatListEdit: fc.Arbitrary<EditOp> = fc.oneof(
   {
     weight: 3,
     arbitrary: arbVal.map((v) => ({
-      type: "pushBack" as const,
+      type: "insert" as const,
       target: "items",
+      index: -1,
       value: v,
+      strict: true,
     })),
   },
   {
     weight: 3,
     arbitrary: arbVal.map((v) => ({
-      type: "pushFront" as const,
+      type: "insert" as const,
       target: "items",
+      index: 0,
       value: v,
+      strict: true,
     })),
   },
   {
     weight: 2,
-    arbitrary: fc.constant({ type: "popBack" as const, target: "items" }),
+    arbitrary: fc.constant({ type: "remove" as const, target: "items", index: -1, strict: true }),
   },
   {
     weight: 2,
-    arbitrary: fc.constant({ type: "popFront" as const, target: "items" }),
+    arbitrary: fc.constant({ type: "remove" as const, target: "items", index: 0, strict: true }),
   },
   {
     weight: 2,
@@ -378,26 +374,30 @@ const arbNestedEdit: fc.Arbitrary<EditOp> = fc.oneof(
   {
     weight: 2,
     arbitrary: fc.tuple(arbVal, arbVal).map(([n, v]) => ({
-      type: "pushBack" as const,
+      type: "insert" as const,
       target: "rows",
+      index: -1,
       value: { $tag: "row", name: n, val: v } as PlainNode,
+      strict: true,
     })),
   },
   {
     weight: 2,
     arbitrary: fc.tuple(arbVal, arbVal).map(([n, v]) => ({
-      type: "pushFront" as const,
+      type: "insert" as const,
       target: "rows",
+      index: 0,
       value: { $tag: "row", name: n, val: v } as PlainNode,
+      strict: true,
     })),
   },
   {
     weight: 1,
-    arbitrary: fc.constant({ type: "popBack" as const, target: "rows" }),
+    arbitrary: fc.constant({ type: "remove" as const, target: "rows", index: -1, strict: true }),
   },
   {
     weight: 1,
-    arbitrary: fc.constant({ type: "popFront" as const, target: "rows" }),
+    arbitrary: fc.constant({ type: "remove" as const, target: "rows", index: 0, strict: true }),
   },
   // Wildcard primitive edits
   {
@@ -526,34 +526,38 @@ const arbDeepEdit: fc.Arbitrary<EditOp> = fc.oneof(
   {
     weight: 2,
     arbitrary: fc.constant({
-      type: "pushBack" as const,
+      type: "insert" as const,
       target: "grid",
+      index: -1,
       value: {
         $tag: "row",
         $items: [{ $tag: "cell", x: "n1", y: "n2" }],
       } as PlainNode,
+      strict: true,
     }),
   },
   {
     weight: 1,
-    arbitrary: fc.constant({ type: "popBack" as const, target: "grid" }),
+    arbitrary: fc.constant({ type: "remove" as const, target: "grid", index: -1, strict: true }),
   },
   {
     weight: 1,
-    arbitrary: fc.constant({ type: "popFront" as const, target: "grid" }),
+    arbitrary: fc.constant({ type: "remove" as const, target: "grid", index: 0, strict: true }),
   },
   // Inner list ops (specific and wildcard)
   {
     weight: 2,
     arbitrary: fc.constant({
-      type: "pushBack" as const,
+      type: "insert" as const,
       target: "grid/0",
+      index: -1,
       value: { $tag: "cell", x: "new", y: "new" } as PlainNode,
+      strict: true,
     }),
   },
   {
     weight: 1,
-    arbitrary: fc.constant({ type: "popBack" as const, target: "grid/0" }),
+    arbitrary: fc.constant({ type: "remove" as const, target: "grid/0", index: -1, strict: true }),
   },
   // Deep wildcard edits (*/* and */*/*)
   {
@@ -918,15 +922,15 @@ Deno.test("SyncOrder: concurrent adds", () => {
   );
 });
 
-Deno.test("SyncOrder: concurrent list pushes", () => {
+Deno.test("SyncOrder: concurrent list inserts", () => {
   fc.assert(
     fc.property(fc.tuple(arbVal, arbVal, arbVal), (values) => {
       assertAllSyncOrdersConverge(
         { $tag: "root", items: { $tag: "items", $items: ["initial"] } },
         [
-          (p) => p.pushBack("items", values[0]!),
-          (p) => p.pushFront("items", values[1]!),
-          (p) => p.pushBack("items", values[2]!),
+          (p) => p.insert("items", -1, values[0]!, true),
+          (p) => p.insert("items", 0, values[1]!, true),
+          (p) => p.insert("items", -1, values[2]!, true),
         ],
       );
     }),
@@ -962,7 +966,7 @@ Deno.test("SyncOrder: wildcard edits + structural changes", () => {
         [
           (p) => p.set("items/*/val", "UPDATED"),
           (p) => p.wrapList("items/*", tag),
-          (p) => p.pushBack("items", { $tag: "item", val: "c" }),
+          (p) => p.insert("items", -1, { $tag: "item", val: "c" }, true),
         ],
       );
     }),
@@ -990,12 +994,12 @@ Deno.test("SyncOrder: add + delete + rename on same record", () => {
   );
 });
 
-Deno.test("SyncOrder: push + pop + wildcard edit", () => {
+Deno.test("SyncOrder: insert + remove + wildcard edit", () => {
   assertAllSyncOrdersConverge(
     { $tag: "root", items: { $tag: "items", $items: ["a", "b", "c", "d"] } },
     [
-      (p) => p.pushFront("items", "front"),
-      (p) => p.popBack("items"),
+      (p) => p.insert("items", 0, "front", true),
+      (p) => p.remove("items", -1, true),
       (p) => p.set("items/*", "UPDATED"),
     ],
   );
@@ -1268,7 +1272,7 @@ Deno.test("Intent: non-conflicting push-backs are all preserved", () => {
         (_, i) => new Denicek(`peer${i}`, doc),
       );
       for (let i = 0; i < NUM_PEERS; i++) {
-        peers[i]!.pushBack("items", values[i]!);
+        peers[i]!.insert("items", -1, values[i]!, true);
       }
 
       syncAll(peers);

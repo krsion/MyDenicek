@@ -11,62 +11,62 @@ function makeListDoc() {
 
 // ── Basic operations (single peer) ──────────────────────────────────
 
-Deno.test("insertAt: inserts at beginning of list", () => {
+Deno.test("insert: inserts at beginning of list", () => {
   const dk = new Denicek("alice", makeListDoc());
-  dk.insertAt("items", 0, "x");
+  dk.insert("items", 0, "x");
   const doc = dk.materialize() as Record<string, unknown>;
   const items = doc.items as { $items: string[] };
   assertEquals(items.$items, ["x", "a", "b", "c"]);
 });
 
-Deno.test("insertAt: inserts at middle of list", () => {
+Deno.test("insert: inserts at middle of list", () => {
   const dk = new Denicek("alice", makeListDoc());
-  dk.insertAt("items", 1, "x");
+  dk.insert("items", 1, "x");
   const doc = dk.materialize() as Record<string, unknown>;
   const items = doc.items as { $items: string[] };
   assertEquals(items.$items, ["a", "x", "b", "c"]);
 });
 
-Deno.test("insertAt: inserts at end of list", () => {
+Deno.test("insert: inserts at end of list", () => {
   const dk = new Denicek("alice", makeListDoc());
-  dk.insertAt("items", 3, "x");
+  dk.insert("items", 3, "x");
   const doc = dk.materialize() as Record<string, unknown>;
   const items = doc.items as { $items: string[] };
   assertEquals(items.$items, ["a", "b", "c", "x"]);
 });
 
-Deno.test("insertAt: throws on out-of-bounds index", () => {
+Deno.test("insert: throws on out-of-bounds index", () => {
   const dk = new Denicek("alice", makeListDoc());
-  assertThrows(() => dk.insertAt("items", 5, "x"));
+  assertThrows(() => dk.insert("items", 5, "x"));
 });
 
-Deno.test("removeAt: removes first item", () => {
+Deno.test("remove: removes first item", () => {
   const dk = new Denicek("alice", makeListDoc());
-  dk.removeAt("items", 0);
+  dk.remove("items", 0);
   const doc = dk.materialize() as Record<string, unknown>;
   const items = doc.items as { $items: string[] };
   assertEquals(items.$items, ["b", "c"]);
 });
 
-Deno.test("removeAt: removes middle item", () => {
+Deno.test("remove: removes middle item", () => {
   const dk = new Denicek("alice", makeListDoc());
-  dk.removeAt("items", 1);
+  dk.remove("items", 1);
   const doc = dk.materialize() as Record<string, unknown>;
   const items = doc.items as { $items: string[] };
   assertEquals(items.$items, ["a", "c"]);
 });
 
-Deno.test("removeAt: removes last item", () => {
+Deno.test("remove: removes last item", () => {
   const dk = new Denicek("alice", makeListDoc());
-  dk.removeAt("items", 2);
+  dk.remove("items", 2);
   const doc = dk.materialize() as Record<string, unknown>;
   const items = doc.items as { $items: string[] };
   assertEquals(items.$items, ["a", "b"]);
 });
 
-Deno.test("removeAt: throws on out-of-bounds index", () => {
+Deno.test("remove: throws on out-of-bounds index", () => {
   const dk = new Denicek("alice", makeListDoc());
-  assertThrows(() => dk.removeAt("items", 3));
+  assertThrows(() => dk.remove("items", 3));
 });
 
 Deno.test("reorder: moves item forward", () => {
@@ -95,18 +95,18 @@ Deno.test("reorder: same index is a no-op", () => {
 
 // ── Undo/Redo ───────────────────────────────────────────────────────
 
-Deno.test("undo insertAt restores original list", () => {
+Deno.test("undo insert restores original list", () => {
   const dk = new Denicek("alice", makeListDoc());
-  dk.insertAt("items", 1, "x");
+  dk.insert("items", 1, "x");
   dk.undo();
   const doc = dk.materialize() as Record<string, unknown>;
   const items = doc.items as { $items: string[] };
   assertEquals(items.$items, ["a", "b", "c"]);
 });
 
-Deno.test("redo insertAt re-applies the insertion", () => {
+Deno.test("redo insert re-applies the insertion", () => {
   const dk = new Denicek("alice", makeListDoc());
-  dk.insertAt("items", 1, "x");
+  dk.insert("items", 1, "x");
   dk.undo();
   dk.redo();
   const doc = dk.materialize() as Record<string, unknown>;
@@ -114,18 +114,18 @@ Deno.test("redo insertAt re-applies the insertion", () => {
   assertEquals(items.$items, ["a", "x", "b", "c"]);
 });
 
-Deno.test("undo removeAt restores removed item", () => {
+Deno.test("undo remove restores removed item", () => {
   const dk = new Denicek("alice", makeListDoc());
-  dk.removeAt("items", 1);
+  dk.remove("items", 1);
   dk.undo();
   const doc = dk.materialize() as Record<string, unknown>;
   const items = doc.items as { $items: string[] };
   assertEquals(items.$items, ["a", "b", "c"]);
 });
 
-Deno.test("redo removeAt re-applies the removal", () => {
+Deno.test("redo remove re-applies the removal", () => {
   const dk = new Denicek("alice", makeListDoc());
-  dk.removeAt("items", 1);
+  dk.remove("items", 1);
   dk.undo();
   dk.redo();
   const doc = dk.materialize() as Record<string, unknown>;
@@ -152,13 +152,13 @@ Deno.test("redo reorder re-applies the move", () => {
   assertEquals(items.$items, ["b", "c", "a"]);
 });
 
-// ── Two-peer convergence: concurrent insertAt + insertAt ────────────
+// ── Two-peer convergence: concurrent insert + insert ────────────
 
-Deno.test("concurrent insertAt at same index: both items appear, peers converge", () => {
+Deno.test("concurrent insert at same index: both items appear, peers converge", () => {
   const alice = new Denicek("alice", makeListDoc());
   const bob = new Denicek("bob", makeListDoc());
-  alice.insertAt("items", 1, "X");
-  bob.insertAt("items", 1, "Y");
+  alice.insert("items", 1, "X");
+  bob.insert("items", 1, "Y");
   sync(alice, bob);
   assertEquals(alice.materialize(), bob.materialize());
   const doc = alice.materialize() as Record<string, unknown>;
@@ -169,11 +169,11 @@ Deno.test("concurrent insertAt at same index: both items appear, peers converge"
   assertEquals(items.includes("Y"), true);
 });
 
-Deno.test("concurrent insertAt at different indices: both items appear, peers converge", () => {
+Deno.test("concurrent insert at different indices: both items appear, peers converge", () => {
   const alice = new Denicek("alice", makeListDoc());
   const bob = new Denicek("bob", makeListDoc());
-  alice.insertAt("items", 0, "X");
-  bob.insertAt("items", 2, "Y");
+  alice.insert("items", 0, "X");
+  bob.insert("items", 2, "Y");
   sync(alice, bob);
   assertEquals(alice.materialize(), bob.materialize());
   const doc = alice.materialize() as Record<string, unknown>;
@@ -183,13 +183,13 @@ Deno.test("concurrent insertAt at different indices: both items appear, peers co
   assertEquals(items.includes("Y"), true);
 });
 
-// ── Two-peer convergence: concurrent insertAt + removeAt ────────────
+// ── Two-peer convergence: concurrent insert + remove ────────────
 
-Deno.test("concurrent insertAt + removeAt: both apply, peers converge", () => {
+Deno.test("concurrent insert + remove: both apply, peers converge", () => {
   const alice = new Denicek("alice", makeListDoc());
   const bob = new Denicek("bob", makeListDoc());
-  alice.insertAt("items", 1, "X");
-  bob.removeAt("items", 2);
+  alice.insert("items", 1, "X");
+  bob.remove("items", 2);
   sync(alice, bob);
   assertEquals(alice.materialize(), bob.materialize());
   const doc = alice.materialize() as Record<string, unknown>;
@@ -198,11 +198,11 @@ Deno.test("concurrent insertAt + removeAt: both apply, peers converge", () => {
   assertEquals(!items.includes("c"), true);
 });
 
-Deno.test("concurrent insertAt before removeAt index: both apply, peers converge", () => {
+Deno.test("concurrent insert before remove index: both apply, peers converge", () => {
   const alice = new Denicek("alice", makeListDoc());
   const bob = new Denicek("bob", makeListDoc());
-  alice.insertAt("items", 0, "X");
-  bob.removeAt("items", 0);
+  alice.insert("items", 0, "X");
+  bob.remove("items", 0);
   sync(alice, bob);
   assertEquals(alice.materialize(), bob.materialize());
   const doc = alice.materialize() as Record<string, unknown>;
@@ -212,13 +212,13 @@ Deno.test("concurrent insertAt before removeAt index: both apply, peers converge
   assertEquals(!items.includes("a"), true); // "a" was at index 0, removed
 });
 
-// ── Two-peer convergence: concurrent removeAt + removeAt ────────────
+// ── Two-peer convergence: concurrent remove + remove ────────────
 
-Deno.test("concurrent removeAt same index: one becomes no-op, peers converge", () => {
+Deno.test("concurrent remove same index: one becomes no-op, peers converge", () => {
   const alice = new Denicek("alice", makeListDoc());
   const bob = new Denicek("bob", makeListDoc());
-  alice.removeAt("items", 1);
-  bob.removeAt("items", 1);
+  alice.remove("items", 1);
+  bob.remove("items", 1);
   sync(alice, bob);
   assertEquals(alice.materialize(), bob.materialize());
   const doc = alice.materialize() as Record<string, unknown>;
@@ -226,11 +226,11 @@ Deno.test("concurrent removeAt same index: one becomes no-op, peers converge", (
   assertEquals(items, ["a", "c"]);
 });
 
-Deno.test("concurrent removeAt different indices: both apply, peers converge", () => {
+Deno.test("concurrent remove different indices: both apply, peers converge", () => {
   const alice = new Denicek("alice", makeListDoc());
   const bob = new Denicek("bob", makeListDoc());
-  alice.removeAt("items", 0);
-  bob.removeAt("items", 2);
+  alice.remove("items", 0);
+  bob.remove("items", 2);
   sync(alice, bob);
   assertEquals(alice.materialize(), bob.materialize());
   const doc = alice.materialize() as Record<string, unknown>;
@@ -238,13 +238,13 @@ Deno.test("concurrent removeAt different indices: both apply, peers converge", (
   assertEquals(items, ["b"]);
 });
 
-// ── Two-peer convergence: concurrent reorder + insertAt ─────────────
+// ── Two-peer convergence: concurrent reorder + insert ─────────────
 
-Deno.test("concurrent reorder + insertAt: peers converge", () => {
+Deno.test("concurrent reorder + insert: peers converge", () => {
   const alice = new Denicek("alice", makeListDoc());
   const bob = new Denicek("bob", makeListDoc());
   alice.reorder("items", 0, 2);
-  bob.insertAt("items", 1, "X");
+  bob.insert("items", 1, "X");
   sync(alice, bob);
   assertEquals(alice.materialize(), bob.materialize());
   const doc = alice.materialize() as Record<string, unknown>;
@@ -253,13 +253,13 @@ Deno.test("concurrent reorder + insertAt: peers converge", () => {
   assertEquals(items.includes("X"), true);
 });
 
-// ── Two-peer convergence: concurrent reorder + removeAt ─────────────
+// ── Two-peer convergence: concurrent reorder + remove ─────────────
 
-Deno.test("concurrent reorder + removeAt of different item: peers converge", () => {
+Deno.test("concurrent reorder + remove of different item: peers converge", () => {
   const alice = new Denicek("alice", makeListDoc());
   const bob = new Denicek("bob", makeListDoc());
   alice.reorder("items", 0, 2);
-  bob.removeAt("items", 1);
+  bob.remove("items", 1);
   sync(alice, bob);
   assertEquals(alice.materialize(), bob.materialize());
   const doc = alice.materialize() as Record<string, unknown>;
@@ -267,11 +267,11 @@ Deno.test("concurrent reorder + removeAt of different item: peers converge", () 
   assertEquals(items.length, 2);
 });
 
-Deno.test("concurrent reorder + removeAt of reordered item: peers converge", () => {
+Deno.test("concurrent reorder + remove of reordered item: peers converge", () => {
   const alice = new Denicek("alice", makeListDoc());
   const bob = new Denicek("bob", makeListDoc());
   alice.reorder("items", 0, 2);
-  bob.removeAt("items", 0);
+  bob.remove("items", 0);
   sync(alice, bob);
   assertEquals(alice.materialize(), bob.materialize());
   const doc = alice.materialize() as Record<string, unknown>;
@@ -279,13 +279,13 @@ Deno.test("concurrent reorder + removeAt of reordered item: peers converge", () 
   assertEquals(items.length, 2);
 });
 
-// ── Cross-edit: concurrent pushFront + removeAt ─────────────────────
+// ── Cross-edit: concurrent insert(strict) + remove ──────────────────
 
-Deno.test("concurrent pushFront + removeAt: peers converge", () => {
+Deno.test("concurrent insert(strict) + remove: peers converge", () => {
   const alice = new Denicek("alice", makeListDoc());
   const bob = new Denicek("bob", makeListDoc());
-  alice.pushFront("items", "X");
-  bob.removeAt("items", 1);
+  alice.insert("items", 0, "X", true);
+  bob.remove("items", 1);
   sync(alice, bob);
   assertEquals(alice.materialize(), bob.materialize());
   const doc = alice.materialize() as Record<string, unknown>;
@@ -295,13 +295,13 @@ Deno.test("concurrent pushFront + removeAt: peers converge", () => {
   assertEquals(!items.includes("b"), true);
 });
 
-// ── Cross-edit: concurrent insertAt + popFront ──────────────────────
+// ── Cross-edit: concurrent insert + remove(strict) ──────────────────────
 
-Deno.test("concurrent insertAt + popFront: peers converge", () => {
+Deno.test("concurrent insert + remove(strict): peers converge", () => {
   const alice = new Denicek("alice", makeListDoc());
   const bob = new Denicek("bob", makeListDoc());
-  alice.insertAt("items", 2, "X");
-  bob.popFront("items");
+  alice.insert("items", 2, "X");
+  bob.remove("items", 0, true);
   sync(alice, bob);
   assertEquals(alice.materialize(), bob.materialize());
   const doc = alice.materialize() as Record<string, unknown>;
@@ -313,10 +313,10 @@ Deno.test("concurrent insertAt + popFront: peers converge", () => {
 
 // ── Remote codec round-trip ─────────────────────────────────────────
 
-Deno.test("insertAt survives remote round-trip", () => {
+Deno.test("insert survives remote round-trip", () => {
   const alice = new Denicek("alice", makeListDoc());
   const bob = new Denicek("bob", makeListDoc());
-  alice.insertAt("items", 1, "X");
+  alice.insert("items", 1, "X");
   // Sync via the remote event codec path
   for (const event of alice.eventsSince(bob.frontiers)) {
     bob.applyRemote(event);
@@ -324,10 +324,10 @@ Deno.test("insertAt survives remote round-trip", () => {
   assertEquals(alice.materialize(), bob.materialize());
 });
 
-Deno.test("removeAt survives remote round-trip", () => {
+Deno.test("remove survives remote round-trip", () => {
   const alice = new Denicek("alice", makeListDoc());
   const bob = new Denicek("bob", makeListDoc());
-  alice.removeAt("items", 1);
+  alice.remove("items", 1);
   for (const event of alice.eventsSince(bob.frontiers)) {
     bob.applyRemote(event);
   }
@@ -346,11 +346,11 @@ Deno.test("reorder survives remote round-trip", () => {
 
 // ── Selector transformation ─────────────────────────────────────────
 
-Deno.test("insertAt: set targeting shifted index is properly adjusted", () => {
+Deno.test("insert: set targeting shifted index is properly adjusted", () => {
   const alice = new Denicek("alice", makeListDoc());
   const bob = new Denicek("bob", makeListDoc());
   // Alice inserts at 0, which shifts everything up
-  alice.insertAt("items", 0, "X");
+  alice.insert("items", 0, "X");
   // Bob sets the value at index 1 (originally "b")
   bob.set("items/1", "B!");
   sync(alice, bob);
@@ -361,10 +361,10 @@ Deno.test("insertAt: set targeting shifted index is properly adjusted", () => {
   assertEquals(items.includes("B!"), true);
 });
 
-Deno.test("removeAt: set targeting removed index becomes conflict", () => {
+Deno.test("remove: set targeting removed index becomes conflict", () => {
   const alice = new Denicek("alice", makeListDoc());
   const bob = new Denicek("bob", makeListDoc());
-  alice.removeAt("items", 1);
+  alice.remove("items", 1);
   bob.set("items/1", "B!");
   sync(alice, bob);
   assertEquals(alice.materialize(), bob.materialize());

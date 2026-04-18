@@ -21,14 +21,14 @@ Deno.test("Formative: Conference List", () => {
   const bob = new Denicek("bob", initialDocument);
 
   // Alice and Bob concurrently add speakers
-  alice.pushBack("speakers", {
+  alice.insert("speakers", -1, {
     $tag: "li",
     contact: "Katherine Johnson, katherine@example.com",
-  });
-  bob.pushBack("speakers", {
+  }, true);
+  bob.insert("speakers", -1, {
     $tag: "li",
     contact: "Margaret Hamilton, margaret@example.com",
-  });
+  }, true);
 
   sync(alice, bob);
 
@@ -125,17 +125,17 @@ Deno.test("Formative: Conference Table", () => {
   const bob = new Denicek("bob", initialDocument);
 
   // Record the "add speaker" recipe (list phase)
-  const insertId = alice.pushBack("speakers", { $tag: "li", contact: "" });
+  const insertId = alice.insert("speakers", -1, { $tag: "li", contact: "" }, true);
   const copyId = alice.copy("speakers/!2/contact", "controls/input/value");
-  alice.pushBack("controls/addSpeakerFromInput/steps", {
+  alice.insert("controls/addSpeakerFromInput/steps", -1, {
     $tag: "replay-step",
     eventId: insertId,
-  });
-  alice.pushBack("controls/addSpeakerFromInput/steps", {
+  }, true);
+  alice.insert("controls/addSpeakerFromInput/steps", -1, {
     $tag: "replay-step",
     eventId: copyId,
-  });
-  alice.popBack("speakers");
+  }, true);
+  alice.remove("speakers", -1, true);
 
   sync(alice, bob);
 
@@ -146,13 +146,13 @@ Deno.test("Formative: Conference Table", () => {
   // Wrap contact in split-first → column 1 shows the name
   alice.wrapRecord("speakers/*/0/contact", "source", "split-first");
   // Push split-rest td → column 2 shows the email
-  alice.pushBack("speakers/*", {
+  alice.insert("speakers/*", -1, {
     $tag: "td",
     email: {
       $tag: "split-rest",
       source: { $ref: "../../../0/contact/source" },
     },
-  });
+  }, true);
 
   // Concurrently, Bob adds a speaker using the button
   bob.set("controls/input/value", "Margaret Hamilton, margaret@example.com");

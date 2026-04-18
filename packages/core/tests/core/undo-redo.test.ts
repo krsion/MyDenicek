@@ -65,13 +65,13 @@ Deno.test("undo: rename restores original field name", () => {
   });
 });
 
-Deno.test("undo: pushBack removes appended item", () => {
+Deno.test("undo: insert (append) removes appended item", () => {
   const peer = new Denicek("alice", {
     $tag: "root",
     items: { $tag: "list", $items: ["a"] },
   });
 
-  peer.pushBack("items", "b");
+  peer.insert("items", -1, "b", true);
   assertEquals(peer.toPlain(), {
     $tag: "root",
     items: { $tag: "list", $items: ["a", "b"] },
@@ -84,13 +84,13 @@ Deno.test("undo: pushBack removes appended item", () => {
   });
 });
 
-Deno.test("undo: pushFront removes prepended item", () => {
+Deno.test("undo: insert (prepend) removes prepended item", () => {
   const peer = new Denicek("alice", {
     $tag: "root",
     items: { $tag: "list", $items: ["a"] },
   });
 
-  peer.pushFront("items", "b");
+  peer.insert("items", 0, "b", true);
   assertEquals(peer.toPlain(), {
     $tag: "root",
     items: { $tag: "list", $items: ["b", "a"] },
@@ -103,13 +103,13 @@ Deno.test("undo: pushFront removes prepended item", () => {
   });
 });
 
-Deno.test("undo: popBack restores removed last item", () => {
+Deno.test("undo: remove (last) restores removed last item", () => {
   const peer = new Denicek("alice", {
     $tag: "root",
     items: { $tag: "list", $items: ["a", "b"] },
   });
 
-  peer.popBack("items");
+  peer.remove("items", -1, true);
   assertEquals(peer.toPlain(), {
     $tag: "root",
     items: { $tag: "list", $items: ["a"] },
@@ -122,13 +122,13 @@ Deno.test("undo: popBack restores removed last item", () => {
   });
 });
 
-Deno.test("undo: popFront restores removed first item", () => {
+Deno.test("undo: remove (first) restores removed first item", () => {
   const peer = new Denicek("alice", {
     $tag: "root",
     items: { $tag: "list", $items: ["a", "b"] },
   });
 
-  peer.popFront("items");
+  peer.remove("items", 0, true);
   assertEquals(peer.toPlain(), {
     $tag: "root",
     items: { $tag: "list", $items: ["b"] },

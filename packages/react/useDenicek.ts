@@ -63,14 +63,10 @@ export interface UseDenicekReturn {
   set: (target: string, value: PrimitiveValue) => void;
   /** Rename a field on every record matched by `target`. */
   rename: (target: string, from: string, to: string) => void;
-  /** Append `value` to every list matched by `target`. */
-  pushBack: (target: string, value: PlainNode) => void;
-  /** Prepend `value` to every list matched by `target`. */
-  pushFront: (target: string, value: PlainNode) => void;
-  /** Remove the last item from every list matched by `target`. */
-  popBack: (target: string) => void;
-  /** Remove the first item from every list matched by `target`. */
-  popFront: (target: string) => void;
+  /** Insert `value` at `index` in every list matched by `target`. */
+  insert: (target: string, index: number, value: PlainNode, strict?: boolean) => void;
+  /** Remove the item at `index` from every list matched by `target`. */
+  remove: (target: string, index: number, strict?: boolean) => void;
   /** Update the structural tag on every matched node. */
   updateTag: (target: string, tag: string) => void;
   /** Wrap every matched node in a record with the given field and tag. */
@@ -177,20 +173,14 @@ export function useDenicek(options?: UseDenicekOptions): UseDenicekReturn {
         mutate(() => dk.rename(t, from, to)),
       [dk, mutate],
     ),
-    pushBack: useCallback(
-      (t: string, v: PlainNode) => mutate(() => dk.pushBack(t, v)),
+    insert: useCallback(
+      (t: string, i: number, v: PlainNode, s?: boolean) =>
+        mutate(() => dk.insert(t, i, v, s)),
       [dk, mutate],
     ),
-    pushFront: useCallback(
-      (t: string, v: PlainNode) => mutate(() => dk.pushFront(t, v)),
-      [dk, mutate],
-    ),
-    popBack: useCallback(
-      (t: string) => mutate(() => dk.popBack(t)),
-      [dk, mutate],
-    ),
-    popFront: useCallback(
-      (t: string) => mutate(() => dk.popFront(t)),
+    remove: useCallback(
+      (t: string, i: number, s?: boolean) =>
+        mutate(() => dk.remove(t, i, s)),
       [dk, mutate],
     ),
     updateTag: useCallback(

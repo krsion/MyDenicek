@@ -2,7 +2,7 @@
 // Run: deno run --allow-hrtime tools/bench-materialize.ts
 //
 // Measures three workloads against event-count N:
-//   1. local-append : one peer, pushBack of list items (linear chain, cache-friendly)
+//   1. local-append : one peer, insert (append) of list items (linear chain, cache-friendly)
 //   2. sync-linear  : two peers, A creates all events then syncs to B (ingest path)
 //   3. merge-fan    : two peers edit disjoint subtrees concurrently, then sync
 //
@@ -28,7 +28,7 @@ function benchLocalAppend(n: number): Row {
   const dk = new Denicek("p", INITIAL);
   const t0 = now();
   for (let i = 0; i < n; i++) {
-    dk.pushBack("items", { $tag: "li", text: `item ${i}` });
+    dk.insert("items", -1, { $tag: "li", text: `item ${i}` }, true);
   }
   const total = now() - t0;
   const m0 = now();
@@ -47,7 +47,7 @@ function benchSyncLinear(n: number): Row {
   const a = new Denicek("a", INITIAL);
   const b = new Denicek("b", INITIAL);
   for (let i = 0; i < n; i++) {
-    a.pushBack("items", { $tag: "li", text: `item ${i}` });
+    a.insert("items", -1, { $tag: "li", text: `item ${i}` }, true);
   }
   const pending = a.eventsSince(b.frontiers);
   const t0 = now();
@@ -74,8 +74,8 @@ function benchMergeFan(n: number): Row {
   const a = new Denicek("a", initial);
   const b = new Denicek("b", initial);
   for (let i = 0; i < n / 2; i++) {
-    a.pushBack("la", { $tag: "li", text: `a${i}` });
-    b.pushBack("lb", { $tag: "li", text: `b${i}` });
+    a.insert("la", -1, { $tag: "li", text: `a${i}` }, true);
+    b.insert("lb", -1, { $tag: "li", text: `b${i}` }, true);
   }
   const t0 = now();
   const fromA = a.eventsSince(b.frontiers);
@@ -111,7 +111,7 @@ function benchMergeForkFromShared(n: number): Row {
   const b = new Denicek("b", initial);
   // Build shared linear history
   for (let i = 0; i < sharedSize; i++) {
-    a.pushBack("items", { $tag: "li", text: `shared${i}` });
+    a.insert("items", -1, { $tag: "li", text: `shared${i}` }, true);
   }
   // Sync shared history to b
   for (const e of a.eventsSince(b.frontiers)) b.applyRemote(e);
@@ -120,8 +120,8 @@ function benchMergeForkFromShared(n: number): Row {
   b.materialize();
   // Both diverge
   for (let i = 0; i < branchSize; i++) {
-    a.pushBack("la", { $tag: "li", text: `a${i}` });
-    b.pushBack("lb", { $tag: "li", text: `b${i}` });
+    a.insert("la", -1, { $tag: "li", text: `a${i}` }, true);
+    b.insert("lb", -1, { $tag: "li", text: `b${i}` }, true);
   }
   // Merge
   const t0 = now();

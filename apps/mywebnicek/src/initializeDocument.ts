@@ -113,35 +113,35 @@ export function initializeActions(dk: Denicek): void {
   const renameId = dk.rename("counter/value", "value", "left");
   const addRightId = dk.add("counter/value", "right", 1);
 
-  dk.pushBack("counter/btn/steps", { $tag: "step", eventId: wrapId });
-  dk.pushBack("counter/btn/steps", { $tag: "step", eventId: renameId });
-  dk.pushBack("counter/btn/steps", { $tag: "step", eventId: addRightId });
+  dk.insert("counter/btn/steps", -1, { $tag: "step", eventId: wrapId }, true);
+  dk.insert("counter/btn/steps", -1, { $tag: "step", eventId: renameId }, true);
+  dk.insert("counter/btn/steps", -1, { $tag: "step", eventId: addRightId }, true);
 
   // ── Conference List: record the "add speaker from input" recipe ────
-  const pushId = dk.pushFront("conferenceList/items", {
+  const pushId = dk.insert("conferenceList/items", 0, {
     $tag: "li",
     text: "",
-  });
+  }, true);
   const copyId = dk.copy(
     "conferenceList/items/!0/text",
     "conferenceList/composer/input/value",
   );
 
-  dk.pushBack("conferenceList/composer/addAction/steps", {
+  dk.insert("conferenceList/composer/addAction/steps", -1, {
     $tag: "step",
     eventId: pushId,
-  });
-  dk.pushBack("conferenceList/composer/addAction/steps", {
+  }, true);
+  dk.insert("conferenceList/composer/addAction/steps", -1, {
     $tag: "step",
     eventId: copyId,
-  });
+  }, true);
 
   // ── Conferences: record the "add speaker from input" recipe ───────
-  const addSpeakerId = dk.pushFront("conferences/speakers", {
+  const addSpeakerId = dk.insert("conferences/speakers", 0, {
     $tag: "tr",
     name: { $tag: "td", text: "" },
     email: { $tag: "td", text: "" },
-  });
+  }, true);
   const copySpeakerNameId = dk.copy(
     "conferences/speakers/!0/name/text",
     "conferences/composer/input/value",
@@ -161,24 +161,24 @@ export function initializeActions(dk: Denicek): void {
     ", ",
   );
 
-  dk.pushBack("conferences/composer/addAction/steps", {
+  dk.insert("conferences/composer/addAction/steps", -1, {
     $tag: "step",
     eventId: addSpeakerId,
-  });
-  dk.pushBack("conferences/composer/addAction/steps", {
+  }, true);
+  dk.insert("conferences/composer/addAction/steps", -1, {
     $tag: "step",
     eventId: copySpeakerNameId,
-  });
-  dk.pushBack("conferences/composer/addAction/steps", {
+  }, true);
+  dk.insert("conferences/composer/addAction/steps", -1, {
     $tag: "step",
     eventId: copySpeakerEmailId,
-  });
-  dk.pushBack("conferences/composer/addAction/steps", {
+  }, true);
+  dk.insert("conferences/composer/addAction/steps", -1, {
     $tag: "step",
     eventId: splitNameId,
-  });
-  dk.pushBack("conferences/composer/addAction/steps", {
+  }, true);
+  dk.insert("conferences/composer/addAction/steps", -1, {
     $tag: "step",
     eventId: splitEmailId,
-  });
+  }, true);
 }

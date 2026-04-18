@@ -20,11 +20,11 @@ Deno.test("encodeEvent/decodeEvent preserves remote event behavior", () => {
   const bob = new Denicek("bob", initial);
 
   alice.set("title", "Published");
-  alice.pushBack("items", {
+  alice.insert("items", -1, {
     $tag: "item",
     name: "Ship sync server",
     done: false,
-  });
+  }, true);
 
   for (const event of collectRemoteEventsSince(alice, [])) {
     bob.applyRemote(decodeEvent(encodeEvent(event)));
@@ -51,7 +51,7 @@ Deno.test("SyncRoom exchanges only missing events between peers", () => {
   applySyncResponse(alice, aliceResponse);
   aliceServerFrontiers = aliceResponse.frontiers;
 
-  bob.pushBack("items", { $tag: "item", name: "Bob task", done: false });
+  bob.insert("items", -1, { $tag: "item", name: "Bob task", done: false }, true);
   let bobServerFrontiers: string[] = [];
   const bobResponse = room.computeSyncResponse(
     createSyncRequest(bob, "demo", bobServerFrontiers),

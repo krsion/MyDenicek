@@ -141,9 +141,9 @@ Deno.test("recomputeFormulas: skips formulas with errors", () => {
   assertEquals(peer.get("bad/result"), [0]);
 });
 
-// ── 7. evaluateFormulas after pushBack ──────────────────────────────────
+// ── 7. evaluateFormulas after insert ──────────────────────────────────
 
-Deno.test("evaluateFormulas: formula with wildcard ref updates after pushBack", () => {
+Deno.test("evaluateFormulas: formula with wildcard ref updates after insert", () => {
   const peer = new Denicek("alice", {
     $tag: "root",
     items: {
@@ -162,7 +162,7 @@ Deno.test("evaluateFormulas: formula with wildcard ref updates after pushBack", 
 
   assertEquals(peer.evaluateFormulas().get("total"), 3);
 
-  peer.pushBack("items", { $tag: "item", value: 10 });
+  peer.insert("items", -1, { $tag: "item", value: 10 }, true);
   assertEquals(peer.evaluateFormulas().get("total"), 13);
 });
 

@@ -192,21 +192,21 @@ const peer = new Denicek("alice", {
 });
 
 // Step 1: Record the two edits that make up "add item"
-const insertItemEventId = peer.pushFront("items", {
+const insertItemEventId = peer.insert("items", 0, {
   $tag: "li",
   $items: [""],
-});
+}, true);
 const copyInputEventId = peer.copy("items/!0/0", "composer/input/value");
 
 // Step 2: Store event IDs as replay steps in the button
-peer.pushBack("composer/addAction/steps", {
+peer.insert("composer/addAction/steps", -1, {
   $tag: "replay-step",
   eventId: insertItemEventId,
-});
-peer.pushBack("composer/addAction/steps", {
+}, true);
+peer.insert("composer/addAction/steps", -1, {
   $tag: "replay-step",
   eventId: copyInputEventId,
-});
+}, true);
 ```
 
 ### Expected State After Recording
@@ -350,18 +350,18 @@ const renameEventId = peer.rename("formula", "formula", "left");
 const addRightEventId = peer.add("formula", "right", 1);
 
 // Store as replay steps
-peer.pushBack("btn/script/steps", {
+peer.insert("btn/script/steps", -1, {
   $tag: "replay-step",
   eventId: wrapEventId,
-});
-peer.pushBack("btn/script/steps", {
+}, true);
+peer.insert("btn/script/steps", -1, {
   $tag: "replay-step",
   eventId: renameEventId,
-});
-peer.pushBack("btn/script/steps", {
+}, true);
+peer.insert("btn/script/steps", -1, {
   $tag: "replay-step",
   eventId: addRightEventId,
-});
+}, true);
 ```
 
 ### Expected State After Recording (value = 2)
@@ -508,24 +508,24 @@ function sync(a: Denicek, b: Denicek): void {
 }
 
 // Alice records the "add speaker from input" action
-const insertSpeakerEventId = alice.pushBack("speakers", {
+const insertSpeakerEventId = alice.insert("speakers", -1, {
   $tag: "li",
   contact: "",
-});
+}, true);
 const copyInputEventId = alice.copy(
   "speakers/!2/contact",
   "controls/input/value",
 );
-alice.pushBack("controls/addSpeakerFromInput/steps", {
+alice.insert("controls/addSpeakerFromInput/steps", -1, {
   $tag: "replay-step",
   eventId: insertSpeakerEventId,
-});
-alice.pushBack("controls/addSpeakerFromInput/steps", {
+}, true);
+alice.insert("controls/addSpeakerFromInput/steps", -1, {
   $tag: "replay-step",
   eventId: copyInputEventId,
-});
+}, true);
 // Remove the temporary item used during recording
-alice.popBack("speakers");
+alice.remove("speakers", -1, true);
 
 sync(alice, bob);
 
@@ -533,14 +533,14 @@ sync(alice, bob);
 alice.updateTag("speakers", "table");
 alice.updateTag("speakers/*", "td");
 alice.wrapList("speakers/*", "tr");
-alice.pushBack("speakers/*", {
+alice.insert("speakers/*", -1, {
   $tag: "td",
   name: {
     $tag: "split-first",
     source: { $ref: "../../../0/contact" },
     separator: ", ",
   },
-});
+}, true);
 
 // Concurrently, Bob adds a new speaker via the button
 bob.set("controls/input/value", "Margaret Hamilton, margaret@example.com");
@@ -933,7 +933,7 @@ peer.set("stats/primary/minInjuries", 2);
 | Example           | Key Features                                                        |
 | ----------------- | ------------------------------------------------------------------- |
 | Hello World       | Custom primitive edits, wildcard replay (`*`)                       |
-| Todo App          | Multi-step action recording, `pushFront`, `copy`, `repeatEditsFrom` |
+| Todo App          | Multi-step action recording, `insert`, `copy`, `repeatEditsFrom` |
 | Counter App       | `wrapRecord`, `rename`, `add`, structural stability across replays  |
 | Conference List   | Two-peer sync, concurrent structural transform + item insertion     |
 | Conference Budget | `$ref` references, automatic path transformation under `wrapList`   |

@@ -24,20 +24,20 @@ Deno.test("Formative: Todo App", () => {
     },
   });
 
-  const insertItemEventId = peer.pushFront("items", {
+  const insertItemEventId = peer.insert("items", 0, {
     $tag: "li",
     $items: [""],
-  });
+  }, true);
   const copyInputEventId = peer.copy("items/!0/0", "composer/input/value");
 
-  peer.pushBack("composer/addAction/steps", {
+  peer.insert("composer/addAction/steps", -1, {
     $tag: "replay-step",
     eventId: insertItemEventId,
-  });
-  peer.pushBack("composer/addAction/steps", {
+  }, true);
+  peer.insert("composer/addAction/steps", -1, {
     $tag: "replay-step",
     eventId: copyInputEventId,
-  });
+  }, true);
 
   assertEquals(peer.toPlain(), {
     $tag: "app",

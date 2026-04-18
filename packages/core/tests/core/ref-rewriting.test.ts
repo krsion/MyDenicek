@@ -76,10 +76,10 @@ Deno.test("rename + concurrent ListPushBack with $ref: ref is rewritten", () => 
   const bob = new Denicek("bob", doc);
 
   alice.rename("data", "input", "source");
-  bob.pushBack("data/items", {
+  bob.insert("data/items", -1, {
     $tag: "x-formula",
     target: { $ref: "../../../input" },
-  });
+  }, true);
 
   sync(alice, bob);
 
@@ -106,10 +106,10 @@ Deno.test("rename + concurrent ListPushFront with $ref: ref is rewritten", () =>
   const bob = new Denicek("bob", doc);
 
   alice.rename("data", "input", "source");
-  bob.pushFront("data/items", {
+  bob.insert("data/items", 0, {
     $tag: "x-formula",
     target: { $ref: "../../../input" },
-  });
+  }, true);
 
   sync(alice, bob);
 
@@ -155,7 +155,7 @@ Deno.test("wrapRecord + concurrent RecordAdd with $ref: ref is rewritten", () =>
   assertEquals(source.$ref, "../../input/inner");
 });
 
-Deno.test("wrapRecord + concurrent pushBack with $ref: ref is rewritten", () => {
+Deno.test("wrapRecord + concurrent insert with $ref: ref is rewritten", () => {
   // $ref "../../0/contact/name" from "items/1/lookup" → "items/0/contact/name".
   const doc = {
     $tag: "root",
@@ -170,11 +170,11 @@ Deno.test("wrapRecord + concurrent pushBack with $ref: ref is rewritten", () => 
   const bob = new Denicek("bob", doc);
 
   alice.wrapRecord("items/*/contact", "inner", "wrapper");
-  bob.pushBack("items", {
+  bob.insert("items", -1, {
     $tag: "row",
     lookup: { $ref: "../../0/contact/name" },
     contact: { $tag: "info", name: "Bob" },
-  });
+  }, true);
 
   sync(alice, bob);
 
@@ -237,10 +237,10 @@ Deno.test("convergence: rename + two concurrent inserts with $ref", () => {
     $tag: "x-formula",
     target: { $ref: "../../input" },
   });
-  carol.pushBack("data/items", {
+  carol.insert("data/items", -1, {
     $tag: "x-formula",
     target: { $ref: "../../../input" },
-  });
+  }, true);
 
   syncMesh([alice, bob, carol]);
 
@@ -306,10 +306,10 @@ Deno.test("transitive sync: rename + insert with $ref via chain A↔B, B↔C, A�
     $tag: "x-formula",
     source: { $ref: "../../input/value" },
   });
-  carol.pushBack("form/items", {
+  carol.insert("form/items", -1, {
     $tag: "x-formula",
     target: { $ref: "../../../input" },
-  });
+  }, true);
 
   sync(alice, bob);
   sync(bob, carol);

@@ -142,11 +142,11 @@ function applyRandomEdit(
   if (op < 6 && !wild && isLst(node)) {
     const item = newItem();
     if (r() < 0.5) {
-      peer.pushBack(path, item);
-      return `pushBack(${p})`;
+      peer.insert(path, -1, item, true);
+      return `insert(${p}, -1)`;
     } else {
-      peer.pushFront(path, item);
-      return `pushFront(${p})`;
+      peer.insert(path, 0, item, true);
+      return `insert(${p}, 0)`;
     }
   }
   if (op < 10 && isLst(node) && lst(node).length > 0) {
@@ -163,11 +163,11 @@ function applyRandomEdit(
   }
   if (op < 14 && !wild && isLst(node) && lst(node).length > 0) {
     if (r() < 0.5) {
-      peer.popBack(path);
-      return `popBack(${p})`;
+      peer.remove(path, -1, true);
+      return `remove(${p}, -1)`;
     } else {
-      peer.popFront(path);
-      return `popFront(${p})`;
+      peer.remove(path, 0, true);
+      return `remove(${p}, 0)`;
     }
   }
   if (

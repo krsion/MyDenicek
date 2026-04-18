@@ -367,63 +367,29 @@ export class Denicek {
   }
 
   /**
-   * Appends `value` to every list matched by `target`.
-   *
-   * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
-   */
-  pushBack(target: string, value: PlainNode): string {
-    return this.commit(
-      new ListInsertAtEdit(Selector.parse(target), -1, Node.fromPlain(value), true),
-    );
-  }
-
-  /**
-   * Prepends `value` to every list matched by `target`.
-   *
-   * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
-   */
-  pushFront(target: string, value: PlainNode): string {
-    return this.commit(
-      new ListInsertAtEdit(Selector.parse(target), 0, Node.fromPlain(value), true),
-    );
-  }
-
-  /**
-   * Removes the last item from every list matched by `target`.
-   *
-   * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
-   */
-  popBack(target: string): string {
-    return this.commit(new ListRemoveAtEdit(Selector.parse(target), -1, true));
-  }
-
-  /**
-   * Removes the first item from every list matched by `target`.
-   *
-   * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
-   */
-  popFront(target: string): string {
-    return this.commit(new ListRemoveAtEdit(Selector.parse(target), 0, true));
-  }
-
-  /**
    * Inserts `value` at `index` in every list matched by `target`.
    *
+   * When `strict` is true the operation uses strict boundary semantics
+   * (index 0 = front, -1 = back) matching the old pushFront/pushBack behavior.
+   *
    * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
    */
-  insertAt(target: string, index: number, value: PlainNode): string {
+  insert(target: string, index: number, value: PlainNode, strict?: boolean): string {
     return this.commit(
-      new ListInsertAtEdit(Selector.parse(target), index, Node.fromPlain(value)),
+      new ListInsertAtEdit(Selector.parse(target), index, Node.fromPlain(value), strict),
     );
   }
 
   /**
    * Removes the item at `index` from every list matched by `target`.
    *
+   * When `strict` is true the operation uses strict boundary semantics
+   * (index 0 = front, -1 = back) matching the old popFront/popBack behavior.
+   *
    * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
    */
-  removeAt(target: string, index: number): string {
-    return this.commit(new ListRemoveAtEdit(Selector.parse(target), index));
+  remove(target: string, index: number, strict?: boolean): string {
+    return this.commit(new ListRemoveAtEdit(Selector.parse(target), index, strict));
   }
 
   /**

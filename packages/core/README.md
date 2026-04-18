@@ -24,7 +24,7 @@ const doc = new Denicek("alice", {
 });
 
 doc.set("title", "Hello, world");
-doc.pushBack("items", { $tag: "item", name: "First task" });
+doc.insert("items", -1, { $tag: "item", name: "First task" }, true);
 
 console.log(doc.toPlain());
 ```
@@ -76,10 +76,8 @@ canonical integers like `"0"`.
 - `delete`
 - `rename`
 - `set`
-- `pushBack`
-- `pushFront`
-- `popBack`
-- `popFront`
+- `insert`
+- `remove`
 - `updateTag`
 - `wrapRecord`
 - `wrapList`

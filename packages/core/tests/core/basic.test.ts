@@ -81,8 +81,8 @@ Deno.test("rejects list pops that would remove referenced items", () => {
     focus: { $ref: "/items/1/name" },
   });
 
-  assertThrows(() => front.popFront("items"), Error, "cannot remove 'items/0'");
-  assertThrows(() => back.popBack("items"), Error, "cannot remove 'items/1'");
+  assertThrows(() => front.remove("items", 0, true), Error, "cannot remove 'items/0'");
+  assertThrows(() => back.remove("items", -1, true), Error, "cannot remove 'items/1'");
 });
 
 Deno.test("rejects remote delete events that would remove referenced nodes", () => {
@@ -192,8 +192,8 @@ Deno.test("keeps concurrent list push-backs from both peers", () => {
   const alice = new Denicek("alice", doc);
   const bob = new Denicek("bob", doc);
 
-  alice.pushBack("items", "A");
-  bob.pushBack("items", "B");
+  alice.insert("items", -1, "A", true);
+  bob.insert("items", -1, "B", true);
 
   sync(alice, bob);
 
@@ -212,7 +212,7 @@ Deno.test("list-pop-front removes first item", () => {
     items: { $tag: "ul", $items: ["a", "b", "c"] },
   });
 
-  core.popFront("items");
+  core.remove("items", 0, true);
 
   assertEquals(core.toPlain(), {
     $tag: "root",
@@ -226,7 +226,7 @@ Deno.test("list-pop-back removes last item", () => {
     items: { $tag: "ul", $items: ["a", "b", "c"] },
   });
 
-  core.popBack("items");
+  core.remove("items", -1, true);
 
   assertEquals(core.toPlain(), {
     $tag: "root",
@@ -240,7 +240,7 @@ Deno.test("list-push-front inserts at start", () => {
     items: { $tag: "ul", $items: ["a", "b", "c"] },
   });
 
-  core.pushFront("items", "z");
+  core.insert("items", 0, "z", true);
 
   assertEquals(core.toPlain(), {
     $tag: "root",

@@ -47,7 +47,7 @@ Deno.test("concurrent wildcard edit on emptied list becomes no-op", () => {
   const alice = new Denicek("alice", doc);
   const bob = new Denicek("bob", doc);
 
-  alice.popBack("items");
+  alice.remove("items", -1, true);
   bob.set("items/*", "UPDATED");
   sync(alice, bob);
 
@@ -112,7 +112,7 @@ Deno.test("concurrent push-front shifts index-based selectors", () => {
   };
   const alice = new Denicek("alice", doc);
   const bob = new Denicek("bob", doc);
-  alice.pushFront("items", { $tag: "item", name: "new", val: "xxx" });
+  alice.insert("items", 0, { $tag: "item", name: "new", val: "xxx" }, true);
   bob.set("items/0/val", "UPDATED");
   sync(alice, bob);
 
@@ -139,8 +139,8 @@ Deno.test("concurrent double pop-back on single-item list converges", () => {
   };
   const alice = new Denicek("alice", doc);
   const bob = new Denicek("bob", doc);
-  alice.popBack("items");
-  bob.popBack("items");
+  alice.remove("items", -1, true);
+  bob.remove("items", -1, true);
   sync(alice, bob);
 
   // Both peers saw the same last item, so the shared intent is one removal.
@@ -157,7 +157,7 @@ Deno.test("commit throws on pop-front from empty list", () => {
     $tag: "root",
     items: { $tag: "ul", $items: [] as string[] },
   });
-  assertThrows(() => core.popFront("items"), Error, "list is empty");
+  assertThrows(() => core.remove("items", 0, true), Error, "list is empty");
 });
 
 // ── Adversarial concurrent scenarios ────────────────────────────────
@@ -259,8 +259,8 @@ Deno.test("concurrent pop-front + push-front + rename", () => {
   const alice = new Denicek("alice", doc);
   const bob = new Denicek("bob", doc);
   const carol = new Denicek("carol", doc);
-  alice.popFront("items");
-  bob.pushFront("items", { $tag: "item", name: "new" });
+  alice.remove("items", 0, true);
+  bob.insert("items", 0, { $tag: "item", name: "new" }, true);
   carol.rename("items/*", "name", "title");
 
   syncMesh([alice, bob, carol]);
@@ -301,7 +301,7 @@ Deno.test("transitive convergence: A↔B, B↔C, then A↔C", () => {
 
   alice.rename("items/*", "name", "title");
   bob.wrapRecord("items/*", "inner", "w");
-  carol.pushBack("items", { $tag: "item", name: "b", val: "2" });
+  carol.insert("items", -1, { $tag: "item", name: "b", val: "2" }, true);
 
   // Chain sync: A↔B, then B↔C — A and C never directly sync
   sync(alice, bob);
@@ -351,13 +351,13 @@ Deno.test("nested list: concurrent push + pop at different levels", () => {
   const alice = new Denicek("alice", doc);
   const bob = new Denicek("bob", doc);
 
-  alice.popFront("items/0/sub");
-  alice.pushBack("items", {
+  alice.remove("items/0/sub", 0, true);
+  alice.insert("items", -1, {
     $tag: "group",
     sub: { $tag: "sl", $items: ["new"] },
-  });
-  bob.popBack("items/0/sub");
-  bob.pushFront("items/0/sub", "front");
+  }, true);
+  bob.remove("items/0/sub", -1, true);
+  bob.insert("items/0/sub", 0, "front", true);
 
   sync(alice, bob);
   assertEquals(alice.toPlain(), bob.toPlain());
