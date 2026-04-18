@@ -6,7 +6,9 @@ import {
 } from "../selector.ts";
 import { Node } from "./base.ts";
 
+/** A pointer to another node via a relative or absolute path. */
 export class ReferenceNode extends Node {
+  /** The selector path this reference points to. */
   selector: Selector;
 
   constructor(selector: Selector) {

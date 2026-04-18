@@ -1,8 +1,11 @@
 import type { Selector, SelectorSegment } from "../selector.ts";
 import { Node } from "./base.ts";
 
+/** A set of named fields with a structural tag. */
 export class RecordNode extends Node {
+  /** Structural tag (e.g. `"div"`, `"speaker"`). */
   tag: string;
+  /** Named child nodes keyed by field name. */
   fields: Record<string, Node>;
 
   constructor(tag: string, fields: Record<string, Node>) {

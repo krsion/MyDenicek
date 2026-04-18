@@ -1,4 +1,4 @@
-import { Node } from "./nodes/base.ts";
+import type { Node } from "./nodes/base.ts";
 import { ListNode } from "./nodes/list-node.ts";
 import { PrimitiveNode } from "./nodes/primitive-node.ts";
 import { RecordNode } from "./nodes/record-node.ts";

@@ -5,8 +5,11 @@ import {
 } from "../selector.ts";
 import { Node } from "./base.ts";
 
+/** An ordered list of child nodes with a structural tag. */
 export class ListNode extends Node {
+  /** Structural tag (e.g. `"ul"`, `"table"`). */
   tag: string;
+  /** Ordered child nodes. */
   items: Node[];
 
   constructor(tag: string, items: Node[]) {

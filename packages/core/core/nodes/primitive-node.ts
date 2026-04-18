@@ -1,7 +1,9 @@
 import type { PrimitiveValue, SelectorSegment } from "../selector.ts";
 import { Node } from "./base.ts";
 
+/** A scalar leaf node (string, number, or boolean). */
 export class PrimitiveNode extends Node {
+  /** The scalar value. */
   value: PrimitiveValue;
 
   constructor(value: PrimitiveValue) {
