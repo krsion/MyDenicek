@@ -385,6 +385,64 @@ function resolveRefPath(
   return navigatePlainNode(root, resolved);
 }
 
+// ── Child evaluation (transparent $ref resolution) ──────────────────────
+
+/**
+ * Resolve a `$ref` to a single evaluated value.
+ * If the target is a formula, it is evaluated recursively.
+ * Wildcards that expand to multiple values are an error
+ * (single-value context).
+ */
+function resolveRefToValue(
+  ref: PlainRef,
+  root: PlainNode,
+  contextPath: string,
+  visiting: Set<string>,
+  depth: number,
+): FormulaResult {
+  const targets = resolveRefPath(ref.$ref, root, contextPath);
+  if (targets.length === 0) {
+    return new FormulaError(`reference '${ref.$ref}' not found`);
+  }
+  if (targets.length > 1) {
+    return new FormulaError(
+      `reference '${ref.$ref}' resolved to ${targets.length} values, expected 1`,
+    );
+  }
+  const target = targets[0];
+  if (isPrimitive(target)) return target;
+  if (isFormulaNode(target)) {
+    const targetPath = computeTargetPath(ref.$ref, contextPath);
+    return evaluateFormulaNode(target, root, targetPath, visiting, depth + 1);
+  }
+  return new FormulaError(
+    `reference '${ref.$ref}' resolved to non-primitive value`,
+  );
+}
+
+/**
+ * Evaluate a child node, transparently resolving `$ref` references.
+ * Callers never need to distinguish between a reference and an inline
+ * value — references are navigated, and formula targets are evaluated,
+ * before any type checking occurs.
+ */
+function evaluateChild(
+  child: PlainNode,
+  root: PlainNode,
+  contextPath: string,
+  visiting: Set<string>,
+  depth: number,
+): FormulaResult {
+  if (isPlainRef(child)) {
+    return resolveRefToValue(child, root, contextPath, visiting, depth);
+  }
+  if (isPrimitive(child)) return child;
+  if (isFormulaNode(child)) {
+    return evaluateFormulaNode(child, root, contextPath, visiting, depth + 1);
+  }
+  return new FormulaError("non-primitive, non-formula child");
+}
+
 // ── Evaluator ───────────────────────────────────────────────────────────
 
 const MAX_DEPTH = 100;
@@ -432,39 +490,15 @@ function evaluateFormulaInner(
   const tag = formula.$tag as string;
 
   // Check for a tag-based evaluator first
+  // Tag-based evaluator: the evaluate callback transparently resolves
+  // $ref references so that evaluators only ever see values or formulas.
   const tagEvaluator = lookupTagEvaluator(tag);
   if (tagEvaluator) {
     return tagEvaluator(formula, (child: PlainNode, fieldName?: string) => {
-      if (isPrimitive(child)) return child;
-      // Resolve $ref relative to the field that contains it, not the formula
       const childRefPath = fieldName
         ? formulaPath + "/" + fieldName
         : formulaPath;
-      if (isPlainRef(child)) {
-        const resolved = resolveRefArgument(
-          child,
-          root,
-          childRefPath,
-          tag,
-          visiting,
-          depth,
-        );
-        if (resolved instanceof FormulaError) return resolved;
-        if (resolved.length === 1) return resolved[0];
-        return new FormulaError(
-          `reference '${child.$ref}' resolved to ${resolved.length} values, expected 1`,
-        );
-      }
-      if (isFormulaNode(child)) {
-        return evaluateFormulaNode(
-          child,
-          root,
-          childRefPath,
-          visiting,
-          depth + 1,
-        );
-      }
-      return new FormulaError("non-primitive, non-formula child");
+      return evaluateChild(child, root, childRefPath, visiting, depth);
     });
   }
 
@@ -525,6 +559,7 @@ function evaluateFormulaInner(
 
 /**
  * Resolve a single argument node into one or more primitive values.
+ * References are resolved first — argument processing never sees `$ref`.
  * Returns an array because wildcard refs can expand to multiple values.
  */
 function resolveArgument(
@@ -535,10 +570,7 @@ function resolveArgument(
   visiting: Set<string>,
   depth: number,
 ): PrimitiveValue[] | FormulaError {
-  if (isPrimitive(argNode)) {
-    return [argNode];
-  }
-
+  // Resolve references transparently before any type checking
   if (isPlainRef(argNode)) {
     return resolveRefArgument(
       argNode,
@@ -548,6 +580,10 @@ function resolveArgument(
       visiting,
       depth,
     );
+  }
+
+  if (isPrimitive(argNode)) {
+    return [argNode];
   }
 
   if (isFormulaNode(argNode)) {
