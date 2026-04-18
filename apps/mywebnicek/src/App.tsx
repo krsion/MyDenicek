@@ -17,6 +17,13 @@ const SYNC_SERVER_URL: string = VITE_SYNC_URL ??
     ? "ws://localhost:8787/sync"
     : "wss://mydenicek-core-krsion-dev-sync.happyisland-d6dda219.westeurope.azurecontainerapps.io/sync");
 
+// Warm up the sync server (Azure Container Apps cold start) by hitting
+// the health endpoint as early as possible. Fire-and-forget.
+const HEALTH_URL = SYNC_SERVER_URL
+  .replace(/^ws/, "http")
+  .replace(/\/sync$/, "/healthz");
+fetch(HEALTH_URL).catch(() => {});
+
 const PEER_SESSION_KEY = "mydenicek-peer-id";
 
 /** Unique peer ID per tab, survives refreshes via sessionStorage. */
