@@ -930,11 +930,11 @@ peer.set("stats/primary/minInjuries", 2);
 
 ## Summary of Demonstrated Capabilities
 
-| Example           | Key Features                                                        |
-| ----------------- | ------------------------------------------------------------------- |
-| Hello World       | Custom primitive edits, wildcard replay (`*`)                       |
-| Todo App          | Multi-step action recording, `insert`, `copy`, `repeatEditsFrom` |
-| Counter App       | `wrapRecord`, `rename`, `add`, structural stability across replays  |
-| Conference List   | Two-peer sync, concurrent structural transform + item insertion     |
-| Conference Budget | `$ref` references, automatic path transformation under `wrapList`   |
-| Traffic Accidents | `copy`, inter-formula `$ref` linking, cascading computed updates    |
+| Example           | Key Features                                                       |
+| ----------------- | ------------------------------------------------------------------ |
+| Hello World       | Custom primitive edits, wildcard replay (`*`)                      |
+| Todo App          | Multi-step action recording, `insert`, `copy`, `repeatEditsFrom`   |
+| Counter App       | `wrapRecord`, `rename`, `add`, structural stability across replays |
+| Conference List   | Two-peer sync, concurrent structural transform + item insertion    |
+| Conference Budget | `$ref` references, automatic path transformation under `wrapList`  |
+| Traffic Accidents | `copy`, inter-formula `$ref` linking, cascading computed updates   |

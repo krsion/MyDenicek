@@ -493,7 +493,12 @@ Deno.test("wrapRecord with wildcard affects concurrently inserted item", () => {
   alice.wrapRecord("items/*/contact", "source", "split-first");
 
   // Bob concurrently inserts a new item
-  bob.insert("items", -1, { $tag: "li", contact: "Bob, bob@example.com" }, true);
+  bob.insert(
+    "items",
+    -1,
+    { $tag: "li", contact: "Bob, bob@example.com" },
+    true,
+  );
 
   sync(alice, bob);
 

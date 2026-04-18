@@ -81,8 +81,16 @@ Deno.test("rejects list pops that would remove referenced items", () => {
     focus: { $ref: "/items/1/name" },
   });
 
-  assertThrows(() => front.remove("items", 0, true), Error, "cannot remove 'items/0'");
-  assertThrows(() => back.remove("items", -1, true), Error, "cannot remove 'items/1'");
+  assertThrows(
+    () => front.remove("items", 0, true),
+    Error,
+    "cannot remove 'items/0'",
+  );
+  assertThrows(
+    () => back.remove("items", -1, true),
+    Error,
+    "cannot remove 'items/1'",
+  );
 });
 
 Deno.test("rejects remote delete events that would remove referenced nodes", () => {

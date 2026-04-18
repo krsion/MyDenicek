@@ -20,8 +20,19 @@ export type EncodedRemoteEdit =
   | { kind: "UnwrapRecordEdit"; target: string; field: string }
   | { kind: "UnwrapListEdit"; target: string }
   | { kind: "RestoreSnapshotEdit"; target: string; snapshot: PlainNode }
-  | { kind: "ListInsertAtEdit"; target: string; index: number; node: PlainNode; strict?: boolean }
-  | { kind: "ListRemoveAtEdit"; target: string; index: number; strict?: boolean }
+  | {
+    kind: "ListInsertAtEdit";
+    target: string;
+    index: number;
+    node: PlainNode;
+    strict?: boolean;
+  }
+  | {
+    kind: "ListRemoveAtEdit";
+    target: string;
+    index: number;
+    strict?: boolean;
+  }
   | {
     kind: "ListReorderEdit";
     target: string;

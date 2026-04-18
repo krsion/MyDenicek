@@ -46,7 +46,13 @@ function assertConvergence(peers: Denicek[], msg?: string): void {
 const NUM_PEERS = 3;
 
 type EditOp =
-  | { type: "insert"; target: string; index: number; value: PlainNode; strict?: boolean }
+  | {
+    type: "insert";
+    target: string;
+    index: number;
+    value: PlainNode;
+    strict?: boolean;
+  }
   | { type: "remove"; target: string; index: number; strict?: boolean }
   | { type: "add"; target: string; field: string; value: PlainNode }
   | { type: "delete"; target: string; field: string }
@@ -210,11 +216,21 @@ const arbFlatListEdit: fc.Arbitrary<EditOp> = fc.oneof(
   },
   {
     weight: 2,
-    arbitrary: fc.constant({ type: "remove" as const, target: "items", index: -1, strict: true }),
+    arbitrary: fc.constant({
+      type: "remove" as const,
+      target: "items",
+      index: -1,
+      strict: true,
+    }),
   },
   {
     weight: 2,
-    arbitrary: fc.constant({ type: "remove" as const, target: "items", index: 0, strict: true }),
+    arbitrary: fc.constant({
+      type: "remove" as const,
+      target: "items",
+      index: 0,
+      strict: true,
+    }),
   },
   {
     weight: 2,
@@ -393,11 +409,21 @@ const arbNestedEdit: fc.Arbitrary<EditOp> = fc.oneof(
   },
   {
     weight: 1,
-    arbitrary: fc.constant({ type: "remove" as const, target: "rows", index: -1, strict: true }),
+    arbitrary: fc.constant({
+      type: "remove" as const,
+      target: "rows",
+      index: -1,
+      strict: true,
+    }),
   },
   {
     weight: 1,
-    arbitrary: fc.constant({ type: "remove" as const, target: "rows", index: 0, strict: true }),
+    arbitrary: fc.constant({
+      type: "remove" as const,
+      target: "rows",
+      index: 0,
+      strict: true,
+    }),
   },
   // Wildcard primitive edits
   {
@@ -538,11 +564,21 @@ const arbDeepEdit: fc.Arbitrary<EditOp> = fc.oneof(
   },
   {
     weight: 1,
-    arbitrary: fc.constant({ type: "remove" as const, target: "grid", index: -1, strict: true }),
+    arbitrary: fc.constant({
+      type: "remove" as const,
+      target: "grid",
+      index: -1,
+      strict: true,
+    }),
   },
   {
     weight: 1,
-    arbitrary: fc.constant({ type: "remove" as const, target: "grid", index: 0, strict: true }),
+    arbitrary: fc.constant({
+      type: "remove" as const,
+      target: "grid",
+      index: 0,
+      strict: true,
+    }),
   },
   // Inner list ops (specific and wildcard)
   {
@@ -557,7 +593,12 @@ const arbDeepEdit: fc.Arbitrary<EditOp> = fc.oneof(
   },
   {
     weight: 1,
-    arbitrary: fc.constant({ type: "remove" as const, target: "grid/0", index: -1, strict: true }),
+    arbitrary: fc.constant({
+      type: "remove" as const,
+      target: "grid/0",
+      index: -1,
+      strict: true,
+    }),
   },
   // Deep wildcard edits (*/* and */*/*)
   {

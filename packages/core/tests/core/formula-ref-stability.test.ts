@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "@std/assert";
-import { Denicek, evaluateAllFormulas, FormulaError } from "../../mod.ts";
+import { Denicek, evaluateAllFormulas } from "../../mod.ts";
 
 function sync(a: Denicek, b: Denicek): void {
   const aFrontiers = a.frontiers;
@@ -47,13 +47,8 @@ Deno.test("formula $ref is rewritten when concurrent rename changes referenced f
   // After LWW resolution, the value is either "hello" or "world";
   // the formula should uppercase whichever value won.
   assert(
-    formulaResult === "HELLO" || formulaResult === "WORLD" ||
-      formulaResult === "ALICE-VALUE" || formulaResult === "BOB-VALUE",
+    formulaResult === "HELLO" || formulaResult === "WORLD",
     `Expected formula to produce an uppercase string, but got: ${formulaResult}`,
-  );
-  assert(
-    !(formulaResult instanceof FormulaError),
-    `Formula should not produce an error after rename, but got: ${formulaResult}`,
   );
 });
 
@@ -133,9 +128,5 @@ Deno.test("formula $ref is rewritten when concurrent wrap changes path structure
   assert(
     typeof formulaResult === "string",
     `Expected formula to produce a string after wrap, got: ${formulaResult}`,
-  );
-  assert(
-    !(formulaResult instanceof FormulaError),
-    `Formula should not produce an error after wrap, but got: ${formulaResult}`,
   );
 });

@@ -13,9 +13,7 @@ import {
   registerRemoteEditDecoder,
 } from "../remote-edit-codec.ts";
 import { UnwrapListEdit, UnwrapRecordEdit } from "./unwrap-edits.ts";
-import {
-  rewriteInsertEditRefs,
-} from "./ref-rewriting.ts";
+import { rewriteInsertEditRefs } from "./ref-rewriting.ts";
 
 type EncodedUpdateTagEdit = Extract<
   EncodedRemoteEdit,

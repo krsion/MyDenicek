@@ -428,14 +428,12 @@ export class ListRemoveAtEdit extends NoOpOnRemovedTargetEdit {
       .flatMap(({ path, node }) => {
         const list = this.assertList(node);
         if (this.strict) {
-          return list.items.length === 0
-            ? []
-            : [
-              new Selector([
-                ...path.segments,
-                this.resolveIndex(list),
-              ]),
-            ];
+          return list.items.length === 0 ? [] : [
+            new Selector([
+              ...path.segments,
+              this.resolveIndex(list),
+            ]),
+          ];
         }
         return this.index >= 0 && this.index < list.items.length
           ? [new Selector([...path.segments, this.index])]

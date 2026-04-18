@@ -64,7 +64,12 @@ export interface UseDenicekReturn {
   /** Rename a field on every record matched by `target`. */
   rename: (target: string, from: string, to: string) => void;
   /** Insert `value` at `index` in every list matched by `target`. */
-  insert: (target: string, index: number, value: PlainNode, strict?: boolean) => void;
+  insert: (
+    target: string,
+    index: number,
+    value: PlainNode,
+    strict?: boolean,
+  ) => void;
   /** Remove the item at `index` from every list matched by `target`. */
   remove: (target: string, index: number, strict?: boolean) => void;
   /** Update the structural tag on every matched node. */
@@ -179,8 +184,7 @@ export function useDenicek(options?: UseDenicekOptions): UseDenicekReturn {
       [dk, mutate],
     ),
     remove: useCallback(
-      (t: string, i: number, s?: boolean) =>
-        mutate(() => dk.remove(t, i, s)),
+      (t: string, i: number, s?: boolean) => mutate(() => dk.remove(t, i, s)),
       [dk, mutate],
     ),
     updateTag: useCallback(

@@ -52,8 +52,8 @@ Returns an object with:
 
 **Mutations** — all auto-trigger re-render and sync flush:
 
-`add`, `delete`, `set`, `rename`, `insert`, `remove`, `updateTag`, `wrapRecord`, `wrapList`, `copy`, `get`, `undo`,
-`redo`.
+`add`, `delete`, `set`, `rename`, `insert`, `remove`, `updateTag`, `wrapRecord`,
+`wrapList`, `copy`, `get`, `undo`, `redo`.
 
 **Sync control:** `connectSync(opts)`, `disconnectSync()`.
 

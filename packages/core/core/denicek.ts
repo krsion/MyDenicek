@@ -374,9 +374,19 @@ export class Denicek {
    *
    * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
    */
-  insert(target: string, index: number, value: PlainNode, strict?: boolean): string {
+  insert(
+    target: string,
+    index: number,
+    value: PlainNode,
+    strict?: boolean,
+  ): string {
     return this.commit(
-      new ListInsertAtEdit(Selector.parse(target), index, Node.fromPlain(value), strict),
+      new ListInsertAtEdit(
+        Selector.parse(target),
+        index,
+        Node.fromPlain(value),
+        strict,
+      ),
     );
   }
 
@@ -389,7 +399,9 @@ export class Denicek {
    * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
    */
   remove(target: string, index: number, strict?: boolean): string {
-    return this.commit(new ListRemoveAtEdit(Selector.parse(target), index, strict));
+    return this.commit(
+      new ListRemoveAtEdit(Selector.parse(target), index, strict),
+    );
   }
 
   /**

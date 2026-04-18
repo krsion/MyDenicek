@@ -51,7 +51,12 @@ Deno.test("SyncRoom exchanges only missing events between peers", () => {
   applySyncResponse(alice, aliceResponse);
   aliceServerFrontiers = aliceResponse.frontiers;
 
-  bob.insert("items", -1, { $tag: "item", name: "Bob task", done: false }, true);
+  bob.insert(
+    "items",
+    -1,
+    { $tag: "item", name: "Bob task", done: false },
+    true,
+  );
   let bobServerFrontiers: string[] = [];
   const bobResponse = room.computeSyncResponse(
     createSyncRequest(bob, "demo", bobServerFrontiers),

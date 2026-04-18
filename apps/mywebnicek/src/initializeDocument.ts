@@ -115,7 +115,12 @@ export function initializeActions(dk: Denicek): void {
 
   dk.insert("counter/btn/steps", -1, { $tag: "step", eventId: wrapId }, true);
   dk.insert("counter/btn/steps", -1, { $tag: "step", eventId: renameId }, true);
-  dk.insert("counter/btn/steps", -1, { $tag: "step", eventId: addRightId }, true);
+  dk.insert(
+    "counter/btn/steps",
+    -1,
+    { $tag: "step", eventId: addRightId },
+    true,
+  );
 
   // ── Conference List: record the "add speaker from input" recipe ────
   const pushId = dk.insert("conferenceList/items", 0, {

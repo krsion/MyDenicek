@@ -71,7 +71,12 @@ export class PeerSession {
   set(target: string, value: PrimitiveValue): void {
     this.denicek.set(target, value);
   }
-  insert(target: string, index: number, value: PlainNode, strict?: boolean): void {
+  insert(
+    target: string,
+    index: number,
+    value: PlainNode,
+    strict?: boolean,
+  ): void {
     this.denicek.insert(target, index, value, strict);
   }
   remove(target: string, index: number, strict?: boolean): void {

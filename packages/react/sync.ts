@@ -7,9 +7,7 @@
  */
 
 import type { Denicek, PlainNode } from "@mydenicek/core";
-import {
-  SyncClient as BaseSyncClient,
-} from "@mydenicek/sync";
+import { SyncClient as BaseSyncClient } from "@mydenicek/sync";
 
 /** Reactive sync status. */
 export type SyncStatus =

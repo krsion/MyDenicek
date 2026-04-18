@@ -125,7 +125,12 @@ Deno.test("Formative: Conference Table", () => {
   const bob = new Denicek("bob", initialDocument);
 
   // Record the "add speaker" recipe (list phase)
-  const insertId = alice.insert("speakers", -1, { $tag: "li", contact: "" }, true);
+  const insertId = alice.insert(
+    "speakers",
+    -1,
+    { $tag: "li", contact: "" },
+    true,
+  );
   const copyId = alice.copy("speakers/!2/contact", "controls/input/value");
   alice.insert("controls/addSpeakerFromInput/steps", -1, {
     $tag: "replay-step",
