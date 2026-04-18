@@ -77,16 +77,16 @@ export function EditComposer({ session, onEdit }: Props) {
           break;
         }
         case "pushBack":
-          session.pushBack(target, parseValue(value));
+          session.insert(target, -1, parseValue(value), true);
           break;
         case "pushFront":
-          session.pushFront(target, parseValue(value));
+          session.insert(target, 0, parseValue(value), true);
           break;
         case "popBack":
-          session.popBack(target);
+          session.remove(target, -1, true);
           break;
         case "popFront":
-          session.popFront(target);
+          session.remove(target, 0, true);
           break;
         case "updateTag":
           session.updateTag(target, tag);
