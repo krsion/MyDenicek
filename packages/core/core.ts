@@ -22,13 +22,6 @@ export type {
   PlainRef,
 } from "./core/nodes.ts";
 export {
-  ListNode,
-  Node,
-  PrimitiveNode,
-  RecordNode,
-  ReferenceNode,
-} from "./core/nodes.ts";
-export {
   listRegisteredPrimitiveEdits,
   registerPrimitiveEdit,
 } from "./core/primitive-edits.ts";

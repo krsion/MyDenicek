@@ -37,7 +37,7 @@ import {
   type EncodedRemoteEvent,
   encodeRemoteEvent,
 } from "./remote-events.ts";
-import { evaluateAllFormulas, FormulaError } from "./formula-engine.ts";
+import { evaluateAllFormulasOnNode, FormulaError } from "./formula-engine.ts";
 import type { FormulaResult } from "./formula-engine.ts";
 
 // ── Denicek (collaborative document peer) ───────────────────────────
@@ -619,7 +619,7 @@ export class Denicek {
   evaluateFormulas(): Map<string, FormulaResult> {
     const doc = this.cachedDoc ?? this.rematerialize();
     this.cachedDoc = doc;
-    return evaluateAllFormulas(doc);
+    return evaluateAllFormulasOnNode(doc);
   }
 
   /**

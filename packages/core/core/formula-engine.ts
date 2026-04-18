@@ -53,6 +53,7 @@ function lookupOperation(name: string): FormulaOperation | undefined {
  * A tag evaluator computes a result from a formula record's own fields.
  * The `evaluate` callback recursively evaluates child nodes.
  */
+/** @internal */
 export type FormulaTagEvaluator = (
   node: RecordNode,
   evaluate: (child: Node, fieldName?: string) => FormulaResult,
@@ -397,7 +398,9 @@ function evaluateFormulaInner(
 
   // Default path: operation + args
   const opField = formula.fields["operation"];
-  if (!(opField instanceof PrimitiveNode) || typeof opField.value !== "string") {
+  if (
+    !(opField instanceof PrimitiveNode) || typeof opField.value !== "string"
+  ) {
     return new FormulaError("formula missing 'operation' field");
   }
   const opName = opField.value;
@@ -573,17 +576,16 @@ function resolveRefArgument(
 
 // ── Evaluate all formulas ───────────────────────────────────────────────
 
-/**
- * Walk the entire Node tree, find every formula node, evaluate it,
- * and return a map from path to result.
- */
-export function evaluateAllFormulas(
-  root: Node,
+import type { PlainNode } from "./nodes/plain.ts";
+import { createNodeFromPlain } from "./nodes/from-plain.ts";
+
+function evaluateAllFormulasOnNode(
+  nodeRoot: Node,
 ): Map<string, FormulaResult> {
   const results = new Map<string, FormulaResult>();
   const visiting = new Set<string>();
 
-  root.forEach((path, node) => {
+  nodeRoot.forEach((path, node) => {
     if (isFormulaNode(node)) {
       const pathKey = path.format();
       if (!results.has(pathKey)) {
@@ -591,7 +593,7 @@ export function evaluateAllFormulas(
           pathKey,
           evaluateFormulaNode(
             node as RecordNode,
-            root,
+            nodeRoot,
             path,
             visiting,
             0,
@@ -603,3 +605,16 @@ export function evaluateAllFormulas(
 
   return results;
 }
+
+/**
+ * Walk the entire document tree, find every formula node, evaluate it,
+ * and return a map from path to result.
+ */
+export function evaluateAllFormulas(
+  root: PlainNode,
+): Map<string, FormulaResult> {
+  return evaluateAllFormulasOnNode(createNodeFromPlain(root));
+}
+
+/** @internal Evaluate formulas on an already-materialized Node tree. */
+export { evaluateAllFormulasOnNode };

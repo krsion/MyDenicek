@@ -2,7 +2,6 @@ import { assert, assertEquals } from "@std/assert";
 import {
   evaluateAllFormulas,
   FormulaError,
-  Node,
   registerFormulaOperation,
 } from "../../mod.ts";
 import type { FormulaResult, PlainNode, PlainRecord } from "../../mod.ts";
@@ -27,7 +26,7 @@ function makeFormula(operation: string, args: PlainNode[]): PlainRecord {
 
 /** Build a Node tree from plain and evaluate all formulas, returning the results map. */
 function evalAll(plain: PlainNode): Map<string, FormulaResult> {
-  return evaluateAllFormulas(Node.fromPlain(plain));
+  return evaluateAllFormulas(plain);
 }
 
 /** Evaluate a standalone formula (possibly with a doc root). */
@@ -293,7 +292,10 @@ Deno.test("reference to non-existent path returns FormulaError", () => {
     result: makeFormula("sum", [{ $ref: "/missing/path" }]),
   };
   const results = evalAll(doc);
-  assertFormulaError(results.get("result")!, "reference '/missing/path' not found");
+  assertFormulaError(
+    results.get("result")!,
+    "reference '/missing/path' not found",
+  );
 });
 
 Deno.test("max depth exceeded returns FormulaError", () => {
@@ -407,5 +409,8 @@ Deno.test("reference to record field returns FormulaError for non-primitive", ()
     result: makeFormula("sum", [{ $ref: "/nested" }]),
   };
   const results = evalAll(doc);
-  assert(results.get("result") instanceof FormulaError, "expected FormulaError");
+  assert(
+    results.get("result") instanceof FormulaError,
+    "expected FormulaError",
+  );
 });

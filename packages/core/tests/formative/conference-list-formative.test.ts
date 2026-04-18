@@ -1,5 +1,5 @@
 import { assertEquals, Denicek, sync } from "../core/test-helpers.ts";
-import { evaluateAllFormulas, Node } from "../../mod.ts";
+import { evaluateAllFormulas } from "../../mod.ts";
 
 // ── Conference List (before) ─────────────────────────────────────────
 // A flat <ul> where each item stores "Name, email" as a single string.
@@ -182,7 +182,7 @@ Deno.test("Formative: Conference Table", () => {
     source: "Grace Hopper, grace@example.com",
   });
   // Verify formula evaluation extracts names correctly
-  const results = evaluateAllFormulas(Node.fromPlain(merged));
+  const results = evaluateAllFormulas(merged);
   assertEquals(results.get("speakers/0/0/contact"), "Ada Lovelace");
   assertEquals(results.get("speakers/1/0/contact"), "Grace Hopper");
 
