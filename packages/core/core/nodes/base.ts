@@ -58,6 +58,15 @@ export abstract class Node {
   popFront(): void {
     throw this.createUnsupportedOperationError("popFront");
   }
+  insertAt(_index: number, _node: Node): void {
+    throw this.createUnsupportedOperationError("insertAt");
+  }
+  removeAt(_index: number): void {
+    throw this.createUnsupportedOperationError("removeAt");
+  }
+  reorder(_fromIndex: number, _toIndex: number): void {
+    throw this.createUnsupportedOperationError("reorder");
+  }
   updateTag(_tag: string): void {
     throw this.createUnsupportedOperationError("updateTag");
   }

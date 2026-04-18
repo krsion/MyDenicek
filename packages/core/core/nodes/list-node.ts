@@ -41,6 +41,40 @@ export class ListNode extends Node {
     return true;
   }
 
+  override insertAt(index: number, node: Node): void {
+    if (index < 0 || index > this.items.length) {
+      throw new Error(
+        `list-insert-at: index ${index} out of bounds [0, ${this.items.length}]`,
+      );
+    }
+    this.items.splice(index, 0, node);
+  }
+
+  override removeAt(index: number): void {
+    if (index < 0 || index >= this.items.length) {
+      throw new Error(
+        `list-remove-at: index ${index} out of bounds [0, ${this.items.length})`,
+      );
+    }
+    this.items.splice(index, 1);
+  }
+
+  override reorder(fromIndex: number, toIndex: number): void {
+    if (fromIndex < 0 || fromIndex >= this.items.length) {
+      throw new Error(
+        `list-reorder: fromIndex ${fromIndex} out of bounds [0, ${this.items.length})`,
+      );
+    }
+    const maxTo = this.items.length - 1;
+    if (toIndex < 0 || toIndex > maxTo) {
+      throw new Error(
+        `list-reorder: toIndex ${toIndex} out of bounds [0, ${maxTo}]`,
+      );
+    }
+    const [item] = this.items.splice(fromIndex, 1);
+    this.items.splice(toIndex, 0, item!);
+  }
+
   override updateTag(tag: string): boolean {
     this.tag = tag;
     return true;

@@ -2,10 +2,13 @@ import {
   ApplyPrimitiveEdit,
   CopyEdit,
   type Edit,
+  ListInsertAtEdit,
   ListPopBackEdit,
   ListPopFrontEdit,
   ListPushBackEdit,
   ListPushFrontEdit,
+  ListRemoveAtEdit,
+  ListReorderEdit,
   RecordAddEdit,
   RecordDeleteEdit,
   RecordRenameFieldEdit,
@@ -405,6 +408,38 @@ export class Denicek {
    */
   popFront(target: string): string {
     return this.commit(new ListPopFrontEdit(Selector.parse(target)));
+  }
+
+  /**
+   * Inserts `value` at `index` in every list matched by `target`.
+   *
+   * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
+   */
+  insertAt(target: string, index: number, value: PlainNode): string {
+    return this.commit(
+      new ListInsertAtEdit(Selector.parse(target), index, Node.fromPlain(value)),
+    );
+  }
+
+  /**
+   * Removes the item at `index` from every list matched by `target`.
+   *
+   * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
+   */
+  removeAt(target: string, index: number): string {
+    return this.commit(new ListRemoveAtEdit(Selector.parse(target), index));
+  }
+
+  /**
+   * Moves an item from `fromIndex` to `toIndex` in every list matched by `target`.
+   * The `toIndex` is the target position after the item has been removed from `fromIndex`.
+   *
+   * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
+   */
+  reorder(target: string, fromIndex: number, toIndex: number): string {
+    return this.commit(
+      new ListReorderEdit(Selector.parse(target), fromIndex, toIndex),
+    );
   }
 
   /**

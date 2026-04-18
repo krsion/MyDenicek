@@ -24,6 +24,14 @@ export type EncodedRemoteEdit =
   | { kind: "UnwrapRecordEdit"; target: string; field: string }
   | { kind: "UnwrapListEdit"; target: string }
   | { kind: "RestoreSnapshotEdit"; target: string; snapshot: PlainNode }
+  | { kind: "ListInsertAtEdit"; target: string; index: number; node: PlainNode }
+  | { kind: "ListRemoveAtEdit"; target: string; index: number }
+  | {
+    kind: "ListReorderEdit";
+    target: string;
+    fromIndex: number;
+    toIndex: number;
+  }
   | { kind: "NoOpEdit"; target: string; reason: string };
 
 type RemoteEditDecoder<
