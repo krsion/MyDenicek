@@ -142,7 +142,11 @@ Deno.test("room is evicted after timeout and reloaded from disk on reconnect", a
       [],
       "test-hash",
     );
-    assertEquals(f2.length > 0, true, "should have received events from memory");
+    assertEquals(
+      f2.length > 0,
+      true,
+      "should have received events from memory",
+    );
 
     // Bob should have Alice's edits
     assertEquals(

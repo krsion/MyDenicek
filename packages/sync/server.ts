@@ -6,11 +6,10 @@ import type {
 } from "./protocol.ts";
 import { SyncRoom } from "./room.ts";
 
-/** Persisted room data format. */
-interface PersistedRoom {
+/** Persisted room metadata (written once on creation, rewritten on compaction). */
+interface PersistedRoomMeta {
   initialDocument?: PlainNode;
   initialDocumentHash?: string;
-  events: EncodedEvent[];
 }
 
 /** Options for {@linkcode createSyncServer}. */
@@ -53,57 +52,102 @@ type ClientState = {
   hashValidated: boolean;
 };
 
-function buildRoomFilePath(persistencePath: string, roomId: string): string {
-  const safeRoomId = encodeURIComponent(roomId);
-  return `${persistencePath}/${safeRoomId}.json`;
+function buildMetaFilePath(persistencePath: string, roomId: string): string {
+  return `${persistencePath}/${encodeURIComponent(roomId)}.meta.json`;
 }
 
-async function loadRoomEvents(
+function buildEventsFilePath(persistencePath: string, roomId: string): string {
+  return `${persistencePath}/${encodeURIComponent(roomId)}.events.ndjson`;
+}
+
+async function loadRoomFromDisk(
   persistencePath: string,
   roomId: string,
 ): Promise<SyncRoom> {
-  const roomFilePath = buildRoomFilePath(persistencePath, roomId);
+  const metaPath = buildMetaFilePath(persistencePath, roomId);
+  const eventsPath = buildEventsFilePath(persistencePath, roomId);
+
+  // Try new NDJSON format first
+  let meta: PersistedRoomMeta | undefined;
   try {
-    const fileText = await Deno.readTextFile(roomFilePath);
-    const data = JSON.parse(fileText);
-    // Support new format (object with initialDocument) and legacy (raw array)
+    meta = JSON.parse(await Deno.readTextFile(metaPath));
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e;
+  }
+
+  if (meta) {
+    const room = new SyncRoom(roomId, meta.initialDocument);
+    if (meta.initialDocumentHash) {
+      room.validateAndBootstrap(meta.initialDocumentHash, undefined);
+    }
+    try {
+      const eventsText = await Deno.readTextFile(eventsPath);
+      for (const line of eventsText.split("\n")) {
+        const trimmed = line.trim();
+        if (trimmed) room.ingestEncodedEvents([JSON.parse(trimmed)]);
+      }
+    } catch (e) {
+      if (!(e instanceof Deno.errors.NotFound)) throw e;
+    }
+    return room;
+  }
+
+  // Fall back to legacy single-file format
+  const legacyPath = `${persistencePath}/${encodeURIComponent(roomId)}.json`;
+  try {
+    const data = JSON.parse(await Deno.readTextFile(legacyPath));
     if (Array.isArray(data)) {
       const room = new SyncRoom(roomId);
       room.ingestEncodedEvents(data);
       return room;
     }
-    const persisted = data as PersistedRoom;
+    const persisted = data as {
+      initialDocument?: PlainNode;
+      initialDocumentHash?: string;
+      events: EncodedEvent[];
+    };
     const room = new SyncRoom(roomId, persisted.initialDocument);
     if (persisted.initialDocumentHash) {
       room.validateAndBootstrap(persisted.initialDocumentHash, undefined);
     }
     room.ingestEncodedEvents(persisted.events);
     return room;
-  } catch (error) {
-    if (!(error instanceof Deno.errors.NotFound)) {
-      throw error;
-    }
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e;
   }
+
   return new SyncRoom(roomId);
 }
 
-async function persistRoomEvents(
+async function persistRoomMeta(
   persistencePath: string,
   room: SyncRoom,
 ): Promise<void> {
   await Deno.mkdir(persistencePath, { recursive: true });
-  const roomFilePath = buildRoomFilePath(persistencePath, room.id);
-  const temporaryRoomFilePath = `${roomFilePath}.${crypto.randomUUID()}.tmp`;
-  const data: PersistedRoom = {
+  const metaPath = buildMetaFilePath(persistencePath, room.id);
+  const meta: PersistedRoomMeta = {
     initialDocument: room.initialDocument,
     initialDocumentHash: room.initialDocumentHash,
-    events: room.listEncodedEvents(),
   };
-  await Deno.writeTextFile(
-    temporaryRoomFilePath,
-    JSON.stringify(data, null, 2),
+  const tmpPath = `${metaPath}.${crypto.randomUUID()}.tmp`;
+  await Deno.writeTextFile(tmpPath, JSON.stringify(meta));
+  await Deno.rename(tmpPath, metaPath);
+}
+
+async function appendEvents(
+  persistencePath: string,
+  roomId: string,
+  events: EncodedEvent[],
+): Promise<void> {
+  if (events.length === 0) return;
+  await Deno.mkdir(persistencePath, { recursive: true });
+  const eventsPath = buildEventsFilePath(persistencePath, roomId);
+  const lines = events.map((e) => JSON.stringify(e)).join("\n") + "\n";
+  await Deno.writeFile(
+    eventsPath,
+    new TextEncoder().encode(lines),
+    { append: true, create: true },
   );
-  await Deno.rename(temporaryRoomFilePath, roomFilePath);
 }
 
 /** Create a WebSocket sync server with optional file-based persistence. */
@@ -157,7 +201,10 @@ export function createSyncServer(
     }
   }
 
-  const evictionInterval = setInterval(evictInactiveRooms, EVICTION_INTERVAL_MS);
+  const evictionInterval = setInterval(
+    evictInactiveRooms,
+    EVICTION_INTERVAL_MS,
+  );
 
   async function ensureRoomLoaded(roomId: string): Promise<SyncRoom> {
     const existingRoom = rooms.get(roomId);
@@ -166,7 +213,7 @@ export function createSyncServer(
     }
     const room = options.persistencePath === undefined
       ? new SyncRoom(roomId)
-      : await loadRoomEvents(options.persistencePath, roomId);
+      : await loadRoomFromDisk(options.persistencePath, roomId);
     rooms.set(roomId, room);
     roomLastActivity.set(roomId, Date.now());
     evictLeastRecentlyActiveRoom();
@@ -181,7 +228,7 @@ export function createSyncServer(
     if (existing) return existing;
     if (!options.persistencePath) return undefined;
     try {
-      const room = await loadRoomEvents(options.persistencePath, roomId);
+      const room = await loadRoomFromDisk(options.persistencePath, roomId);
       if (room.initialDocument) {
         rooms.set(roomId, room);
         roomLastActivity.set(roomId, Date.now());
@@ -217,22 +264,24 @@ export function createSyncServer(
     }
   }
 
-  function enqueueRoomPersistence(room: SyncRoom): Promise<void> {
-    const persistencePath = options.persistencePath;
-    if (persistencePath === undefined) {
+  function enqueueEventAppend(
+    roomId: string,
+    newEvents: EncodedEvent[],
+  ): Promise<void> {
+    if (!options.persistencePath || newEvents.length === 0) {
       return Promise.resolve();
     }
-    const previousWrite = pendingRoomWrites.get(room.id) ?? Promise.resolve();
-    const nextWrite = previousWrite
+    const prev = pendingRoomWrites.get(roomId) ?? Promise.resolve();
+    const next = prev
       .catch(() => undefined)
-      .then(() => persistRoomEvents(persistencePath, room))
+      .then(() => appendEvents(options.persistencePath!, roomId, newEvents))
       .finally(() => {
-        if (pendingRoomWrites.get(room.id) === nextWrite) {
-          pendingRoomWrites.delete(room.id);
+        if (pendingRoomWrites.get(roomId) === next) {
+          pendingRoomWrites.delete(roomId);
         }
       });
-    pendingRoomWrites.set(room.id, nextWrite);
-    return nextWrite;
+    pendingRoomWrites.set(roomId, next);
+    return next;
   }
 
   const server = Deno.serve({ port, hostname }, (request) => {
@@ -286,6 +335,7 @@ export function createSyncServer(
         }
         const room = await ensureRoomLoaded(clientRoomId);
         roomLastActivity.set(room.id, Date.now());
+        const hadHash = room.initialDocumentHash !== undefined;
         const hashError = room.validateAndBootstrap(
           message.initialDocumentHash,
           message.initialDocument,
@@ -297,6 +347,10 @@ export function createSyncServer(
             message: hashError,
           }));
           return;
+        }
+        // Persist meta when hash is set for the first time
+        if (!hadHash && room.initialDocumentHash && options.persistencePath) {
+          await persistRoomMeta(options.persistencePath, room);
         }
         if (clientState !== undefined) {
           clientState.hashValidated = true;
@@ -310,7 +364,7 @@ export function createSyncServer(
           clientState.frontiers = responseMessage.frontiers;
         }
         socket.send(JSON.stringify(responseMessage));
-        await enqueueRoomPersistence(room);
+        await enqueueEventAppend(clientRoomId, message.events);
         broadcastRoomState(socket, room);
       } catch (error) {
         socket.send(JSON.stringify({

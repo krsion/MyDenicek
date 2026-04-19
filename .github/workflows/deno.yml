@@ -70,7 +70,7 @@ jobs:
       - uses: denoland/setup-deno@v2
       - run: deno test --allow-all --no-check tests
         working-directory: packages/core
-      - run: deno test --allow-read --allow-write tests
+      - run: deno test --allow-read --allow-write --allow-net tests
         working-directory: packages/sync
       - run: deno test --allow-all src/tests
         working-directory: apps/playground
