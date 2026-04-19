@@ -12,7 +12,6 @@
     "react": "npm:react@^19.2.0",
     "react-dom": "npm:react-dom@^19.2.0",
     "react/jsx-runtime": "npm:react@^19.2.0/jsx-runtime",
-    "@fluentui/react-components": "npm:@fluentui/react-components@^9.72.7",
     "@vitejs/plugin-react": "npm:@vitejs/plugin-react@^5.1.0",
     "vite": "npm:vite@^6.3.5",
     "@deno/vite-plugin": "npm:@deno/vite-plugin@^1"

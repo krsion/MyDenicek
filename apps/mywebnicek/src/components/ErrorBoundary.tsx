@@ -1,10 +1,3 @@
-import {
-  Button,
-  Card,
-  CardHeader,
-  Text,
-  Title3,
-} from "@fluentui/react-components";
 import { Component, type ErrorInfo, type ReactNode } from "react";
 
 interface Props {
@@ -57,26 +50,51 @@ export class ErrorBoundary extends Component<Props, State> {
             padding: 20,
           }}
         >
-          <Card style={{ maxWidth: 500, padding: 20 }}>
-            <CardHeader
-              image={<span style={{ color: "#d13438", fontSize: 32 }}>⚠</span>}
-              header={<Title3>Something went wrong</Title3>}
-            />
+          <div
+            style={{
+              maxWidth: 500,
+              padding: 20,
+              border: "1px solid #e0e0e0",
+              borderRadius: 8,
+              background: "#fff",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                marginBottom: 12,
+              }}
+            >
+              <span style={{ color: "#d13438", fontSize: 32 }}>⚠</span>
+              <h3 style={{ margin: 0 }}>Something went wrong</h3>
+            </div>
             <div style={{ marginTop: 12, marginBottom: 16 }}>
-              <Text style={{ color: "#605e5c" }}>
+              <span style={{ color: "#605e5c" }}>
                 {this.state.error?.message || "An unexpected error occurred"}
-              </Text>
+              </span>
               {this.state.error?.message?.includes("tag name") && (
-                <Text block style={{ marginTop: 8, color: "#605e5c" }}>
+                <p style={{ marginTop: 8, color: "#605e5c" }}>
                   Tip: Tag names should be valid HTML tags like "div", "span",
                   "input" (without angle brackets).
-                </Text>
+                </p>
               )}
             </div>
-            <Button appearance="primary" onClick={this.handleReset}>
+            <button
+              style={{
+                padding: "8px 16px",
+                background: "#0078d4",
+                color: "#fff",
+                border: "none",
+                borderRadius: 4,
+                cursor: "pointer",
+              }}
+              onClick={this.handleReset}
+            >
               Try Again
-            </Button>
-          </Card>
+            </button>
+          </div>
         </div>
       );
     }

@@ -1,4 +1,3 @@
-import { Text } from "@fluentui/react-components";
 import type { Denicek, PlainNode } from "@mydenicek/react";
 import { useDenicek } from "@mydenicek/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -204,9 +203,9 @@ function EditorInner(
           flexShrink: 0,
         }}
       >
-        <Text size={400} weight="semibold" style={{ color: "#242424" }}>
+        <span style={{ fontSize: 16, fontWeight: 600, color: "#242424" }}>
           mydenicek
-        </Text>
+        </span>
         <div style={{ display: "flex", gap: 4 }}>
           {(["rendered", "raw", "events"] as const).map((key) => (
             <button
