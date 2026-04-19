@@ -23,6 +23,13 @@ export interface SyncServerOptions {
   path?: string;
   /** Directory for JSON event persistence. Omit for in-memory only. */
   persistencePath?: string;
+  /**
+   * Maximum number of rooms to keep in memory. When exceeded, the least
+   * recently active room with no connected clients is evicted. Evicted rooms
+   * remain on disk (if persistence is enabled) and are reloaded on reconnect.
+   * Default: no limit.
+   */
+  maxRooms?: number;
 }
 
 /** Handle returned by {@linkcode createSyncServer}. */
@@ -31,6 +38,12 @@ export interface SyncServerHandle {
   server: Deno.HttpServer<Deno.NetAddr>;
   /** Gracefully shut down, flushing any pending writes. */
   close(): Promise<void>;
+  /**
+   * Evict rooms with no connected clients that have been inactive for longer
+   * than `ROOM_EVICTION_TIMEOUT_MS`. Exposed for testing; also runs
+   * automatically on a periodic interval.
+   */
+  evictInactiveRooms(): void;
 }
 
 type ClientState = {
@@ -103,6 +116,48 @@ export function createSyncServer(
   const rooms = new Map<string, SyncRoom>();
   const clients = new Map<WebSocket, ClientState>();
   const pendingRoomWrites = new Map<string, Promise<void>>();
+  const roomLastActivity = new Map<string, number>();
+
+  const ROOM_EVICTION_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+  const EVICTION_INTERVAL_MS = 60_000;
+
+  function getConnectedRoomIds(): Set<string> {
+    return new Set([...clients.values()].map((s) => s.roomId));
+  }
+
+  function evictInactiveRooms(): void {
+    const now = Date.now();
+    const connectedRoomIds = getConnectedRoomIds();
+    for (const [roomId, lastActivity] of roomLastActivity) {
+      if (connectedRoomIds.has(roomId)) continue;
+      if (now - lastActivity < ROOM_EVICTION_TIMEOUT_MS) continue;
+      if (pendingRoomWrites.has(roomId)) continue;
+      rooms.delete(roomId);
+      roomLastActivity.delete(roomId);
+    }
+  }
+
+  function evictLeastRecentlyActiveRoom(): void {
+    if (options.maxRooms === undefined) return;
+    if (rooms.size <= options.maxRooms) return;
+    const connectedRoomIds = getConnectedRoomIds();
+    let oldestRoomId: string | undefined;
+    let oldestActivity = Infinity;
+    for (const [roomId, lastActivity] of roomLastActivity) {
+      if (connectedRoomIds.has(roomId)) continue;
+      if (pendingRoomWrites.has(roomId)) continue;
+      if (lastActivity < oldestActivity) {
+        oldestActivity = lastActivity;
+        oldestRoomId = roomId;
+      }
+    }
+    if (oldestRoomId !== undefined) {
+      rooms.delete(oldestRoomId);
+      roomLastActivity.delete(oldestRoomId);
+    }
+  }
+
+  const evictionInterval = setInterval(evictInactiveRooms, EVICTION_INTERVAL_MS);
 
   async function ensureRoomLoaded(roomId: string): Promise<SyncRoom> {
     const existingRoom = rooms.get(roomId);
@@ -113,6 +168,8 @@ export function createSyncServer(
       ? new SyncRoom(roomId)
       : await loadRoomEvents(options.persistencePath, roomId);
     rooms.set(roomId, room);
+    roomLastActivity.set(roomId, Date.now());
+    evictLeastRecentlyActiveRoom();
     return room;
   }
 
@@ -127,6 +184,8 @@ export function createSyncServer(
       const room = await loadRoomEvents(options.persistencePath, roomId);
       if (room.initialDocument) {
         rooms.set(roomId, room);
+        roomLastActivity.set(roomId, Date.now());
+        evictLeastRecentlyActiveRoom();
         return room;
       }
     } catch { /* not found */ }
@@ -226,6 +285,7 @@ export function createSyncServer(
           );
         }
         const room = await ensureRoomLoaded(clientRoomId);
+        roomLastActivity.set(room.id, Date.now());
         const hashError = room.validateAndBootstrap(
           message.initialDocumentHash,
           message.initialDocument,
@@ -270,7 +330,9 @@ export function createSyncServer(
 
   return {
     server,
+    evictInactiveRooms,
     close: async () => {
+      clearInterval(evictionInterval);
       await server.shutdown();
       if (options.persistencePath !== undefined && pendingRoomWrites.size > 0) {
         const writes = Array.from(pendingRoomWrites.values());
