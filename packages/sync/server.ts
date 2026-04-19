@@ -364,7 +364,7 @@ export function createSyncServer(
           clientState.frontiers = responseMessage.frontiers;
         }
         socket.send(JSON.stringify(responseMessage));
-        await enqueueEventAppend(clientRoomId, message.events);
+        enqueueEventAppend(clientRoomId, message.events);
         broadcastRoomState(socket, room);
       } catch (error) {
         socket.send(JSON.stringify({
