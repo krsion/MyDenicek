@@ -3,4 +3,6 @@ packages/core/npm-dist/
 
 .playwright-mcp/
 data/
-spec/
+spec/states/
+spec/tla2tools.jar
+states/
