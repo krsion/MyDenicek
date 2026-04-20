@@ -151,6 +151,11 @@ export class Selector {
     return this.segments.length;
   }
 
+  /** True when at least one segment is the `*` wildcard. */
+  get hasWildcard(): boolean {
+    return this.segments.includes("*");
+  }
+
   at(index: number): SelectorSegment | undefined {
     return this.segments.at(index);
   }

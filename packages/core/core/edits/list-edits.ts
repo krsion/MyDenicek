@@ -5,7 +5,7 @@ import {
   Selector,
   type SelectorTransform,
 } from "../selector.ts";
-import { ListNode, Node, type PlainNode } from "../nodes.ts";
+import { ListNode, Node, type PlainNode, RecordNode } from "../nodes.ts";
 import {
   type EncodedRemoteEdit,
   registerRemoteEditDecoder,
@@ -49,6 +49,34 @@ export abstract class ListInsertEdit extends NoOpOnRemovedTargetEdit {
   }
 
   protected abstract withInsertedNode(node: Node): ListInsertEdit;
+
+  /**
+   * General wildcard-affects-concurrent-inserts: replay a wildcard edit's
+   * inner portion on this insert's payload by wrapping it in a temporary
+   * RecordNode root.
+   */
+  override rewritePayloadForWildcard(
+    wildcardEdit: Edit,
+    wildcardTarget: Selector,
+  ): Edit | null {
+    return this.rewriteInsertedNode(
+      wildcardTarget,
+      (payloadNode, relativeTarget) => {
+        if (relativeTarget.length === 0) return null;
+        try {
+          const tempRoot = new RecordNode("__tmp", { __item__: payloadNode });
+          const innerEdit = wildcardEdit.withTarget(
+            new Selector(["__item__", ...relativeTarget.segments]),
+          );
+          if (!innerEdit.canApply(tempRoot)) return null;
+          innerEdit.apply(tempRoot);
+          return tempRoot.fields["__item__"]!;
+        } catch {
+          return null;
+        }
+      },
+    );
+  }
 }
 
 // ── Index-based list edits ──────────────────────────────────────────

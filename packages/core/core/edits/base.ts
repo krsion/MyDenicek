@@ -79,9 +79,37 @@ export abstract class Edit {
    * The receiver is already earlier in deterministic replay order. Most edits
    * simply transform the later edit's selector through themselves, while richer
    * edits can also rewrite inserted payloads or duplicate mirrored effects.
+   *
+   * The default implementation also handles the general case where this edit
+   * targets a wildcard path and the concurrent edit inserts into a matching
+   * parent list: the edit is replayed on the inserted payload so newly
+   * inserted items receive the same modification.
    */
   transformLaterConcurrentEdit(concurrent: Edit): Edit {
-    return concurrent.transform(this);
+    const transformed = concurrent.transform(this);
+    if (transformed instanceof NoOpEdit) return transformed;
+
+    if (this.target.hasWildcard) {
+      const rewritten = transformed.rewritePayloadForWildcard(this, this.target);
+      if (rewritten) return rewritten;
+    }
+
+    return transformed;
+  }
+
+  /**
+   * Called on a concurrent edit (typically a `ListInsertEdit`) to replay a
+   * wildcard-targeting edit onto its inserted payload.
+   *
+   * Non-insert edits return `null` (nothing to rewrite). `ListInsertEdit`
+   * overrides this to clone its payload, apply the wildcard edit's inner
+   * portion, and return a new insert with the modified payload.
+   */
+  rewritePayloadForWildcard(
+    _wildcardEdit: Edit,
+    _wildcardTarget: Selector,
+  ): Edit | null {
+    return null;
   }
 
   protected navigateOrThrow(doc: Node, target: Selector): Node[] {

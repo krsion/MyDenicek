@@ -362,3 +362,155 @@ Deno.test("nested list: concurrent push + pop at different levels", () => {
   sync(alice, bob);
   assertEquals(alice.toPlain(), bob.toPlain());
 });
+
+// ── General wildcard-affects-concurrent-inserts tests ──────────────
+
+Deno.test("wildcard RecordAddEdit applies to concurrently inserted items", () => {
+  const doc = {
+    $tag: "root",
+    items: {
+      $tag: "ul",
+      $items: [{ $tag: "item", name: "existing" }],
+    },
+  };
+  const alice = new Denicek("alice", doc);
+  const bob = new Denicek("bob", doc);
+
+  alice.add("items/*", "email", "default@test.com");
+  bob.insert("items", -1, { $tag: "item", name: "new" }, true);
+
+  sync(alice, bob);
+
+  const expected = {
+    $tag: "root",
+    items: {
+      $tag: "ul",
+      $items: [
+        { $tag: "item", name: "existing", email: "default@test.com" },
+        { $tag: "item", name: "new", email: "default@test.com" },
+      ],
+    },
+  };
+  assertEquals(alice.toPlain(), expected);
+  assertEquals(bob.toPlain(), expected);
+});
+
+Deno.test("wildcard RecordDeleteEdit applies to concurrently inserted items", () => {
+  const doc = {
+    $tag: "root",
+    items: {
+      $tag: "ul",
+      $items: [{ $tag: "item", name: "existing", old: "remove-me" }],
+    },
+  };
+  const alice = new Denicek("alice", doc);
+  const bob = new Denicek("bob", doc);
+
+  alice.delete("items/*", "old");
+  bob.insert("items", -1, { $tag: "item", name: "new", old: "also-remove" }, true);
+
+  sync(alice, bob);
+
+  const expected = {
+    $tag: "root",
+    items: {
+      $tag: "ul",
+      $items: [
+        { $tag: "item", name: "existing" },
+        { $tag: "item", name: "new" },
+      ],
+    },
+  };
+  assertEquals(alice.toPlain(), expected);
+  assertEquals(bob.toPlain(), expected);
+});
+
+Deno.test("wildcard set applies to concurrently inserted items", () => {
+  const doc = {
+    $tag: "root",
+    items: {
+      $tag: "ul",
+      $items: [{ $tag: "item", val: "old" }],
+    },
+  };
+  const alice = new Denicek("alice", doc);
+  const bob = new Denicek("bob", doc);
+
+  alice.set("items/*/val", "updated");
+  bob.insert("items", -1, { $tag: "item", val: "original" }, true);
+
+  sync(alice, bob);
+
+  const expected = {
+    $tag: "root",
+    items: {
+      $tag: "ul",
+      $items: [
+        { $tag: "item", val: "updated" },
+        { $tag: "item", val: "updated" },
+      ],
+    },
+  };
+  assertEquals(alice.toPlain(), expected);
+  assertEquals(bob.toPlain(), expected);
+});
+
+Deno.test("wildcard add with nested path applies to concurrently inserted items", () => {
+  const doc = {
+    $tag: "root",
+    items: {
+      $tag: "ul",
+      $items: [{ $tag: "row", data: { $tag: "data", x: "1" } }],
+    },
+  };
+  const alice = new Denicek("alice", doc);
+  const bob = new Denicek("bob", doc);
+
+  alice.add("items/*/data", "y", "2");
+  bob.insert("items", -1, { $tag: "row", data: { $tag: "data", x: "a" } }, true);
+
+  sync(alice, bob);
+
+  const expected = {
+    $tag: "root",
+    items: {
+      $tag: "ul",
+      $items: [
+        { $tag: "row", data: { $tag: "data", x: "1", y: "2" } },
+        { $tag: "row", data: { $tag: "data", x: "a", y: "2" } },
+      ],
+    },
+  };
+  assertEquals(alice.toPlain(), expected);
+  assertEquals(bob.toPlain(), expected);
+});
+
+Deno.test("wildcard edit skips insert when payload lacks the target path", () => {
+  const doc = {
+    $tag: "root",
+    items: {
+      $tag: "ul",
+      $items: [{ $tag: "item", email: "a@b.com" }],
+    },
+  };
+  const alice = new Denicek("alice", doc);
+  const bob = new Denicek("bob", doc);
+
+  alice.set("items/*/email", "updated@b.com");
+  bob.insert("items", -1, { $tag: "item", name: "no-email" }, true);
+
+  sync(alice, bob);
+
+  const expected = {
+    $tag: "root",
+    items: {
+      $tag: "ul",
+      $items: [
+        { $tag: "item", email: "updated@b.com" },
+        { $tag: "item", name: "no-email" },
+      ],
+    },
+  };
+  assertEquals(alice.toPlain(), expected);
+  assertEquals(bob.toPlain(), expected);
+});
