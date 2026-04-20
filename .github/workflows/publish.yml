@@ -26,4 +26,4 @@ jobs:
           cd ../react && deno check mod.ts
 
       - name: Publish workspace to JSR
-        run: deno publish
+        run: deno publish --allow-dirty
