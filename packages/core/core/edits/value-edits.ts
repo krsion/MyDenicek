@@ -1,5 +1,4 @@
-import { type Edit, NoOpOnRemovedTargetEdit } from "./base.ts";
-import { ListInsertEdit } from "./list-edits.ts";
+import { Edit } from "./base.ts";
 import {
   mapSelector,
   type PrimitiveValue,
@@ -19,7 +18,7 @@ type EncodedApplyPrimitiveEdit = Extract<
 >;
 
 /** Applies a registered named primitive edit (e.g. "set") to every matched primitive node. */
-export class ApplyPrimitiveEdit extends NoOpOnRemovedTargetEdit {
+export class ApplyPrimitiveEdit extends Edit {
   /** @inheritDoc */
   readonly isStructural = false;
   /** @inheritDoc */
@@ -61,9 +60,6 @@ export class ApplyPrimitiveEdit extends NoOpOnRemovedTargetEdit {
   }
 
   override transformLaterConcurrentEdit(concurrent: Edit): Edit {
-    if (!(concurrent instanceof ListInsertEdit)) {
-      return super.transformLaterConcurrentEdit(concurrent);
-    }
     const rewritten = concurrent.rewriteInsertedNode(
       this.target,
       (transformedNode, relativeTarget) => {

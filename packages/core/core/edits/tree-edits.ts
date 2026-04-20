@@ -1,10 +1,4 @@
-import {
-  CompositeEdit,
-  createCompositeEdit,
-  Edit,
-  NoOpEdit,
-  NoOpOnRemovedTargetEdit,
-} from "./base.ts";
+import { CompositeEdit, createCompositeEdit, Edit, NoOpEdit } from "./base.ts";
 import { mapSelector, Selector, type SelectorTransform } from "../selector.ts";
 import { ListNode, Node, type PlainNode, RecordNode } from "../nodes.ts";
 import {
@@ -26,7 +20,7 @@ type EncodedWrapRecordEdit = Extract<
 type EncodedWrapListEdit = Extract<EncodedRemoteEdit, { kind: "WrapListEdit" }>;
 
 /** Updates the structural tag on every matched record or list node. */
-export class UpdateTagEdit extends NoOpOnRemovedTargetEdit {
+export class UpdateTagEdit extends Edit {
   /** @inheritDoc */
   readonly isStructural = true;
   /** @inheritDoc */
@@ -322,7 +316,7 @@ registerRemoteEditDecoder<EncodedCopyEdit>(
 );
 
 /** Wraps every matched node in a new record with the given field name and tag. */
-export class WrapRecordEdit extends NoOpOnRemovedTargetEdit {
+export class WrapRecordEdit extends Edit {
   /** @inheritDoc */
   readonly isStructural = true;
   /** @inheritDoc */
@@ -337,16 +331,13 @@ export class WrapRecordEdit extends NoOpOnRemovedTargetEdit {
   }
 
   apply(doc: Node): void {
-    const referenceTargets = doc.captureReferenceTransformTargets();
-    this.navigateOrThrow(doc, this.target);
-    doc.wrapAtPath(
-      this.target,
-      (child) => new RecordNode(this.tag, { [this.field]: child }),
-    );
-    doc.updateReferences(
-      (abs) => this.transformSelectorOrThrow(abs),
-      referenceTargets,
-    );
+    this.applyWithReferenceUpdate(doc, () => {
+      this.navigateOrThrow(doc, this.target);
+      doc.wrapAtPath(
+        this.target,
+        (child) => new RecordNode(this.tag, { [this.field]: child }),
+      );
+    });
   }
 
   canApply(doc: Node): boolean {
@@ -436,7 +427,7 @@ registerRemoteEditDecoder<EncodedWrapRecordEdit>(
 );
 
 /** Wraps every matched node in a new single-item list with the given tag. */
-export class WrapListEdit extends NoOpOnRemovedTargetEdit {
+export class WrapListEdit extends Edit {
   /** @inheritDoc */
   readonly isStructural = true;
   /** @inheritDoc */
@@ -447,12 +438,13 @@ export class WrapListEdit extends NoOpOnRemovedTargetEdit {
   }
 
   apply(doc: Node): void {
-    const referenceTargets = doc.captureReferenceTransformTargets();
-    this.navigateOrThrow(doc, this.target);
-    doc.wrapAtPath(this.target, (child) => new ListNode(this.tag, [child]));
-    doc.updateReferences(
+    this.applyWithReferenceUpdate(
+      doc,
+      () => {
+        this.navigateOrThrow(doc, this.target);
+        doc.wrapAtPath(this.target, (child) => new ListNode(this.tag, [child]));
+      },
       (abs) => this.transformReferenceSelector(abs),
-      referenceTargets,
     );
   }
 
@@ -541,7 +533,7 @@ type EncodedRestoreSnapshotEdit = Extract<
  * Edit that restores a previously snapshotted node at a target path.
  * Used by `CopyEdit.computeInverse` to undo copy operations.
  */
-export class RestoreSnapshotEdit extends NoOpOnRemovedTargetEdit {
+export class RestoreSnapshotEdit extends Edit {
   /** @inheritDoc */
   readonly isStructural = false;
   /** @inheritDoc */

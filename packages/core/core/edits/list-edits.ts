@@ -1,4 +1,4 @@
-import { type Edit, NoOpEdit, NoOpOnRemovedTargetEdit } from "./base.ts";
+import { Edit, NoOpEdit } from "./base.ts";
 import {
   mapSelector,
   REMOVED_SELECTOR,
@@ -38,7 +38,7 @@ type EncodedListReorderEdit = Extract<
 >;
 
 /** Abstract base for list insertion edits (push-back and push-front). */
-export abstract class ListInsertEdit extends NoOpOnRemovedTargetEdit {
+export abstract class ListInsertEdit extends Edit {
   /** @inheritDoc */
   readonly isStructural = true;
 
@@ -525,7 +525,7 @@ registerRemoteEditDecoder(
  *
  * When `strict` is false (default) positive indices are shifted by OT.
  */
-export class ListRemoveAtEdit extends NoOpOnRemovedTargetEdit {
+export class ListRemoveAtEdit extends Edit {
   /** @inheritDoc */
   readonly isStructural = true;
   /** @inheritDoc */
@@ -926,7 +926,7 @@ registerRemoteEditDecoder(
 );
 
 /** Moves an item from one index to another in every list matched by the target selector. */
-export class ListReorderEdit extends NoOpOnRemovedTargetEdit {
+export class ListReorderEdit extends Edit {
   /** @inheritDoc */
   readonly isStructural = true;
   /** @inheritDoc */
@@ -943,27 +943,24 @@ export class ListReorderEdit extends NoOpOnRemovedTargetEdit {
   override validate(_doc: Node): void {}
 
   apply(doc: Node): void {
-    const referenceTargets = doc.captureReferenceTransformTargets();
-    const nodes = this.navigateOrThrow(doc, this.target);
-    for (const n of nodes) {
-      const list = this.assertList(n);
-      if (this.fromIndex < 0 || this.fromIndex >= list.items.length) {
-        throw new Error(
-          `ListReorderEdit: fromIndex ${this.fromIndex} out of bounds [0, ${list.items.length})`,
-        );
+    this.applyWithReferenceUpdate(doc, () => {
+      const nodes = this.navigateOrThrow(doc, this.target);
+      for (const n of nodes) {
+        const list = this.assertList(n);
+        if (this.fromIndex < 0 || this.fromIndex >= list.items.length) {
+          throw new Error(
+            `ListReorderEdit: fromIndex ${this.fromIndex} out of bounds [0, ${list.items.length})`,
+          );
+        }
+        const maxTo = list.items.length - 1;
+        if (this.toIndex < 0 || this.toIndex > maxTo) {
+          throw new Error(
+            `ListReorderEdit: toIndex ${this.toIndex} out of bounds [0, ${maxTo}]`,
+          );
+        }
+        n.reorder(this.fromIndex, this.toIndex);
       }
-      const maxTo = list.items.length - 1;
-      if (this.toIndex < 0 || this.toIndex > maxTo) {
-        throw new Error(
-          `ListReorderEdit: toIndex ${this.toIndex} out of bounds [0, ${maxTo}]`,
-        );
-      }
-      n.reorder(this.fromIndex, this.toIndex);
-    }
-    doc.updateReferences(
-      (abs) => this.transformSelectorOrThrow(abs),
-      referenceTargets,
-    );
+    });
   }
 
   canApply(doc: Node): boolean {

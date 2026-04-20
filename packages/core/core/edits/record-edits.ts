@@ -1,9 +1,4 @@
-import {
-  describeNodeForEdit,
-  type Edit,
-  NoOpEdit,
-  NoOpOnRemovedTargetEdit,
-} from "./base.ts";
+import { describeNodeForEdit, Edit, NoOpEdit } from "./base.ts";
 import {
   mapSelector,
   REMOVED_SELECTOR,
@@ -31,7 +26,7 @@ type EncodedRecordRenameFieldEdit = Extract<
 >;
 
 /** Adds a named field to every record matched by the target selector's parent. */
-export class RecordAddEdit extends NoOpOnRemovedTargetEdit {
+export class RecordAddEdit extends Edit {
   /** @inheritDoc */
   readonly isStructural = false;
   /** @inheritDoc */
@@ -119,7 +114,7 @@ registerRemoteEditDecoder<EncodedRecordAddEdit>(
 );
 
 /** Deletes a named field from every record matched by the target selector's parent. */
-export class RecordDeleteEdit extends NoOpOnRemovedTargetEdit {
+export class RecordDeleteEdit extends Edit {
   /** @inheritDoc */
   readonly isStructural = true;
   /** @inheritDoc */
@@ -189,7 +184,7 @@ registerRemoteEditDecoder<EncodedRecordDeleteEdit>(
 );
 
 /** Renames a field on every record matched by the target selector's parent. */
-export class RecordRenameFieldEdit extends NoOpOnRemovedTargetEdit {
+export class RecordRenameFieldEdit extends Edit {
   /** @inheritDoc */
   readonly isStructural = true;
   /** @inheritDoc */
@@ -200,17 +195,14 @@ export class RecordRenameFieldEdit extends NoOpOnRemovedTargetEdit {
   }
 
   apply(doc: Node): void {
-    const referenceTargets = doc.captureReferenceTransformTargets();
-    const parentSel = this.target.parent;
-    const from = String(this.target.lastSegment);
-    const parents = this.navigateOrThrow(doc, parentSel);
-    for (const parent of parents) {
-      parent.renameField(from, this.to);
-    }
-    doc.updateReferences(
-      (abs) => this.transformSelectorOrThrow(abs),
-      referenceTargets,
-    );
+    this.applyWithReferenceUpdate(doc, () => {
+      const parentSel = this.target.parent;
+      const from = String(this.target.lastSegment);
+      const parents = this.navigateOrThrow(doc, parentSel);
+      for (const parent of parents) {
+        parent.renameField(from, this.to);
+      }
+    });
   }
 
   canApply(doc: Node): boolean {

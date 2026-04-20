@@ -17,6 +17,8 @@ import {
   Selector,
   VectorClock,
 } from "./test-helpers.ts";
+import { assert } from "@std/assert";
+import { NoOpEdit } from "../../core/edits/base.ts";
 
 Deno.test("rejects peer ids containing the event-id separator", () => {
   assertThrows(
@@ -764,7 +766,7 @@ Deno.test("throws when applying an unknown primitive edit", () => {
   );
 });
 
-Deno.test("default edit transform throws unless removal handling is explicit", () => {
+Deno.test("default edit transform produces NoOp when target is removed", () => {
   class DummyEdit extends Edit {
     readonly isStructural = false;
     // Edit subclasses must expose a stable kind string.
@@ -804,10 +806,10 @@ Deno.test("default edit transform throws unless removal handling is explicit", (
   const edit = new DummyEdit(Selector.parse("item/name"));
   const prior = new RecordDeleteEdit(Selector.parse("item"));
 
-  assertThrows(
-    () => edit.transform(prior),
-    Error,
-    "must explicitly handle removal",
+  const result = edit.transform(prior);
+  assert(
+    result instanceof NoOpEdit,
+    "expected NoOpEdit when target is removed",
   );
 });
 

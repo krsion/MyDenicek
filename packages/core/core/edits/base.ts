@@ -154,6 +154,28 @@ export abstract class Edit {
     return null;
   }
 
+  /**
+   * Helper for structural edits that need to capture and update references
+   * around a mutation. The typical structural-edit `apply()` pattern is:
+   *
+   *     this.applyWithReferenceUpdate(doc, () => { …mutate… });
+   *
+   * The default reference transform is `this.transformSelectorOrThrow`.
+   * Pass a custom `transformRef` when the edit uses a different mapping.
+   */
+  protected applyWithReferenceUpdate(
+    doc: Node,
+    doApply: () => void,
+    transformRef?: (abs: Selector) => Selector,
+  ): void {
+    const referenceTargets = doc.captureReferenceTransformTargets();
+    doApply();
+    doc.updateReferences(
+      transformRef ?? ((abs) => this.transformSelectorOrThrow(abs)),
+      referenceTargets,
+    );
+  }
+
   protected navigateOrThrow(doc: Node, target: Selector): Node[] {
     const nodes = doc.navigate(target);
     if (nodes.length === 0) {
@@ -204,9 +226,7 @@ export abstract class Edit {
   }
 
   protected handleRemovedTarget(prior: Edit): Edit {
-    throw new Error(
-      `${this.constructor.name} must explicitly handle removal of '${this.target.format()}' by ${prior.constructor.name}.`,
-    );
+    return this.createRemovedTargetNoOp(prior);
   }
 
   protected createRemovedTargetNoOp(prior: Edit): NoOpEdit {
@@ -272,13 +292,6 @@ export abstract class Edit {
   ): boolean {
     const match = selector.matchPrefix(concretePath);
     return match.kind === "matched" && match.rest.length === 0;
-  }
-}
-
-/** Edit subclass that degrades to a no-op when its target is removed by a prior structural edit. */
-export abstract class NoOpOnRemovedTargetEdit extends Edit {
-  protected override handleRemovedTarget(prior: Edit): Edit {
-    return this.createRemovedTargetNoOp(prior);
   }
 }
 

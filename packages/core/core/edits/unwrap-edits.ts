@@ -1,4 +1,4 @@
-import { type Edit, NoOpOnRemovedTargetEdit } from "./base.ts";
+import { Edit } from "./base.ts";
 import {
   mapSelector,
   REMOVED_SELECTOR,
@@ -22,7 +22,7 @@ type EncodedUnwrapListEdit = Extract<
 >;
 
 /** Unwraps a record wrapper, replacing it with the child at the given field. */
-export class UnwrapRecordEdit extends NoOpOnRemovedTargetEdit {
+export class UnwrapRecordEdit extends Edit {
   /** @inheritDoc */
   readonly isStructural = true;
   /** @inheritDoc */
@@ -33,27 +33,24 @@ export class UnwrapRecordEdit extends NoOpOnRemovedTargetEdit {
   }
 
   apply(doc: Node): void {
-    const referenceTargets = doc.captureReferenceTransformTargets();
-    const entries = doc.navigateWithPaths(this.target);
-    if (entries.length === 0) {
-      throw new Error(
-        `No nodes match selector '${this.target.format()}'.`,
-      );
-    }
-    for (const { path, node } of entries) {
-      const record = this.assertRecord(node);
-      const child = record.fields[this.field];
-      if (child === undefined) {
+    this.applyWithReferenceUpdate(doc, () => {
+      const entries = doc.navigateWithPaths(this.target);
+      if (entries.length === 0) {
         throw new Error(
-          `UnwrapRecordEdit: field '${this.field}' not found at '${path.format()}'.`,
+          `No nodes match selector '${this.target.format()}'.`,
         );
       }
-      doc.replaceAtPath(path, child);
-    }
-    doc.updateReferences(
-      (abs) => this.transformSelectorOrThrow(abs),
-      referenceTargets,
-    );
+      for (const { path, node } of entries) {
+        const record = this.assertRecord(node);
+        const child = record.fields[this.field];
+        if (child === undefined) {
+          throw new Error(
+            `UnwrapRecordEdit: field '${this.field}' not found at '${path.format()}'.`,
+          );
+        }
+        doc.replaceAtPath(path, child);
+      }
+    });
   }
 
   canApply(doc: Node): boolean {
@@ -115,7 +112,7 @@ registerRemoteEditDecoder<EncodedUnwrapRecordEdit>(
 );
 
 /** Unwraps a single-item list, replacing it with its sole child. */
-export class UnwrapListEdit extends NoOpOnRemovedTargetEdit {
+export class UnwrapListEdit extends Edit {
   /** @inheritDoc */
   readonly isStructural = true;
   /** @inheritDoc */
@@ -126,26 +123,23 @@ export class UnwrapListEdit extends NoOpOnRemovedTargetEdit {
   }
 
   apply(doc: Node): void {
-    const referenceTargets = doc.captureReferenceTransformTargets();
-    const entries = doc.navigateWithPaths(this.target);
-    if (entries.length === 0) {
-      throw new Error(
-        `No nodes match selector '${this.target.format()}'.`,
-      );
-    }
-    for (const { path, node } of entries) {
-      const list = this.assertList(node);
-      if (list.items.length !== 1) {
+    this.applyWithReferenceUpdate(doc, () => {
+      const entries = doc.navigateWithPaths(this.target);
+      if (entries.length === 0) {
         throw new Error(
-          `UnwrapListEdit: expected exactly 1 item at '${path.format()}', found ${list.items.length}.`,
+          `No nodes match selector '${this.target.format()}'.`,
         );
       }
-      doc.replaceAtPath(path, list.items[0]!);
-    }
-    doc.updateReferences(
-      (abs) => this.transformSelectorOrThrow(abs),
-      referenceTargets,
-    );
+      for (const { path, node } of entries) {
+        const list = this.assertList(node);
+        if (list.items.length !== 1) {
+          throw new Error(
+            `UnwrapListEdit: expected exactly 1 item at '${path.format()}', found ${list.items.length}.`,
+          );
+        }
+        doc.replaceAtPath(path, list.items[0]!);
+      }
+    });
   }
 
   canApply(doc: Node): boolean {
