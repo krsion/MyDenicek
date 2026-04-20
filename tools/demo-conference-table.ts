@@ -86,7 +86,7 @@ async function screenshot(page, name) {
   console.log("  insert email column with split-rest");
   await typeCommand(
     page,
-    '/conferenceList/items/* insert -1 {"$tag":"td","email":{"$tag":"split-rest","source":{"$ref":"../../0/text/source"}}}',
+    '/conferenceList/items/* insert -1 {"$tag":"td","email":{"$tag":"split-rest","source":{"$ref":"../../../0/text/source"}}}',
   );
   await screenshot(page, "08-split-rest");
 
