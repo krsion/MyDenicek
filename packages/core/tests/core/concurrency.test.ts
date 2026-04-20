@@ -407,7 +407,12 @@ Deno.test("wildcard RecordDeleteEdit applies to concurrently inserted items", ()
   const bob = new Denicek("bob", doc);
 
   alice.delete("items/*", "old");
-  bob.insert("items", -1, { $tag: "item", name: "new", old: "also-remove" }, true);
+  bob.insert(
+    "items",
+    -1,
+    { $tag: "item", name: "new", old: "also-remove" },
+    true,
+  );
 
   sync(alice, bob);
 
@@ -467,7 +472,12 @@ Deno.test("wildcard add with nested path applies to concurrently inserted items"
   const bob = new Denicek("bob", doc);
 
   alice.add("items/*/data", "y", "2");
-  bob.insert("items", -1, { $tag: "row", data: { $tag: "data", x: "a" } }, true);
+  bob.insert(
+    "items",
+    -1,
+    { $tag: "row", data: { $tag: "data", x: "a" } },
+    true,
+  );
 
   sync(alice, bob);
 

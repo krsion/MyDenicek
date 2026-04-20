@@ -90,7 +90,10 @@ export abstract class Edit {
     if (transformed instanceof NoOpEdit) return transformed;
 
     if (this.target.hasWildcard) {
-      const rewritten = transformed.rewritePayloadForWildcard(this, this.target);
+      const rewritten = transformed.rewritePayloadForWildcard(
+        this,
+        this.target,
+      );
       if (rewritten) return rewritten;
     }
 
