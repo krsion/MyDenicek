@@ -867,7 +867,11 @@ Deno.test("commit throws on pop-back from empty list", () => {
     $tag: "root",
     items: { $tag: "ul", $items: [] as string[] },
   });
-  assertThrows(() => core.remove("items", -1, true), Error, "list is empty");
+  assertThrows(
+    () => core.remove("items", -1, true),
+    Error,
+    "cannot remove from empty list",
+  );
 });
 
 Deno.test("replay of a set edit follows a later rename of its own target field", () => {

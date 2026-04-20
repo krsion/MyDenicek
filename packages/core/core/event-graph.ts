@@ -1,8 +1,13 @@
 import { BinaryHeap } from "@std/data-structures/binary-heap";
-import { type Edit, NoOpEdit } from "./edits.ts";
+import {
+  type Edit,
+  ListInsertAtEdit,
+  ListRemoveAtEdit,
+  NoOpEdit,
+} from "./edits.ts";
 import { Event } from "./event.ts";
 import { EventId } from "./event-id.ts";
-import type { Node } from "./nodes.ts";
+import { ListNode, type Node } from "./nodes.ts";
 import { VectorClock } from "./vector-clock.ts";
 
 // ── EventGraph ──────────────────────────────────────────────────────
@@ -554,9 +559,26 @@ export class EventGraph {
       const key = ordered[i]!;
       const ev = this.events.get(key) as Event;
       const edit = ev.resolveAgainst(applied, doc);
-      applied.push({ ev, edit });
-      if (!(edit instanceof NoOpEdit)) {
-        edit.apply(doc);
+
+      // Resolve negative indices to absolute positions BEFORE apply so
+      // that (a) the correct list element is addressed and (b) the
+      // stored edit in `applied` carries a positive index for downstream
+      // OT transformations.
+      let finalEdit = edit;
+      if (
+        (edit instanceof ListInsertAtEdit ||
+          edit instanceof ListRemoveAtEdit) &&
+        edit.index < 0
+      ) {
+        const lists = doc.navigate(edit.target);
+        if (lists.length > 0 && lists[0] instanceof ListNode) {
+          finalEdit = edit.withResolvedIndex(lists[0].items.length);
+        }
+      }
+
+      applied.push({ ev, edit: finalEdit });
+      if (!(finalEdit instanceof NoOpEdit)) {
+        finalEdit.apply(doc);
       }
     }
 
@@ -637,9 +659,20 @@ export class EventGraph {
     for (const key of ordered) {
       const ev = this.events.get(key) as Event;
       const edit = ev.resolveAgainst(oracleApplied, oracleDoc);
-      oracleApplied.push({ ev, edit });
-      if (!(edit instanceof NoOpEdit)) {
-        edit.apply(oracleDoc);
+      let finalEdit = edit;
+      if (
+        (edit instanceof ListInsertAtEdit ||
+          edit instanceof ListRemoveAtEdit) &&
+        edit.index < 0
+      ) {
+        const lists = oracleDoc.navigate(edit.target);
+        if (lists.length > 0 && lists[0] instanceof ListNode) {
+          finalEdit = edit.withResolvedIndex(lists[0].items.length);
+        }
+      }
+      oracleApplied.push({ ev, edit: finalEdit });
+      if (!(finalEdit instanceof NoOpEdit)) {
+        finalEdit.apply(oracleDoc);
       }
     }
     const checkpointPlain = JSON.stringify(checkpointDoc.toPlain());
