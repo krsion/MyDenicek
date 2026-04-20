@@ -1,22 +1,7 @@
 import { Selector, type SelectorSegment } from "../selector.ts";
 import type { Node } from "../nodes/base.ts";
 import { ReferenceNode } from "../nodes/reference-node.ts";
-import { RecordAddEdit } from "./record-edits.ts";
-import { ListInsertAtEdit } from "./list-edits.ts";
 import type { Edit } from "./base.ts";
-
-/**
- * Sentinel index used as the payload base for back-anchored inserts.
- *
- * Back-anchored inserts append at the **end** of the list, so the real
- * insertion index is always ≥ the current list length.  Using `0` as a
- * placeholder would cause `makeRelative` to find a false common prefix
- * with explicit index-0 refs, producing a shorter (and incorrect) relative
- * path.  A very large sentinel avoids accidental prefix matching with any
- * realistic index while still being recognised as a numeric index segment
- * by the selector machinery.
- */
-const PUSH_BACK_SENTINEL_INDEX = Number.MAX_SAFE_INTEGER;
 
 /**
  * Walks a payload node tree and rewrites every {@link ReferenceNode}'s selector
@@ -87,38 +72,18 @@ export function rewriteRefsInPayload(
 }
 
 /**
- * If `edit` carries an inserted payload ({@link RecordAddEdit} or
- * {@link ListInsertAtEdit}), returns a copy of the edit whose payload has
- * all {@link ReferenceNode} selectors rewritten through `transformSelector`.
- * Other edit types are returned unchanged.
+ * If `edit` carries an inserted payload ({@link Edit.mapInsertedPayload}),
+ * returns a copy of the edit whose payload has all {@link ReferenceNode}
+ * selectors rewritten through `transformSelector`. Other edit types are
+ * returned unchanged.
  */
 export function rewriteInsertEditRefs(
   edit: Edit,
   transformSelector: (sel: Selector) => Selector,
 ): Edit {
-  if (edit instanceof RecordAddEdit) {
-    const node = edit.node.clone();
-    rewriteRefsInPayload(node, edit.target, transformSelector);
-    return new RecordAddEdit(edit.target, node);
-  }
-  if (edit instanceof ListInsertAtEdit) {
-    const node = edit.node.clone();
-    if (edit.strict && edit.index === -1) {
-      rewriteRefsInPayload(
-        node,
-        new Selector([...edit.target.segments, PUSH_BACK_SENTINEL_INDEX]),
-        transformSelector,
-      );
-    } else {
-      // Strict front or non-strict: use actual index (0 for strict front).
-      const idx = (edit.strict && edit.index === 0) ? 0 : edit.index;
-      rewriteRefsInPayload(
-        node,
-        new Selector([...edit.target.segments, idx]),
-        transformSelector,
-      );
-    }
-    return new ListInsertAtEdit(edit.target, edit.index, node, edit.strict);
-  }
-  return edit;
+  return edit.mapInsertedPayload((node, basePath) => {
+    const cloned = node.clone();
+    rewriteRefsInPayload(cloned, basePath, transformSelector);
+    return cloned;
+  });
 }

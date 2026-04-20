@@ -95,6 +95,12 @@ export class RecordAddEdit extends NoOpOnRemovedTargetEdit {
     };
   }
 
+  override mapInsertedPayload(
+    fn: (node: Node, basePath: Selector) => Node,
+  ): RecordAddEdit {
+    return new RecordAddEdit(this.target, fn(this.node, this.target));
+  }
+
   override describe(): string {
     const field = String(this.target.lastSegment);
     return `Add '${field}'${describeNodeForEdit(this.node)} to ${

@@ -11,6 +11,19 @@ import {
   registerRemoteEditDecoder,
 } from "../remote-edit-codec.ts";
 
+/**
+ * Sentinel index used as the payload base for back-anchored inserts.
+ *
+ * Back-anchored inserts append at the **end** of the list, so the real
+ * insertion index is always ≥ the current list length.  Using `0` as a
+ * placeholder would cause `makeRelative` to find a false common prefix
+ * with explicit index-0 refs, producing a shorter (and incorrect) relative
+ * path.  A very large sentinel avoids accidental prefix matching with any
+ * realistic index while still being recognised as a numeric index segment
+ * by the selector machinery.
+ */
+const PUSH_BACK_SENTINEL_INDEX = Number.MAX_SAFE_INTEGER;
+
 type EncodedListInsertAtEdit = Extract<
   EncodedRemoteEdit,
   { kind: "ListInsertAtEdit" }
@@ -38,7 +51,7 @@ export abstract class ListInsertEdit extends NoOpOnRemovedTargetEdit {
     return match.kind === "no-match" ? null : match.rest;
   }
 
-  rewriteInsertedNode(
+  override rewriteInsertedNode(
     target: Selector,
     rewrite: (node: Node, relativeTarget: Selector) => Node | null,
   ): ListInsertEdit | null {
@@ -288,12 +301,9 @@ export class ListInsertAtEdit extends ListInsertEdit {
   }
 
   override transformLaterConcurrentEdit(concurrent: Edit): Edit {
-    // Strict append (-1): don't shift concurrent indices, only rewrite
+    // Strict append (-1): doesn't shift concurrent indices, only rewrites
     // concurrent insert payloads that construct our target list.
     if (this.strict && this.index === -1) {
-      if (!(concurrent instanceof ListInsertEdit)) {
-        return super.transformLaterConcurrentEdit(concurrent);
-      }
       const rewritten = concurrent.rewriteInsertedNode(
         this.target,
         (transformedNode, relativeTarget) => {
@@ -307,76 +317,18 @@ export class ListInsertAtEdit extends ListInsertEdit {
           return transformedNode;
         },
       );
-      if (rewritten === null) {
-        return super.transformLaterConcurrentEdit(concurrent);
-      }
-      return rewritten;
+      return rewritten ?? super.transformLaterConcurrentEdit(concurrent);
     }
 
-    const thisAbsIndex = this.resolveAbsoluteIndex();
+    // ── Generic list index shifting ──────────────────────────────────
+    const shifted = concurrent.applyListIndexShift(
+      this.target,
+      this.resolveAbsoluteIndex(),
+      +1,
+    );
+    if (shifted !== null) return shifted;
 
-    // ── Shift non-strict concurrent ListInsertAtEdit ───────────────
-    if (
-      concurrent instanceof ListInsertAtEdit &&
-      !concurrent.strict &&
-      this.target.equals(concurrent.target)
-    ) {
-      const concAbsIndex = concurrent.resolveAbsoluteIndex();
-      if (concAbsIndex >= thisAbsIndex) {
-        return new ListInsertAtEdit(
-          concurrent.target,
-          concAbsIndex + 1,
-          concurrent.node,
-        );
-      }
-      // Not shifted — resolve to positive if it was negative.
-      if (concurrent.index < 0) {
-        return new ListInsertAtEdit(
-          concurrent.target,
-          concAbsIndex,
-          concurrent.node,
-        );
-      }
-      return concurrent;
-    }
-
-    // ── Shift non-strict concurrent ListRemoveAtEdit ──────────────
-    if (
-      concurrent instanceof ListRemoveAtEdit &&
-      !concurrent.strict &&
-      this.target.equals(concurrent.target)
-    ) {
-      const concAbsIndex = concurrent.resolveAbsoluteIndex();
-      if (concAbsIndex >= thisAbsIndex) {
-        return new ListRemoveAtEdit(concurrent.target, concAbsIndex + 1);
-      }
-      if (concurrent.index < 0) {
-        return new ListRemoveAtEdit(concurrent.target, concAbsIndex);
-      }
-      return concurrent;
-    }
-
-    // ── Shift concurrent ListReorderEdit ──────────────────────────
-    if (
-      concurrent instanceof ListReorderEdit &&
-      this.target.equals(concurrent.target)
-    ) {
-      const newFrom = concurrent.fromIndex >= thisAbsIndex
-        ? concurrent.fromIndex + 1
-        : concurrent.fromIndex;
-      const newTo = concurrent.toIndex >= thisAbsIndex
-        ? concurrent.toIndex + 1
-        : concurrent.toIndex;
-      if (newFrom === concurrent.fromIndex && newTo === concurrent.toIndex) {
-        return super.transformLaterConcurrentEdit(concurrent);
-      }
-      return new ListReorderEdit(concurrent.target, newFrom, newTo);
-    }
-
-    // ── Rewrite concurrent ListInsertEdit inserting into our target ─
-    if (!(concurrent instanceof ListInsertEdit)) {
-      return super.transformLaterConcurrentEdit(concurrent);
-    }
+    // ── Rewrite concurrent insert payloads that construct our target ─
     const rewritten = concurrent.rewriteInsertedNode(
       this.target,
       (transformedNode, relativeTarget) => {
@@ -400,10 +352,7 @@ export class ListInsertAtEdit extends ListInsertEdit {
         return transformedNode;
       },
     );
-    if (rewritten === null) {
-      return super.transformLaterConcurrentEdit(concurrent);
-    }
-    return rewritten;
+    return rewritten ?? super.transformLaterConcurrentEdit(concurrent);
   }
 
   computeInverse(_preDoc: Node): Edit {
@@ -446,6 +395,44 @@ export class ListInsertAtEdit extends ListInsertEdit {
       this.strict,
       this.listLength,
     );
+  }
+
+  private computePayloadBasePath(): Selector {
+    if (this.strict && this.index === -1) {
+      return new Selector([...this.target.segments, PUSH_BACK_SENTINEL_INDEX]);
+    }
+    const idx = (this.strict && this.index === 0) ? 0 : this.index;
+    return new Selector([...this.target.segments, idx]);
+  }
+
+  override mapInsertedPayload(
+    fn: (node: Node, basePath: Selector) => Node,
+  ): ListInsertAtEdit {
+    return new ListInsertAtEdit(
+      this.target,
+      this.index,
+      fn(this.node, this.computePayloadBasePath()),
+      this.strict,
+      this.listLength,
+    );
+  }
+
+  override applyListIndexShift(
+    listTarget: Selector,
+    threshold: number,
+    delta: 1 | -1,
+  ): Edit | null {
+    if (this.strict || !this.target.equals(listTarget)) return null;
+    const myIdx = this.resolveAbsoluteIndex();
+    const shouldShift = delta > 0 ? myIdx >= threshold : myIdx > threshold;
+    if (shouldShift) {
+      return new ListInsertAtEdit(this.target, myIdx + delta, this.node);
+    }
+    // Resolve negative to positive even when no shift is needed.
+    if (this.index < 0) {
+      return new ListInsertAtEdit(this.target, myIdx, this.node);
+    }
+    return this;
   }
 
   encodeRemoteEdit(): EncodedListInsertAtEdit {
@@ -805,82 +792,42 @@ export class ListRemoveAtEdit extends NoOpOnRemovedTargetEdit {
     return super.transform(prior);
   }
 
+  override applyListIndexShift(
+    listTarget: Selector,
+    threshold: number,
+    delta: 1 | -1,
+  ): Edit | null {
+    if (this.strict || !this.target.equals(listTarget)) return null;
+    const myIdx = this.resolveAbsoluteIndex();
+    // Same-position collision with a concurrent remove → NoOp.
+    if (delta < 0 && myIdx === threshold) {
+      return new NoOpEdit(
+        this.target,
+        `ListRemoveAtEdit already removed item at index ${threshold}.`,
+      );
+    }
+    const shouldShift = delta > 0 ? myIdx >= threshold : myIdx > threshold;
+    if (shouldShift) {
+      return new ListRemoveAtEdit(this.target, myIdx + delta);
+    }
+    if (this.index < 0) {
+      return new ListRemoveAtEdit(this.target, myIdx);
+    }
+    return this;
+  }
+
   override transformLaterConcurrentEdit(concurrent: Edit): Edit {
     // Strict remove-last (-1): doesn't shift concurrent indices.
     if (this.strict && this.index === -1) {
       return super.transformLaterConcurrentEdit(concurrent);
     }
 
-    const thisAbsIndex = this.resolveAbsoluteIndex();
-
-    // ── Shift non-strict concurrent ListInsertAtEdit ───────────────
-    if (
-      concurrent instanceof ListInsertAtEdit &&
-      !concurrent.strict &&
-      this.target.equals(concurrent.target)
-    ) {
-      const concAbsIndex = concurrent.resolveAbsoluteIndex();
-      if (concAbsIndex > thisAbsIndex) {
-        return new ListInsertAtEdit(
-          concurrent.target,
-          concAbsIndex - 1,
-          concurrent.node,
-        );
-      }
-      if (concurrent.index < 0) {
-        return new ListInsertAtEdit(
-          concurrent.target,
-          concAbsIndex,
-          concurrent.node,
-        );
-      }
-      return concurrent;
-    }
-
-    // ── Shift non-strict concurrent ListRemoveAtEdit ──────────────
-    if (
-      concurrent instanceof ListRemoveAtEdit &&
-      !concurrent.strict &&
-      this.target.equals(concurrent.target)
-    ) {
-      const concAbsIndex = concurrent.resolveAbsoluteIndex();
-      if (concAbsIndex > thisAbsIndex) {
-        return new ListRemoveAtEdit(concurrent.target, concAbsIndex - 1);
-      }
-      if (concAbsIndex === thisAbsIndex) {
-        return new NoOpEdit(
-          concurrent.target,
-          `ListRemoveAtEdit already removed item at index ${thisAbsIndex}.`,
-        );
-      }
-      if (concurrent.index < 0) {
-        return new ListRemoveAtEdit(concurrent.target, concAbsIndex);
-      }
-      return concurrent;
-    }
-
-    // ── Shift concurrent ListReorderEdit ──────────────────────────
-    if (
-      concurrent instanceof ListReorderEdit &&
-      this.target.equals(concurrent.target)
-    ) {
-      if (concurrent.fromIndex === thisAbsIndex) {
-        return new NoOpEdit(
-          concurrent.target,
-          `ListRemoveAtEdit removed the item being reordered at index ${thisAbsIndex}.`,
-        );
-      }
-      const newFrom = concurrent.fromIndex > thisAbsIndex
-        ? concurrent.fromIndex - 1
-        : concurrent.fromIndex;
-      const newTo = concurrent.toIndex > thisAbsIndex
-        ? concurrent.toIndex - 1
-        : concurrent.toIndex;
-      if (newFrom === concurrent.fromIndex && newTo === concurrent.toIndex) {
-        return super.transformLaterConcurrentEdit(concurrent);
-      }
-      return new ListReorderEdit(concurrent.target, newFrom, newTo);
-    }
+    const shifted = concurrent.applyListIndexShift(
+      this.target,
+      this.resolveAbsoluteIndex(),
+      -1,
+    );
+    if (shifted !== null) return shifted;
 
     return super.transformLaterConcurrentEdit(concurrent);
   }
@@ -1095,21 +1042,25 @@ export class ListReorderEdit extends NoOpOnRemovedTargetEdit {
     return super.transform(prior);
   }
 
-  override transformLaterConcurrentEdit(concurrent: Edit): Edit {
-    // Reorder doesn't change list length, just shifts indices for other edits
-    if (
-      concurrent instanceof ListInsertAtEdit &&
-      this.target.equals(concurrent.target)
-    ) {
-      return super.transformLaterConcurrentEdit(concurrent);
+  override applyListIndexShift(
+    listTarget: Selector,
+    threshold: number,
+    delta: 1 | -1,
+  ): Edit | null {
+    if (!this.target.equals(listTarget)) return null;
+    // From-position collision with a concurrent remove → NoOp.
+    if (delta < 0 && this.fromIndex === threshold) {
+      return new NoOpEdit(
+        this.target,
+        `ListRemoveAtEdit removed the item being reordered at index ${threshold}.`,
+      );
     }
-    if (
-      concurrent instanceof ListRemoveAtEdit &&
-      this.target.equals(concurrent.target)
-    ) {
-      return super.transformLaterConcurrentEdit(concurrent);
-    }
-    return super.transformLaterConcurrentEdit(concurrent);
+    const shiftIdx = (idx: number) =>
+      (delta > 0 ? idx >= threshold : idx > threshold) ? idx + delta : idx;
+    const newFrom = shiftIdx(this.fromIndex);
+    const newTo = shiftIdx(this.toIndex);
+    if (newFrom === this.fromIndex && newTo === this.toIndex) return this;
+    return new ListReorderEdit(this.target, newFrom, newTo);
   }
 
   computeInverse(_preDoc: Node): Edit {

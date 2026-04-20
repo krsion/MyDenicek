@@ -5,7 +5,6 @@ import {
   NoOpEdit,
   NoOpOnRemovedTargetEdit,
 } from "./base.ts";
-import { ListInsertEdit } from "./list-edits.ts";
 import { mapSelector, Selector, type SelectorTransform } from "../selector.ts";
 import { ListNode, Node, type PlainNode, RecordNode } from "../nodes.ts";
 import {
@@ -57,9 +56,6 @@ export class UpdateTagEdit extends NoOpOnRemovedTargetEdit {
   }
 
   override transformLaterConcurrentEdit(concurrent: Edit): Edit {
-    if (!(concurrent instanceof ListInsertEdit)) {
-      return super.transformLaterConcurrentEdit(concurrent);
-    }
     const rewritten = concurrent.rewriteInsertedNode(
       this.target,
       (transformedNode, relativeTarget) => {
@@ -391,14 +387,6 @@ export class WrapRecordEdit extends NoOpOnRemovedTargetEdit {
   }
 
   override transformLaterConcurrentEdit(concurrent: Edit): Edit {
-    if (!(concurrent instanceof ListInsertEdit)) {
-      const transformed = super.transformLaterConcurrentEdit(concurrent);
-      if (transformed instanceof NoOpEdit) return transformed;
-      return rewriteInsertEditRefs(
-        transformed,
-        (abs) => this.transformSelectorOrThrow(abs),
-      );
-    }
     const rewritten = concurrent.rewriteInsertedNode(
       this.target,
       (insertedNode, relativeTarget) => {
@@ -488,14 +476,6 @@ export class WrapListEdit extends NoOpOnRemovedTargetEdit {
   }
 
   override transformLaterConcurrentEdit(concurrent: Edit): Edit {
-    if (!(concurrent instanceof ListInsertEdit)) {
-      const transformed = super.transformLaterConcurrentEdit(concurrent);
-      if (transformed instanceof NoOpEdit) return transformed;
-      return rewriteInsertEditRefs(
-        transformed,
-        (abs) => this.transformSelectorOrThrow(abs),
-      );
-    }
     const rewritten = concurrent.rewriteInsertedNode(
       this.target,
       (insertedNode, relativeTarget) =>

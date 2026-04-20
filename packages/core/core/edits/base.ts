@@ -112,6 +112,45 @@ export abstract class Edit {
     return null;
   }
 
+  /**
+   * If this edit inserts a payload, calls `fn` with the payload node and its
+   * computed base path, returning a new edit carrying the (possibly modified)
+   * node. Non-insert edits return `this` unchanged.
+   */
+  mapInsertedPayload(
+    _fn: (node: Node, basePath: Selector) => Node,
+  ): Edit {
+    return this;
+  }
+
+  /**
+   * If this edit inserts a node into a list, attempts to rewrite the inserted
+   * payload via `rewrite`. Returns a new edit with the rewritten payload, or
+   * `null` if not applicable (e.g. target doesn't match, or this edit is not
+   * a list insert).
+   */
+  rewriteInsertedNode(
+    _target: Selector,
+    _rewrite: (node: Node, relativeTarget: Selector) => Node | null,
+  ): Edit | null {
+    return null;
+  }
+
+  /**
+   * If this edit targets a list and carries shiftable indices, applies an
+   * index shift caused by a prior concurrent insert (`+1`) or remove (`−1`)
+   * on the same list. Returns the shifted edit, a {@link NoOpEdit} if the
+   * shift invalidates the edit (e.g. same-position remove collision), or
+   * `null` if not applicable.
+   */
+  applyListIndexShift(
+    _listTarget: Selector,
+    _threshold: number,
+    _delta: 1 | -1,
+  ): Edit | null {
+    return null;
+  }
+
   protected navigateOrThrow(doc: Node, target: Selector): Node[] {
     const nodes = doc.navigate(target);
     if (nodes.length === 0) {
