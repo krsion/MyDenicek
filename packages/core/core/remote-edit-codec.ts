@@ -26,12 +26,14 @@ export type EncodedRemoteEdit =
     index: number;
     node: PlainNode;
     strict?: boolean;
+    listLength?: number;
   }
   | {
     kind: "ListRemoveAtEdit";
     target: string;
     index: number;
     strict?: boolean;
+    listLength?: number;
   }
   | {
     kind: "ListReorderEdit";

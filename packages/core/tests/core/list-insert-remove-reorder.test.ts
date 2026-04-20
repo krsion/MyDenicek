@@ -514,8 +514,9 @@ Deno.test("concurrent remove(-1) + remove(-2): both apply, peers converge", () =
   assertEquals(alice.materialize(), bob.materialize());
   const doc = alice.materialize() as Record<string, unknown>;
   const items = (doc.items as { $items: string[] }).$items;
-  // Both apply: -1 removes "c" (last), then -2 resolves on ["a","b"] → removes "a"
-  assertEquals(items, ["b"]);
+  // Both carry listLength=3: -1 → index 2 ("c"), -2 → index 1 ("b")
+  // After OT: both removals apply → ["a"]
+  assertEquals(items, ["a"]);
 });
 
 Deno.test("concurrent remove(-1) + remove(-1): one becomes no-op, peers converge", () => {
@@ -561,4 +562,126 @@ Deno.test("remove(-1) survives remote round-trip", () => {
     bob.applyRemote(event);
   }
   assertEquals(alice.materialize(), bob.materialize());
+});
+
+// ── Negative-index OT with listLength ───────────────────────────────
+
+Deno.test("non-strict insert(-1) concurrent with insert at front: position shifts correctly", () => {
+  const alice = new Denicek("alice", makeListDoc());
+  const bob = new Denicek("bob", makeListDoc());
+  // Alice appends (non-strict -1 → resolveAbsoluteIndex = 3)
+  alice.insert("items", -1, "X");
+  // Bob inserts at front — shifts Alice's resolved index from 3 to 4
+  bob.insert("items", 0, "Y");
+  sync(alice, bob);
+  assertEquals(alice.materialize(), bob.materialize());
+  const doc = alice.materialize() as Record<string, unknown>;
+  const items = (doc.items as { $items: string[] }).$items;
+  assertEquals(items.length, 5);
+  assertEquals(items.includes("X"), true);
+  assertEquals(items.includes("Y"), true);
+  // X should be at end, Y at front
+  assertEquals(items[0], "Y");
+  assertEquals(items[items.length - 1], "X");
+});
+
+Deno.test("non-strict insert(-2) concurrent with remove from end: position shifts correctly", () => {
+  const alice = new Denicek("alice", makeListDoc());
+  const bob = new Denicek("bob", makeListDoc());
+  // Alice inserts before last (non-strict -2 → resolveAbsoluteIndex = 2)
+  alice.insert("items", -2, "X");
+  // Bob removes last item (index 2 = "c")
+  bob.remove("items", 2);
+  sync(alice, bob);
+  assertEquals(alice.materialize(), bob.materialize());
+  const doc = alice.materialize() as Record<string, unknown>;
+  const items = (doc.items as { $items: string[] }).$items;
+  assertEquals(items.includes("X"), true);
+  assertEquals(!items.includes("c"), true);
+});
+
+Deno.test("strict insert(-1) concurrent with insert at front: stays at end", () => {
+  const alice = new Denicek("alice", makeListDoc());
+  const bob = new Denicek("bob", makeListDoc());
+  // Alice strict-appends: always at end regardless of concurrent edits
+  alice.insert("items", -1, "X", true);
+  bob.insert("items", 0, "Y");
+  sync(alice, bob);
+  assertEquals(alice.materialize(), bob.materialize());
+  const doc = alice.materialize() as Record<string, unknown>;
+  const items = (doc.items as { $items: string[] }).$items;
+  assertEquals(items.length, 5);
+  assertEquals(items[items.length - 1], "X");
+  assertEquals(items[0], "Y");
+});
+
+Deno.test("non-strict remove(-1) concurrent with insert at front: removes correct item", () => {
+  const alice = new Denicek("alice", makeListDoc());
+  const bob = new Denicek("bob", makeListDoc());
+  // Alice removes last (non-strict -1 → resolveAbsoluteIndex = 2 = "c")
+  alice.remove("items", -1);
+  // Bob inserts at front — shifts Alice's resolved index from 2 to 3
+  bob.insert("items", 0, "Y");
+  sync(alice, bob);
+  assertEquals(alice.materialize(), bob.materialize());
+  const doc = alice.materialize() as Record<string, unknown>;
+  const items = (doc.items as { $items: string[] }).$items;
+  // "c" should be removed, "Y" added at front
+  assertEquals(!items.includes("c"), true);
+  assertEquals(items[0], "Y");
+  assertEquals(items.length, 3); // 3 original - 1 removed + 1 inserted
+});
+
+Deno.test("non-strict insert(-1) remote round-trip preserves listLength", () => {
+  const alice = new Denicek("alice", makeListDoc());
+  const bob = new Denicek("bob", makeListDoc());
+  alice.insert("items", -1, "X");
+  for (const event of alice.eventsSince(bob.frontiers)) {
+    bob.applyRemote(event);
+  }
+  assertEquals(alice.materialize(), bob.materialize());
+  const doc = bob.materialize() as Record<string, unknown>;
+  const items = (doc.items as { $items: string[] }).$items;
+  assertEquals(items[items.length - 1], "X");
+});
+
+Deno.test("non-strict remove(-1) remote round-trip preserves listLength", () => {
+  const alice = new Denicek("alice", makeListDoc());
+  const bob = new Denicek("bob", makeListDoc());
+  alice.remove("items", -1);
+  for (const event of alice.eventsSince(bob.frontiers)) {
+    bob.applyRemote(event);
+  }
+  assertEquals(alice.materialize(), bob.materialize());
+  const doc = bob.materialize() as Record<string, unknown>;
+  const items = (doc.items as { $items: string[] }).$items;
+  assertEquals(items, ["a", "b"]);
+});
+
+Deno.test("concurrent non-strict insert(-1) + non-strict insert(-1): both append, peers converge", () => {
+  const alice = new Denicek("alice", makeListDoc());
+  const bob = new Denicek("bob", makeListDoc());
+  alice.insert("items", -1, "X");
+  bob.insert("items", -1, "Y");
+  sync(alice, bob);
+  assertEquals(alice.materialize(), bob.materialize());
+  const doc = alice.materialize() as Record<string, unknown>;
+  const items = (doc.items as { $items: string[] }).$items;
+  assertEquals(items.length, 5);
+  assertEquals(items.includes("X"), true);
+  assertEquals(items.includes("Y"), true);
+});
+
+Deno.test("non-strict insert(-1) concurrent with non-strict remove(-1): peers converge", () => {
+  const alice = new Denicek("alice", makeListDoc());
+  const bob = new Denicek("bob", makeListDoc());
+  // Alice appends (resolved to 3), Bob removes last (resolved to 2)
+  alice.insert("items", -1, "X");
+  bob.remove("items", -1);
+  sync(alice, bob);
+  assertEquals(alice.materialize(), bob.materialize());
+  const doc = alice.materialize() as Record<string, unknown>;
+  const items = (doc.items as { $items: string[] }).$items;
+  assertEquals(items.includes("X"), true);
+  assertEquals(!items.includes("c"), true);
 });

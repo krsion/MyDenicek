@@ -560,15 +560,15 @@ export class EventGraph {
       const ev = this.events.get(key) as Event;
       const edit = ev.resolveAgainst(applied, doc);
 
-      // Resolve negative indices to absolute positions BEFORE apply so
-      // that (a) the correct list element is addressed and (b) the
-      // stored edit in `applied` carries a positive index for downstream
-      // OT transformations.
+      // Resolve strict-negative indices to absolute positions at replay
+      // time — their position depends on the current document state and
+      // is not tracked by listLength.  Non-strict negatives carry their
+      // own listLength and are resolved by OT via resolveAbsoluteIndex().
       let finalEdit = edit;
       if (
         (edit instanceof ListInsertAtEdit ||
           edit instanceof ListRemoveAtEdit) &&
-        edit.index < 0
+        edit.index < 0 && edit.strict
       ) {
         const lists = doc.navigate(edit.target);
         if (lists.length > 0 && lists[0] instanceof ListNode) {
@@ -663,7 +663,7 @@ export class EventGraph {
       if (
         (edit instanceof ListInsertAtEdit ||
           edit instanceof ListRemoveAtEdit) &&
-        edit.index < 0
+        edit.index < 0 && edit.strict
       ) {
         const lists = oracleDoc.navigate(edit.target);
         if (lists.length > 0 && lists[0] instanceof ListNode) {
@@ -720,8 +720,20 @@ export class EventGraph {
         conflicts.push(edit.toConflict());
         continue;
       }
-      edit.apply(doc);
-      applied.push({ ev, edit });
+      // Resolve strict-negative indices at replay time (same as ensureCachedApplied).
+      let finalEdit = edit;
+      if (
+        (edit instanceof ListInsertAtEdit ||
+          edit instanceof ListRemoveAtEdit) &&
+        edit.index < 0 && edit.strict
+      ) {
+        const lists = doc.navigate(edit.target);
+        if (lists.length > 0 && lists[0] instanceof ListNode) {
+          finalEdit = edit.withResolvedIndex(lists[0].items.length);
+        }
+      }
+      finalEdit.apply(doc);
+      applied.push({ ev, edit: finalEdit });
     }
 
     if (this.debugValidateCheckpoints && checkpoint !== null) {

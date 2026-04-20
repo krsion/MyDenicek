@@ -82,11 +82,24 @@ export class ListInsertAtEdit extends ListInsertEdit {
     readonly index: number,
     readonly node: Node,
     readonly strict: boolean = false,
+    readonly listLength: number = 0,
   ) {
     super();
   }
 
-  /** Resolve the effective insertion index from a list. */
+  /**
+   * Resolve the effective insertion index using the stored list length.
+   * Positive indices are returned as-is; negative indices are resolved
+   * to an absolute position using `listLength` (the length of the target
+   * list at the time this edit was created).
+   */
+  resolveAbsoluteIndex(): number {
+    if (this.index >= 0) return this.index;
+    // Python-style: -1 → listLength (append), -2 → listLength-1, etc.
+    return Math.max(0, this.listLength + 1 + this.index);
+  }
+
+  /** Resolve the effective insertion index from a list (for apply). */
   private resolveIndex(list: ListNode): number {
     if (this.index >= 0) return this.index;
     // Python-style: -1 → list.length (append), -2 → list.length-1, etc.
@@ -95,8 +108,10 @@ export class ListInsertAtEdit extends ListInsertEdit {
 
   /**
    * Returns a copy of this edit with the negative index resolved to a
-   * positive absolute position. Used by the materializer so that
-   * downstream OT transformations operate on the concrete position.
+   * positive absolute position and `strict` cleared. Used by the
+   * materializer for strict-negative edits whose absolute position must
+   * be computed at replay time (the stored `listLength` is stale for
+   * strict edits because their position is never shifted by OT).
    */
   withResolvedIndex(listLength: number): ListInsertAtEdit {
     if (this.index >= 0) return this;
@@ -229,142 +244,70 @@ export class ListInsertAtEdit extends ListInsertEdit {
   }
 
   transformSelector(sel: Selector): SelectorTransform {
-    if (this.index < 0) {
-      // Negative index: end-relative. Before resolution, we can't shift
-      // selectors because we don't know the absolute position. The
-      // resolved copy (with positive index) stored in `applied` will
-      // handle selector transforms for downstream OT.
-      return mapSelector(sel);
-    }
-    if (this.strict && this.index === 0) {
-      return this.target.shiftIndex(sel, 0, +1);
-    }
-    if (this.strict) {
-      // Strict positive non-zero: shifts indices at and after this.index.
-      return this.target.shiftIndex(sel, this.index, +1);
-    }
-    return this.target.shiftIndex(sel, this.index, +1);
+    const absIndex = this.resolveAbsoluteIndex();
+    return this.target.shiftIndex(sel, absIndex, +1);
   }
 
   override transform(prior: Edit): Edit {
-    // Negative indices are end-relative — not shifted by prior edits.
-    // Strict inserts also never adjust their own index through prior edits.
-    if (this.strict || this.index < 0) {
-      return super.transform(prior);
-    }
-    // Non-strict positive: delegate to base (default OT).
+    // Insert index adjustment is handled by the prior edit's
+    // transformLaterConcurrentEdit, not here.  Strict and negative
+    // inserts both delegate to the base class (selector remap only).
     return super.transform(prior);
   }
 
   override transformLaterConcurrentEdit(concurrent: Edit): Edit {
-    if (this.index < 0) {
-      // Negative index: end-relative. We can't shift concurrent edits
-      // because we don't know the resolved position yet. The resolved
-      // copy stored in `applied` will handle downstream OT. For
-      // concurrent inserts into the same list that are being constructed
-      // (e.g. ListInsertEdit), rewrite the inserted node.
-      if (!(concurrent instanceof ListInsertEdit)) {
-        return super.transformLaterConcurrentEdit(concurrent);
-      }
-      const rewritten = concurrent.rewriteInsertedNode(
-        this.target,
-        (transformedNode, relativeTarget) => {
-          if (
-            relativeTarget.length !== 0 ||
-            !(transformedNode instanceof ListNode)
-          ) {
-            return null;
-          }
-          // Resolve position against the node being constructed.
-          const resolved = Math.max(
-            0,
-            transformedNode.items.length + 1 + this.index,
-          );
-          if (resolved >= transformedNode.items.length) {
-            transformedNode.pushBack(this.node.clone());
-          } else {
-            transformedNode.insertAt(resolved, this.node.clone());
-          }
-          return transformedNode;
-        },
-      );
-      if (rewritten === null) {
-        return super.transformLaterConcurrentEdit(concurrent);
-      }
-      return rewritten;
-    }
+    const thisAbsIndex = this.resolveAbsoluteIndex();
 
-    if (this.strict && this.index >= 0) {
-      // Strict front insert at index 0: shifts all concurrent indexed edits.
-      if (
-        concurrent instanceof ListInsertAtEdit &&
-        !concurrent.strict &&
-        concurrent.index >= 0 &&
-        this.target.equals(concurrent.target)
-      ) {
-        return new ListInsertAtEdit(
-          concurrent.target,
-          concurrent.index + 1,
-          concurrent.node,
-        );
-      }
-      if (
-        concurrent instanceof ListRemoveAtEdit &&
-        !concurrent.strict &&
-        concurrent.index >= 0 &&
-        this.target.equals(concurrent.target)
-      ) {
-        return new ListRemoveAtEdit(concurrent.target, concurrent.index + 1);
-      }
-      if (
-        concurrent instanceof ListReorderEdit &&
-        this.target.equals(concurrent.target)
-      ) {
-        return new ListReorderEdit(
-          concurrent.target,
-          concurrent.fromIndex + 1,
-          concurrent.toIndex + 1,
-        );
-      }
-      // For other ListInsertEdits (e.g. another strict insert), delegate.
-      return super.transformLaterConcurrentEdit(concurrent);
-    }
-
-    // Non-strict positive indexed insert — original logic.
+    // ── Shift non-strict concurrent ListInsertAtEdit ───────────────
     if (
       concurrent instanceof ListInsertAtEdit &&
       !concurrent.strict &&
-      concurrent.index >= 0 &&
       this.target.equals(concurrent.target)
     ) {
-      if (concurrent.index >= this.index) {
+      const concAbsIndex = concurrent.resolveAbsoluteIndex();
+      if (concAbsIndex >= thisAbsIndex) {
         return new ListInsertAtEdit(
           concurrent.target,
-          concurrent.index + 1,
+          concAbsIndex + 1,
+          concurrent.node,
+        );
+      }
+      // Not shifted — resolve to positive if it was negative.
+      if (concurrent.index < 0) {
+        return new ListInsertAtEdit(
+          concurrent.target,
+          concAbsIndex,
           concurrent.node,
         );
       }
       return concurrent;
     }
+
+    // ── Shift non-strict concurrent ListRemoveAtEdit ──────────────
     if (
       concurrent instanceof ListRemoveAtEdit &&
       !concurrent.strict &&
-      concurrent.index >= 0 &&
       this.target.equals(concurrent.target)
     ) {
-      if (concurrent.index >= this.index) {
-        return new ListRemoveAtEdit(concurrent.target, concurrent.index + 1);
+      const concAbsIndex = concurrent.resolveAbsoluteIndex();
+      if (concAbsIndex >= thisAbsIndex) {
+        return new ListRemoveAtEdit(concurrent.target, concAbsIndex + 1);
+      }
+      if (concurrent.index < 0) {
+        return new ListRemoveAtEdit(concurrent.target, concAbsIndex);
       }
       return concurrent;
     }
+
+    // ── Shift concurrent ListReorderEdit ──────────────────────────
     if (
       concurrent instanceof ListReorderEdit &&
       this.target.equals(concurrent.target)
     ) {
-      const newFrom = concurrent.fromIndex >= this.index
+      const newFrom = concurrent.fromIndex >= thisAbsIndex
         ? concurrent.fromIndex + 1
         : concurrent.fromIndex;
-      const newTo = concurrent.toIndex >= this.index
+      const newTo = concurrent.toIndex >= thisAbsIndex
         ? concurrent.toIndex + 1
         : concurrent.toIndex;
       if (newFrom === concurrent.fromIndex && newTo === concurrent.toIndex) {
@@ -372,7 +315,8 @@ export class ListInsertAtEdit extends ListInsertEdit {
       }
       return new ListReorderEdit(concurrent.target, newFrom, newTo);
     }
-    // Handle concurrent ListInsertEdit inserting into our target
+
+    // ── Rewrite concurrent ListInsertEdit inserting into our target ─
     if (!(concurrent instanceof ListInsertEdit)) {
       return super.transformLaterConcurrentEdit(concurrent);
     }
@@ -380,11 +324,22 @@ export class ListInsertAtEdit extends ListInsertEdit {
       this.target,
       (transformedNode, relativeTarget) => {
         if (
-          relativeTarget.length !== 0 || !(transformedNode instanceof ListNode)
+          relativeTarget.length !== 0 ||
+          !(transformedNode instanceof ListNode)
         ) {
           return null;
         }
-        transformedNode.insertAt(this.index, this.node.clone());
+        // For rewriting into a newly constructed node, use the node's own
+        // length for negative indices (listLength refers to the original
+        // list, not this constructed node).
+        const insertPos = this.index >= 0
+          ? this.index
+          : Math.max(0, transformedNode.items.length + 1 + this.index);
+        if (insertPos >= transformedNode.items.length) {
+          transformedNode.pushBack(this.node.clone());
+        } else {
+          transformedNode.insertAt(insertPos, this.node.clone());
+        }
         return transformedNode;
       },
     );
@@ -395,13 +350,16 @@ export class ListInsertAtEdit extends ListInsertEdit {
   }
 
   computeInverse(_preDoc: Node): Edit {
-    if (this.index < 0) {
-      return new ListRemoveAtEdit(this.target, this.index, true);
+    if (this.strict) {
+      return new ListRemoveAtEdit(
+        this.target,
+        this.index,
+        true,
+        this.listLength,
+      );
     }
-    if (this.strict && this.index === 0) {
-      return new ListRemoveAtEdit(this.target, 0, true);
-    }
-    return new ListRemoveAtEdit(this.target, this.index);
+    const absIndex = this.resolveAbsoluteIndex();
+    return new ListRemoveAtEdit(this.target, absIndex);
   }
 
   equals(other: Edit): boolean {
@@ -409,15 +367,28 @@ export class ListInsertAtEdit extends ListInsertEdit {
       this.target.equals(other.target) &&
       this.index === other.index &&
       this.node.equals(other.node) &&
-      this.strict === other.strict;
+      this.strict === other.strict &&
+      this.listLength === other.listLength;
   }
 
   withTarget(target: Selector): ListInsertAtEdit {
-    return new ListInsertAtEdit(target, this.index, this.node, this.strict);
+    return new ListInsertAtEdit(
+      target,
+      this.index,
+      this.node,
+      this.strict,
+      this.listLength,
+    );
   }
 
   protected withInsertedNode(node: Node): ListInsertAtEdit {
-    return new ListInsertAtEdit(this.target, this.index, node, this.strict);
+    return new ListInsertAtEdit(
+      this.target,
+      this.index,
+      node,
+      this.strict,
+      this.listLength,
+    );
   }
 
   encodeRemoteEdit(): EncodedListInsertAtEdit {
@@ -429,6 +400,9 @@ export class ListInsertAtEdit extends ListInsertEdit {
     };
     if (this.strict) {
       (encoded as Record<string, unknown>).strict = true;
+    }
+    if (this.listLength !== 0) {
+      (encoded as Record<string, unknown>).listLength = this.listLength;
     }
     return encoded;
   }
@@ -460,6 +434,7 @@ registerRemoteEditDecoder<EncodedListInsertAtEdit>(
       encodedEdit.index,
       Node.fromPlain(encodedEdit.node),
       raw.strict === true,
+      typeof raw.listLength === "number" ? raw.listLength : 0,
     );
   },
 );
@@ -516,11 +491,23 @@ export class ListRemoveAtEdit extends NoOpOnRemovedTargetEdit {
     readonly target: Selector,
     readonly index: number,
     readonly strict: boolean = false,
+    readonly listLength: number = 0,
   ) {
     super();
   }
 
-  /** Resolve the effective removal index from a list. */
+  /**
+   * Resolve the effective removal index using the stored list length.
+   * Positive indices are returned as-is; negative indices are resolved
+   * to an absolute position using `listLength`.
+   */
+  resolveAbsoluteIndex(): number {
+    if (this.index >= 0) return this.index;
+    // Python-style: -1 → listLength-1 (last), -2 → listLength-2, etc.
+    return Math.max(0, this.listLength + this.index);
+  }
+
+  /** Resolve the effective removal index from a list (for apply). */
   private resolveIndex(list: ListNode): number {
     if (this.index >= 0) return this.index;
     // Python-style: -1 → list.length-1 (last), -2 → list.length-2, etc.
@@ -529,8 +516,9 @@ export class ListRemoveAtEdit extends NoOpOnRemovedTargetEdit {
 
   /**
    * Returns a copy of this edit with the negative index resolved to a
-   * positive absolute position. Used by the materializer so that
-   * downstream OT transformations operate on the concrete position.
+   * positive absolute position and `strict` cleared. Used by the
+   * materializer for strict-negative edits whose absolute position must
+   * be computed at replay time.
    */
   withResolvedIndex(listLength: number): ListRemoveAtEdit {
     if (this.index >= 0) return this;
@@ -686,59 +674,18 @@ export class ListRemoveAtEdit extends NoOpOnRemovedTargetEdit {
   }
 
   transformSelector(sel: Selector): SelectorTransform {
-    if (this.index < 0) {
-      // Negative index: end-relative. Before resolution, we can't shift
-      // selectors. The resolved copy stored in `applied` handles this.
-      return mapSelector(sel);
-    }
-    if (this.strict && this.index === 0) {
-      const m = this.target.matchPrefix(sel);
-      if (
-        m.kind === "matched" && m.rest.length > 0 && m.rest.segments[0] === 0
-      ) {
-        return REMOVED_SELECTOR;
-      }
-      return this.target.shiftIndex(sel, 1, -1);
-    }
-    if (this.strict) {
-      // Strict positive (non-zero).
-      const m = this.target.matchPrefix(sel);
-      if (
-        m.kind === "matched" && m.rest.length > 0 &&
-        m.rest.segments[0] === this.index
-      ) {
-        return REMOVED_SELECTOR;
-      }
-      return this.target.shiftIndex(sel, this.index + 1, -1);
-    }
-    // Non-strict positive.
+    const absIndex = this.resolveAbsoluteIndex();
     const m = this.target.matchPrefix(sel);
     if (
       m.kind === "matched" && m.rest.length > 0 &&
-      m.rest.segments[0] === this.index
+      m.rest.segments[0] === absIndex
     ) {
       return REMOVED_SELECTOR;
     }
-    return this.target.shiftIndex(sel, this.index + 1, -1);
+    return this.target.shiftIndex(sel, absIndex + 1, -1);
   }
 
   override transform(prior: Edit): Edit {
-    if (this.index < 0) {
-      // Negative indices are end-relative — not shifted by prior edits.
-      // Two concurrent negative removes of the same index collapse.
-      if (
-        prior instanceof ListRemoveAtEdit &&
-        (prior.strict || prior.index < 0) &&
-        prior.target.equals(this.target) &&
-        prior.index === this.index
-      ) {
-        return new NoOpEdit(
-          this.target,
-          `Concurrent negative ListRemoveAtEdit already removed the same end-relative item.`,
-        );
-      }
-      return super.transform(prior);
-    }
     if (this.strict) {
       // Two concurrent strict removes of the same list collapse to one removal.
       if (
@@ -754,247 +701,112 @@ export class ListRemoveAtEdit extends NoOpOnRemovedTargetEdit {
       // Strict removes don't adjust their index through prior edits.
       return super.transform(prior);
     }
-    // Non-strict positive indexed remove — original OT logic.
+
+    // Non-strict (positive or negative): resolve to absolute and shift.
+    const thisAbsIndex = this.resolveAbsoluteIndex();
+
     if (
       prior instanceof ListRemoveAtEdit &&
       prior.target.equals(this.target)
     ) {
-      if (prior.index < 0) {
-        // Prior is negative (end-relative) — doesn't affect positive indices
-        // below the last element (we don't know the resolved position here).
-        return this;
+      const priorAbsIndex = prior.resolveAbsoluteIndex();
+      if (priorAbsIndex < thisAbsIndex) {
+        return new ListRemoveAtEdit(this.target, thisAbsIndex - 1);
       }
-      if (prior.strict && prior.index === 0) {
-        if (this.index === 0) {
-          return new NoOpEdit(
-            this.target,
-            `strict ListRemoveAtEdit already removed item at index 0.`,
-          );
-        }
-        return new ListRemoveAtEdit(this.target, this.index - 1);
-      }
-      if (prior.strict) {
-        // Strict positive (non-zero): shifts indices after prior.index.
-        if (prior.index === this.index) {
-          return new NoOpEdit(
-            this.target,
-            `strict ListRemoveAtEdit already removed item at index ${this.index}.`,
-          );
-        }
-        if (prior.index < this.index) {
-          return new ListRemoveAtEdit(this.target, this.index - 1);
-        }
-        return this;
-      }
-      // Prior is also non-strict positive.
-      if (prior.index < this.index) {
-        return new ListRemoveAtEdit(this.target, this.index - 1);
-      }
-      if (prior.index === this.index) {
+      if (priorAbsIndex === thisAbsIndex) {
         return new NoOpEdit(
           this.target,
-          `ListRemoveAtEdit already removed item at index ${this.index}.`,
+          `ListRemoveAtEdit already removed item at index ${thisAbsIndex}.`,
         );
+      }
+      // priorAbsIndex > thisAbsIndex — no shift needed.
+      if (this.index < 0) {
+        return new ListRemoveAtEdit(this.target, thisAbsIndex);
       }
       return this;
     }
+
     if (
       prior instanceof ListInsertAtEdit &&
       prior.target.equals(this.target)
     ) {
-      if (prior.index < 0) {
-        // Prior is negative (end-relative) — doesn't affect existing indices.
-        return this;
+      const priorAbsIndex = prior.resolveAbsoluteIndex();
+      if (priorAbsIndex <= thisAbsIndex) {
+        return new ListRemoveAtEdit(this.target, thisAbsIndex + 1);
       }
-      if (prior.strict && prior.index === 0) {
-        return new ListRemoveAtEdit(this.target, this.index + 1);
-      }
-      if (prior.strict) {
-        // Strict positive (non-zero).
-        if (prior.index <= this.index) {
-          return new ListRemoveAtEdit(this.target, this.index + 1);
-        }
-        return this;
-      }
-      if (prior.index <= this.index) {
-        return new ListRemoveAtEdit(this.target, this.index + 1);
+      if (this.index < 0) {
+        return new ListRemoveAtEdit(this.target, thisAbsIndex);
       }
       return this;
     }
+
     return super.transform(prior);
   }
 
   override transformLaterConcurrentEdit(concurrent: Edit): Edit {
-    if (this.index < 0) {
-      // Negative index: end-relative. We can't shift concurrent edits
-      // because we don't know the resolved position yet. The resolved
-      // copy stored in `applied` will handle downstream OT.
-      return super.transformLaterConcurrentEdit(concurrent);
-    }
+    const thisAbsIndex = this.resolveAbsoluteIndex();
 
-    if (this.strict && this.index === 0) {
-      // Strict front remove at index 0: shift concurrent indexed edits.
-      if (
-        concurrent instanceof ListInsertAtEdit &&
-        !concurrent.strict &&
-        concurrent.index >= 0 &&
-        this.target.equals(concurrent.target)
-      ) {
-        if (concurrent.index > 0) {
-          return new ListInsertAtEdit(
-            concurrent.target,
-            concurrent.index - 1,
-            concurrent.node,
-          );
-        }
-        return concurrent;
-      }
-      if (
-        concurrent instanceof ListRemoveAtEdit &&
-        !concurrent.strict &&
-        concurrent.index >= 0 &&
-        this.target.equals(concurrent.target)
-      ) {
-        if (concurrent.index > 0) {
-          return new ListRemoveAtEdit(concurrent.target, concurrent.index - 1);
-        }
-        if (concurrent.index === 0) {
-          return new NoOpEdit(
-            concurrent.target,
-            `ListRemoveAtEdit already removed item at index 0.`,
-          );
-        }
-        return concurrent;
-      }
-      if (
-        concurrent instanceof ListReorderEdit &&
-        this.target.equals(concurrent.target)
-      ) {
-        if (concurrent.fromIndex === 0) {
-          return new NoOpEdit(
-            concurrent.target,
-            `ListRemoveAtEdit removed the item being reordered at index 0.`,
-          );
-        }
-        const newFrom = concurrent.fromIndex > 0
-          ? concurrent.fromIndex - 1
-          : concurrent.fromIndex;
-        const newTo = concurrent.toIndex > 0
-          ? concurrent.toIndex - 1
-          : concurrent.toIndex;
-        if (newFrom === concurrent.fromIndex && newTo === concurrent.toIndex) {
-          return super.transformLaterConcurrentEdit(concurrent);
-        }
-        return new ListReorderEdit(concurrent.target, newFrom, newTo);
-      }
-      return super.transformLaterConcurrentEdit(concurrent);
-    }
-
-    if (this.strict) {
-      // Strict positive non-zero: similar to non-strict but from a fixed position.
-      if (
-        concurrent instanceof ListInsertAtEdit &&
-        !concurrent.strict &&
-        concurrent.index >= 0 &&
-        this.target.equals(concurrent.target)
-      ) {
-        if (concurrent.index > this.index) {
-          return new ListInsertAtEdit(
-            concurrent.target,
-            concurrent.index - 1,
-            concurrent.node,
-          );
-        }
-        return concurrent;
-      }
-      if (
-        concurrent instanceof ListRemoveAtEdit &&
-        !concurrent.strict &&
-        concurrent.index >= 0 &&
-        this.target.equals(concurrent.target)
-      ) {
-        if (concurrent.index > this.index) {
-          return new ListRemoveAtEdit(concurrent.target, concurrent.index - 1);
-        }
-        if (concurrent.index === this.index) {
-          return new NoOpEdit(
-            concurrent.target,
-            `ListRemoveAtEdit already removed item at index ${this.index}.`,
-          );
-        }
-        return concurrent;
-      }
-      if (
-        concurrent instanceof ListReorderEdit &&
-        this.target.equals(concurrent.target)
-      ) {
-        if (concurrent.fromIndex === this.index) {
-          return new NoOpEdit(
-            concurrent.target,
-            `ListRemoveAtEdit removed the item being reordered at index ${this.index}.`,
-          );
-        }
-        const newFrom = concurrent.fromIndex > this.index
-          ? concurrent.fromIndex - 1
-          : concurrent.fromIndex;
-        const newTo = concurrent.toIndex > this.index
-          ? concurrent.toIndex - 1
-          : concurrent.toIndex;
-        if (newFrom === concurrent.fromIndex && newTo === concurrent.toIndex) {
-          return super.transformLaterConcurrentEdit(concurrent);
-        }
-        return new ListReorderEdit(concurrent.target, newFrom, newTo);
-      }
-      return super.transformLaterConcurrentEdit(concurrent);
-    }
-
-    // Non-strict positive indexed remove — original logic.
+    // ── Shift non-strict concurrent ListInsertAtEdit ───────────────
     if (
       concurrent instanceof ListInsertAtEdit &&
       !concurrent.strict &&
-      concurrent.index >= 0 &&
       this.target.equals(concurrent.target)
     ) {
-      if (concurrent.index > this.index) {
+      const concAbsIndex = concurrent.resolveAbsoluteIndex();
+      if (concAbsIndex > thisAbsIndex) {
         return new ListInsertAtEdit(
           concurrent.target,
-          concurrent.index - 1,
+          concAbsIndex - 1,
+          concurrent.node,
+        );
+      }
+      if (concurrent.index < 0) {
+        return new ListInsertAtEdit(
+          concurrent.target,
+          concAbsIndex,
           concurrent.node,
         );
       }
       return concurrent;
     }
+
+    // ── Shift non-strict concurrent ListRemoveAtEdit ──────────────
     if (
       concurrent instanceof ListRemoveAtEdit &&
       !concurrent.strict &&
-      concurrent.index >= 0 &&
       this.target.equals(concurrent.target)
     ) {
-      if (concurrent.index > this.index) {
-        return new ListRemoveAtEdit(concurrent.target, concurrent.index - 1);
+      const concAbsIndex = concurrent.resolveAbsoluteIndex();
+      if (concAbsIndex > thisAbsIndex) {
+        return new ListRemoveAtEdit(concurrent.target, concAbsIndex - 1);
       }
-      if (concurrent.index === this.index) {
+      if (concAbsIndex === thisAbsIndex) {
         return new NoOpEdit(
           concurrent.target,
-          `ListRemoveAtEdit already removed item at index ${this.index}.`,
+          `ListRemoveAtEdit already removed item at index ${thisAbsIndex}.`,
         );
+      }
+      if (concurrent.index < 0) {
+        return new ListRemoveAtEdit(concurrent.target, concAbsIndex);
       }
       return concurrent;
     }
+
+    // ── Shift concurrent ListReorderEdit ──────────────────────────
     if (
       concurrent instanceof ListReorderEdit &&
       this.target.equals(concurrent.target)
     ) {
-      if (concurrent.fromIndex === this.index) {
+      if (concurrent.fromIndex === thisAbsIndex) {
         return new NoOpEdit(
           concurrent.target,
-          `ListRemoveAtEdit removed the item being reordered at index ${this.index}.`,
+          `ListRemoveAtEdit removed the item being reordered at index ${thisAbsIndex}.`,
         );
       }
-      const newFrom = concurrent.fromIndex > this.index
+      const newFrom = concurrent.fromIndex > thisAbsIndex
         ? concurrent.fromIndex - 1
         : concurrent.fromIndex;
-      const newTo = concurrent.toIndex > this.index
+      const newTo = concurrent.toIndex > thisAbsIndex
         ? concurrent.toIndex - 1
         : concurrent.toIndex;
       if (newFrom === concurrent.fromIndex && newTo === concurrent.toIndex) {
@@ -1002,41 +814,27 @@ export class ListRemoveAtEdit extends NoOpOnRemovedTargetEdit {
       }
       return new ListReorderEdit(concurrent.target, newFrom, newTo);
     }
+
     return super.transformLaterConcurrentEdit(concurrent);
   }
 
   computeInverse(preDoc: Node): Edit {
     const nodes = this.navigateOrThrow(preDoc, this.target);
     const list = this.assertList(nodes[0]!);
-    if (this.index < 0) {
-      const resolved = this.resolveIndex(list);
-      return new ListInsertAtEdit(
-        this.target,
-        this.index,
-        list.items[resolved]!.clone(),
-        true,
-      );
-    }
-    if (this.strict && this.index === 0) {
-      return new ListInsertAtEdit(
-        this.target,
-        0,
-        list.items[0]!.clone(),
-        true,
-      );
-    }
+    const absIndex = this.resolveIndex(list);
     if (this.strict) {
       return new ListInsertAtEdit(
         this.target,
         this.index,
-        list.items[this.index]!.clone(),
+        list.items[absIndex]!.clone(),
         true,
+        this.listLength,
       );
     }
     return new ListInsertAtEdit(
       this.target,
-      this.index,
-      list.items[this.index]!.clone(),
+      absIndex,
+      list.items[absIndex]!.clone(),
     );
   }
 
@@ -1044,11 +842,17 @@ export class ListRemoveAtEdit extends NoOpOnRemovedTargetEdit {
     return other instanceof ListRemoveAtEdit &&
       this.target.equals(other.target) &&
       this.index === other.index &&
-      this.strict === other.strict;
+      this.strict === other.strict &&
+      this.listLength === other.listLength;
   }
 
   withTarget(target: Selector): ListRemoveAtEdit {
-    return new ListRemoveAtEdit(target, this.index, this.strict);
+    return new ListRemoveAtEdit(
+      target,
+      this.index,
+      this.strict,
+      this.listLength,
+    );
   }
 
   encodeRemoteEdit(): EncodedListRemoveAtEdit {
@@ -1059,6 +863,9 @@ export class ListRemoveAtEdit extends NoOpOnRemovedTargetEdit {
     };
     if (this.strict) {
       (encoded as Record<string, unknown>).strict = true;
+    }
+    if (this.listLength !== 0) {
+      (encoded as Record<string, unknown>).listLength = this.listLength;
     }
     return encoded;
   }
@@ -1087,6 +894,7 @@ registerRemoteEditDecoder<EncodedListRemoveAtEdit>(
       Selector.parse(encodedEdit.target),
       encodedEdit.index,
       raw.strict === true,
+      typeof raw.listLength === "number" ? raw.listLength : 0,
     );
   },
 );
@@ -1183,35 +991,11 @@ export class ListReorderEdit extends NoOpOnRemovedTargetEdit {
       prior instanceof ListInsertAtEdit &&
       prior.target.equals(this.target)
     ) {
-      if (prior.index < 0) {
-        // Negative (end-relative) insert — doesn't affect existing indices.
-        return super.transform(prior);
-      }
-      if (prior.strict && prior.index === 0) {
-        // Strict front insert always inserts at 0, shifts everything +1.
-        return new ListReorderEdit(
-          this.target,
-          this.fromIndex + 1,
-          this.toIndex + 1,
-        );
-      }
-      if (prior.strict) {
-        // Strict positive (non-zero).
-        const newFrom = this.fromIndex >= prior.index
-          ? this.fromIndex + 1
-          : this.fromIndex;
-        const newTo = this.toIndex >= prior.index
-          ? this.toIndex + 1
-          : this.toIndex;
-        if (newFrom === this.fromIndex && newTo === this.toIndex) {
-          return super.transform(prior);
-        }
-        return new ListReorderEdit(this.target, newFrom, newTo);
-      }
-      const newFrom = this.fromIndex >= prior.index
+      const priorAbsIndex = prior.resolveAbsoluteIndex();
+      const newFrom = this.fromIndex >= priorAbsIndex
         ? this.fromIndex + 1
         : this.fromIndex;
-      const newTo = this.toIndex >= prior.index
+      const newTo = this.toIndex >= priorAbsIndex
         ? this.toIndex + 1
         : this.toIndex;
       if (newFrom === this.fromIndex && newTo === this.toIndex) {
@@ -1223,53 +1007,17 @@ export class ListReorderEdit extends NoOpOnRemovedTargetEdit {
       prior instanceof ListRemoveAtEdit &&
       prior.target.equals(this.target)
     ) {
-      if (prior.index < 0) {
-        // Negative (end-relative) remove — doesn't affect existing indices.
-        return super.transform(prior);
-      }
-      if (prior.strict && prior.index === 0) {
-        // Strict front remove always removes index 0.
-        if (this.fromIndex === 0) {
-          return new NoOpEdit(
-            this.target,
-            `strict ListRemoveAtEdit removed the item being reordered at index 0.`,
-          );
-        }
-        return new ListReorderEdit(
-          this.target,
-          this.fromIndex - 1,
-          this.toIndex > 0 ? this.toIndex - 1 : this.toIndex,
-        );
-      }
-      if (prior.strict) {
-        // Strict positive (non-zero).
-        if (prior.index === this.fromIndex) {
-          return new NoOpEdit(
-            this.target,
-            `strict ListRemoveAtEdit removed the item being reordered at index ${this.fromIndex}.`,
-          );
-        }
-        const newFrom = this.fromIndex > prior.index
-          ? this.fromIndex - 1
-          : this.fromIndex;
-        const newTo = this.toIndex > prior.index
-          ? this.toIndex - 1
-          : this.toIndex;
-        if (newFrom === this.fromIndex && newTo === this.toIndex) {
-          return super.transform(prior);
-        }
-        return new ListReorderEdit(this.target, newFrom, newTo);
-      }
-      if (prior.index === this.fromIndex) {
+      const priorAbsIndex = prior.resolveAbsoluteIndex();
+      if (priorAbsIndex === this.fromIndex) {
         return new NoOpEdit(
           this.target,
           `ListRemoveAtEdit removed the item being reordered at index ${this.fromIndex}.`,
         );
       }
-      const newFrom = this.fromIndex > prior.index
+      const newFrom = this.fromIndex > priorAbsIndex
         ? this.fromIndex - 1
         : this.fromIndex;
-      const newTo = this.toIndex > prior.index
+      const newTo = this.toIndex > priorAbsIndex
         ? this.toIndex - 1
         : this.toIndex;
       if (newFrom === this.fromIndex && newTo === this.toIndex) {

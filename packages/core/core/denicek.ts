@@ -380,12 +380,23 @@ export class Denicek {
     value: PlainNode,
     strict?: boolean,
   ): string {
+    const sel = Selector.parse(target);
+    let listLength = 0;
+    if (index < 0) {
+      const doc = this.cachedDoc ?? this.rematerialize();
+      this.cachedDoc = doc;
+      const lists = doc.navigate(sel);
+      if (lists.length > 0 && lists[0] instanceof ListNode) {
+        listLength = lists[0].items.length;
+      }
+    }
     return this.commit(
       new ListInsertAtEdit(
-        Selector.parse(target),
+        sel,
         index,
         Node.fromPlain(value),
         strict,
+        listLength,
       ),
     );
   }
@@ -399,8 +410,18 @@ export class Denicek {
    * Returns the formatted id (`${peer}:${seq}`) of the recorded local event.
    */
   remove(target: string, index: number, strict?: boolean): string {
+    const sel = Selector.parse(target);
+    let listLength = 0;
+    if (index < 0) {
+      const doc = this.cachedDoc ?? this.rematerialize();
+      this.cachedDoc = doc;
+      const lists = doc.navigate(sel);
+      if (lists.length > 0 && lists[0] instanceof ListNode) {
+        listLength = lists[0].items.length;
+      }
+    }
     return this.commit(
-      new ListRemoveAtEdit(Selector.parse(target), index, strict),
+      new ListRemoveAtEdit(sel, index, strict, listLength),
     );
   }
 
