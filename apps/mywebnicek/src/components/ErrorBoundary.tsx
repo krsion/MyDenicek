@@ -82,6 +82,7 @@ export class ErrorBoundary extends Component<Props, State> {
               )}
             </div>
             <button
+              type="button"
               style={{
                 padding: "8px 16px",
                 background: "#0078d4",
