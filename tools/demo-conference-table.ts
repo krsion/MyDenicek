@@ -2,14 +2,17 @@
  * Conference Table Demo — Playwright automation script
  *
  * Run: node tools/demo-conference-table.ts [url]
- * Default URL: http://localhost:5173/mydenicek/
+ *
+ * Press ENTER in the terminal to advance between phases.
+ * This lets you explain each step to the audience.
  */
 
 const { chromium } = require("playwright");
+const readline = require("readline");
 
 const APP_URL = process.argv[2] || "http://localhost:5173/mydenicek/";
 const SLOW = 60;
-const PAUSE = 1500;
+const PAUSE = 1200;
 
 const CURSOR_CSS = `
   * { cursor: none !important; }
@@ -36,6 +39,14 @@ const CURSOR_JS = `
   });
 `;
 
+const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+
+function waitForEnter(prompt) {
+  return new Promise(resolve => {
+    rl.question(`\n⏸️  ${prompt} — press ENTER to continue...`, () => resolve());
+  });
+}
+
 async function injectCursor(page) {
   await page.addStyleTag({ content: CURSOR_CSS });
   await page.addScriptTag({ content: CURSOR_JS });
@@ -53,13 +64,11 @@ async function typeCommand(page, command) {
 }
 
 async function setInputField(page, newValue) {
-  // Find the Conference List input by looking near the "Add" button
   const input = page.locator('section').filter({ hasText: 'Conference List' }).locator('input').first();
-  await input.click({ clickCount: 3 }); // triple-click to select all
+  await input.click({ clickCount: 3 });
   await page.waitForTimeout(200);
   await input.type(newValue, { delay: SLOW });
   await page.waitForTimeout(200);
-  // Blur to commit the value
   await page.locator('body').click({ position: { x: 10, y: 10 } });
   await page.waitForTimeout(800);
 }
@@ -78,10 +87,11 @@ async function screenshot(page, name) {
   const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } });
   const page = await ctx.newPage();
 
-  console.log("🚀 Conference Table Demo\n");
+  console.log("🚀 Conference Table Demo");
+  console.log("   Press ENTER to advance between phases.\n");
 
   // ── Phase 1: Create document ────────────────────────────────────
-  console.log("Phase 1: Create document from template");
+  await waitForEnter("Phase 1: Create document from Formative Examples template");
   await page.goto(APP_URL);
   await page.waitForTimeout(2000);
   await injectCursor(page);
@@ -91,32 +101,41 @@ async function screenshot(page, name) {
   await screenshot(page, "01-initial-list");
 
   // ── Phase 2: Refactor list → table ──────────────────────────────
-  console.log("\nPhase 2: Refactor list → table with formulas");
+  await waitForEnter("Phase 2: Refactor the flat <ul> list into a <table>");
 
-  console.log("  updateTag ul → table");
+  console.log("  Step 1: Change <ul> tag to <table>");
   await typeCommand(page, "/conferenceList/items updateTag table");
   await screenshot(page, "02-tag-table");
 
-  console.log("  updateTag li → td");
+  console.log("  Step 2: Change <li> items to <td>");
   await typeCommand(page, "/conferenceList/items/* updateTag td");
   await screenshot(page, "03-tag-td");
 
-  console.log("  wrapList td → tr[td]");
+  console.log("  Step 3: Wrap each <td> in a <tr> row");
   await typeCommand(page, "/conferenceList/items/* wrapList tr");
   await screenshot(page, "04-wrap-tr");
 
-  console.log("  wrapRecord text → split-first formula");
+  await waitForEnter("Phase 2b: Add formula columns (split name and email)");
+
+  console.log("  Step 4: Wrap the text field in a split-first formula (extracts name)");
   await typeCommand(page, "/conferenceList/items/*/0/text wrapRecord source split-first");
   await screenshot(page, "05-split-first");
 
-  console.log("  insert email column with split-rest");
-  await typeCommand(
-    page,
-    '/conferenceList/items/* insert -1 {"$tag":"td","email":{"$tag":"split-rest","source":{"$ref":"../../../0/text/source"}}}',
-  );
-  await screenshot(page, "06-table-done");
+  console.log("  Step 5: Add an empty email <td> to each row");
+  await typeCommand(page, '/conferenceList/items/* insert -1 {"$tag":"td"}');
+  await screenshot(page, "06-add-empty-td");
+
+  console.log("  Step 6: Add split-rest formula to the email cell");
+  await typeCommand(page, "/conferenceList/items/*/1 add email {\"$tag\":\"split-rest\"}");
+  await screenshot(page, "07-add-split-rest");
+
+  console.log("  Step 7: Add $ref source pointing to the name cell's original string");
+  await typeCommand(page, '/conferenceList/items/*/1/email add source {"$ref":"../../../0/text/source"}');
+  await screenshot(page, "08-add-ref");
 
   // ── Phase 3: Add speakers using the button AFTER refactoring ────
+  await waitForEnter("Phase 3: Use the 'Add' button — it was recorded against the flat list!");
+
   const speakers = [
     "Katherine Johnson, katherine@nasa.gov",
     "Margaret Hamilton, margaret@mit.edu",
@@ -127,24 +146,20 @@ async function screenshot(page, name) {
 
   for (let i = 0; i < speakers.length; i++) {
     const name = speakers[i].split(",")[0];
-    console.log(`\n🎯 Phase 3.${i + 1}: Adding "${name}"`);
-
-    // Click the input field, clear it, type the new speaker name
+    console.log(`  🎯 Adding "${name}"...`);
     await setInputField(page, speakers[i]);
-
-    // Click the Add button
     if (await addBtn.isVisible()) {
       await addBtn.click();
       await page.waitForTimeout(PAUSE * 2);
     }
-    await screenshot(page, `${7 + i}-add-${name.split(" ")[1].toLowerCase()}`);
+    await screenshot(page, `${9 + i}-add-${name.split(" ")[1].toLowerCase()}`);
   }
 
   // ── Final ───────────────────────────────────────────────────────
-  console.log("\nPhase 4: Final state — 5 speakers in the table");
-  await screenshot(page, "10-final");
+  await waitForEnter("Done! The button recorded against a flat list works on the table");
+  await screenshot(page, "12-final");
 
   console.log("\n✅ Demo complete! Screenshots in demo-screenshots/");
-  await page.waitForTimeout(3000);
+  rl.close();
   await browser.close();
-})().catch(e => { console.error("❌ Demo failed:", e.message); process.exit(1); });
+})().catch(e => { console.error("❌ Demo failed:", e.message); rl.close(); process.exit(1); });
