@@ -97,17 +97,32 @@ async function screenshot(page, name) {
   await typeCommand(page, "/conferenceList/items/0/1/email get");
   await screenshot(page, "10-email-result");
 
-  // ── THE DEMO: Click Add AGAIN after refactoring ─────────────────
-  console.log("\n🎯 Phase 5: Click 'Add' AGAIN — button was recorded against flat list!");
-  if (await addBtn.isVisible()) {
-    await addBtn.click();
-    await page.waitForTimeout(PAUSE * 2);
-  }
-  await screenshot(page, "11-button-after-refactor");
+  // ── THE DEMO: Add speakers AFTER refactoring ─────────────────────
+  // The button was recorded against a flat <ul>/<li> list.
+  // After 5 structural edits turned it into a <table> with formulas,
+  // the button STILL WORKS — producing correct table rows.
 
-  console.log("\nPhase 6: Final state");
+  const speakers = [
+    "Katherine Johnson, katherine@nasa.gov",
+    "Margaret Hamilton, margaret@mit.edu",
+    "Grace Hopper, grace@navy.mil",
+  ];
+
+  for (let i = 0; i < speakers.length; i++) {
+    console.log(`\n🎯 Phase 5.${i + 1}: Adding "${speakers[i].split(",")[0]}" via the button`);
+    // Change the input field to a new speaker
+    await typeCommand(page, `/conferenceList/composer/input/value set ${speakers[i]}`);
+    // Click Add — the button replays its recorded edits, retargeted through the refactoring
+    if (await addBtn.isVisible()) {
+      await addBtn.click();
+      await page.waitForTimeout(PAUSE * 2);
+    }
+    await screenshot(page, `${11 + i}-add-${speakers[i].split(",")[0].split(" ")[1].toLowerCase()}`);
+  }
+
+  console.log("\nPhase 6: Final state — 5 speakers in the table, all with formulas");
   await typeCommand(page, "/conferenceList/items tree");
-  await screenshot(page, "12-final-tree");
+  await screenshot(page, "14-final-tree");
 
   console.log("\n✅ Demo complete! Screenshots in demo-screenshots/");
   await page.waitForTimeout(3000);
