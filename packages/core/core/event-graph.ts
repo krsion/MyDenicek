@@ -191,7 +191,7 @@ export class EventGraph {
           );
         }
         replayEdit = edit;
-      } else if (replayEdit !== null && edit.isStructural) {
+      } else if (replayEdit !== null && (edit.isStructural || edit.target.hasWildcard)) {
         replayTransformationCount++;
         if (replayTransformationCount > this.maxReplayTransformations) {
           throw new Error(
