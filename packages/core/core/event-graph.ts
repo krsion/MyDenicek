@@ -578,7 +578,22 @@ export class EventGraph {
 
       applied.push({ ev, edit: finalEdit });
       if (!(finalEdit instanceof NoOpEdit)) {
-        finalEdit.apply(doc);
+        if (
+          (finalEdit instanceof ListInsertAtEdit ||
+            finalEdit instanceof ListRemoveAtEdit) &&
+          !finalEdit.canApply(doc)
+        ) {
+          // Strict edit index became invalid after concurrent modifications.
+          applied[applied.length - 1] = {
+            ev,
+            edit: new NoOpEdit(
+              finalEdit.target,
+              `Strict edit at stale index is no longer applicable.`,
+            ),
+          };
+        } else {
+          finalEdit.apply(doc);
+        }
       }
     }
 
@@ -672,7 +687,21 @@ export class EventGraph {
       }
       oracleApplied.push({ ev, edit: finalEdit });
       if (!(finalEdit instanceof NoOpEdit)) {
-        finalEdit.apply(oracleDoc);
+        if (
+          (finalEdit instanceof ListInsertAtEdit ||
+            finalEdit instanceof ListRemoveAtEdit) &&
+          !finalEdit.canApply(oracleDoc)
+        ) {
+          oracleApplied[oracleApplied.length - 1] = {
+            ev,
+            edit: new NoOpEdit(
+              finalEdit.target,
+              `Strict edit at stale index is no longer applicable.`,
+            ),
+          };
+        } else {
+          finalEdit.apply(oracleDoc);
+        }
       }
     }
     const checkpointPlain = JSON.stringify(checkpointDoc.toPlain());
@@ -731,6 +760,26 @@ export class EventGraph {
         if (lists.length > 0 && lists[0] instanceof ListNode) {
           finalEdit = edit.withResolvedIndex(lists[0].items.length);
         }
+      }
+      if (
+        (finalEdit instanceof ListInsertAtEdit ||
+          finalEdit instanceof ListRemoveAtEdit) &&
+        !finalEdit.canApply(doc)
+      ) {
+        conflicts.push(
+          new NoOpEdit(
+            finalEdit.target,
+            `Strict edit at stale index is no longer applicable.`,
+          ).toConflict(),
+        );
+        applied.push({
+          ev,
+          edit: new NoOpEdit(
+            finalEdit.target,
+            `Strict edit at stale index is no longer applicable.`,
+          ),
+        });
+        continue;
       }
       finalEdit.apply(doc);
       applied.push({ ev, edit: finalEdit });
