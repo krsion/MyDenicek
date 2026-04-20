@@ -244,6 +244,10 @@ export class ListInsertAtEdit extends ListInsertEdit {
   }
 
   transformSelector(sel: Selector): SelectorTransform {
+    if (this.strict && this.index === -1) {
+      // Strict append: doesn't shift existing indices.
+      return mapSelector(sel);
+    }
     const absIndex = this.resolveAbsoluteIndex();
     return this.target.shiftIndex(sel, absIndex, +1);
   }
@@ -256,6 +260,31 @@ export class ListInsertAtEdit extends ListInsertEdit {
   }
 
   override transformLaterConcurrentEdit(concurrent: Edit): Edit {
+    // Strict append (-1): don't shift concurrent indices, only rewrite
+    // concurrent insert payloads that construct our target list.
+    if (this.strict && this.index === -1) {
+      if (!(concurrent instanceof ListInsertEdit)) {
+        return super.transformLaterConcurrentEdit(concurrent);
+      }
+      const rewritten = concurrent.rewriteInsertedNode(
+        this.target,
+        (transformedNode, relativeTarget) => {
+          if (
+            relativeTarget.length !== 0 ||
+            !(transformedNode instanceof ListNode)
+          ) {
+            return null;
+          }
+          transformedNode.pushBack(this.node.clone());
+          return transformedNode;
+        },
+      );
+      if (rewritten === null) {
+        return super.transformLaterConcurrentEdit(concurrent);
+      }
+      return rewritten;
+    }
+
     const thisAbsIndex = this.resolveAbsoluteIndex();
 
     // ── Shift non-strict concurrent ListInsertAtEdit ───────────────
@@ -674,6 +703,11 @@ export class ListRemoveAtEdit extends NoOpOnRemovedTargetEdit {
   }
 
   transformSelector(sel: Selector): SelectorTransform {
+    if (this.strict && this.index === -1) {
+      // Strict remove-last: can't determine which index is last without
+      // current list state. Identity — doesn't shift existing indices.
+      return mapSelector(sel);
+    }
     const absIndex = this.resolveAbsoluteIndex();
     const m = this.target.matchPrefix(sel);
     if (
@@ -744,6 +778,11 @@ export class ListRemoveAtEdit extends NoOpOnRemovedTargetEdit {
   }
 
   override transformLaterConcurrentEdit(concurrent: Edit): Edit {
+    // Strict remove-last (-1): doesn't shift concurrent indices.
+    if (this.strict && this.index === -1) {
+      return super.transformLaterConcurrentEdit(concurrent);
+    }
+
     const thisAbsIndex = this.resolveAbsoluteIndex();
 
     // ── Shift non-strict concurrent ListInsertAtEdit ───────────────
