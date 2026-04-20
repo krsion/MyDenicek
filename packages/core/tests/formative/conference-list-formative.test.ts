@@ -192,3 +192,89 @@ Deno.test("Formative: Conference Table", () => {
 
   assertEquals(alice.toPlain(), bob.toPlain());
 });
+
+// ── Button replay after table refactoring ────────────────────────────
+// The "Add Speaker" button was recorded against a flat <ul> list.
+// After the list is refactored into a <table> with formula columns,
+// clicking the button still works: repeatEditsFrom retargets each
+// recorded step through every structural edit that happened after
+// recording. This is sequential, not concurrent — all refactoring
+// completes before the button is used.
+
+Deno.test("Formative: Button replay after table refactoring", () => {
+  const initialDocument = {
+    $tag: "app",
+    controls: {
+      $tag: "toolbar",
+      input: {
+        $tag: "input",
+        value: "",
+      },
+      addSpeakerFromInput: {
+        $tag: "button",
+        steps: { $tag: "event-steps", $items: [] },
+      },
+    },
+    speakers: {
+      $tag: "ul",
+      $items: [
+        { $tag: "li", contact: "Ada Lovelace, ada@example.com" },
+        { $tag: "li", contact: "Grace Hopper, grace@example.com" },
+      ],
+    },
+  };
+  const alice = new Denicek("alice", initialDocument);
+
+  // Record the "add speaker" recipe (list phase)
+  const insertId = alice.insert(
+    "speakers",
+    -1,
+    { $tag: "li", contact: "" },
+    true,
+  );
+  const copyId = alice.copy("speakers/!2/contact", "controls/input/value");
+  alice.insert("controls/addSpeakerFromInput/steps", -1, {
+    $tag: "replay-step",
+    eventId: insertId,
+  }, true);
+  alice.insert("controls/addSpeakerFromInput/steps", -1, {
+    $tag: "replay-step",
+    eventId: copyId,
+  }, true);
+  alice.remove("speakers", -1, true);
+
+  // Refactor list → table (same structural edits as Conference Table)
+  alice.updateTag("speakers", "table");
+  alice.updateTag("speakers/*", "td");
+  alice.wrapList("speakers/*", "tr");
+  alice.wrapRecord("speakers/*/0/contact", "source", "split-first");
+  alice.insert("speakers/*", -1, {
+    $tag: "td",
+    email: {
+      $tag: "split-rest",
+      source: { $ref: "../../../0/contact/source" },
+    },
+  }, true);
+
+  // Use the button AFTER the refactor — sequential, not concurrent.
+  // The recorded edits were for a flat list, but repeatEditsFrom
+  // retargets them through the structural changes.
+  alice.set("controls/input/value", "Margaret Hamilton, margaret@example.com");
+  alice.repeatEditsFrom("controls/addSpeakerFromInput/steps");
+
+  // Verify: 3 rows in the table, all with correct formulas
+  const doc = alice.toPlain() as TableDocument;
+  assertEquals(doc.speakers.$items.length, 3);
+
+  const results = evaluateAllFormulas(doc);
+
+  // Original rows
+  assertEquals(results.get("speakers/0/0/contact"), "Ada Lovelace");
+  assertEquals(results.get("speakers/0/1/email"), "ada@example.com");
+  assertEquals(results.get("speakers/1/0/contact"), "Grace Hopper");
+  assertEquals(results.get("speakers/1/1/email"), "grace@example.com");
+
+  // New row added by the retargeted button replay
+  assertEquals(results.get("speakers/2/0/contact"), "Margaret Hamilton");
+  assertEquals(results.get("speakers/2/1/email"), "margaret@example.com");
+});
