@@ -121,12 +121,17 @@ async function screenshot(page, name) {
   await typeCommand(page, "/conferenceList/items/*/0/text wrapRecord source split-first");
   await screenshot(page, "05-split-first");
 
-  console.log("  Step 5: Add email column with split-rest formula referencing the name source");
-  await typeCommand(
-    page,
-    '/conferenceList/items/* insert -1 {"$tag":"td","email":{"$tag":"split-rest","source":{"$ref":"../../../0/text/source"}}}',
-  );
-  await screenshot(page, "06-email-column");
+  console.log("  Step 5: Add an empty email <td> to each row");
+  await typeCommand(page, '/conferenceList/items/* insert -1 {"$tag":"td"}');
+  await screenshot(page, "06-empty-td");
+
+  console.log("  Step 6: Add split-rest formula to the email cell");
+  await typeCommand(page, '/conferenceList/items/*/1 add email {"$tag":"split-rest"}');
+  await screenshot(page, "07-split-rest");
+
+  console.log("  Step 7: Add $ref source pointing to the original contact string");
+  await typeCommand(page, '/conferenceList/items/*/1/email add source {"$ref":"../../../0/text/source"}');
+  await screenshot(page, "08-ref-source");
 
   // ── Phase 3: Add speakers using the button AFTER refactoring ────
   await waitForEnter("Phase 3: Use the 'Add' button — it was recorded against the flat list!");
@@ -147,12 +152,12 @@ async function screenshot(page, name) {
       await addBtn.click();
       await page.waitForTimeout(PAUSE * 2);
     }
-    await screenshot(page, `${7 + i}-add-${name.split(" ")[1].toLowerCase()}`);
+    await screenshot(page, `${9 + i}-add-${name.split(" ")[1].toLowerCase()}`);
   }
 
   // ── Final ───────────────────────────────────────────────────────
   await waitForEnter("Done! The button recorded against a flat list works on the table");
-  await screenshot(page, "10-final");
+  await screenshot(page, "12-final");
 
   console.log("\n✅ Demo complete! Screenshots in demo-screenshots/");
   rl.close();
