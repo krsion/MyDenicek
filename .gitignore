@@ -3,3 +3,4 @@ packages/core/npm-dist/
 
 .playwright-mcp/
 data/
+spec/
