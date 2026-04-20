@@ -225,7 +225,10 @@ Deno.test("Formative: Button replay after table refactoring", () => {
   };
   const alice = new Denicek("alice", initialDocument);
 
-  // Record the "add speaker" recipe (list phase)
+  // ── Phase 1: Record a button against the flat <ul> list ──────────
+  // The button recipe: append an <li> with empty contact, then copy
+  // the input value into it. This is what the button "knows" — it
+  // has no idea a table refactoring will happen later.
   const insertId = alice.insert(
     "speakers",
     -1,
@@ -243,12 +246,17 @@ Deno.test("Formative: Button replay after table refactoring", () => {
   }, true);
   alice.remove("speakers", -1, true);
 
-  // Refactor list → table (same structural edits as Conference Table)
-  alice.updateTag("speakers", "table");
-  alice.updateTag("speakers/*", "td");
-  alice.wrapList("speakers/*", "tr");
+  // Verify: the button recorded edits that target a flat list.
+  // insertId's edit: insert <li> into "speakers" (a <ul>)
+  // copyId's edit: copy into "speakers/!2/contact" (a string field on an <li>)
+
+  // ── Phase 2: Refactor list → table with formula columns ──────────
+  // 5 structural edits that completely change the document shape.
+  alice.updateTag("speakers", "table"); // <ul> → <table>
+  alice.updateTag("speakers/*", "td"); // <li> → <td>
+  alice.wrapList("speakers/*", "tr"); // <td> → <tr>[<td>]
   alice.wrapRecord("speakers/*/0/contact", "source", "split-first");
-  alice.insert("speakers/*", -1, {
+  alice.insert("speakers/*", -1, { // add email column
     $tag: "td",
     email: {
       $tag: "split-rest",
@@ -256,25 +264,69 @@ Deno.test("Formative: Button replay after table refactoring", () => {
     },
   }, true);
 
-  // Use the button AFTER the refactor — sequential, not concurrent.
-  // The recorded edits were for a flat list, but repeatEditsFrom
-  // retargets them through the structural changes.
-  alice.set("controls/input/value", "Margaret Hamilton, margaret@example.com");
+  // Verify: document is now a table. The button has NOT been updated —
+  // its steps still reference the original insertId and copyId.
+  const beforeReplay = alice.toPlain() as TableDocument;
+  assertEquals(beforeReplay.speakers.$tag, "table");
+  assertEquals(beforeReplay.speakers.$items.length, 2);
+  assertEquals(beforeReplay.speakers.$items[0].$tag, "tr");
+  assertEquals(beforeReplay.speakers.$items[0].$items.length, 2);
+  // The button still has the same two step IDs from phase 1:
+  assertEquals(
+    beforeReplay.controls.addSpeakerFromInput.steps.$items.length,
+    2,
+  );
+
+  // ── Phase 3: Click the button AFTER the refactor ─────────────────
+  // repeatEditsFrom retargets each recorded step through every
+  // structural edit that happened after recording. The <li> insert
+  // becomes a <tr> row insert; the contact copy gains extra path
+  // segments to reach through the split-first wrapper.
+  alice.set(
+    "controls/input/value",
+    "Margaret Hamilton, margaret@example.com",
+  );
   alice.repeatEditsFrom("controls/addSpeakerFromInput/steps");
 
-  // Verify: 3 rows in the table, all with correct formulas
+  // ── Verify: the button produced a complete table row ─────────────
   const doc = alice.toPlain() as TableDocument;
+
+  // 3 rows now (was 2 before the button click)
   assertEquals(doc.speakers.$items.length, 3);
 
+  // The new row is a proper <tr> with two <td> cells
+  const newRow = doc.speakers.$items[2];
+  assertEquals(newRow.$tag, "tr");
+  assertEquals(newRow.$items.length, 2);
+
+  // Cell 1: split-first formula wrapping the copied contact string
+  const nameCell = newRow.$items[0];
+  assertEquals(nameCell.$tag, "td");
+  assertEquals(nameCell.contact.$tag, "split-first");
+  assertEquals(
+    nameCell.contact.source,
+    "Margaret Hamilton, margaret@example.com",
+  );
+
+  // Cell 2: split-rest formula with a $ref to the source
+  const emailCell = newRow.$items[1];
+  assertEquals(emailCell.$tag, "td");
+  assertEquals(emailCell.email.$tag, "split-rest");
+
+  // Formula evaluation: the formulas produce correct results
   const results = evaluateAllFormulas(doc);
 
-  // Original rows
+  // Original rows still correct
   assertEquals(results.get("speakers/0/0/contact"), "Ada Lovelace");
   assertEquals(results.get("speakers/0/1/email"), "ada@example.com");
   assertEquals(results.get("speakers/1/0/contact"), "Grace Hopper");
   assertEquals(results.get("speakers/1/1/email"), "grace@example.com");
 
-  // New row added by the retargeted button replay
+  // NEW ROW — added by a button that was recorded against a flat list,
+  // replayed against a table, and produced correct formula cells:
   assertEquals(results.get("speakers/2/0/contact"), "Margaret Hamilton");
-  assertEquals(results.get("speakers/2/1/email"), "margaret@example.com");
+  assertEquals(
+    results.get("speakers/2/1/email"),
+    "margaret@example.com",
+  );
 });
