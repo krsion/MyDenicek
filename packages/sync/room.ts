@@ -42,7 +42,7 @@ export class SyncRoom {
    * ("From Causality to Stability", MPLR 2020). Tracks which events all
    * known peers have observed, enabling stability-based compaction decisions.
    */
-  readonly stability = new CausalStabilityTracker();
+  readonly stability: CausalStabilityTracker = new CausalStabilityTracker();
 
   /** Peers inactive longer than this are excluded from compaction consensus. */
   static readonly PEER_ACTIVITY_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
