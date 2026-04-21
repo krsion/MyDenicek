@@ -107,7 +107,7 @@ export class Denicek {
    */
   /**
    * Applies a validated local edit: Baquero's *prepare* (read state,
-   * create tagged operation) and *effect* (add to PO-Log) in one step.
+   * create tagged operation) and *effect* (`insertEvent`) in one step.
    * Returns the formatted event ID.
    */
   private commit(edit: Edit): string {

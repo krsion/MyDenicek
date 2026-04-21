@@ -216,34 +216,13 @@ export class EventGraph {
     return replayEdit;
   }
 
-  // ── Baquero pure op-based CRDT interface ────────────────────────────
-  // The following methods map directly to the API defined by Baquero
-  // et al. in "Pure Operation-Based Replicated Data Types" (2017):
-  //   prepare(params) → op       ≡  Denicek.add/insert/... → Edit
-  //   effect(state, op) → state' ≡  EventGraph.effect (= insertEvent)
-  //   eval(state) → value        ≡  EventGraph.eval (= materialize)
-  //
-  // The PO-Log is this.events (a grow-only Map<string, Event>).
-  // Unlike Baquero's framework, the PO-Log is never pruned: replay
-  // (programming by demonstration) references event IDs that must
-  // remain in the log indefinitely.
-
-  /**
-   * Baquero's *effect*: adds a tagged operation to the PO-Log.
-   * Equivalent to {@link insertEvent}.
-   */
-  effect(event: Event): void {
-    this.insertEvent(event);
-  }
-
-  /**
-   * Baquero's *eval*: computes the observable document from the PO-Log
-   * by deterministic topological replay with selector rewriting.
-   * Equivalent to {@link materialize}.
-   */
-  eval(): MaterializeResult {
-    return this.materialize();
-  }
+  // ── Pure op-based CRDT mapping (Baquero et al., 2017) ───────────────
+  // In Baquero's terminology:
+  //   prepare  ≡  Denicek.add/insert/... (read state, produce Edit)
+  //   effect   ≡  insertEvent (add tagged operation to PO-Log)
+  //   eval     ≡  materialize (deterministic topological replay)
+  // The PO-Log (this.events) is append-only: replay references event
+  // IDs that must remain in the DAG, so pruning is not possible.
 
   insertEvent(event: Event): void {
     event.validate(this.events);
