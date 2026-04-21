@@ -363,7 +363,7 @@ const TEMPLATES: Template[] = [
     initialDocument: INITIAL_DOCUMENT,
     initActions: initializeActions,
   },
-  { name: "Empty" },
+  { name: "Empty", initialDocument: { $tag: "root" } },
 ];
 
 interface DocTab {

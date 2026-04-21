@@ -3,6 +3,7 @@
   "specifiers": {
     "jsr:@std/data-structures@1": "1.0.10",
     "npm:@deno/vite-plugin@1": "1.0.6_vite@6.4.1",
+    "npm:@playwright/test@^1.59.1": "1.59.1",
     "npm:@types/react-dom@^18.3.1": "18.3.7_@types+react@18.3.28",
     "npm:@types/react@^18.3.12": "18.3.28",
     "npm:@vitejs/plugin-react@^4.3.0": "4.7.0_vite@6.4.1",
@@ -324,6 +325,13 @@
         "@jridgewell/resolve-uri",
         "@jridgewell/sourcemap-codec"
       ]
+    },
+    "@playwright/test@1.59.1": {
+      "integrity": "sha512-PG6q63nQg5c9rIi4/Z5lR5IVF7yU5MqmKaPOe0HSc0O2cX1fPi96sUQu5j7eo4gKCkB2AnNGoWt7y4/Xx3Kcqg==",
+      "dependencies": [
+        "playwright"
+      ],
+      "bin": true
     },
     "@rolldown/pluginutils@1.0.0-beta.27": {
       "integrity": "sha512-+d0F4MKMCbeVUJwG96uQ4SgAznZNSq93I3V+9NHA4OpvqG8mRCpGdKmK8l/dl02h2CCDHwW2FqilnTyDcAnqjA=="
@@ -1046,7 +1054,12 @@
           "npm:react-dom@^19.2.0",
           "npm:react@^19.2.0",
           "npm:vite@^6.3.5"
-        ]
+        ],
+        "packageJson": {
+          "dependencies": [
+            "npm:@playwright/test@^1.59.1"
+          ]
+        }
       },
       "apps/playground": {
         "dependencies": [

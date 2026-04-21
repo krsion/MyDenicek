@@ -13,6 +13,33 @@ test.describe("mydenicek E2E", () => {
     await expect(page.locator("h1").first()).toBeVisible({ timeout: 10_000 });
   });
 
+  test("empty template creates a room and connects", async ({ page }) => {
+    await page.goto("./");
+
+    // Click the "Empty" template button
+    await page.getByText("+ Empty").click();
+
+    // Should get a room hash in the URL
+    await expect(page).toHaveURL(/#.+/, { timeout: 5_000 });
+
+    // The raw document view should show the empty document (at least the root tag)
+    await expect(page.locator("text=root")).toBeVisible({ timeout: 10_000 });
+
+    // Should connect to sync server
+    await expect(page.getByText("connected")).toBeVisible({ timeout: 30_000 });
+
+    // Make an edit via the command bar
+    const input = page.getByPlaceholder("/path command");
+    await input.click();
+    await input.fill("/ add greeting hello");
+    await input.press("Enter");
+
+    // The edit should appear in the raw view
+    await expect(page.locator("text=greeting").first()).toBeVisible({
+      timeout: 5_000,
+    });
+  });
+
   test("two peers can sync edits via the server", async ({ browser }) => {
     // Alice creates a room from a template
     const aliceCtx = await browser.newContext();
