@@ -314,4 +314,13 @@ export class SyncRoom {
   listEncodedEvents(): EncodedEvent[] {
     return collectRemoteEventsSince(this.roomPeer, []).map(encodeEvent);
   }
+
+  /**
+   * Notify the room that a peer has disconnected. Removes the peer from
+   * the causal stability tracker so that a departed peer does not block
+   * stability detection for the remaining active peers.
+   */
+  peerDisconnected(peerId: string): void {
+    this.stability.removePeer(peerId);
+  }
 }
