@@ -286,8 +286,15 @@ export function createSyncServer(
 
   const server = Deno.serve({ port, hostname }, (request) => {
     const url = new URL(request.url);
+    const corsHeaders = {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, OPTIONS",
+    };
+    if (request.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: corsHeaders });
+    }
     if (request.method === "GET" && url.pathname === "/healthz") {
-      return new Response("ok");
+      return new Response("ok", { headers: corsHeaders });
     }
     if (request.method !== "GET" || url.pathname !== path) {
       return new Response("Not found", { status: 404 });
