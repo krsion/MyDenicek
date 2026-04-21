@@ -105,6 +105,11 @@ export class Denicek {
    * If this assumption is ever relaxed (e.g. Web Workers sharing a `Denicek`),
    * the cache must be protected by a lock or made immutable-snapshot-based.
    */
+  /**
+   * Applies a validated local edit: Baquero's *prepare* (read state,
+   * create tagged operation) and *effect* (add to PO-Log) in one step.
+   * Returns the formatted event ID.
+   */
   private commit(edit: Edit): string {
     const doc = this.cachedDoc ?? this.rematerialize();
     try {
