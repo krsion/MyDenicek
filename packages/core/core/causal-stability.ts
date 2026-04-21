@@ -67,33 +67,13 @@ export class CausalStabilityTracker {
    * R's known clock for the event's originating peer >= the event's seq number.
    */
   isCausallyStable(event: Event): boolean {
-    return this.isStable(event.id.peer, event.id.seq, event.id.format());
-  }
+    const eventKey = event.id.format();
+    if (this.stableEvents.has(eventKey)) return true;
 
-  /**
-   * Checks stability by peer ID and sequence number, without requiring
-   * a full Event object. Useful when working with RemoteEvent or encoded
-   * events in the sync layer.
-   */
-  isStableByPeerSeq(peer: string, seq: number): boolean {
-    return this.isStable(peer, seq, `${peer}:${seq}`);
-  }
+    const eventPeer = event.id.peer;
+    const eventSeq = event.id.seq;
 
-  /**
-   * Checks whether all events up to the given clock are causally stable.
-   * Returns true if every entry in the clock has been observed by all peers.
-   * This is the efficient check for "can we compact everything?"
-   */
-  isClockStable(clock: Record<string, number>): boolean {
-    if (this.remoteClocks.size === 0) return false;
-    for (const [peer, seq] of Object.entries(clock)) {
-      if (!this.isStable(peer, seq, `${peer}:${seq}`)) return false;
-    }
-    return true;
-  }
-
-  private isStable(eventPeer: string, eventSeq: number, key: string): boolean {
-    if (this.stableEvents.has(key)) return true;
+    // If no remote peers are known, nothing can be stable
     if (this.remoteClocks.size === 0) return false;
 
     for (const [_peerId, clockMap] of this.remoteClocks) {
@@ -101,7 +81,8 @@ export class CausalStabilityTracker {
       if (knownSeq < eventSeq) return false;
     }
 
-    this.stableEvents.add(key);
+    // All peers have observed this event
+    this.stableEvents.add(eventKey);
     return true;
   }
 

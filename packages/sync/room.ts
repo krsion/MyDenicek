@@ -263,41 +263,20 @@ export class SyncRoom {
   }
 
   /**
-   * Attempts to compact the room's event graph using causal stability.
+   * Attempts to compact the room's event graph.
    *
    * Compaction occurs only when:
-   * 1. The event count exceeds {@link MIN_EVENTS_FOR_COMPACTION}
-   * 2. All events in the room are causally stable (all known peers have
-   *    observed them), following Bauwens & Gonzalez Boix (MPLR 2020)
-   * 3. At least one peer is tracked by the stability tracker
-   *
-   * Falls back to the legacy frontier-based check when the stability
-   * tracker has no peers (e.g., during tests that don't call
-   * updateRemoteClock).
+   * 1. At least 2 active peers exist
+   * 2. All active peers have acknowledged the same frontier
+   * 3. The event count exceeds {@link MIN_EVENTS_FOR_COMPACTION}
    *
    * Returns true if compaction was performed.
    */
   tryCompact(now: number = Date.now()): boolean {
     if (this.eventCount < SyncRoom.MIN_EVENTS_FOR_COMPACTION) return false;
 
-    // Use stability tracker if it has at least 2 peers (need consensus
-    // between multiple peers for meaningful stability).
-    // First, remove inactive peers from the tracker so that disconnected
-    // peers don't prevent stability detection for active ones, and
-    // so that inactive peers don't count toward the consensus.
-    for (const [peerId, lastActivity] of this.lastActivityByPeer) {
-      if (now - lastActivity > SyncRoom.PEER_ACTIVITY_TIMEOUT_MS) {
-        this.stability.removePeer(peerId);
-      }
-    }
-
-    if (this.stability.peerCount >= 2) {
-      const frontierClock = this.roomPeer.frontierClock;
-      if (!this.stability.isClockStable(frontierClock)) return false;
-    } else {
-      const minFrontier = this.computeMinAcknowledgedFrontier(now);
-      if (minFrontier === null) return false;
-    }
+    const minFrontier = this.computeMinAcknowledgedFrontier(now);
+    if (minFrontier === null) return false;
 
     // Materialize the current state via a temporary non-relay Denicek,
     // since the room's own Denicek operates in relay mode and may not
@@ -306,8 +285,8 @@ export class SyncRoom {
       `compact-${this.id.replaceAll(":", "-")}`,
       this._initialDocument,
     );
-    const eventsToCompact = collectRemoteEventsSince(this.roomPeer, []);
-    for (const ev of eventsToCompact) {
+    const allEvents = collectRemoteEventsSince(this.roomPeer, []);
+    for (const ev of allEvents) {
       tempPeer.applyRemote(ev);
     }
     const compactedDoc = tempPeer.materialize();
@@ -319,9 +298,7 @@ export class SyncRoom {
       { relayMode: true },
     );
 
-    this.compactedFrontier = this.roomPeer.frontiers.length > 0
-      ? this.roomPeer.frontiers
-      : eventsToCompact.map((ev) => `${ev.id.peer}:${ev.id.seq}`);
+    this.compactedFrontier = minFrontier;
     this._initialDocument = compactedDoc;
 
     // Clear peer tracking: all peers need to be reset
