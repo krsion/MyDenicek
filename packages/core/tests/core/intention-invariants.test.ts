@@ -188,33 +188,37 @@ Deno.test("Intention: concurrent insert shifts remove to same logical item", () 
 // or wrapped.
 // ═══════════════════════════════════════════════════════════════════════
 
-// NOTE: This test currently fails — relative references from sibling
-// subtrees are not retargeted by rename. The reference ../data/source
-// is not inside the renamed subtree, so updateReferences does not
-// transform it. This is a known limitation: only references that
-// traverse the renamed path are retargeted. A reference from a
-// sibling subtree must use an absolute path ($ref: "/data/source")
-// to be retargeted correctly.
-Deno.test({
-  name: "Intention: reference survives rename of its target",
-  ignore: true,
-  fn: () => {
+// INVARIANT 4: Reference survival through structural edits.
+// A ReferenceNode's target is retargeted when the target path is renamed.
+// The reference ../../data/source (two levels up from formula/arg to root,
+// then down to data/source) must become ../../data/value after rename.
+Deno.test(
+  "Intention: reference survives rename of its target",
+  () => {
     const initial: PlainNode = {
       $tag: "root",
       data: { $tag: "rec", source: "hello" },
-      formula: { $tag: "ref-test", arg: { $ref: "../data/source" } },
+      formula: { $tag: "ref-test", arg: { $ref: "../../data/source" } },
     };
 
     const alice = new Denicek("alice", initial);
     alice.rename("data", "source", "value");
 
     const doc = plain(alice);
-    assertEquals(get(doc, "data", "value"), "hello");
+    assertEquals(
+      get(doc, "data", "value"),
+      "hello",
+      "Renamed field should contain original value",
+    );
     const formula = get(doc, "formula") as Record<string, unknown>;
     const arg = formula.arg as Record<string, unknown>;
-    assertEquals(arg.$ref, "../data/value");
+    assertEquals(
+      arg.$ref,
+      "../../data/value",
+      "Reference should be retargeted from source to value after rename",
+    );
   },
-});
+);
 
 // ═══════════════════════════════════════════════════════════════════════
 // INVARIANT 5: Replay equivalence
