@@ -37,7 +37,7 @@ export class UpdateTagEdit extends Edit {
     }
   }
 
-  canApply(doc: Node): boolean {
+  override canApply(doc: Node): boolean {
     return this.canFindNodesOfType(
       doc,
       this.target,
@@ -147,7 +147,7 @@ export class CopyEdit extends Edit {
     }
   }
 
-  canApply(doc: Node): boolean {
+  override canApply(doc: Node): boolean {
     const sourceNodes = doc.navigate(this.source);
     const targetEntries = doc.navigateWithPaths(this.target);
     return sourceNodes.length > 0 &&
@@ -340,7 +340,7 @@ export class WrapRecordEdit extends Edit {
     });
   }
 
-  canApply(doc: Node): boolean {
+  override canApply(doc: Node): boolean {
     return this.target.length > 0 && this.canFindNodes(doc, this.target);
   }
 
@@ -448,7 +448,7 @@ export class WrapListEdit extends Edit {
     );
   }
 
-  canApply(doc: Node): boolean {
+  override canApply(doc: Node): boolean {
     return this.target.length > 0 && this.canFindNodes(doc, this.target);
   }
 
@@ -548,7 +548,7 @@ export class RestoreSnapshotEdit extends Edit {
     doc.replaceAtPath(this.target, this.snapshot.clone());
   }
 
-  canApply(doc: Node): boolean {
+  override canApply(doc: Node): boolean {
     return this.canFindNodes(doc, this.target);
   }
 

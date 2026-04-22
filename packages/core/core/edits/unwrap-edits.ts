@@ -53,7 +53,7 @@ export class UnwrapRecordEdit extends Edit {
     });
   }
 
-  canApply(doc: Node): boolean {
+  override canApply(doc: Node): boolean {
     return this.canFindNodesOfType(
       doc,
       this.target,
@@ -142,7 +142,7 @@ export class UnwrapListEdit extends Edit {
     });
   }
 
-  canApply(doc: Node): boolean {
+  override canApply(doc: Node): boolean {
     return this.canFindNodesOfType(
       doc,
       this.target,

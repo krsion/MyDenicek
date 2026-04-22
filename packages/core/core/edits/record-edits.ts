@@ -41,7 +41,7 @@ export class RecordAddEdit extends Edit {
       .map(({ path, node }) => {
         this.assertRecord(node);
         return {
-          path: new Selector([...path.segments, this.target.lastSegment]),
+          path: path.append(this.target.lastSegment),
           node: this.node,
         };
       });
@@ -58,7 +58,7 @@ export class RecordAddEdit extends Edit {
     }
   }
 
-  canApply(doc: Node): boolean {
+  override canApply(doc: Node): boolean {
     return this.canFindNodesOfType(
       doc,
       this.target.parent,
@@ -141,7 +141,7 @@ export class RecordDeleteEdit extends Edit {
     }
   }
 
-  canApply(doc: Node): boolean {
+  override canApply(doc: Node): boolean {
     return this.canFindNodesOfType(
       doc,
       this.target.parent,
@@ -205,7 +205,7 @@ export class RecordRenameFieldEdit extends Edit {
     });
   }
 
-  canApply(doc: Node): boolean {
+  override canApply(doc: Node): boolean {
     return this.canFindNodesOfType(
       doc,
       this.target.parent,
@@ -218,8 +218,7 @@ export class RecordRenameFieldEdit extends Edit {
     if (m.kind === "no-match") return mapSelector(sel);
     return mapSelector(
       new Selector([
-        ...m.specificPrefix.segments.slice(0, -1),
-        this.to,
+        ...m.specificPrefix.replaceLastSegment(this.to).segments,
         ...m.rest.segments,
       ]),
     );
@@ -236,10 +235,7 @@ export class RecordRenameFieldEdit extends Edit {
 
   computeInverse(_preDoc: Node): Edit {
     const from = String(this.target.lastSegment);
-    const newTarget = new Selector([
-      ...this.target.parent.segments,
-      this.to,
-    ]);
+    const newTarget = this.target.parent.append(this.to);
     return new RecordRenameFieldEdit(newTarget, from);
   }
 

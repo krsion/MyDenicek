@@ -37,7 +37,14 @@ export abstract class Edit {
    */
   abstract apply(doc: Node): void;
   /** Returns whether this edit can be applied to `doc` without throwing. */
-  abstract canApply(doc: Node): boolean;
+  canApply(doc: Node): boolean {
+    try {
+      this.validate(doc);
+      return true;
+    } catch {
+      return false;
+    }
+  }
   /** Validates pre-conditions against the document. Override in subclasses. */
   validate(_doc: Node): void {}
 
@@ -101,10 +108,10 @@ export abstract class Edit {
   }
 
   /**
-   * Called on a concurrent edit (typically a `ListInsertEdit`) to replay a
+   * Called on a concurrent edit (typically a `ListInsertAtEdit`) to replay a
    * wildcard-targeting edit onto its inserted payload.
    *
-   * Non-insert edits return `null` (nothing to rewrite). `ListInsertEdit`
+   * Non-insert edits return `null` (nothing to rewrite). `ListInsertAtEdit`
    * overrides this to clone its payload, apply the wildcard edit's inner
    * portion, and return a new insert with the modified payload.
    */
@@ -351,10 +358,6 @@ export class NoOpEdit extends Edit {
     return this.conflict(new PrimitiveNode(this.reason));
   }
 
-  canApply(_doc: Node): boolean {
-    return true;
-  }
-
   transformSelector(sel: Selector): SelectorTransform {
     return mapSelector(sel);
   }
@@ -455,7 +458,7 @@ export class CompositeEdit extends Edit {
     }
   }
 
-  canApply(doc: Node): boolean {
+  override canApply(doc: Node): boolean {
     return this.primary.canApply(doc);
   }
 
