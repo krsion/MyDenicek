@@ -155,6 +155,40 @@ export abstract class Edit {
   }
 
   /**
+   * Describes this edit's effect on list indices, if any. Returns `null` for
+   * non-list edits. List inserts return `delta: 1` (indices at or after the
+   * insert position shift up); list removes return `delta: -1` (indices after
+   * the remove position shift down). The `absIndex` is the resolved absolute
+   * position, and `isStrictRemove` flags a strict remove that should collapse
+   * with a concurrent strict remove at the same target.
+   *
+   * This is the **reverse** of {@link applyListIndexShift}: while
+   * `applyListIndexShift` is called on a *later* concurrent edit to shift its
+   * indices through *this* edit's effect, `listIndexEffect` is called on a
+   * *prior* edit by a later edit that needs to shift its own indices.
+   * Together they eliminate all `instanceof` checks from the list OT layer.
+   */
+  listIndexEffect(_target: Selector): {
+    absIndex: number;
+    delta: 1 | -1;
+    isStrictRemove: boolean;
+  } | null {
+    return null;
+  }
+
+  /**
+   * Whether this edit should bypass CopyEdit's mirroring logic when it
+   * appears as the concurrent edit in `transformLaterConcurrentEdit`.
+   *
+   * `CompositeEdit` overrides this to return `true`, because it already
+   * contains both the primary and mirrored edits — wrapping it again would
+   * produce double mirroring.
+   */
+  get skipMirroring(): boolean {
+    return false;
+  }
+
+  /**
    * Helper for structural edits that need to capture and update references
    * around a mutation. The typical structural-edit `apply()` pattern is:
    *
@@ -401,6 +435,10 @@ export class CompositeEdit extends Edit {
   get isStructural(): boolean {
     return this.primary.isStructural ||
       this.mirrors.some((edit) => edit.isStructural);
+  }
+
+  override get skipMirroring(): boolean {
+    return true;
   }
 
   override get selectors(): Selector[] {

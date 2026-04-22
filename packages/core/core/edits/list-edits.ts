@@ -387,6 +387,17 @@ export class ListInsertAtEdit extends ListInsertEdit {
     );
   }
 
+  override listIndexEffect(
+    target: Selector,
+  ): { absIndex: number; delta: 1; isStrictRemove: false } | null {
+    if (!this.target.equals(target)) return null;
+    return {
+      absIndex: this.resolveAbsoluteIndex(),
+      delta: 1,
+      isStrictRemove: false,
+    };
+  }
+
   protected withInsertedNode(node: Node): ListInsertAtEdit {
     return new ListInsertAtEdit(
       this.target,
@@ -737,11 +748,8 @@ export class ListRemoveAtEdit extends Edit {
   override transform(prior: Edit): Edit {
     if (this.strict) {
       // Two concurrent strict removes of the same list collapse to one removal.
-      if (
-        prior instanceof ListRemoveAtEdit &&
-        prior.strict &&
-        prior.target.equals(this.target)
-      ) {
+      const effect = prior.listIndexEffect(this.target);
+      if (effect !== null && effect.isStrictRemove) {
         return new NoOpEdit(
           this.target,
           `strict ListRemoveAtEdit already removed the list item targeted by strict ListRemoveAtEdit.`,
@@ -753,33 +761,28 @@ export class ListRemoveAtEdit extends Edit {
 
     // Non-strict (positive or negative): resolve to absolute and shift.
     const thisAbsIndex = this.resolveAbsoluteIndex();
+    const effect = prior.listIndexEffect(this.target);
 
-    if (
-      prior instanceof ListRemoveAtEdit &&
-      prior.target.equals(this.target)
-    ) {
-      const priorAbsIndex = prior.resolveAbsoluteIndex();
-      if (priorAbsIndex < thisAbsIndex) {
-        return new ListRemoveAtEdit(this.target, thisAbsIndex - 1);
+    if (effect !== null) {
+      const priorAbsIndex = effect.absIndex;
+      if (effect.delta === -1) {
+        // Prior is a remove on the same list.
+        if (priorAbsIndex < thisAbsIndex) {
+          return new ListRemoveAtEdit(this.target, thisAbsIndex - 1);
+        }
+        if (priorAbsIndex === thisAbsIndex) {
+          return new NoOpEdit(
+            this.target,
+            `ListRemoveAtEdit already removed item at index ${thisAbsIndex}.`,
+          );
+        }
+        // priorAbsIndex > thisAbsIndex — no shift needed.
+        if (this.index < 0) {
+          return new ListRemoveAtEdit(this.target, thisAbsIndex);
+        }
+        return this;
       }
-      if (priorAbsIndex === thisAbsIndex) {
-        return new NoOpEdit(
-          this.target,
-          `ListRemoveAtEdit already removed item at index ${thisAbsIndex}.`,
-        );
-      }
-      // priorAbsIndex > thisAbsIndex — no shift needed.
-      if (this.index < 0) {
-        return new ListRemoveAtEdit(this.target, thisAbsIndex);
-      }
-      return this;
-    }
-
-    if (
-      prior instanceof ListInsertAtEdit &&
-      prior.target.equals(this.target)
-    ) {
-      const priorAbsIndex = prior.resolveAbsoluteIndex();
+      // Prior is an insert on the same list.
       if (priorAbsIndex <= thisAbsIndex) {
         return new ListRemoveAtEdit(this.target, thisAbsIndex + 1);
       }
@@ -867,6 +870,17 @@ export class ListRemoveAtEdit extends Edit {
       this.strict,
       this.listLength,
     );
+  }
+
+  override listIndexEffect(
+    target: Selector,
+  ): { absIndex: number; delta: -1; isStrictRemove: boolean } | null {
+    if (!this.target.equals(target)) return null;
+    return {
+      absIndex: this.resolveAbsoluteIndex(),
+      delta: -1,
+      isStrictRemove: this.strict,
+    };
   }
 
   encodeRemoteEdit(): EncodedListRemoveAtEdit {
@@ -998,27 +1012,23 @@ export class ListReorderEdit extends Edit {
   }
 
   override transform(prior: Edit): Edit {
-    if (
-      prior instanceof ListInsertAtEdit &&
-      prior.target.equals(this.target)
-    ) {
-      const priorAbsIndex = prior.resolveAbsoluteIndex();
-      const newFrom = this.fromIndex >= priorAbsIndex
-        ? this.fromIndex + 1
-        : this.fromIndex;
-      const newTo = this.toIndex >= priorAbsIndex
-        ? this.toIndex + 1
-        : this.toIndex;
-      if (newFrom === this.fromIndex && newTo === this.toIndex) {
-        return super.transform(prior);
+    const effect = prior.listIndexEffect(this.target);
+    if (effect !== null) {
+      const priorAbsIndex = effect.absIndex;
+      if (effect.delta === 1) {
+        // Prior is an insert — shift both from and to past the insertion.
+        const newFrom = this.fromIndex >= priorAbsIndex
+          ? this.fromIndex + 1
+          : this.fromIndex;
+        const newTo = this.toIndex >= priorAbsIndex
+          ? this.toIndex + 1
+          : this.toIndex;
+        if (newFrom === this.fromIndex && newTo === this.toIndex) {
+          return super.transform(prior);
+        }
+        return new ListReorderEdit(this.target, newFrom, newTo);
       }
-      return new ListReorderEdit(this.target, newFrom, newTo);
-    }
-    if (
-      prior instanceof ListRemoveAtEdit &&
-      prior.target.equals(this.target)
-    ) {
-      const priorAbsIndex = prior.resolveAbsoluteIndex();
+      // Prior is a remove — if it removed the item we're reordering, no-op.
       if (priorAbsIndex === this.fromIndex) {
         return new NoOpEdit(
           this.target,

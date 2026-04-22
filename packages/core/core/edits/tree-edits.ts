@@ -1,4 +1,4 @@
-import { CompositeEdit, createCompositeEdit, Edit, NoOpEdit } from "./base.ts";
+import { createCompositeEdit, Edit, NoOpEdit } from "./base.ts";
 import { mapSelector, Selector, type SelectorTransform } from "../selector.ts";
 import { ListNode, Node, type PlainNode, RecordNode } from "../nodes.ts";
 import {
@@ -162,7 +162,7 @@ export class CopyEdit extends Edit {
   }
 
   override transformLaterConcurrentEdit(concurrent: Edit): Edit {
-    if (concurrent instanceof CompositeEdit) {
+    if (concurrent.skipMirroring) {
       return concurrent.transform(this);
     }
     const transformed = concurrent.transform(this);
