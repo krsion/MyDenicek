@@ -158,7 +158,19 @@ Deno.test("pair: wrapRecord + wrapRecord same target", () => {
   b.wrapRecord("val", "inner", "wrapB");
   sync(a, b);
   assertEquals(a.toPlain(), b.toPlain());
-  // Both wraps succeed — double nesting
+  // Both wraps succeed — double nesting. Verify structure:
+  const val = (a.toPlain() as Record<string, unknown>)["val"] as Record<
+    string,
+    unknown
+  >;
+  const outerTag = val["$tag"] as string;
+  const inner = val["inner"] as Record<string, unknown>;
+  const innerTag = inner["$tag"] as string;
+  // One wrap is outer, one is inner — both tags present
+  assertEquals(
+    [outerTag, innerTag].sort(),
+    ["wrapA", "wrapB"],
+  );
 });
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -252,8 +264,11 @@ Deno.test("pair: copy + concurrent delete of source", () => {
   b.delete("", "src");
   sync(a, b);
   assertEquals(a.toPlain(), b.toPlain());
-  // Both peers converge — behavior depends on replay order
-  // (copy may succeed before delete, or delete may remove source first)
+  // Depending on replay order: copy may succeed (src existed when copy applied)
+  // then delete removes src; OR delete first, then copy becomes no-op.
+  // Either way, both peers converge.
+  const result = a.toPlain() as Record<string, unknown>;
+  assertEquals(result["src"], undefined, "src should be deleted");
 });
 
 Deno.test("pair: copy + concurrent insert in list", () => {
