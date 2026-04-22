@@ -778,7 +778,7 @@ Deno.test("default edit transform produces NoOp when target is removed", () => {
 
     apply(_doc: Node): void {}
 
-    canApply(_doc: Node): boolean {
+    override canApply(_doc: Node): boolean {
       return true;
     }
 

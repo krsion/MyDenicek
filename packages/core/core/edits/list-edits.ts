@@ -37,61 +37,6 @@ type EncodedListReorderEdit = Extract<
   { kind: "ListReorderEdit" }
 >;
 
-/** Abstract base for list insertion edits (push-back and push-front). */
-export abstract class ListInsertEdit extends Edit {
-  /** @inheritDoc */
-  readonly isStructural = true;
-
-  abstract override readonly target: Selector;
-  abstract readonly node: Node;
-
-  matchInsertedChildRoot(target: Selector): Selector | null {
-    const insertedChildPath = new Selector([...this.target.segments, "*"]);
-    const match = insertedChildPath.matchPrefix(target);
-    return match.kind === "no-match" ? null : match.rest;
-  }
-
-  override rewriteInsertedNode(
-    target: Selector,
-    rewrite: (node: Node, relativeTarget: Selector) => Node | null,
-  ): ListInsertEdit | null {
-    const relativeTarget = this.matchInsertedChildRoot(target);
-    if (relativeTarget === null) return null;
-    const rewrittenNode = rewrite(this.node.clone(), relativeTarget);
-    return rewrittenNode === null ? null : this.withInsertedNode(rewrittenNode);
-  }
-
-  protected abstract withInsertedNode(node: Node): ListInsertEdit;
-
-  /**
-   * General wildcard-affects-concurrent-inserts: replay a wildcard edit's
-   * inner portion on this insert's payload by wrapping it in a temporary
-   * RecordNode root.
-   */
-  override rewritePayloadForWildcard(
-    wildcardEdit: Edit,
-    wildcardTarget: Selector,
-  ): Edit | null {
-    return this.rewriteInsertedNode(
-      wildcardTarget,
-      (payloadNode, relativeTarget) => {
-        if (relativeTarget.length === 0) return null;
-        try {
-          const tempRoot = new RecordNode("__tmp", { __item__: payloadNode });
-          const innerEdit = wildcardEdit.withTarget(
-            new Selector(["__item__", ...relativeTarget.segments]),
-          );
-          if (!innerEdit.canApply(tempRoot)) return null;
-          innerEdit.apply(tempRoot);
-          return tempRoot.fields["__item__"]!;
-        } catch {
-          return null;
-        }
-      },
-    );
-  }
-}
-
 // ── Index-based list edits ──────────────────────────────────────────
 
 /**
@@ -114,7 +59,9 @@ export abstract class ListInsertEdit extends Edit {
  *
  * When `strict` is false (default) positive indices are shifted by OT.
  */
-export class ListInsertAtEdit extends ListInsertEdit {
+export class ListInsertAtEdit extends Edit {
+  /** @inheritDoc */
+  readonly isStructural = true;
   /** @inheritDoc */
   readonly kind = "ListInsertAt";
 
@@ -126,6 +73,63 @@ export class ListInsertAtEdit extends ListInsertEdit {
     readonly listLength: number = 0,
   ) {
     super();
+  }
+
+  /** Creates a ListInsertAtEdit, reading listLength from doc for negative indices. */
+  static create(
+    target: Selector,
+    index: number,
+    node: Node,
+    doc: Node,
+    strict?: boolean,
+  ): ListInsertAtEdit {
+    let listLength = 0;
+    if (index < 0) {
+      const lists = doc.navigate(target);
+      if (lists.length > 0 && lists[0] instanceof ListNode) {
+        listLength = lists[0].items.length;
+      }
+    }
+    return new ListInsertAtEdit(target, index, node, strict, listLength);
+  }
+
+  matchInsertedChildRoot(target: Selector): Selector | null {
+    const insertedChildPath = this.target.append("*");
+    const match = insertedChildPath.matchPrefix(target);
+    return match.kind === "no-match" ? null : match.rest;
+  }
+
+  override rewriteInsertedNode(
+    target: Selector,
+    rewrite: (node: Node, relativeTarget: Selector) => Node | null,
+  ): ListInsertAtEdit | null {
+    const relativeTarget = this.matchInsertedChildRoot(target);
+    if (relativeTarget === null) return null;
+    const rewrittenNode = rewrite(this.node.clone(), relativeTarget);
+    return rewrittenNode === null ? null : this.withInsertedNode(rewrittenNode);
+  }
+
+  override rewritePayloadForWildcard(
+    wildcardEdit: Edit,
+    wildcardTarget: Selector,
+  ): Edit | null {
+    return this.rewriteInsertedNode(
+      wildcardTarget,
+      (payloadNode, relativeTarget) => {
+        if (relativeTarget.length === 0) return null;
+        try {
+          const tempRoot = new RecordNode("__tmp", { __item__: payloadNode });
+          const innerEdit = wildcardEdit.withTarget(
+            new Selector(["__item__", ...relativeTarget.segments]),
+          );
+          if (!innerEdit.canApply(tempRoot)) return null;
+          innerEdit.apply(tempRoot);
+          return tempRoot.fields["__item__"]!;
+        } catch {
+          return null;
+        }
+      },
+    );
   }
 
   /**
@@ -166,7 +170,7 @@ export class ListInsertAtEdit extends ListInsertEdit {
         const list = this.assertList(node);
         const idx = this.resolveIndex(list);
         return {
-          path: new Selector([...path.segments, idx]),
+          path: path.append(idx),
           node: this.node,
         };
       });
@@ -268,7 +272,7 @@ export class ListInsertAtEdit extends ListInsertEdit {
     );
   }
 
-  canApply(doc: Node): boolean {
+  override canApply(doc: Node): boolean {
     const nodes = doc.navigate(this.target);
     if (this.index < 0 || this.strict) {
       return this.canFindNodesOfType(
@@ -387,7 +391,18 @@ export class ListInsertAtEdit extends ListInsertEdit {
     );
   }
 
-  protected withInsertedNode(node: Node): ListInsertAtEdit {
+  override listIndexEffect(
+    target: Selector,
+  ): { absIndex: number; delta: 1; isStrictRemove: false } | null {
+    if (!this.target.equals(target)) return null;
+    return {
+      absIndex: this.resolveAbsoluteIndex(),
+      delta: 1,
+      isStrictRemove: false,
+    };
+  }
+
+  private withInsertedNode(node: Node): ListInsertAtEdit {
     return new ListInsertAtEdit(
       this.target,
       this.index,
@@ -399,10 +414,10 @@ export class ListInsertAtEdit extends ListInsertEdit {
 
   private computePayloadBasePath(): Selector {
     if (this.strict && this.index === -1) {
-      return new Selector([...this.target.segments, PUSH_BACK_SENTINEL_INDEX]);
+      return this.target.append(PUSH_BACK_SENTINEL_INDEX);
     }
     const idx = (this.strict && this.index === 0) ? 0 : this.index;
-    return new Selector([...this.target.segments, idx]);
+    return this.target.append(idx);
   }
 
   override mapInsertedPayload(
@@ -540,6 +555,23 @@ export class ListRemoveAtEdit extends Edit {
     super();
   }
 
+  /** Creates a ListRemoveAtEdit, reading listLength from doc for negative indices. */
+  static create(
+    target: Selector,
+    index: number,
+    doc: Node,
+    strict?: boolean,
+  ): ListRemoveAtEdit {
+    let listLength = 0;
+    if (index < 0) {
+      const lists = doc.navigate(target);
+      if (lists.length > 0 && lists[0] instanceof ListNode) {
+        listLength = lists[0].items.length;
+      }
+    }
+    return new ListRemoveAtEdit(target, index, strict, listLength);
+  }
+
   /**
    * Resolve the effective removal index using the stored list length.
    * Positive indices are returned as-is; negative indices are resolved
@@ -576,14 +608,11 @@ export class ListRemoveAtEdit extends Edit {
         const list = this.assertList(node);
         if (this.index < 0 || this.strict) {
           return list.items.length === 0 ? [] : [
-            new Selector([
-              ...path.segments,
-              this.resolveIndex(list),
-            ]),
+            path.append(this.resolveIndex(list)),
           ];
         }
         return this.index >= 0 && this.index < list.items.length
-          ? [new Selector([...path.segments, this.index])]
+          ? [path.append(this.index)]
           : [];
       });
     this.assertRemovedPathsAreUnreferenced(doc, removedPaths);
@@ -702,7 +731,7 @@ export class ListRemoveAtEdit extends Edit {
     );
   }
 
-  canApply(doc: Node): boolean {
+  override canApply(doc: Node): boolean {
     const nodes = doc.navigate(this.target);
     if (this.index < 0 || this.strict) {
       return nodes.length > 0 &&
@@ -737,11 +766,8 @@ export class ListRemoveAtEdit extends Edit {
   override transform(prior: Edit): Edit {
     if (this.strict) {
       // Two concurrent strict removes of the same list collapse to one removal.
-      if (
-        prior instanceof ListRemoveAtEdit &&
-        prior.strict &&
-        prior.target.equals(this.target)
-      ) {
+      const effect = prior.listIndexEffect(this.target);
+      if (effect !== null && effect.isStrictRemove) {
         return new NoOpEdit(
           this.target,
           `strict ListRemoveAtEdit already removed the list item targeted by strict ListRemoveAtEdit.`,
@@ -753,33 +779,28 @@ export class ListRemoveAtEdit extends Edit {
 
     // Non-strict (positive or negative): resolve to absolute and shift.
     const thisAbsIndex = this.resolveAbsoluteIndex();
+    const effect = prior.listIndexEffect(this.target);
 
-    if (
-      prior instanceof ListRemoveAtEdit &&
-      prior.target.equals(this.target)
-    ) {
-      const priorAbsIndex = prior.resolveAbsoluteIndex();
-      if (priorAbsIndex < thisAbsIndex) {
-        return new ListRemoveAtEdit(this.target, thisAbsIndex - 1);
+    if (effect !== null) {
+      const priorAbsIndex = effect.absIndex;
+      if (effect.delta === -1) {
+        // Prior is a remove on the same list.
+        if (priorAbsIndex < thisAbsIndex) {
+          return new ListRemoveAtEdit(this.target, thisAbsIndex - 1);
+        }
+        if (priorAbsIndex === thisAbsIndex) {
+          return new NoOpEdit(
+            this.target,
+            `ListRemoveAtEdit already removed item at index ${thisAbsIndex}.`,
+          );
+        }
+        // priorAbsIndex > thisAbsIndex — no shift needed.
+        if (this.index < 0) {
+          return new ListRemoveAtEdit(this.target, thisAbsIndex);
+        }
+        return this;
       }
-      if (priorAbsIndex === thisAbsIndex) {
-        return new NoOpEdit(
-          this.target,
-          `ListRemoveAtEdit already removed item at index ${thisAbsIndex}.`,
-        );
-      }
-      // priorAbsIndex > thisAbsIndex — no shift needed.
-      if (this.index < 0) {
-        return new ListRemoveAtEdit(this.target, thisAbsIndex);
-      }
-      return this;
-    }
-
-    if (
-      prior instanceof ListInsertAtEdit &&
-      prior.target.equals(this.target)
-    ) {
-      const priorAbsIndex = prior.resolveAbsoluteIndex();
+      // Prior is an insert on the same list.
       if (priorAbsIndex <= thisAbsIndex) {
         return new ListRemoveAtEdit(this.target, thisAbsIndex + 1);
       }
@@ -867,6 +888,17 @@ export class ListRemoveAtEdit extends Edit {
       this.strict,
       this.listLength,
     );
+  }
+
+  override listIndexEffect(
+    target: Selector,
+  ): { absIndex: number; delta: -1; isStrictRemove: boolean } | null {
+    if (!this.target.equals(target)) return null;
+    return {
+      absIndex: this.resolveAbsoluteIndex(),
+      delta: -1,
+      isStrictRemove: this.strict,
+    };
   }
 
   encodeRemoteEdit(): EncodedListRemoveAtEdit {
@@ -963,7 +995,7 @@ export class ListReorderEdit extends Edit {
     });
   }
 
-  canApply(doc: Node): boolean {
+  override canApply(doc: Node): boolean {
     const nodes = doc.navigate(this.target);
     return nodes.length > 0 &&
       nodes.every((node) => {
@@ -998,27 +1030,23 @@ export class ListReorderEdit extends Edit {
   }
 
   override transform(prior: Edit): Edit {
-    if (
-      prior instanceof ListInsertAtEdit &&
-      prior.target.equals(this.target)
-    ) {
-      const priorAbsIndex = prior.resolveAbsoluteIndex();
-      const newFrom = this.fromIndex >= priorAbsIndex
-        ? this.fromIndex + 1
-        : this.fromIndex;
-      const newTo = this.toIndex >= priorAbsIndex
-        ? this.toIndex + 1
-        : this.toIndex;
-      if (newFrom === this.fromIndex && newTo === this.toIndex) {
-        return super.transform(prior);
+    const effect = prior.listIndexEffect(this.target);
+    if (effect !== null) {
+      const priorAbsIndex = effect.absIndex;
+      if (effect.delta === 1) {
+        // Prior is an insert — shift both from and to past the insertion.
+        const newFrom = this.fromIndex >= priorAbsIndex
+          ? this.fromIndex + 1
+          : this.fromIndex;
+        const newTo = this.toIndex >= priorAbsIndex
+          ? this.toIndex + 1
+          : this.toIndex;
+        if (newFrom === this.fromIndex && newTo === this.toIndex) {
+          return super.transform(prior);
+        }
+        return new ListReorderEdit(this.target, newFrom, newTo);
       }
-      return new ListReorderEdit(this.target, newFrom, newTo);
-    }
-    if (
-      prior instanceof ListRemoveAtEdit &&
-      prior.target.equals(this.target)
-    ) {
-      const priorAbsIndex = prior.resolveAbsoluteIndex();
+      // Prior is a remove — if it removed the item we're reordering, no-op.
       if (priorAbsIndex === this.fromIndex) {
         return new NoOpEdit(
           this.target,

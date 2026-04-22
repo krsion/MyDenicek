@@ -152,6 +152,43 @@ export class EventGraph {
     return this.events.get(key);
   }
 
+  /** Clears all materialization caches without touching checkpoints. */
+  private clearMaterializationCaches(): void {
+    this.cachedOrder = null;
+    this.cachedApplied = null;
+    this.cachedDoc = null;
+    this.cachedConflicts = null;
+  }
+
+  /**
+   * Saves the current cached state as a checkpoint so the next materialize()
+   * can resume from it. The checkpoint is keyed by the given frontier hash.
+   */
+  private saveCheckpointIfNeeded(event: Event, parentKeys: Set<string>): void {
+    if (
+      this.cachedDoc === null || this.cachedApplied === null ||
+      this.cachedOrder === null
+    ) {
+      return;
+    }
+    const fHash = this.frontierHash(
+      parentKeys.size > 0
+        ? event.parents
+        : this._frontierIds.filter((id) => id.format() !== event.id.format()),
+    );
+    if (!this.checkpointCache.has(fHash)) {
+      this.checkpointCache.set(fHash, {
+        doc: this.cachedDoc.clone(),
+        applied: [...this.cachedApplied],
+        order: [...this.cachedOrder],
+      });
+      while (this.checkpointCache.size > EventGraph.MAX_CHECKPOINTS) {
+        const oldest = this.checkpointCache.keys().next().value;
+        if (oldest !== undefined) this.checkpointCache.delete(oldest);
+      }
+    }
+  }
+
   /**
    * Resolves an event into the edit shape it should replay against the current
    * graph state.
@@ -277,10 +314,7 @@ export class EventGraph {
       try {
         event.edit.apply(this.cachedDoc);
       } catch {
-        this.cachedOrder = null;
-        this.cachedApplied = null;
-        this.cachedDoc = null;
-        this.cachedConflicts = null;
+        this.clearMaterializationCaches();
       }
       return;
     }
@@ -294,33 +328,9 @@ export class EventGraph {
     // Save a checkpoint of the current cached state before invalidation.
     // On the next materialize(), we can resume from this checkpoint
     // instead of replaying from scratch.
-    if (
-      this.cachedDoc !== null && this.cachedApplied !== null &&
-      this.cachedOrder !== null
-    ) {
-      const fHash = this.frontierHash(
-        parentKeys.size > 0
-          ? event.parents
-          : this._frontierIds.filter((id) => id.format() !== event.id.format()),
-      );
-      if (!this.checkpointCache.has(fHash)) {
-        this.checkpointCache.set(fHash, {
-          doc: this.cachedDoc.clone(),
-          applied: [...this.cachedApplied],
-          order: [...this.cachedOrder],
-        });
-        // Evict oldest if over limit
-        while (this.checkpointCache.size > EventGraph.MAX_CHECKPOINTS) {
-          const oldest = this.checkpointCache.keys().next().value;
-          if (oldest !== undefined) this.checkpointCache.delete(oldest);
-        }
-      }
-    }
+    this.saveCheckpointIfNeeded(event, parentKeys);
 
-    this.cachedOrder = null;
-    this.cachedApplied = null;
-    this.cachedDoc = null;
-    this.cachedConflicts = null;
+    this.clearMaterializationCaches();
   }
 
   private isLinearExtension(event: Event): boolean {
@@ -565,16 +575,45 @@ export class EventGraph {
       : [];
     const startIndex = checkpoint ? checkpoint.startIndex : 0;
 
+    this.replayEvents(ordered, startIndex, doc, applied);
+
+    if (this.debugValidateCheckpoints && checkpoint !== null) {
+      this.validateAgainstFullReplay(ordered, doc);
+    }
+
+    this.cachedApplied = applied;
+    this.cachedDoc = doc;
+    return applied;
+  }
+
+  /**
+   * Shared replay loop: iterates events in topological order, resolves
+   * against prior edits, handles strict-negative indices, and applies.
+   * When `conflicts` is provided, NoOp resolutions are collected into it.
+   */
+  private replayEvents(
+    ordered: string[],
+    startIndex: number,
+    doc: Node,
+    applied: { ev: Event; edit: Edit }[],
+    conflicts?: Node[],
+  ): void {
     for (let i = startIndex; i < ordered.length; i++) {
       const key = ordered[i]!;
       const ev = this.events.get(key) as Event;
       const edit = ev.resolveAgainst(applied, doc);
 
+      if (edit instanceof NoOpEdit) {
+        conflicts?.push(edit.toConflict());
+        applied.push({ ev, edit });
+        continue;
+      }
+
       // Resolve strict-negative indices to absolute positions at replay
       // time — their position depends on the current document state and
       // is not tracked by listLength.  Non-strict negatives carry their
       // own listLength and are resolved by OT via resolveAbsoluteIndex().
-      let finalEdit = edit;
+      let finalEdit: Edit = edit;
       if (
         (edit instanceof ListInsertAtEdit ||
           edit instanceof ListRemoveAtEdit) &&
@@ -586,34 +625,23 @@ export class EventGraph {
         }
       }
 
-      applied.push({ ev, edit: finalEdit });
-      if (!(finalEdit instanceof NoOpEdit)) {
-        if (
-          (finalEdit instanceof ListInsertAtEdit ||
-            finalEdit instanceof ListRemoveAtEdit) &&
-          !finalEdit.canApply(doc)
-        ) {
-          // Strict edit index became invalid after concurrent modifications.
-          applied[applied.length - 1] = {
-            ev,
-            edit: new NoOpEdit(
-              finalEdit.target,
-              `Strict edit at stale index is no longer applicable.`,
-            ),
-          };
-        } else {
-          finalEdit.apply(doc);
-        }
+      if (
+        (finalEdit instanceof ListInsertAtEdit ||
+          finalEdit instanceof ListRemoveAtEdit) &&
+        !finalEdit.canApply(doc)
+      ) {
+        const noOp = new NoOpEdit(
+          finalEdit.target,
+          `Strict edit at stale index is no longer applicable.`,
+        );
+        conflicts?.push(noOp.toConflict());
+        applied.push({ ev, edit: noOp });
+        continue;
       }
-    }
 
-    if (this.debugValidateCheckpoints && checkpoint !== null) {
-      this.validateAgainstFullReplay(ordered, doc);
+      finalEdit.apply(doc);
+      applied.push({ ev, edit: finalEdit });
     }
-
-    this.cachedApplied = applied;
-    this.cachedDoc = doc;
-    return applied;
   }
 
   /** Compute a stable hash for a frontier (sorted, joined event IDs). */
@@ -751,49 +779,7 @@ export class EventGraph {
     const startIndex = checkpoint ? checkpoint.startIndex : 0;
 
     const conflicts: Node[] = [];
-    for (let i = startIndex; i < ordered.length; i++) {
-      const key = ordered[i]!;
-      const ev = this.events.get(key) as Event;
-      const edit = ev.resolveAgainst(applied, doc);
-      if (edit instanceof NoOpEdit) {
-        conflicts.push(edit.toConflict());
-        continue;
-      }
-      // Resolve strict-negative indices at replay time (same as ensureCachedApplied).
-      let finalEdit = edit;
-      if (
-        (edit instanceof ListInsertAtEdit ||
-          edit instanceof ListRemoveAtEdit) &&
-        edit.index < 0 && edit.strict
-      ) {
-        const lists = doc.navigate(edit.target);
-        if (lists.length > 0 && lists[0] instanceof ListNode) {
-          finalEdit = edit.withResolvedIndex(lists[0].items.length);
-        }
-      }
-      if (
-        (finalEdit instanceof ListInsertAtEdit ||
-          finalEdit instanceof ListRemoveAtEdit) &&
-        !finalEdit.canApply(doc)
-      ) {
-        conflicts.push(
-          new NoOpEdit(
-            finalEdit.target,
-            `Strict edit at stale index is no longer applicable.`,
-          ).toConflict(),
-        );
-        applied.push({
-          ev,
-          edit: new NoOpEdit(
-            finalEdit.target,
-            `Strict edit at stale index is no longer applicable.`,
-          ),
-        });
-        continue;
-      }
-      finalEdit.apply(doc);
-      applied.push({ ev, edit: finalEdit });
-    }
+    this.replayEvents(ordered, startIndex, doc, applied, conflicts);
 
     if (this.debugValidateCheckpoints && checkpoint !== null) {
       this.validateAgainstFullReplay(ordered, doc);
@@ -840,10 +826,7 @@ export class EventGraph {
     this.initial = doc;
     this.events = new Map();
     this._frontierIds = [];
-    this.cachedOrder = null;
-    this.cachedApplied = null;
-    this.cachedDoc = null;
-    this.cachedConflicts = null;
+    this.clearMaterializationCaches();
     this.checkpointCache.clear();
   }
 

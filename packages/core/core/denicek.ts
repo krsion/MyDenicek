@@ -111,7 +111,7 @@ export class Denicek {
    * Returns the formatted event ID.
    */
   private commit(edit: Edit): string {
-    const doc = this.cachedDoc ?? this.rematerialize();
+    const doc = this.currentDoc();
     try {
       edit.apply(doc);
       const event = this.graph.createEvent(this.peer, edit);
@@ -293,8 +293,7 @@ export class Denicek {
    * without converting the whole document to plain first.
    */
   get(target: string): PlainNode[] {
-    const doc = this.cachedDoc ?? this.rematerialize();
-    this.cachedDoc = doc;
+    const doc = this.currentDoc();
     return doc.navigate(Selector.parse(target)).map((node) =>
       node.toPlain() as PlainNode
     );
@@ -386,23 +385,9 @@ export class Denicek {
     strict?: boolean,
   ): string {
     const sel = Selector.parse(target);
-    let listLength = 0;
-    if (index < 0) {
-      const doc = this.cachedDoc ?? this.rematerialize();
-      this.cachedDoc = doc;
-      const lists = doc.navigate(sel);
-      if (lists.length > 0 && lists[0] instanceof ListNode) {
-        listLength = lists[0].items.length;
-      }
-    }
+    const doc = this.currentDoc();
     return this.commit(
-      new ListInsertAtEdit(
-        sel,
-        index,
-        Node.fromPlain(value),
-        strict,
-        listLength,
-      ),
+      ListInsertAtEdit.create(sel, index, Node.fromPlain(value), doc, strict),
     );
   }
 
@@ -416,17 +401,9 @@ export class Denicek {
    */
   remove(target: string, index: number, strict?: boolean): string {
     const sel = Selector.parse(target);
-    let listLength = 0;
-    if (index < 0) {
-      const doc = this.cachedDoc ?? this.rematerialize();
-      this.cachedDoc = doc;
-      const lists = doc.navigate(sel);
-      if (lists.length > 0 && lists[0] instanceof ListNode) {
-        listLength = lists[0].items.length;
-      }
-    }
+    const doc = this.currentDoc();
     return this.commit(
-      new ListRemoveAtEdit(sel, index, strict, listLength),
+      ListRemoveAtEdit.create(sel, index, doc, strict),
     );
   }
 
@@ -502,6 +479,13 @@ export class Denicek {
   private rematerialize(): Node {
     const { doc, conflicts } = this.graph.materialize();
     this.lastConflicts = conflicts;
+    return doc;
+  }
+
+  /** Returns the current cached document, or rematerializes it if the cache is stale. */
+  private currentDoc(): Node {
+    const doc = this.cachedDoc ?? this.rematerialize();
+    this.cachedDoc = doc;
     return doc;
   }
 
@@ -584,8 +568,7 @@ export class Denicek {
 
   /** Collects replayable event ids from step lists without materializing the whole document to plain. */
   private collectRepeatEditEventIds(target: string): string[] {
-    const doc = this.cachedDoc ?? this.rematerialize();
-    this.cachedDoc = doc;
+    const doc = this.currentDoc();
     const matchedNodes = doc.navigate(Selector.parse(target));
     if (matchedNodes.length === 0) return [];
     const eventIds: string[] = [];
@@ -623,8 +606,7 @@ export class Denicek {
 
   /** Rejects local adds that would overwrite an existing record field. */
   private validateLocalAddTarget(target: string, field: string): void {
-    const doc = this.cachedDoc ?? this.rematerialize();
-    this.cachedDoc = doc;
+    const doc = this.currentDoc();
     for (const node of doc.navigate(Selector.parse(target))) {
       if (node instanceof RecordNode && field in node.fields) {
         throw new Error(
@@ -643,8 +625,7 @@ export class Denicek {
    * Results are returned as a map from formula path to computed value or error.
    */
   evaluateFormulas(): Map<string, FormulaResult> {
-    const doc = this.cachedDoc ?? this.rematerialize();
-    this.cachedDoc = doc;
+    const doc = this.currentDoc();
     return evaluateAllFormulasOnNode(doc);
   }
 
@@ -676,8 +657,7 @@ export class Denicek {
     to: string,
   ): void {
     if (from === to) return;
-    const doc = this.cachedDoc ?? this.rematerialize();
-    this.cachedDoc = doc;
+    const doc = this.currentDoc();
     for (const node of doc.navigate(Selector.parse(target))) {
       if (
         node instanceof RecordNode && from in node.fields && to in node.fields

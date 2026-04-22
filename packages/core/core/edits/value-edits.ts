@@ -47,7 +47,7 @@ export class ApplyPrimitiveEdit extends Edit {
     }
   }
 
-  canApply(doc: Node): boolean {
+  override canApply(doc: Node): boolean {
     return this.canFindNodesOfType(
       doc,
       this.target,

@@ -1,4 +1,4 @@
-import { CompositeEdit, createCompositeEdit, Edit, NoOpEdit } from "./base.ts";
+import { createCompositeEdit, Edit, NoOpEdit } from "./base.ts";
 import { mapSelector, Selector, type SelectorTransform } from "../selector.ts";
 import { ListNode, Node, type PlainNode, RecordNode } from "../nodes.ts";
 import {
@@ -37,7 +37,7 @@ export class UpdateTagEdit extends Edit {
     }
   }
 
-  canApply(doc: Node): boolean {
+  override canApply(doc: Node): boolean {
     return this.canFindNodesOfType(
       doc,
       this.target,
@@ -147,7 +147,7 @@ export class CopyEdit extends Edit {
     }
   }
 
-  canApply(doc: Node): boolean {
+  override canApply(doc: Node): boolean {
     const sourceNodes = doc.navigate(this.source);
     const targetEntries = doc.navigateWithPaths(this.target);
     return sourceNodes.length > 0 &&
@@ -162,7 +162,7 @@ export class CopyEdit extends Edit {
   }
 
   override transformLaterConcurrentEdit(concurrent: Edit): Edit {
-    if (concurrent instanceof CompositeEdit) {
+    if (concurrent.skipMirroring) {
       return concurrent.transform(this);
     }
     const transformed = concurrent.transform(this);
@@ -340,7 +340,7 @@ export class WrapRecordEdit extends Edit {
     });
   }
 
-  canApply(doc: Node): boolean {
+  override canApply(doc: Node): boolean {
     return this.target.length > 0 && this.canFindNodes(doc, this.target);
   }
 
@@ -448,7 +448,7 @@ export class WrapListEdit extends Edit {
     );
   }
 
-  canApply(doc: Node): boolean {
+  override canApply(doc: Node): boolean {
     return this.target.length > 0 && this.canFindNodes(doc, this.target);
   }
 
@@ -548,7 +548,7 @@ export class RestoreSnapshotEdit extends Edit {
     doc.replaceAtPath(this.target, this.snapshot.clone());
   }
 
-  canApply(doc: Node): boolean {
+  override canApply(doc: Node): boolean {
     return this.canFindNodes(doc, this.target);
   }
 

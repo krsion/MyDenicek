@@ -169,6 +169,25 @@ export class Selector {
       this.segments.every((seg, i) => seg === other.segments[i]);
   }
 
+  /** Returns a new Selector with the last segment replaced. */
+  replaceLastSegment(newSeg: SelectorSegment): Selector {
+    return new Selector([...this.segments.slice(0, -1), newSeg]);
+  }
+
+  /** Returns a new Selector with `segment` appended. */
+  append(segment: SelectorSegment): Selector {
+    return new Selector([...this.segments, segment]);
+  }
+
+  /** Returns a new Selector with `segment` inserted at the given depth. */
+  withInsertedSegment(atDepth: number, segment: SelectorSegment): Selector {
+    return new Selector([
+      ...this.segments.slice(0, atDepth),
+      segment,
+      ...this.segments.slice(atDepth),
+    ]);
+  }
+
   /***
    * If `this` is a prefix of `full` (e.g., `a/*` is a prefix of `a/1/b`),
    * returns the specific prefix segments and the remaining suffix.
