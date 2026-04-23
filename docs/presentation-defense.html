@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>mydenicek — Master Thesis Defense</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.min.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/theme/white.min.css" />
+<style>
+  .reveal h1 { font-size: 1.8em; color: #0078d4; }
+  .reveal h2 { font-size: 1.4em; color: #333; }
+  .reveal h3 { font-size: 1.1em; color: #555; }
+  .reveal li { font-size: 0.75em; margin-bottom: 0.3em; }
+  .reveal p  { font-size: 0.75em; }
+  .reveal code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-size: 0.85em; }
+  .reveal .small { font-size: 0.6em; color: #888; }
+  .reveal table { font-size: 0.65em; margin: 0 auto; }
+  .reveal table th { background: #0078d4; color: white; padding: 6px 12px; }
+  .reveal table td { padding: 6px 12px; border-bottom: 1px solid #ddd; }
+  .reveal .cols { display: flex; gap: 2em; align-items: flex-start; }
+  .reveal .cols > div { flex: 1; }
+  .reveal blockquote { font-size: 0.7em; border-left: 4px solid #0078d4; padding-left: 1em; font-style: italic; }
+  .reveal img.screenshot { max-height: 420px; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+  .reveal img.screenshot-sm { max-height: 300px; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+  .reveal .box { border-radius: 8px; padding: 12px 16px; font-size: 0.7em; }
+  .reveal .box-blue { background: #e8f0fe; border: 1px solid #afc6e8; }
+  .reveal .box-green { background: #e6f4ea; border: 1px solid #a8d5b8; }
+  .reveal .box-red { background: #fce8e6; border: 1px solid #f5b7b1; }
+  .reveal .box-orange { background: #fff4e5; border: 1px solid #f5d6a0; }
+  .reveal .arrow-down { text-align: center; font-size: 1.5em; color: #888; margin: 8px 0; }
+  .reveal .demo-label { background: #0078d4; color: white; padding: 4px 12px; border-radius: 4px; font-size: 0.7em; font-weight: bold; display: inline-block; margin-bottom: 8px; }
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/github.min.css" />
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 1: TITLE (30s)                                              -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section>
+  <h1>mydenicek</h1>
+  <h3>Collaborative Editing of Structured Documents<br/>in the Denicek System</h3>
+  <p style="margin-top: 1.5em;">
+    <strong>Bc. Ondřej Krsička</strong><br/>
+    Supervisor: Mgr. Tomáš Petříček, Ph.D.<br/>
+    <span class="small">Master Thesis · Charles University, MFF · 2026</span>
+  </p>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 2: THE PROBLEM (1 min)                                      -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section>
+  <h2>The Problem</h2>
+  <p style="font-size: 0.85em;">
+    <strong>Denicek</strong> is a document-oriented programming system — users program by editing tree-structured documents.
+  </p>
+  <div class="cols" style="margin-top: 0.5em;">
+    <div>
+      <img src="slides-assets/30-initial.png" class="screenshot-sm" alt="Denicek document" />
+    </div>
+    <div>
+      <ul>
+        <li>Documents = <strong>tagged trees</strong> (records, lists, references)</li>
+        <li>Addressed by <strong>paths</strong>: <code>speakers/0/name</code></li>
+        <li>Users <strong>record & replay</strong> edit sequences</li>
+        <li>But collaboration uses <strong>fragile OT</strong></li>
+      </ul>
+      <p style="margin-top: 0.5em;"><strong>Goal:</strong> replace OT with a robust CRDT that preserves user intent.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 3: WHY NOT EXISTING CRDTs (1 min)                           -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Why Not Existing CRDTs?</h2>
+  <div class="cols">
+    <div class="box box-red">
+      <h4>Automerge</h4>
+      <p>Wrap = delete + re-insert (not atomic).<br/>
+      Concurrent wraps → node under <strong>two parents</strong>.</p>
+    </div>
+    <div class="box box-red">
+      <h4>Loro</h4>
+      <p>Opaque node IDs → can't express <code>../../0/source</code>.<br/>
+      Recorded edits can't <strong>retarget</strong> after structural changes.</p>
+    </div>
+  </div>
+  <div class="arrow-down">⬇</div>
+  <div class="box box-green" style="text-align: center;">
+    <strong>mydenicek:</strong> paths are the native addressing mode. OT operates directly on them.
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 4: HOW IT WORKS (1 min)                                     -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section>
+  <h2>How It Works</h2>
+  <ol style="font-size: 0.8em;">
+    <li>Each edit creates an <strong>event</strong> in a causal DAG (grow-only set = CRDT)</li>
+    <li>Events sync to peers via WebSocket relay</li>
+    <li>To get the document: <strong>topological sort → replay → transform concurrent selectors</strong></li>
+    <li>Same events → same order → same transforms → <strong>same document on all peers</strong></li>
+  </ol>
+  <p style="margin-top: 0.5em;">The hard part isn't convergence (that's free from G-Set + deterministic eval).<br/>
+  The hard part is <strong>intention preservation</strong> — each edit should do what the user meant.</p>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 5: LIVE DEMO — COUNTER (1.5 min)                            -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section>
+  <span class="demo-label">🎬 LIVE DEMO</span>
+  <h2>Counter: Formulas & Replay</h2>
+  <img src="slides-assets/04-counter-4.png" class="screenshot" alt="Counter after 4 increments" />
+  <p class="small">Each click replays 3 recorded edits: wrap in formula → rename → add operand.<br/>
+  Formula engine evaluates the nested tree: ((((0+1)+1)+1)+1) = 4</p>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 6: LIVE DEMO — CONFERENCE LIST (1 min)                      -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section>
+  <span class="demo-label">🎬 LIVE DEMO</span>
+  <h2>Conference List: Record & Replay</h2>
+  <div class="cols">
+    <div>
+      <img src="slides-assets/12-conf-list-before.png" class="screenshot-sm" alt="Conference list" />
+    </div>
+    <div>
+      <p>The <strong>Add button</strong> replays a 2-step recipe:</p>
+      <ol>
+        <li>Insert empty item at front</li>
+        <li>Copy value from input field</li>
+      </ol>
+      <p class="small">This is programming by demonstration — the user records actions, the system replays them.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 7: LIVE DEMO — TABLE REFACTORING (2 min)                    -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section>
+  <span class="demo-label">🎬 LIVE DEMO</span>
+  <h2>List → Table: Structural Transformation</h2>
+  <div class="cols">
+    <div style="flex: 1;">
+      <p class="small" style="text-align:center"><strong>Before</strong></p>
+      <img src="slides-assets/30-initial.png" class="screenshot-sm" />
+    </div>
+    <div style="flex: 1;">
+      <p class="small" style="text-align:center"><strong>After</strong></p>
+      <img src="slides-assets/31-alice-refactored.png" class="screenshot-sm" />
+    </div>
+  </div>
+  <p class="small">4 wildcard edits: updateTag → wrapList → wrapRecord (split-first) → insert (split-rest with $ref).<br/>
+  The <code>*</code> wildcard applies to all rows simultaneously.</p>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 8: LIVE DEMO — CONCURRENT EDITING (2 min)                   -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section>
+  <span class="demo-label">🎬 LIVE DEMO</span>
+  <h2>Concurrent Editing: The Main Result</h2>
+  <div class="cols">
+    <div style="flex:1; text-align:center;">
+      <p class="small"><strong>Alice</strong> refactors to table (offline)</p>
+      <img src="slides-assets/31-alice-refactored.png" class="screenshot-sm" />
+    </div>
+    <div style="flex:1; text-align:center;">
+      <p class="small"><strong>Bob</strong> adds speakers (offline)</p>
+      <img src="slides-assets/32-bob-added.png" class="screenshot-sm" />
+    </div>
+  </div>
+</section>
+
+<section>
+  <span class="demo-label">🎬 LIVE DEMO</span>
+  <h2>After Merge</h2>
+  <img src="slides-assets/33-merged.png" class="screenshot" alt="After merge — all speakers in table" />
+  <p class="small">Both reconnect → events merge → <strong>all speakers in the table</strong>.<br/>
+  Bob's plain <code>&lt;li&gt;</code> items were automatically transformed into table rows with split formulas.</p>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 10: TESTING (45s)                                           -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Validation</h2>
+  <table>
+    <tr><th>Layer</th><th>What</th><th>Count</th></tr>
+    <tr><td>Unit tests</td><td>Individual edits, OT rules</td><td>280+</td></tr>
+    <tr><td>Concurrent pair matrix</td><td>One test per edit-type pair</td><td>21</td></tr>
+    <tr><td>Property-based (fast-check)</td><td>Random edits + sync orders → convergence</td><td>36K+ runs</td></tr>
+    <tr><td>Formative examples</td><td>Multi-step workflows (counter, conference...)</td><td>6</td></tr>
+    <tr><td>Sync E2E</td><td>WebSocket relay, late join, reconnection</td><td>21</td></tr>
+    <tr><td>Browser E2E</td><td>Playwright: two browsers sync live</td><td>✓</td></tr>
+  </table>
+  <p class="small" style="margin-top: 0.5em;"><strong>331 tests total</strong>, CI on every push. Zero OT-dispatch <code>instanceof</code> checks — fully virtual dispatch.</p>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 11: COMPARISON (45s)                                        -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section>
+  <h2>Comparison</h2>
+  <table>
+    <tr><th></th><th>Automerge</th><th>Loro</th><th>mydenicek</th></tr>
+    <tr><td>Atomic wrap</td><td>❌</td><td>✅</td><td>✅</td></tr>
+    <tr><td>Path selectors</td><td>❌</td><td>❌</td><td>✅</td></tr>
+    <tr><td>Wildcards</td><td>❌</td><td>❌</td><td>✅</td></tr>
+    <tr><td>Replay retargeting</td><td>❌</td><td>❌</td><td>✅</td></tr>
+    <tr><td>Character-level text</td><td>✅</td><td>✅</td><td>❌</td></tr>
+    <tr><td>Dependencies</td><td>WASM</td><td>WASM</td><td>zero</td></tr>
+  </table>
+  <p class="small" style="margin-top: 0.5em;">Trade-off: we sacrifice character-level text for native path-based selectors and replay.</p>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 12: CONCLUSION (30s)                                        -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section>
+  <h1>Conclusion</h1>
+  <ul style="font-size: 0.85em;">
+    <li>Built a <strong>pure operation-based CRDT</strong> for Denicek's tree-structured documents</li>
+    <li>Convergence from G-Set + deterministic eval; <strong>intention preservation</strong> from selector rewriting</li>
+    <li>Validated on 5 formative examples, 331 tests, and a determinism audit</li>
+  </ul>
+  <p style="margin-top: 1em; font-size: 0.8em;">
+    <strong>Live:</strong> <a href="https://krsion.github.io/mydenicek/">krsion.github.io/mydenicek</a><br/>
+    <strong>Code:</strong> <a href="https://github.com/krsion/mydenicek">github.com/krsion/mydenicek</a>
+  </p>
+  <p style="margin-top: 1.5em; font-size: 1em;">Questions?</p>
+</section>
+
+</div><!-- slides -->
+</div><!-- reveal -->
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/highlight/highlight.min.js"></script>
+<script>
+  Reveal.initialize({
+    hash: true,
+    slideNumber: true,
+    transition: 'slide',
+    width: 1280,
+    height: 720,
+    plugins: [ RevealHighlight ],
+  });
+</script>
+</body>
+</html>
