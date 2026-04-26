@@ -108,15 +108,17 @@ export class EventGraph {
 
   /**
    * Checkpoint cache for incremental materialization. Stores document
-   * snapshots indexed by frontier hash so that merges can resume from
-   * the most recent fork point instead of replaying from scratch.
+   * snapshots at geometrically-spaced replay points so that rematerialization
+   * after concurrent events can resume from the longest matching prefix of
+   * the topological order instead of replaying from scratch.
    */
   private checkpointCache: Map<string, {
     doc: Node;
     applied: { ev: Event; edit: Edit }[];
+    prefixLength: number;
     order: string[];
   }> = new Map();
-  private static readonly MAX_CHECKPOINTS = 16;
+  private static readonly MAX_CHECKPOINTS = 24;
 
   constructor(
     initial: Node,
@@ -162,30 +164,27 @@ export class EventGraph {
 
   /**
    * Saves the current cached state as a checkpoint so the next materialize()
-   * can resume from it. The checkpoint is keyed by the given frontier hash.
+   * can resume from it. Called from insertEvent when a non-linear-extension
+   * event invalidates the cache.
    */
-  private saveCheckpointIfNeeded(event: Event, parentKeys: Set<string>): void {
+  private saveCheckpointBeforeInvalidation(): void {
     if (
       this.cachedDoc === null || this.cachedApplied === null ||
       this.cachedOrder === null
     ) {
       return;
     }
-    const fHash = this.frontierHash(
-      parentKeys.size > 0
-        ? event.parents
-        : this._frontierIds.filter((id) => id.format() !== event.id.format()),
-    );
-    if (!this.checkpointCache.has(fHash)) {
-      this.checkpointCache.set(fHash, {
+    // Save the full materialized state as one checkpoint. Intermediate
+    // checkpoints created during replay cover shorter prefixes.
+    const key = `full:${this.cachedOrder.length}`;
+    if (!this.checkpointCache.has(key)) {
+      this.checkpointCache.set(key, {
         doc: this.cachedDoc.clone(),
         applied: [...this.cachedApplied],
+        prefixLength: this.cachedOrder.length,
         order: [...this.cachedOrder],
       });
-      while (this.checkpointCache.size > EventGraph.MAX_CHECKPOINTS) {
-        const oldest = this.checkpointCache.keys().next().value;
-        if (oldest !== undefined) this.checkpointCache.delete(oldest);
-      }
+      this.evictCheckpoints();
     }
   }
 
@@ -328,7 +327,7 @@ export class EventGraph {
     // Save a checkpoint of the current cached state before invalidation.
     // On the next materialize(), we can resume from this checkpoint
     // instead of replaying from scratch.
-    this.saveCheckpointIfNeeded(event, parentKeys);
+    this.saveCheckpointBeforeInvalidation();
 
     this.clearMaterializationCaches();
   }
@@ -598,7 +597,34 @@ export class EventGraph {
     applied: { ev: Event; edit: Edit }[],
     conflicts?: Node[],
   ): void {
+    // Compute geometric checkpoint positions: startIndex+1, +2, +4, +8, ...
+    // This ensures early prefixes (which are most likely to remain stable
+    // across order changes from concurrent events) are always captured.
+    const checkpointPositions = new Set<number>();
+    const replayCount = ordered.length - startIndex;
+    if (replayCount >= 20) {
+      let offset = 1;
+      while (startIndex + offset < ordered.length) {
+        checkpointPositions.add(startIndex + offset);
+        offset *= 2;
+      }
+    }
+
     for (let i = startIndex; i < ordered.length; i++) {
+      // Save intermediate checkpoint at geometric positions
+      if (checkpointPositions.has(i)) {
+        const key = `geo:${ordered[i - 1]}`;
+        if (!this.checkpointCache.has(key)) {
+          this.checkpointCache.set(key, {
+            doc: doc.clone(),
+            applied: [...applied],
+            prefixLength: i,
+            order: ordered.slice(0, i),
+          });
+          this.evictCheckpoints();
+        }
+      }
+
       const key = ordered[i]!;
       const ev = this.events.get(key) as Event;
       const edit = ev.resolveAgainst(applied, doc);
@@ -644,15 +670,19 @@ export class EventGraph {
     }
   }
 
-  /** Compute a stable hash for a frontier (sorted, joined event IDs). */
-  private frontierHash(frontier: EventId[]): string {
-    return [...frontier].map((id) => id.format()).sort().join("|");
+  /** Evict oldest checkpoints when cache exceeds MAX_CHECKPOINTS. */
+  private evictCheckpoints(): void {
+    while (this.checkpointCache.size > EventGraph.MAX_CHECKPOINTS) {
+      const oldest = this.checkpointCache.keys().next().value;
+      if (oldest !== undefined) this.checkpointCache.delete(oldest);
+    }
   }
 
   /**
    * Find the best checkpoint: the longest cached prefix of the current
-   * topological order. Promotes the chosen checkpoint to most-recently-used
-   * so that eviction (which deletes the oldest Map entry) behaves as LRU.
+   * topological order. A checkpoint is valid iff its saved order is an exact
+   * prefix of the new deterministic topological order. Promotes the chosen
+   * checkpoint to most-recently-used so that FIFO eviction behaves as LRU.
    */
   private findBestCheckpoint(ordered: string[]): {
     doc: Node;
@@ -667,7 +697,7 @@ export class EventGraph {
     let bestKey: string | null = null;
 
     for (const [key, cached] of this.checkpointCache) {
-      if (cached.order.length >= ordered.length) continue;
+      if (cached.prefixLength >= ordered.length) continue;
       // Verify the cached order is a prefix of our current order
       let isPrefix = true;
       for (let i = 0; i < cached.order.length; i++) {
@@ -677,12 +707,13 @@ export class EventGraph {
         }
       }
       if (
-        isPrefix && (best === null || cached.order.length > best.startIndex)
+        isPrefix &&
+        (best === null || cached.prefixLength > best.startIndex)
       ) {
         best = {
           doc: cached.doc.clone(),
           applied: [...cached.applied],
-          startIndex: cached.order.length,
+          startIndex: cached.prefixLength,
         };
         bestKey = key;
       }
