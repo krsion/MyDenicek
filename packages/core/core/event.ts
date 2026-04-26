@@ -109,43 +109,60 @@ export class Event {
 
   /**
    * Like resolveAgainst, but uses a per-peer index to skip causal ancestors
-   * entirely in O(P + C) instead of scanning all N priors.
+   * entirely in O(P + C log P) instead of scanning all N priors.
    *
-   * The index maps each peer to its applied events, each tagged with its
-   * topological position. Events within a peer are in sequence order. For
-   * event E with clock Vₑ, events from peer Y with seq ≤ Vₑ[Y] are
-   * guaranteed causal ancestors and are skipped via binary search.
+   * The index maps each peer to its applied events in sequence order, each
+   * tagged with its topological position. For event E with clock Vₑ, events
+   * from peer Y with seq ≤ Vₑ[Y] are guaranteed causal ancestors. Because
+   * sequence numbers are contiguous (0, 1, 2, ...), the first concurrent
+   * event is at index Vₑ[Y] + 1 — a direct O(1) lookup per peer.
    * Concurrent events from all peers are merged by topological position
-   * to ensure transformations compose in the correct order.
+   * using a P-way merge to ensure transformations compose in the correct
+   * order.
    */
   resolveAgainstIndex(
     peerIndex: Map<string, { ev: Event; edit: Edit; topoPos: number }[]>,
     doc: Node,
   ): Edit {
-    // Collect concurrent events from each peer with their topo positions.
-    const concurrent: { edit: Edit; topoPos: number }[] = [];
+    // Collect per-peer concurrent slices with their start positions.
+    // Each slice is already sorted by topoPos within its peer.
+    type Slice = {
+      list: { ev: Event; edit: Edit; topoPos: number }[];
+      idx: number;
+    };
+    const slices: Slice[] = [];
     for (const [peer, peerEvents] of peerIndex) {
-      const knownSeq = this.clock.get(peer);
-      // Events are in sequence order; find first with seq > knownSeq.
-      // Binary search for the boundary.
-      let lo = 0, hi = peerEvents.length;
-      while (lo < hi) {
-        const mid = (lo + hi) >> 1;
-        if (peerEvents[mid]!.ev.id.seq <= knownSeq) lo = mid + 1;
-        else hi = mid;
-      }
-      for (let i = lo; i < peerEvents.length; i++) {
-        concurrent.push(peerEvents[i]!);
+      // Direct index: seq numbers are contiguous, so knownSeq+1 is the
+      // first concurrent event's position in peerEvents. VectorClock.get
+      // returns -1 for unknown peers, so knownSeq + 1 = 0 (all events
+      // from an unknown peer are concurrent).
+      const startIdx = this.clock.get(peer) + 1;
+      if (startIdx < peerEvents.length) {
+        slices.push({ list: peerEvents, idx: startIdx });
       }
     }
-    if (concurrent.length === 0) return this.edit;
+    if (slices.length === 0) return this.edit;
 
-    // Sort by topological position to ensure correct transformation order.
-    concurrent.sort((a, b) => a.topoPos - b.topoPos);
-
+    // P-way merge: advance the slice with the smallest topoPos.
+    // For small P (typical: 2–3), this is a simple linear scan.
     let edit: Edit = this.edit;
-    for (const prior of concurrent) {
-      edit = transformLaterConcurrentEdit(prior.edit, edit);
+    for (;;) {
+      let bestSliceIdx = -1;
+      let bestTopoPos = Infinity;
+      for (let s = 0; s < slices.length; s++) {
+        const slice = slices[s]!;
+        if (slice.idx < slice.list.length) {
+          const tp = slice.list[slice.idx]!.topoPos;
+          if (tp < bestTopoPos) {
+            bestTopoPos = tp;
+            bestSliceIdx = s;
+          }
+        }
+      }
+      if (bestSliceIdx === -1) break;
+      const best = slices[bestSliceIdx]!;
+      edit = transformLaterConcurrentEdit(best.list[best.idx]!.edit, edit);
+      best.idx++;
     }
     return this.finalizeResolved(edit, true, doc);
   }
