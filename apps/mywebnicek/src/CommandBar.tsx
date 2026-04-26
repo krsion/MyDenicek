@@ -1245,6 +1245,7 @@ export function CommandBar({ dk }: CommandBarProps) {
       {/* Last output message */}
       {lastMessage && (
         <div
+          data-testid="command-output"
           style={{
             padding: "4px 12px",
             fontSize: 12,

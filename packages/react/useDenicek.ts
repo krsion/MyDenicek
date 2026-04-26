@@ -55,37 +55,37 @@ export interface UseDenicekReturn {
   syncStatus: SyncStatus;
 
   // Mutations (all auto-trigger re-render + sync flush)
-  /** Add a named field to every record matched by `target`. */
-  add: (target: string, field: string, value: PlainNode) => void;
-  /** Delete a named field from every record matched by `target`. */
-  delete: (target: string, field: string) => void;
-  /** Replace every primitive node matched by `target` with `value`. */
-  set: (target: string, value: PrimitiveValue) => void;
-  /** Rename a field on every record matched by `target`. */
-  rename: (target: string, from: string, to: string) => void;
-  /** Insert `value` at `index` in every list matched by `target`. */
+  /** Add a named field to every record matched by `target`. Returns the event ID. */
+  add: (target: string, field: string, value: PlainNode) => string;
+  /** Delete a named field from every record matched by `target`. Returns the event ID. */
+  delete: (target: string, field: string) => string;
+  /** Replace every primitive node matched by `target` with `value`. Returns the event ID. */
+  set: (target: string, value: PrimitiveValue) => string;
+  /** Rename a field on every record matched by `target`. Returns the event ID. */
+  rename: (target: string, from: string, to: string) => string;
+  /** Insert `value` at `index` in every list matched by `target`. Returns the event ID. */
   insert: (
     target: string,
     index: number,
     value: PlainNode,
     strict?: boolean,
-  ) => void;
-  /** Remove the item at `index` from every list matched by `target`. */
-  remove: (target: string, index: number, strict?: boolean) => void;
-  /** Update the structural tag on every matched node. */
-  updateTag: (target: string, tag: string) => void;
-  /** Wrap every matched node in a record with the given field and tag. */
-  wrapRecord: (target: string, field: string, tag: string) => void;
-  /** Wrap every matched node in a single-item list with the given tag. */
-  wrapList: (target: string, tag: string) => void;
-  /** Copy nodes from `source` into `target`. */
-  copy: (target: string, source: string) => void;
+  ) => string;
+  /** Remove the item at `index` from every list matched by `target`. Returns the event ID. */
+  remove: (target: string, index: number, strict?: boolean) => string;
+  /** Update the structural tag on every matched node. Returns the event ID. */
+  updateTag: (target: string, tag: string) => string;
+  /** Wrap every matched node in a record with the given field and tag. Returns the event ID. */
+  wrapRecord: (target: string, field: string, tag: string) => string;
+  /** Wrap every matched node in a single-item list with the given tag. Returns the event ID. */
+  wrapList: (target: string, tag: string) => string;
+  /** Copy nodes from `source` into `target`. Returns the event ID. */
+  copy: (target: string, source: string) => string;
   /** Query nodes matching `target` selector (read-only, no re-render). */
   get: (target: string) => PlainNode[];
-  /** Undo the last local edit. */
-  undo: () => void;
-  /** Redo the last undone edit. */
-  redo: () => void;
+  /** Undo the last local edit. Returns the event ID. */
+  undo: () => string;
+  /** Redo the last undone edit. Returns the event ID. */
+  redo: () => string;
 
   // Sync control
   /** Connect (or switch) to a sync server. */
@@ -137,8 +137,8 @@ export function useDenicek(options?: UseDenicekOptions): UseDenicekReturn {
 
   // Wrap a CRDT mutation: call it, recompute formulas, bump version, flush sync
   const mutate = useCallback(
-    (fn: () => void) => {
-      fn();
+    <T,>(fn: () => T): T => {
+      const result = fn();
       try {
         dk.recomputeFormulas();
       } catch {
@@ -146,6 +146,7 @@ export function useDenicek(options?: UseDenicekOptions): UseDenicekReturn {
       }
       bump();
       sync.flush();
+      return result;
     },
     [dk, bump, sync],
   );
