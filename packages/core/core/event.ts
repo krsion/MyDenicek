@@ -96,12 +96,65 @@ export class Event {
     let edit: Edit = this.edit;
     let sawConcurrentEdit = false;
     for (const prior of applied) {
-      if (this.clock.dominates(prior.ev.clock)) continue;
-      if (this.isConcurrentWith(prior.ev)) {
-        sawConcurrentEdit = true;
-        edit = transformLaterConcurrentEdit(prior.edit, edit);
+      // O(1) causal ancestor check: if we've seen this peer's seq, it's an
+      // ancestor. This replaces the O(P) vector-clock dominates() check.
+      if (this.clock.get(prior.ev.id.peer) >= prior.ev.id.seq) continue;
+      // Prior is in applied (before us in topo order) and not our ancestor,
+      // so it must be concurrent.
+      sawConcurrentEdit = true;
+      edit = transformLaterConcurrentEdit(prior.edit, edit);
+    }
+    return this.finalizeResolved(edit, sawConcurrentEdit, doc);
+  }
+
+  /**
+   * Like resolveAgainst, but uses a per-peer index to skip causal ancestors
+   * entirely in O(P + C) instead of scanning all N priors.
+   *
+   * The index maps each peer to its applied events, each tagged with its
+   * topological position. Events within a peer are in sequence order. For
+   * event E with clock Vₑ, events from peer Y with seq ≤ Vₑ[Y] are
+   * guaranteed causal ancestors and are skipped via binary search.
+   * Concurrent events from all peers are merged by topological position
+   * to ensure transformations compose in the correct order.
+   */
+  resolveAgainstIndex(
+    peerIndex: Map<string, { ev: Event; edit: Edit; topoPos: number }[]>,
+    doc: Node,
+  ): Edit {
+    // Collect concurrent events from each peer with their topo positions.
+    const concurrent: { edit: Edit; topoPos: number }[] = [];
+    for (const [peer, peerEvents] of peerIndex) {
+      const knownSeq = this.clock.get(peer);
+      // Events are in sequence order; find first with seq > knownSeq.
+      // Binary search for the boundary.
+      let lo = 0, hi = peerEvents.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (peerEvents[mid]!.ev.id.seq <= knownSeq) lo = mid + 1;
+        else hi = mid;
+      }
+      for (let i = lo; i < peerEvents.length; i++) {
+        concurrent.push(peerEvents[i]!);
       }
     }
+    if (concurrent.length === 0) return this.edit;
+
+    // Sort by topological position to ensure correct transformation order.
+    concurrent.sort((a, b) => a.topoPos - b.topoPos);
+
+    let edit: Edit = this.edit;
+    for (const prior of concurrent) {
+      edit = transformLaterConcurrentEdit(prior.edit, edit);
+    }
+    return this.finalizeResolved(edit, true, doc);
+  }
+
+  private finalizeResolved(
+    edit: Edit,
+    sawConcurrentEdit: boolean,
+    doc: Node,
+  ): Edit {
     if (sawConcurrentEdit && !edit.canApply(doc)) {
       return new NoOpEdit(
         edit.target,

@@ -610,6 +610,25 @@ export class EventGraph {
       }
     }
 
+    // Build per-peer index from existing applied entries (checkpoint prefix).
+    // Maps each peer to its events in sequence order, tagged with topological
+    // position. This allows resolveAgainstIndex to skip causal ancestors via
+    // O(1) binary search per peer instead of O(N·P) linear scan.
+    const peerIndex = new Map<
+      string,
+      { ev: Event; edit: Edit; topoPos: number }[]
+    >();
+    for (let i = 0; i < applied.length; i++) {
+      const entry = applied[i]!;
+      const peer = entry.ev.id.peer;
+      let list = peerIndex.get(peer);
+      if (!list) {
+        list = [];
+        peerIndex.set(peer, list);
+      }
+      list.push({ ev: entry.ev, edit: entry.edit, topoPos: i });
+    }
+
     for (let i = startIndex; i < ordered.length; i++) {
       // Save intermediate checkpoint at geometric positions
       if (checkpointPositions.has(i)) {
@@ -627,11 +646,19 @@ export class EventGraph {
 
       const key = ordered[i]!;
       const ev = this.events.get(key) as Event;
-      const edit = ev.resolveAgainst(applied, doc);
+      const edit = ev.resolveAgainstIndex(peerIndex, doc);
 
       if (edit instanceof NoOpEdit) {
         conflicts?.push(edit.toConflict());
+        const topoPos = applied.length;
         applied.push({ ev, edit });
+        const peer = ev.id.peer;
+        let list = peerIndex.get(peer);
+        if (!list) {
+          list = [];
+          peerIndex.set(peer, list);
+        }
+        list.push({ ev, edit, topoPos });
         continue;
       }
 
@@ -661,12 +688,28 @@ export class EventGraph {
           `Strict edit at stale index is no longer applicable.`,
         );
         conflicts?.push(noOp.toConflict());
+        const topoPos = applied.length;
         applied.push({ ev, edit: noOp });
+        const peer = ev.id.peer;
+        let list = peerIndex.get(peer);
+        if (!list) {
+          list = [];
+          peerIndex.set(peer, list);
+        }
+        list.push({ ev, edit: noOp, topoPos });
         continue;
       }
 
       finalEdit.apply(doc);
+      const topoPos = applied.length;
       applied.push({ ev, edit: finalEdit });
+      const peer = ev.id.peer;
+      let list = peerIndex.get(peer);
+      if (!list) {
+        list = [];
+        peerIndex.set(peer, list);
+      }
+      list.push({ ev, edit: finalEdit, topoPos });
     }
   }
 
