@@ -814,25 +814,23 @@ Deno.test("default edit transform produces NoOp when target is removed", () => {
 });
 
 Deno.test("materialize throws on cycle", () => {
-  const events = new Map<string, Event>();
-  events.set(
-    "a:0",
+  const events = new Map<string, Event[]>();
+  events.set("a", [
     new Event(
       new EventId("a", 0),
       [new EventId("b", 0)],
       new RecordAddEdit(Selector.parse("x"), new PrimitiveNode("a")),
       new VectorClock({ a: 0 }),
     ),
-  );
-  events.set(
-    "b:0",
+  ]);
+  events.set("b", [
     new Event(
       new EventId("b", 0),
       [new EventId("a", 0)],
       new RecordAddEdit(Selector.parse("y"), new PrimitiveNode("b")),
       new VectorClock({ b: 0 }),
     ),
-  );
+  ]);
   const graph = new EventGraph(
     new RecordNode("root", {}),
     events,
@@ -846,16 +844,18 @@ Deno.test("materialize throws on invalid replay state", () => {
     new RecordNode("root", {}),
     new Map([
       [
-        "alice:0",
-        new Event(
-          new EventId("alice", 0),
-          [],
-          new RecordAddEdit(
-            Selector.parse("missing/x"),
-            new PrimitiveNode("a"),
+        "alice",
+        [
+          new Event(
+            new EventId("alice", 0),
+            [],
+            new RecordAddEdit(
+              Selector.parse("missing/x"),
+              new PrimitiveNode("a"),
+            ),
+            new VectorClock({ alice: 0 }),
           ),
-          new VectorClock({ alice: 0 }),
-        ),
+        ],
       ],
     ]),
     [new EventId("alice", 0)],

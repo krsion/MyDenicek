@@ -39,7 +39,9 @@ export class Event {
       !other.clock.dominates(this.clock);
   }
 
-  validate(known: Map<string, Event>): void {
+  validate(
+    known: { has(key: string): boolean; get(key: string): Event | undefined },
+  ): void {
     const key = this.id.format();
     validatePeerId(this.id.peer);
     if (!Number.isInteger(this.id.seq) || this.id.seq < 0) {

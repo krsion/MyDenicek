@@ -82,7 +82,7 @@ export interface EventGraphOptions {
 
 export class EventGraph {
   private initial: Node;
-  private events: Map<string, Event>;
+  private events: Map<string, Event[]>;
   private _frontierIds: EventId[];
   private cachedOrder: string[] | null = null;
   /** Cached resolved edits from the last full materialization (same lifetime as cachedOrder). */
@@ -101,7 +101,7 @@ export class EventGraph {
 
   constructor(
     initial: Node,
-    events?: Map<string, Event>,
+    events?: Map<string, Event[]>,
     frontiers?: EventId[],
     options?: EventGraphOptions,
   ) {
@@ -121,15 +121,60 @@ export class EventGraph {
 
   /** Number of committed events in the graph (excludes buffered out-of-order events). */
   get eventCount(): number {
-    return this.events.size;
+    let count = 0;
+    for (const arr of this.events.values()) count += arr.length;
+    return count;
   }
 
   hasEvent(key: string): boolean {
-    return this.events.has(key);
+    const id = EventId.parse(key);
+    return this.events.get(id.peer)?.[id.seq] !== undefined;
   }
 
   getEvent(key: string): Event | undefined {
-    return this.events.get(key);
+    const id = EventId.parse(key);
+    return this.events.get(id.peer)?.[id.seq];
+  }
+
+  /** Fast event lookup by already-decomposed peer + seq. */
+  private getEventById(peer: string, seq: number): Event | undefined {
+    return this.events.get(peer)?.[seq];
+  }
+
+  /** Fast existence check by already-decomposed peer + seq. */
+  private hasEventById(peer: string, seq: number): boolean {
+    return this.events.get(peer)?.[seq] !== undefined;
+  }
+
+  /** Insert an event into the per-peer storage. */
+  private storeEvent(event: Event): void {
+    const peer = event.id.peer;
+    let peerEvents = this.events.get(peer);
+    if (!peerEvents) {
+      peerEvents = [];
+      this.events.set(peer, peerEvents);
+    }
+    peerEvents[event.id.seq] = event;
+  }
+
+  /** Iterate all committed events across all peers. */
+  private allEvents(): Event[] {
+    const result: Event[] = [];
+    for (const arr of this.events.values()) {
+      for (const ev of arr) result.push(ev);
+    }
+    return result;
+  }
+
+  /** Map-like lookup facade for passing to Event.validate(). */
+  private get eventLookup(): {
+    has(key: string): boolean;
+    get(key: string): Event | undefined;
+  } {
+    return {
+      has: (key: string) => this.hasEvent(key),
+      get: (key: string) => this.getEvent(key),
+    };
   }
 
   /** Clears all materialization caches. */
@@ -161,7 +206,7 @@ export class EventGraph {
    * later structural history has removed the replay target entirely.
    */
   resolveReplayEdit(key: string): Edit {
-    const sourceEvent = this.events.get(key);
+    const sourceEvent = this.getEvent(key);
     if (sourceEvent === undefined) {
       throw new Error(
         `Unknown event '${key}'. Events must be recorded locally or received before they can be replayed.`,
@@ -213,7 +258,7 @@ export class EventGraph {
   // IDs that must remain in the DAG, so pruning is not possible.
 
   insertEvent(event: Event): void {
-    event.validate(this.events);
+    event.validate(this.eventLookup);
 
     // Track whether this insertion is a strict linear extension of the
     // current state, i.e. event.parents exactly equals this._frontierIds.
@@ -243,7 +288,7 @@ export class EventGraph {
       }
     }
 
-    this.events.set(event.id.format(), event);
+    this.storeEvent(event);
 
     if (
       !this.relayMode &&
@@ -298,7 +343,7 @@ export class EventGraph {
     const parents = [...this._frontierIds];
     const clock = new VectorClock();
     for (const p of parents) {
-      const parentEvent = this.events.get(p.format());
+      const parentEvent = this.getEvent(p.format());
       if (parentEvent) clock.merge(parentEvent.clock);
     }
     const seq = clock.tick(peer);
@@ -311,7 +356,7 @@ export class EventGraph {
     const pendingByKey: PendingEventsByKey = {};
     for (const event of [...this.bufferedEvents, ...incomingEvents]) {
       const key = event.id.format();
-      const existing = this.events.get(key);
+      const existing = this.getEvent(key);
       if (existing != null) {
         if (!existing.equals(event)) {
           throw new ConflictingEventPayloadError(key);
@@ -341,7 +386,7 @@ export class EventGraph {
         // Parents remain missing until they have actually been inserted into
         // `this.events`; merely being present in `pendingByKey` is not enough
         // to make a child causally ready.
-        if (!this.events.has(pk)) {
+        if (!this.hasEvent(pk)) {
           missingParentCount++;
           (childKeysByMissingParent[pk] ??= []).push(key);
         }
@@ -433,7 +478,7 @@ export class EventGraph {
   /** Returns events not known by a peer with the given frontiers. */
   eventsSince(remoteFrontiers: EventId[]): Event[] {
     const remoteKnown = this.filterCausalPast(remoteFrontiers, false);
-    return [...this.events.values()].filter(
+    return this.allEvents().filter(
       (ev) => !remoteKnown.has(ev.id.format()),
     );
   }
@@ -444,7 +489,7 @@ export class EventGraph {
     while (stack.length > 0) {
       const key = stack.pop() as string;
       if (causalPast.has(key)) continue;
-      const ev = this.events.get(key);
+      const ev = this.getEvent(key);
       if (ev == null) {
         if (strict) throw new Error(`Unknown version '${key}'.`);
         continue;
@@ -473,7 +518,7 @@ export class EventGraph {
       children[key] = [];
     }
     for (const key of causalPast) {
-      const ev = this.events.get(key) as Event;
+      const ev = this.getEvent(key) as Event;
       for (const p of ev.parents) {
         const pk = p.format();
         if (!causalPast.has(pk)) continue;
@@ -482,8 +527,8 @@ export class EventGraph {
       }
     }
     const queue = new BinaryHeap<string>((leftKey, rightKey) =>
-      (this.events.get(leftKey) as Event).id.compareTo(
-        (this.events.get(rightKey) as Event).id,
+      (this.getEvent(leftKey) as Event).id.compareTo(
+        (this.getEvent(rightKey) as Event).id,
       )
     );
     for (const key of Object.keys(indegree)) {
@@ -556,7 +601,7 @@ export class EventGraph {
 
     for (let i = startIndex; i < ordered.length; i++) {
       const key = ordered[i]!;
-      const ev = this.events.get(key) as Event;
+      const ev = this.getEvent(key) as Event;
       const edit = ev.resolveAgainstIndex(peerIndex, doc);
 
       if (edit instanceof NoOpEdit) {
@@ -690,7 +735,7 @@ export class EventGraph {
 
   /** Returns a serializable snapshot of all known events for UI inspection. */
   snapshotEvents(): EventSnapshot[] {
-    return [...this.events.values()].map((ev) => ({
+    return this.allEvents().map((ev) => ({
       id: ev.id.format(),
       peer: ev.id.peer,
       seq: ev.id.seq,
