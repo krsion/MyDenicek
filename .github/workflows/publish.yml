@@ -23,7 +23,7 @@ jobs:
       - name: Verify packages before publish
         run: |
           cd packages/core && deno check mod.ts && deno doc --lint mod.ts
-          cd ../react && deno check mod.ts
+          cd ../react && deno check --import-map=../../deno.json mod.ts
 
       - name: Publish workspace to JSR
         run: deno publish --allow-dirty
