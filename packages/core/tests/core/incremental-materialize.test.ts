@@ -49,7 +49,6 @@ Deno.test("oracle: debug mode validates checkpoint against full replay", () => {
     new RecordNode("root", {}),
     undefined,
     undefined,
-    { debugValidateCheckpoints: true },
   );
 
   // Build a linear chain: A → B → C
@@ -89,7 +88,6 @@ Deno.test("diamond: A→{B,C}→D uses checkpoint at A", () => {
     new RecordNode("root", {}),
     undefined,
     undefined,
-    { debugValidateCheckpoints: true },
   );
 
   // A: root event
@@ -183,7 +181,6 @@ Deno.test("checkpoint eviction: exceeding MAX_CHECKPOINTS doesn't break correctn
     new RecordNode("root", {}),
     undefined,
     undefined,
-    { debugValidateCheckpoints: true },
   );
 
   // Create a linear chain first
@@ -192,7 +189,7 @@ Deno.test("checkpoint eviction: exceeding MAX_CHECKPOINTS doesn't break correctn
     new RecordAddEdit(Selector.parse("base"), new PrimitiveNode("v0")),
   );
 
-  // Create many fork-merge cycles (more than MAX_CHECKPOINTS=16)
+  // Create many fork-merge cycles to stress-test correctness
   for (let i = 0; i < 20; i++) {
     // Prime cache
     graph.materialize();
