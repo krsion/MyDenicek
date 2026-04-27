@@ -161,7 +161,9 @@ export class EventGraph {
   private allEvents(): Event[] {
     const result: Event[] = [];
     for (const arr of this.events.values()) {
-      for (const ev of arr) result.push(ev);
+      for (const ev of arr) {
+        if (ev !== undefined) result.push(ev);
+      }
     }
     return result;
   }
@@ -257,7 +259,7 @@ export class EventGraph {
   // The PO-Log (this.events) is append-only: replay references event
   // IDs that must remain in the DAG, so pruning is not possible.
 
-  insertEvent(event: Event): void {
+  insertEvent(event: Event, skipEditValidation = false): void {
     event.validate(this.eventLookup);
 
     // Track whether this insertion is a strict linear extension of the
@@ -273,7 +275,7 @@ export class EventGraph {
     // prime any cache. Skipping this also means the relay never calls edit
     // implementations, so it does not need app-specific primitive edits to
     // be registered.
-    if (!this.relayMode) {
+    if (!this.relayMode && !skipEditValidation) {
       // Prime the cache on first linear extension so subsequent inserts can
       // reuse it. This is cheap because materialize() without frontier would
       // need to run on the very next read anyway.
@@ -407,7 +409,7 @@ export class EventGraph {
     while (readyKeys.length > 0) {
       const key = readyKeys.pop()!;
       const event = pendingByKey[key]!;
-      this.insertEvent(event);
+      this.insertEvent(event, true);
       delete pendingByKey[key];
       const childKeys = childKeysByMissingParent[key];
       if (childKeys != null) {

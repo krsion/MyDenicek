@@ -93,30 +93,23 @@ Deno.test("rejects list pops that would remove referenced items", () => {
   );
 });
 
-Deno.test("rejects remote delete events that would remove referenced nodes", () => {
+Deno.test("remote delete of referenced node is accepted and resolved at materialize", () => {
   const core = new Denicek("alice", {
     $tag: "root",
     person: { $tag: "person", name: "Ada Lovelace" },
     focus: { $ref: "/person/name" },
   });
-  const invalidDelete = new Event(
+  const remoteDelete = new Event(
     new EventId("bob", 1),
     [],
     new RecordDeleteEdit(Selector.parse("person")),
     new VectorClock({ bob: 1 }),
   );
 
-  assertThrows(
-    () => core.applyRemote(encodeRemoteEvent(invalidDelete)),
-    Error,
-    "cannot remove 'person'",
-  );
-  assertEquals(core.eventsSince([]), []);
-  assertEquals(core.toPlain(), {
-    $tag: "root",
-    person: { $tag: "person", name: "Ada Lovelace" },
-    focus: { $ref: "/person/name" },
-  });
+  // Remote events are accepted without edit validation (we trust peers).
+  // The conflict is resolved during materialization.
+  core.applyRemote(encodeRemoteEvent(remoteDelete));
+  assertEquals(core.eventsSince([]).length, 1);
 });
 
 Deno.test("ingests concurrent delete of a newly referenced node and no-ops the delete", () => {
