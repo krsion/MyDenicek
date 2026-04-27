@@ -1,164 +1,74 @@
-// Standalone micro-benchmark for mydenicek event ingest + materialize costs.
-// Run: deno run --allow-hrtime tools/bench-materialize.ts
+// Micro-benchmarks for mydenicek event ingest + materialize costs.
+// Run: deno bench --allow-all tools/bench-materialize.ts
 //
-// Measures three workloads against event-count N:
-//   1. local-append : one peer, insert (append) of list items (linear chain, cache-friendly)
-//   2. sync-linear  : two peers, A creates all events then syncs to B (ingest path)
-//   3. merge-fan    : two peers edit disjoint subtrees concurrently, then sync
-//
-// Prints a CSV (to stdout) suitable for inclusion in the thesis.
+// Uses Deno's built-in benchmarking framework with automatic warmup
+// and statistical reporting (min, max, mean, percentiles).
 
 import { Denicek, type PlainNode } from "../mod.ts";
 
-const INITIAL: PlainNode = { $tag: "root", items: { $tag: "ul", $items: [] } };
-
-type Row = {
-  workload: string;
-  n: number;
-  total_ms: number;
-  per_event_us: number;
-  materialize_ms: number;
+const INITIAL: PlainNode = {
+  $tag: "root",
+  items: { $tag: "ul", $items: [] },
 };
 
-function now(): number {
-  return performance.now();
-}
-
-function benchLocalAppend(n: number): Row {
-  const dk = new Denicek("p", INITIAL);
-  const t0 = now();
-  for (let i = 0; i < n; i++) {
-    dk.insert("items", -1, { $tag: "li", text: `item ${i}` }, true);
-  }
-  const total = now() - t0;
-  const m0 = now();
-  dk.materialize();
-  const mat = now() - m0;
-  return {
-    workload: "local-append",
-    n,
-    total_ms: total,
-    per_event_us: (total / n) * 1000,
-    materialize_ms: mat,
+function setupLocalAppend(n: number): () => void {
+  return () => {
+    const dk = new Denicek("p", INITIAL);
+    for (let i = 0; i < n; i++) {
+      dk.insert("items", -1, { $tag: "li", text: `item ${i}` }, true);
+    }
+    dk.materialize();
   };
 }
 
-function benchSyncLinear(n: number): Row {
-  const a = new Denicek("a", INITIAL);
-  const b = new Denicek("b", INITIAL);
-  for (let i = 0; i < n; i++) {
-    a.insert("items", -1, { $tag: "li", text: `item ${i}` }, true);
-  }
-  const pending = a.eventsSince(b.frontiers);
-  const t0 = now();
-  for (const e of pending) b.applyRemote(e);
-  const total = now() - t0;
-  const m0 = now();
-  b.materialize();
-  const mat = now() - m0;
-  return {
-    workload: "sync-linear",
-    n,
-    total_ms: total,
-    per_event_us: (total / n) * 1000,
-    materialize_ms: mat,
+function setupSyncLinear(n: number): () => void {
+  return () => {
+    const a = new Denicek("a", INITIAL);
+    const b = new Denicek("b", INITIAL);
+    for (let i = 0; i < n; i++) {
+      a.insert("items", -1, { $tag: "li", text: `item ${i}` }, true);
+    }
+    const pending = a.eventsSince(b.frontiers);
+    for (const e of pending) b.applyRemote(e);
+    b.materialize();
   };
 }
 
-function benchMergeFan(n: number): Row {
+function setupConcurrentSync(n: number): () => void {
   const initial: PlainNode = {
     $tag: "root",
     la: { $tag: "ul", $items: [] },
     lb: { $tag: "ul", $items: [] },
   };
-  const a = new Denicek("a", initial);
-  const b = new Denicek("b", initial);
-  for (let i = 0; i < n / 2; i++) {
-    a.insert("la", -1, { $tag: "li", text: `a${i}` }, true);
-    b.insert("lb", -1, { $tag: "li", text: `b${i}` }, true);
-  }
-  const t0 = now();
-  const fromA = a.eventsSince(b.frontiers);
-  const fromB = b.eventsSince(a.frontiers);
-  for (const e of fromA) b.applyRemote(e);
-  for (const e of fromB) a.applyRemote(e);
-  const total = now() - t0;
-  const m0 = now();
-  a.materialize();
-  const mat = now() - m0;
-  return {
-    workload: "merge-fan",
-    n,
-    total_ms: total,
-    per_event_us: (total / n) * 1000,
-    materialize_ms: mat,
+  return () => {
+    const a = new Denicek("a", initial);
+    const b = new Denicek("b", initial);
+    for (let i = 0; i < n / 2; i++) {
+      a.insert("la", -1, { $tag: "li", text: `a${i}` }, true);
+      b.insert("lb", -1, { $tag: "li", text: `b${i}` }, true);
+    }
+    const fromA = a.eventsSince(b.frontiers);
+    const fromB = b.eventsSince(a.frontiers);
+    for (const e of fromA) b.applyRemote(e);
+    for (const e of fromB) a.applyRemote(e);
+    a.materialize();
   };
 }
 
-function benchMergeForkFromShared(n: number): Row {
-  // Realistic scenario: both peers share N events of history, then diverge
-  // for a short branch. Checkpointing should help here: resume from the
-  // shared prefix instead of replaying all N+branch events.
-  const branchSize = Math.min(50, Math.floor(n / 10));
-  const sharedSize = n - branchSize * 2;
-  const initial: PlainNode = {
-    $tag: "root",
-    items: { $tag: "ul", $items: [] },
-    la: { $tag: "ul", $items: [] },
-    lb: { $tag: "ul", $items: [] },
-  };
-  const a = new Denicek("a", initial);
-  const b = new Denicek("b", initial);
-  // Build shared linear history
-  for (let i = 0; i < sharedSize; i++) {
-    a.insert("items", -1, { $tag: "li", text: `shared${i}` }, true);
-  }
-  // Sync shared history to b
-  for (const e of a.eventsSince(b.frontiers)) b.applyRemote(e);
-  // Prime caches (this is where the checkpoint will be saved)
-  a.materialize();
-  b.materialize();
-  // Both diverge
-  for (let i = 0; i < branchSize; i++) {
-    a.insert("la", -1, { $tag: "li", text: `a${i}` }, true);
-    b.insert("lb", -1, { $tag: "li", text: `b${i}` }, true);
-  }
-  // Merge
-  const t0 = now();
-  const fromA = a.eventsSince(b.frontiers);
-  const fromB = b.eventsSince(a.frontiers);
-  for (const e of fromA) b.applyRemote(e);
-  for (const e of fromB) a.applyRemote(e);
-  const total = now() - t0;
-  const m0 = now();
-  a.materialize();
-  const mat = now() - m0;
-  return {
-    workload: "merge-fork-shared",
-    n,
-    total_ms: total,
-    per_event_us: (total / n) * 1000,
-    materialize_ms: mat,
-  };
-}
+for (const n of [100, 2000]) {
+  Deno.bench({
+    name: `local-append N=${n}`,
+    fn: setupLocalAppend(n),
+  });
 
-function main(): void {
-  const sizes = [100, 500, 1000, 2000];
-  const rows: Row[] = [];
-  for (const n of sizes) {
-    rows.push(benchLocalAppend(n));
-    rows.push(benchSyncLinear(n));
-    rows.push(benchMergeFan(n));
-    rows.push(benchMergeForkFromShared(n));
-  }
-  console.log("workload,n,total_ms,per_event_us,materialize_ms");
-  for (const r of rows) {
-    console.log(
-      `${r.workload},${r.n},${r.total_ms.toFixed(2)},${
-        r.per_event_us.toFixed(2)
-      },${r.materialize_ms.toFixed(2)}`,
-    );
-  }
-}
+  Deno.bench({
+    name: `sync-linear N=${n}`,
+    fn: setupSyncLinear(n),
+  });
 
-if (import.meta.main) main();
+  Deno.bench({
+    name: `concurrent-sync N=${n}`,
+    fn: setupConcurrentSync(n),
+    ...(n >= 2000 ? { n: 5 } : {}),
+  });
+}
