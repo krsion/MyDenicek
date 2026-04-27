@@ -2,17 +2,19 @@
  * Conference Table Demo — Playwright automation script
  *
  * Run: node tools/demo-conference-table.ts [url]
+ *      node tools/demo-conference-table.ts --auto [url]
  *
- * Press ENTER in the terminal to advance between phases.
- * This lets you explain each step to the audience.
+ * --auto  Auto-advance between phases (for screen recording).
+ *         Without it, press ENTER in the terminal to advance.
  */
 
 const { chromium } = require("playwright");
 const readline = require("readline");
 
-const APP_URL = process.argv[2] || "http://localhost:5173/mydenicek/";
+const AUTO = process.argv.includes("--auto");
+const APP_URL = process.argv.filter(a => !a.startsWith("--")).at(-1) || "http://localhost:5173/mydenicek/";
 const SLOW = 60;
-const PAUSE = 1200;
+const PAUSE = AUTO ? 2000 : 1200;
 
 const CURSOR_CSS = `
   * { cursor: none !important; }
@@ -39,9 +41,13 @@ const CURSOR_JS = `
   });
 `;
 
-const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+const rl = AUTO ? null : readline.createInterface({ input: process.stdin, output: process.stdout });
 
 function waitForEnter(prompt) {
+  if (AUTO) {
+    console.log(`\n▶️  ${prompt}`);
+    return new Promise(resolve => setTimeout(resolve, 2500));
+  }
   return new Promise(resolve => {
     rl.question(`\n⏸️  ${prompt} — press ENTER to continue...`, () => resolve());
   });
@@ -74,6 +80,7 @@ async function setInputField(page, newValue) {
 }
 
 async function screenshot(page, name) {
+  if (AUTO) return;
   await page.waitForTimeout(500);
   await page.screenshot({ path: `demo-screenshots/${name}.png` });
   console.log(`  📸 ${name}`);
@@ -84,7 +91,11 @@ async function screenshot(page, name) {
   fs.mkdirSync("demo-screenshots", { recursive: true });
 
   const browser = await chromium.launch({ headless: false, slowMo: 30 });
-  const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } });
+  const ctx = await browser.newContext({
+    viewport: { width: 1920, height: 1080 },
+    deviceScaleFactor: 1,
+    ...(AUTO ? { recordVideo: { dir: "demo-screenshots", size: { width: 1920, height: 1080 } } } : {}),
+  });
   const page = await ctx.newPage();
 
   console.log("🚀 Conference Table Demo");
@@ -160,6 +171,18 @@ async function screenshot(page, name) {
   await screenshot(page, "12-final");
 
   console.log("\n✅ Demo complete! Screenshots in demo-screenshots/");
-  rl.close();
+  rl?.close();
+  await page.close();
+  if (AUTO) {
+    const video = page.video();
+    if (video) {
+      const videoPath = await video.path();
+      const fs = require("fs");
+      const dest = "docs/slides-assets/demo-conference-table.webm";
+      fs.mkdirSync("docs/slides-assets", { recursive: true });
+      fs.copyFileSync(videoPath, dest);
+      console.log(`🎥 Video saved to ${dest}`);
+    }
+  }
   await browser.close();
-})().catch(e => { console.error("❌ Demo failed:", e.message); rl.close(); process.exit(1); });
+})().catch(e => { console.error("❌ Demo failed:", e.message); rl?.close(); process.exit(1); });
