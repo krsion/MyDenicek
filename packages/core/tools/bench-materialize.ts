@@ -55,20 +55,24 @@ function setupConcurrentSync(n: number): () => void {
   };
 }
 
-for (const n of [100, 2000]) {
+for (const n of [1000, 10_000, 100_000]) {
   Deno.bench({
     name: `local-append N=${n}`,
     fn: setupLocalAppend(n),
+    ...(n >= 100_000 ? { n: 3 } : {}),
   });
 
   Deno.bench({
     name: `sync-linear N=${n}`,
     fn: setupSyncLinear(n),
+    ...(n >= 100_000 ? { n: 3 } : {}),
   });
+}
 
+for (const n of [1000, 10_000]) {
   Deno.bench({
     name: `concurrent-sync N=${n}`,
     fn: setupConcurrentSync(n),
-    ...(n >= 2000 ? { n: 5 } : {}),
+    ...(n >= 1000 ? { n: 5 } : {}),
   });
 }

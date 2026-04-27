@@ -288,6 +288,10 @@ export class EventGraph {
       } else {
         this.validateEventAgainstCausalState(event);
       }
+    } else if (!this.relayMode && linearExtension && this.cachedDoc === null) {
+      // Even when skipping edit validation (remote events), prime the cache
+      // so the linear extension fast path works.
+      this.materialize();
     }
 
     this.storeEvent(event);
