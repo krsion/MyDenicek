@@ -23,10 +23,6 @@ jobs:
         with:
           deno-version: v2.x
 
-      - name: Install playground dependencies
-        working-directory: apps/playground
-        run: deno install
-
       - name: Install mywebnicek dependencies
         working-directory: apps/mywebnicek
         run: deno install

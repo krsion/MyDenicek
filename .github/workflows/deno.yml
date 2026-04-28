@@ -26,8 +26,6 @@ jobs:
         working-directory: packages/sync
       - run: deno fmt --check .
         working-directory: apps/sync-server
-      - run: deno fmt --check deno.json README.md index.html src vite.config.ts tsconfig.json tsconfig.node.json
-        working-directory: apps/playground
       - run: deno fmt --check src/ deno.json index.html vite.config.ts
         working-directory: apps/mywebnicek
 
@@ -42,8 +40,6 @@ jobs:
         working-directory: packages/sync
       - run: deno lint .
         working-directory: apps/sync-server
-      - run: deno lint src vite.config.ts
-        working-directory: apps/playground
       - run: deno lint src/
         working-directory: apps/mywebnicek
 
@@ -58,8 +54,6 @@ jobs:
         working-directory: packages/sync
       - run: deno check main.ts
         working-directory: apps/sync-server
-      - run: deno check src/main.tsx src/tests/peer-session.test.ts src/tests/sync-service.test.ts
-        working-directory: apps/playground
       - run: deno check src/main.tsx
         working-directory: apps/mywebnicek
 
@@ -72,16 +66,12 @@ jobs:
         working-directory: packages/core
       - run: deno test --allow-read --allow-write --allow-net tests
         working-directory: packages/sync
-      - run: deno test --allow-all src/tests
-        working-directory: apps/playground
 
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2
-      - run: deno install
-        working-directory: apps/playground
       - run: deno install
         working-directory: apps/mywebnicek
       - run: deno task build
