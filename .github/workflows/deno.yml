@@ -133,17 +133,12 @@ jobs:
           echo "DEPLOYMENT_NAME=app-deploy-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
           echo "PERSISTENCE_STORAGE_ACCOUNT_NAME=$STORAGE_NAME" >> "$GITHUB_ENV"
           echo "RESOURCE_GROUP=rg-$NORMALIZED_PREFIX" >> "$GITHUB_ENV"
-      - name: Import Deno base image to ACR
-        shell: bash
-        run: |
-          set -euo pipefail
-          az acr import --name "$ACR_NAME" --source docker.io/denoland/deno:2.7.5 --image denoland/deno:2.7.5 --force --only-show-errors
       - name: Build and push sync-server image
         shell: bash
         run: |
           set -euo pipefail
           az acr config authentication-as-arm update --registry "$ACR_NAME" --status enabled --only-show-errors
-          az acr build --resource-group "$RESOURCE_GROUP" --registry "$ACR_NAME" --image "$IMAGE_REPOSITORY:$IMAGE_TAG" --build-arg "ACR_REGISTRY=${ACR_NAME}.azurecr.io/" --file apps/sync-server/Dockerfile .
+          az acr build --resource-group "$RESOURCE_GROUP" --registry "$ACR_NAME" --image "$IMAGE_REPOSITORY:$IMAGE_TAG" --file apps/sync-server/Dockerfile .
       - name: Ensure AcrPull role assignment
         shell: bash
         run: |
