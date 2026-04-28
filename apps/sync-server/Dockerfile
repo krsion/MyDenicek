@@ -1,5 +1,4 @@
-ARG REGISTRY=denoland
-FROM ${REGISTRY}/deno:2.7.5
+FROM denoland/deno:2.7.5
 
 WORKDIR /app
 
