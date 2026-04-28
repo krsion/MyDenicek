@@ -1,14 +1,14 @@
 # mydenicek
 
-**Local-first collaborative document editor built on a custom OT-based CRDT.**\
+**Local-first collaborative document editor built on a custom OT-based CRDT.**
+
 Published on JSR as [`@mydenicek/core`](https://jsr.io/@mydenicek/core),
 [`@mydenicek/react`](https://jsr.io/@mydenicek/react), and
 [`@mydenicek/sync`](https://jsr.io/@mydenicek/sync).
 
 **Author**: Bc. Ondřej Krsička\
 **Supervisor**: Mgr. Tomáš Petříček, Ph.D.\
-**Course**: NPRG070 — Research Project, Charles University, Faculty of
-Mathematics and Physics
+**Master thesis**: Charles University, Faculty of Mathematics and Physics
 
 ## About
 
@@ -22,14 +22,11 @@ transformation of selector paths** to achieve strong eventual consistency.
 Documents are modeled as tagged trees of records, lists, primitives, and
 references — addressed by filesystem-style selectors like `/header/title/text`.
 
-## Presentation
-
-**[📊 View Presentation](https://krsion.github.io/mydenicek/presentation.html)**
-— project overview, architecture, formative examples, and live demo screenshots.
-
 ## Live Demo
 
-https://krsion.github.io/mydenicek/
+- **Web application**: <https://krsion.github.io/mydenicek/>
+- **Presentation**:
+  [📊 View Presentation](https://krsion.github.io/mydenicek/presentation.html)
 
 ## Documentation
 
@@ -47,132 +44,67 @@ https://krsion.github.io/mydenicek/
   — why transactions are impossible in local-first software
 - [Specification](documents/specification/specification.pdf) — project
   specification
-- [Specification (markdown)](docs/specification.md) — specification (markdown
-  version)
 - [Proposal](documents/proposal/proposal.pdf) — project proposal
-- [Proposal (markdown)](docs/proposal.md) — proposal (markdown version)
 
-## Workspace Structure
+## Repository Structure
 
-Deno workspace for the Denicek document model, sync infrastructure, and browser
-clients:
+Deno monorepo for the Denicek document model, sync infrastructure, and web
+client:
 
 - `packages/core` — the OT-based Denicek CRDT implementation
   ([`@mydenicek/core`](https://jsr.io/@mydenicek/core))
 - `packages/react` — React hook for reactive Denicek usage
   ([`@mydenicek/react`](https://jsr.io/@mydenicek/react))
 - `packages/sync` — sync protocol, sync room, and server/client helpers
-- `apps/sync-server` — the runnable WebSocket sync server
-- `apps/playground` — experimental playground for multi-peer DAG exploration
+  ([`@mydenicek/sync`](https://jsr.io/@mydenicek/sync))
+- `apps/sync-server` — WebSocket sync server (deployed on Azure Container Apps)
 - `apps/mywebnicek` — production web app (Deno + Vite + React + Fluent UI)
+- `docs/` — project documentation
+- `documents/` — thesis proposal and specification (LaTeX + PDF)
+- `infra/` — Azure Bicep deployment templates
 
 ## References
 
 - Petříček, T. "Denicek: Computational Substrate for Document-Oriented End-User
   Programming." UIST 2025.
-  - DOI: https://doi.org/10.1145/3746059.3747646
+  - DOI: <https://doi.org/10.1145/3746059.3747646>
   - [Project page](https://tomasp.net/academic/papers/denicek/)
 
-## Live Deployment
-
-The Azure deployment workflows publish these public endpoints:
-
-- **Sync Server**:
-  `wss://mydenicek-core-krsion-dev-sync.happyisland-d6dda219.westeurope.azurecontainerapps.io/sync`
-- **Sync Server Health Check**:
-  `https://mydenicek-core-krsion-dev-sync.happyisland-d6dda219.westeurope.azurecontainerapps.io/healthz`
-- **Web Application**: https://krsion.github.io/mydenicek/
-
-The exact deployment values are configured in `.github/workflows/deno.yml`.
-
-## Local setup
+## Local Setup
 
 ### Prerequisites
 
-- Deno 2.x
+- [Deno](https://deno.com/) 2.x
 
-### Install browser app dependencies
-
-Most of the workspace uses standard Deno module resolution. The browser apps
-also need their npm dependencies installed:
+### Install dependencies
 
 ```sh
-cd apps/playground
-deno install
+cd apps/mywebnicek && deno install
 ```
 
-Repeat the same command in `apps/mywebnicek` when working on that app.
+### Run locally
 
-### Run the sync server locally
-
-From the repository root:
+Start both the sync server and the web app together:
 
 ```sh
-deno task sync-server
-```
-
-The server listens on `http://127.0.0.1:8787` by default and exposes WebSocket
-sync at `ws://127.0.0.1:8787/sync`.
-
-Environment variables:
-
-- `PORT` — WebSocket port (default `8787`)
-- `HOSTNAME` — bind address (default `0.0.0.0`)
-- `PERSISTENCE_PATH` — directory for JSON event logs (default `./data`)
-
-### Run the playground locally
-
-In a second terminal:
-
-```sh
-cd apps/playground
 deno task dev
 ```
 
 Then open <http://localhost:5173>.
 
-From the repository root you can also use:
+Alternatively, run the sync server and web app separately:
 
 ```sh
-deno task playground:dev
+deno task sync-server          # WebSocket sync at ws://127.0.0.1:8787/sync
+deno task mywebnicek:dev       # Vite dev server at http://localhost:5173
 ```
 
-### Run mywebnicek locally
-
-In another terminal:
+### Validation
 
 ```sh
-cd apps/mywebnicek
-deno task dev
+deno task fmt:check            # Verify formatting
+deno task check                # Type-check all packages
+deno task lint                 # Lint all packages
+deno task test                 # Run all tests
+deno task build                # Build production web app
 ```
-
-Then open <http://localhost:5173> and connect to the default deployed sync
-server or change the URL in the app.
-
-From the repository root you can also use:
-
-```sh
-deno task mywebnicek:dev
-```
-
-### Useful validation commands
-
-From the repository root:
-
-```sh
-deno lint packages/core packages/sync apps/sync-server
-deno task check
-deno task test
-cd apps/playground && deno install && deno task build && deno task test
-cd apps/mywebnicek && deno install && deno task build && deno task test
-```
-
-## Workspace README files
-
-- [Core package README](./packages/core/README.md)
-- [React package README](./packages/react/README.md)
-- [Sync server README](./packages/sync/README.md)
-- [Sync server app README](./apps/sync-server/README.md)
-- [Playground README](./apps/playground/README.md)
-- [MyWebnicek README](./apps/mywebnicek/README.md)
-- [Azure deployment README](./infra/azure/sync-server/README.md)

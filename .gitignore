@@ -3,18 +3,3 @@ packages/core/npm-dist/
 
 .playwright-mcp/
 data/
-spec/states/
-spec/tla2tools.jar
-states/
-
-# Temp artifacts
-demo-screenshots/
-pandoc-*.deb
-slide-*.png
-verify-*.png
-final-*.png
-app-*.png
-
-# Deprecated
-spec/
-apps/playground/

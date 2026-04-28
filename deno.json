@@ -8,8 +8,8 @@
     "./apps/mywebnicek"
   ],
   "tasks": {
-    "fmt": "deno fmt deno.json README.md main.ts && cd packages/core && deno task fmt && cd ../sync && deno task fmt && cd ../../apps/sync-server && deno task fmt && cd ../mywebnicek && deno task fmt",
-    "fmt:check": "deno fmt --check deno.json README.md main.ts && cd packages/core && deno task fmt:check && cd ../sync && deno task fmt:check && cd ../../apps/sync-server && deno task fmt:check && cd ../mywebnicek && deno task fmt:check",
+    "fmt": "deno fmt deno.json README.md && cd packages/core && deno task fmt && cd ../sync && deno task fmt && cd ../../apps/sync-server && deno task fmt && cd ../mywebnicek && deno task fmt",
+    "fmt:check": "deno fmt --check deno.json README.md && cd packages/core && deno task fmt:check && cd ../sync && deno task fmt:check && cd ../../apps/sync-server && deno task fmt:check && cd ../mywebnicek && deno task fmt:check",
     "lint": "cd packages/core && deno task lint && cd ../sync && deno task lint && cd ../../apps/sync-server && deno task lint && cd ../mywebnicek && deno task lint",
     "check": "cd packages/core && deno task check && cd ../sync && deno task check && cd ../../apps/sync-server && deno task check && cd ../mywebnicek && deno task check",
     "test": "cd packages/core && deno task test && cd ../sync && deno task test && cd ../../apps/mywebnicek && deno task test",
