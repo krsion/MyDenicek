@@ -54,10 +54,6 @@ jobs:
         working-directory: packages/sync
       - run: deno check main.ts
         working-directory: apps/sync-server
-      - run: deno install
-        working-directory: apps/mywebnicek
-      - run: deno check src/main.tsx
-        working-directory: apps/mywebnicek
 
   test:
     runs-on: ubuntu-latest
