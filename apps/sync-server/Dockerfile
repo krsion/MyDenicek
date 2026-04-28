@@ -1,4 +1,5 @@
-FROM denoland/deno:2.7.5
+ARG ACR_REGISTRY=""
+FROM ${ACR_REGISTRY}denoland/deno:2.7.5
 
 WORKDIR /app
 
