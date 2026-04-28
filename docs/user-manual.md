@@ -1,30 +1,34 @@
 # User Manual
 
-**Project**: mywebnicek — Local-first Collaborative Document Editor **Author**:
-Bc. Ondřej Krsička **Supervisor**: Mgr. Tomáš Petříček, Ph.D.
+**Project**: mydenicek — Local-first Collaborative Document Editor\
+**Author**: Bc. Ondřej Krsička\
+**Supervisor**: Mgr. Tomáš Petříček, Ph.D.
 
 ---
 
 ## 1. Introduction
 
-mywebnicek is a local-first collaborative document editor for structured,
-tree-based documents. It allows you to build and edit documents composed of
-nested HTML-like elements, text values, formulas, references, and programmable
-action buttons — all synchronized in real time between collaborators using CRDTs
-(Conflict-free Replicated Data Types).
+mydenicek is a local-first collaborative document editor for structured,
+tree-based documents. Documents are composed of nested tagged nodes — records,
+lists, primitives, and references — edited via a terminal-style command bar and
+synchronized in real time between peers using an
+operational-transformation-based event DAG.
 
 Key features:
 
-- **Tree-based editing** — Documents are structured as a tree of typed nodes
-  (elements, values, formulas, references, and actions).
-- **Real-time collaboration** — Multiple users can edit the same document
-  simultaneously; changes sync automatically via WebSocket.
+- **Tagged document tree** — Documents are structured as a tree of four node
+  types: records (tagged objects), lists (tagged arrays), primitives
+  (string/number/boolean), and references.
+- **Real-time collaboration** — Multiple users edit the same document
+  simultaneously via room-based WebSocket sync.
 - **Local-first** — The document works offline and synchronizes when
   connectivity is restored.
-- **Programming by demonstration** — Record your editing actions, then replay
-  them elsewhere or save them as reusable buttons.
-- **Live formulas** — Compute values from other nodes using built-in string,
-  math, and array operations.
+- **Command bar editing** — All editing is done through a terminal-style command
+  bar with path-based selectors and tab completion.
+- **Event DAG visualization** — Inspect the causal history of edits as a
+  directed acyclic graph, with per-peer coloring and replay controls.
+- **Programmable buttons** — Action buttons embedded in the document replay
+  recorded edit sequences when clicked.
 
 ---
 
@@ -36,521 +40,488 @@ Open the live demo in your browser:
 
 > **<https://krsion.github.io/mydenicek/>**
 
-No installation is required. The application runs entirely in the browser and
-automatically connects to the sync server for collaboration.
+No installation is required. The application runs entirely in the browser.
 
 ### 2.2 Running Locally
 
-If you want to run the application on your own machine:
-
 **Prerequisites:**
 
-- [Node.js](https://nodejs.org/) (version 18 or later)
-- npm (included with Node.js)
+- [Deno](https://deno.com/) 2.x
 
 **Steps:**
 
 1. Clone the repository:
    ```bash
    git clone https://github.com/krsion/mydenicek.git
-   cd mywebnicek
+   cd mydenicek
    ```
 2. Install dependencies:
    ```bash
-   npm install
+   cd apps/mywebnicek && deno install
    ```
 3. Start the development server (launches both the sync server and web app):
    ```bash
-   npm run dev
+   deno task dev
    ```
-4. Open your browser at **http://localhost:5174**.
+4. Open your browser at **http://localhost:5173**.
 
-You can also run only specific parts:
+### 2.3 Creating or Joining a Document
 
-- `npm run dev -w mywebnicek` — Web app only (no sync server)
-- `npm run dev -w @mydenicek/sync` — Sync server only (port 3001)
+When you first open the app, a **landing page** is displayed. You have two
+options:
 
-### 2.3 Interface Overview
+- **Create from template** — Click one of the template buttons in the tab bar:
+  - **+ Formative Examples** — Pre-built demo document with a counter,
+    conference list, and table examples (see
+    [Section 8](#8-formative-examples)).
+  - **+ Empty** — A blank document with an empty root record.
+- **Join an existing room** — Paste a shared URL containing a room ID in the
+  hash (e.g., `https://krsion.github.io/mydenicek/#abc12345`) into your browser
+  address bar.
 
-The interface is divided into two main areas:
-
-```
-┌─────────────────────────────────┬─────────────────────────┐
-│         Main Toolbar            │                         │
-├─────────────────────────────────┤   Recorded History      │
-│    Navigation Bar               │   (Actions Panel)       │
-├─────────────────────────────────┤                         │
-│                                 │   - List of recorded    │
-│    Document View                │     editing actions     │
-│    (Rendered Document)          │   - Replay controls     │
-│                                 │   - "Add to Button"     │
-│                                 │                         │
-├─────────────────────────────────┤                         │
-│    Element Details Panel        │                         │
-└─────────────────────────────────┴─────────────────────────┘
-```
-
-- **Main Toolbar** (top) — Undo/Redo, Add child, Rename/Edit, Copy/Paste,
-  Delete, Formula toggle, Sync controls, Share, and panel toggles.
-- **Navigation Bar** — Buttons for traversing the tree (Parent, First child,
-  Prev sibling, Next sibling, Clear) and reordering nodes (Move ↑, Move ↓).
-- **Document View** (center) — The rendered document. Click on any element to
-  select it. The selected node is highlighted with a blue overlay.
-- **Element Details** (bottom) — Shows properties of the selected node: tag
-  name, GUID, CSS classes, dimensions, value, and an editable attribute table.
-- **Recorded History / Actions Panel** (right side, resizable) — Shows all
-  editing actions you have performed since the session started. Used for
-  recording and replay.
+Each template button creates a new tab and sets the URL hash to the new room ID.
 
 ---
 
-## 3. Document Structure
+## 3. Interface Overview
 
-### 3.1 Node Types
+The interface is organized into four areas:
 
-Every document is a tree. Each node in the tree is one of five types:
+```
+┌──────────────────────────────────────────────────────────────┐
+│  Tabs:  [doc1]  [doc2]  │  + Formative Examples  │  + Empty │
+├──────────────────────────────────────────────────────────────┤
+│  mydenicek  [Document] [Raw JSON] [Event Graph]     Status  │
+├────────────────────┬────────────────┬────────────────────────┤
+│                    │                │                        │
+│   Document Panel   │  Raw JSON      │    Event Graph         │
+│   (rendered HTML)  │  Panel         │    Panel (SVG DAG)     │
+│                    │                │                        │
+├────────────────────┴────────────────┴────────────────────────┤
+│  > /path command args                              [output]  │
+└──────────────────────────────────────────────────────────────┘
+```
 
-#### Element Nodes
+### 3.1 Tab Bar
 
-Structural nodes that correspond to HTML tags (e.g., `<div>`, `<article>`,
-`<table>`, `<ul>`). Element nodes can have:
+The top bar shows open document tabs. Each tab displays the first 8 characters
+of its room ID. Click a tab to switch to it. The active tab has a white
+background; inactive tabs are gray. Template buttons appear after the open tabs.
 
-- A **tag name** (e.g., `section`, `p`, `h1`)
-- **Attributes** (e.g., `style`, `className`)
-- **Child nodes** of any type
+### 3.2 Header Bar
 
-Element nodes are the building blocks of your document's structure.
+Below the tabs, a light gray header bar contains:
 
-#### Value Nodes
+- **"mydenicek"** title (left-aligned)
+- **Panel toggle buttons**: **Document**, **Raw JSON**, **Event Graph**
+  - Active panels have a blue background with white text
+  - Inactive panels have a gray appearance
+  - Click to toggle each panel on or off
+- **Sync status** (right-aligned): a colored dot with status text, peer ID, and
+  room ID
+  - 🟢 **connected** — Synchronized with the server
+  - 🟡 **connecting** — Connection attempt in progress
+  - 🔴 **disconnected** — Connection lost
+  - ⚪ **idle** — No sync server configured or sync disabled
+- **Connect / Disconnect** button to toggle sync
 
-Leaf nodes containing text or numeric content. A value node holds a single
-string (e.g., `"Hello World"` or `"42"`). Value nodes cannot have children.
+### 3.3 Main Panels
 
-#### Formula Nodes
+Up to three panels display side by side in the main area. Each is independently
+toggleable via the header buttons. See [Section 6](#6-panels) for details.
 
-Nodes that compute a result from their inputs. A formula node has an
-**operation** (e.g., `add`, `concat`, `upperText`) and takes its arguments
-either from child nodes or in RPN (Reverse Polish Notation) style from preceding
-siblings. See [Section 8.1](#81-formulas) for details.
+### 3.4 Command Bar
+
+A terminal-style input bar at the bottom of the screen, prefixed with a blue `>`
+prompt. This is the primary way to edit documents. See
+[Section 5](#5-editing-with-the-command-bar) for full details.
+
+---
+
+## 4. Document Model
+
+### 4.1 Node Types
+
+Every document is a tree. Each node is one of four types:
+
+#### Record Nodes
+
+Tagged objects with named fields. A record has a **tag** (analogous to an HTML
+element name, e.g., `section`, `h1`, `table`) and a set of **named child
+fields**, each containing another node.
+
+Example (JSON representation):
+
+```json
+{ "$tag": "article", "title": "Hello", "count": 42 }
+```
+
+#### List Nodes
+
+Tagged ordered arrays. A list has a **tag** and a sequence of **indexed child
+nodes** (accessed by numeric index starting at 0).
+
+Example:
+
+```json
+{ "$tag": "ul", "$items": ["Apple", "Banana", "Cherry"] }
+```
+
+#### Primitive Nodes
+
+Leaf nodes containing a single value: a **string**, **number**, or **boolean**.
+Primitives cannot have children.
 
 #### Reference Nodes
 
-Nodes that point to another node's value. A reference node displays the current
-value of its target node. If the target value changes, the reference
-automatically updates. References are shown with an arrow indicator (→) and can
-be clicked to navigate to the target.
+Nodes that point to another node via a `$ref` path. References resolve to the
+current value at the target path and update automatically when the target
+changes.
 
-#### Action Nodes
+### 4.2 Selectors (Path Addressing)
 
-Programmable buttons. An action node has a **label** (displayed on the button),
-a list of **actions** (recorded editing operations), and optional **parameters**
-(named node references). Clicking the button replays its stored actions. See
-[Section 7](#7-recording--replay) for how to create action buttons.
+Nodes are addressed by **selectors** — slash-separated paths from the document
+root:
 
-### 3.2 Tree Navigation
+| Selector         | Meaning                                     |
+| ---------------- | ------------------------------------------- |
+| `/`              | The root node                               |
+| `/title`         | The `title` field of the root record        |
+| `/items/0`       | The first item in the `items` list          |
+| `/items/2/name`  | The `name` field of the third list item     |
+| `/items/*`       | All children of the `items` list (wildcard) |
+| `/items/*/email` | The `email` field of every list item        |
 
-You can navigate the document tree in several ways:
+The **wildcard** `*` expands to all children of a record or list, enabling batch
+operations on multiple nodes at once.
 
-**By clicking:**
+### 4.3 Tags
 
-- **Click** on any rendered element to select it. A blue highlight overlay
-  appears around it.
-- **Ctrl+Click** to toggle multi-selection (add/remove individual nodes).
-- **Shift+Click** to select a range of sibling nodes.
+Tags determine how nodes render in the Document panel. Standard HTML tags
+(`h1`–`h6`, `p`, `table`, `tr`, `td`, `ul`, `li`, `button`, `input`, `article`,
+`section`, etc.) render as their corresponding HTML elements. Unrecognized tags
+render as `<div>`. Special tags:
 
-**By keyboard (when the document view is focused):**
-
-- **Arrow Up** — Navigate to the parent node
-- **Arrow Down** — Navigate to the first child node
-- **Arrow Left** — Navigate to the previous sibling
-- **Arrow Right** — Navigate to the next sibling
-- **Escape** — Clear the selection
-
-**Using the Navigation Bar:** The bar below the toolbar provides clickable
-buttons:
-
-- **Parent** — Go to the parent of the selected node
-- **First child** — Go to the first child
-- **Prev sibling / Next sibling** — Navigate among siblings
-- **Esc (Clear)** — Deselect everything
-- **Move ↑ / Move ↓** — Reorder the selected node among its siblings
+- `button` — Renders as a clickable blue button. If the record contains an event
+  script, clicking the button executes it.
+- `input` — Renders as an editable text field. Changes auto-commit after a short
+  delay.
+- `x-formula-*` — Formula nodes that display a computed result with a `ƒ`
+  indicator.
 
 ---
 
-## 4. Editing Documents
+## 5. Editing with the Command Bar
 
-### 4.1 Creating Nodes
+The command bar at the bottom of the screen is the primary editing interface.
 
-To add a new node to the document:
+### 5.1 Syntax
 
-1. **Select a parent node** — Click on the element where you want to add a
-   child.
-2. **Click the Add (+) button** in the toolbar.
-3. **Choose the node type** from the radio buttons:
-   - **Tag** — Creates an element node. Enter a valid HTML tag name (e.g.,
-     `div`, `p`, `h2`).
-   - **Value** — Creates a text value node. Enter the text content (can be
-     empty).
-   - **Action** — Creates a programmable button. Enter the button's label.
-   - **Formula** — Creates a formula node. Select an operation from the
-     dropdown.
-   - **Ref** — Creates a reference node. Click "Pick target from document..."
-     and then click on the node you want to reference.
-4. **Press Add** or hit **Enter** to create the node.
+```
+/selector command [arguments...]
+```
 
-The newly created node is automatically selected.
+- Type a **selector** (path) to navigate to a node.
+- Follow it with a **command name** and any required **arguments**.
+- Commands without a selector (bare commands) apply globally.
 
-> **Note:** You can only add children to element and formula nodes. Value,
-> reference, and action nodes are leaf nodes.
+### 5.2 Value Parsing
 
-### 4.2 Editing Properties
+Arguments are parsed as follows:
 
-#### Renaming Element Tags
+- Text starting with `{` or `[` is parsed as **JSON** (objects/arrays)
+- `true` / `false` → **boolean**
+- Numeric strings → **number**
+- Everything else → **string**
 
-1. Select an element node.
-2. Click the **Rename** button in the toolbar.
-3. Enter the new tag name and press **Enter**.
+### 5.3 Commands for Record Nodes
 
-Tag names are automatically lowercased and validated (must start with a letter,
-contain only letters, digits, or hyphens).
+| Command                          | Description                            |
+| -------------------------------- | -------------------------------------- |
+| `/path add <field> <value>`      | Add a named field with the given value |
+| `/path delete <field>`           | Delete a named field                   |
+| `/path rename <old> <new>`       | Rename a field                         |
+| `/path updateTag <tag>`          | Change the record's tag                |
+| `/path wrapRecord <field> <tag>` | Wrap the node in a new record          |
+| `/path wrapList <tag>`           | Wrap the node in a new list            |
+| `/path copy <source-path>`       | Copy a node from another path          |
+| `/path formula <field> <op>`     | Add a formula node as a field          |
 
-#### Editing Text Values
+### 5.4 Commands for List Nodes
 
-1. Select a value node.
-2. Click the **Edit** button in the toolbar (replaces the Rename button when a
-   value node is selected).
-3. Modify the text and press **Enter**.
+| Command                          | Description                         |
+| -------------------------------- | ----------------------------------- |
+| `/path pushBack <value>`         | Append an item to the end           |
+| `/path pushFront <value>`        | Prepend an item to the beginning    |
+| `/path popBack`                  | Remove the last item                |
+| `/path popFront`                 | Remove the first item               |
+| `/path insert <index> <value>`   | Insert at a specific index          |
+| `/path remove <index>`           | Remove the item at a specific index |
+| `/path updateTag <tag>`          | Change the list's tag               |
+| `/path wrapRecord <field> <tag>` | Wrap the list in a new record       |
+| `/path wrapList <tag>`           | Wrap the list in a new list         |
+| `/path copy <source-path>`       | Copy a node from another path       |
 
-For `<input>` elements in the rendered document, you can type directly into the
-input field — changes are saved automatically.
+### 5.5 Commands for Primitive Nodes
 
-#### Editing Attributes
+| Command                          | Description                                 |
+| -------------------------------- | ------------------------------------------- |
+| `/path set <value>`              | Set the primitive's value                   |
+| `/path splitFirst [separator]`   | Extract text before separator (default `,`) |
+| `/path splitRest [separator]`    | Extract text after separator (default `,`)  |
+| `/path wrapRecord <field> <tag>` | Wrap the primitive in a record              |
+| `/path wrapList <tag>`           | Wrap the primitive in a list                |
 
-When an element node is selected, the **Element Details** panel at the bottom
-shows its attributes in an editable table.
+### 5.6 Inspection Commands
 
-- **Edit an attribute** — Click on the value field, type a new value, and press
-  **Enter**.
-- **Delete an attribute** — Click the trash icon (🗑) next to the attribute.
-- **Add an attribute** — Fill in the "New key" and "New value" fields at the
-  bottom of the table and click the (+) button.
+| Command      | Description                               |
+| ------------ | ----------------------------------------- |
+| `/path get`  | Show the value at the given path          |
+| `/path tree` | Show the subtree rooted at the given path |
+| `tree`       | Show the full document tree               |
+| `help`       | Show available commands                   |
 
-The `style` attribute accepts JSON objects (e.g.,
-`{"color": "red", "fontSize": "16px"}`).
+### 5.7 Global Commands
 
-### 4.3 Deleting Nodes
+| Command            | Description                              |
+| ------------------ | ---------------------------------------- |
+| `undo`             | Undo the last edit                       |
+| `redo`             | Redo the last undone edit                |
+| `repeat <eventId>` | Replay the edit from a specific event ID |
 
-1. Select one or more nodes (use Ctrl+Click for multi-selection).
-2. Click the **Delete** (🗑) button in the toolbar.
-3. A confirmation dialog appears: "Delete N node(s)? This action can be undone
-   with Ctrl+Z."
-4. Click **Delete** to confirm.
+### 5.8 Formula Operations
 
-> **Note:** You cannot delete the root node.
+When using the `formula` command, the following operations are available:
 
-### 4.4 Moving Nodes (Cut/Paste)
+| Category   | Operations                                                                    |
+| ---------- | ----------------------------------------------------------------------------- |
+| **Math**   | `sum`, `product`, `mod`, `round`, `floor`, `ceil`, `abs`                      |
+| **String** | `concat`, `uppercase`, `lowercase`, `capitalize`, `trim`, `length`, `replace` |
+| **Tree**   | `countChildren`                                                               |
 
-To move a node to a different location in the tree:
+### 5.9 Examples
 
-1. **Select the node(s)** you want to move.
-2. Press **Ctrl+X** to cut. A blue banner appears: "N node(s) cut. Select target
-   and press Ctrl+V to paste."
-3. **Click on the target element** where you want to move the node(s) (must be
-   an element node).
-4. Press **Ctrl+V** to paste. The node(s) move to become children of the target.
-5. Press **Escape** to cancel the cut operation.
-
-You can also **reorder nodes among siblings** using the **Move ↑** and **Move
-↓** buttons in the navigation bar.
-
-### 4.5 Copying Nodes
-
-To copy a value node:
-
-1. **Select a value node**.
-2. Press **Ctrl+C** or click the **Copy** button in the toolbar.
-3. **Select the target** — either a value node (to replace it) or an element
-   node (to add as a child).
-4. Press **Ctrl+V** or click the **Paste** button.
-
-The copy creates a new node linked to the original source via a `sourceId`, so
-the recording system can track provenance.
-
----
-
-## 5. Undo & Redo
-
-mywebnicek supports full undo and redo:
-
-- **Undo**: Click the ↶ button in the toolbar or press **Ctrl+Z**.
-- **Redo**: Click the ↷ button in the toolbar or press **Ctrl+Y**.
-
-Changes made within a short time window (approximately 1 second) are grouped
-into a single undo step, so rapid edits are undone together.
-
-Up to 100 undo steps are stored. Undo only affects your own local changes — it
-does not undo edits made by collaborators.
+```
+/counter/value set 42
+/items pushBack {"$tag": "li", "text": "New item"}
+/items/0/name set "Alice"
+/speakers pushFront "Bob"
+/title updateTag h2
+/items/2 delete name
+/data rename old_key new_key
+/items wrapRecord wrapper section
+undo
+redo
+tree
+/counter/value get
+```
 
 ---
 
-## 6. Collaborative Editing
+## 6. Panels
 
-### 6.1 Connecting to a Sync Server
+### 6.1 Document Panel
 
-mywebnicek automatically connects to the sync server when you open the
-application. The connection status is shown in the top-right of the toolbar:
+Renders the tagged document tree as **live HTML**. The document is displayed
+using semantic HTML elements based on each node's tag.
 
-- **Synced** (green badge) — Connected and synchronized. Shows round-trip
-  latency (e.g., "Synced (42ms)").
-- **Connecting** (yellow badge with spinner) — Connection attempt in progress.
-- **Disconnected** (red badge) — Connection lost. The app will auto-retry.
-- **Offline** (gray badge) — Sync is turned off.
+Interactive features:
 
-You can toggle sync on/off using the **switch** next to the status indicator.
+- **Buttons** (nodes tagged `button`) — Rendered as blue clickable buttons.
+  Clicking a button executes its associated event script (recorded edit
+  sequence).
+- **Input fields** (nodes tagged `input`) — Rendered as editable text inputs.
+  Type directly into them; changes auto-commit after approximately 500ms.
+- **Formulas** (nodes tagged `x-formula-*`) — Display computed results with a
+  `ƒ(operation)` indicator.
+- **References** — Display with an arrow indicator (`→`) in blue text.
 
-### 6.2 Sharing and Real-time Collaboration
+### 6.2 Raw JSON Panel
 
-Each document session has a unique **room ID** embedded in the URL hash (e.g.,
-`https://krsion.github.io/mydenicek/#abc12345`).
+Displays the complete document tree as **syntax-highlighted JSON**:
 
-To collaborate:
+- 🔵 **Blue** — Property keys
+- 🟢 **Green** — String values (teal for `$tag` values)
+- 🟠 **Orange** — Numbers
+- 🟣 **Purple** — Booleans and null
+- ⚫ **Gray** — Structural characters (`{`, `}`, `[`, `]`)
 
-1. Click the **Share** button in the toolbar — the URL is copied to your
-   clipboard.
-2. Send this link to your collaborators.
-3. When they open the link, they automatically join the same room and see the
+This panel is read-only and is useful for inspecting the raw document structure.
+
+### 6.3 Event Graph Panel
+
+An **SVG visualization** of the causal event DAG (Directed Acyclic Graph). Each
+edit to the document creates a node in the graph.
+
+Visual features:
+
+- **Per-peer coloring** — Each peer's events are drawn in a unique color.
+- **Causal edges** — Lines connect each event to its causal parents.
+- **Layout** — Concurrent events appear in the same row but different columns.
+  Peer labels (first 6 characters of peer ID) appear at the top of each column.
+- **Frontier nodes** — The latest events from each peer have thick black
+  borders.
+- **Selection** — Click a node to select it. The selected event shows with a
+  white fill and thick colored border. Hovering shows the full event ID and
+  description.
+
+---
+
+## 7. Collaborative Editing
+
+### 7.1 Room-Based Sync
+
+Documents are synchronized via **rooms**. Each document tab has a unique room ID
+embedded in the URL hash (e.g., `https://krsion.github.io/mydenicek/#abc12345`).
+
+The sync server uses WebSockets at:\
+`wss://mydenicek-core-krsion-dev-sync.happyisland-d6dda219.westeurope.azurecontainerapps.io/sync`
+
+### 7.2 Sharing a Document
+
+To collaborate with others:
+
+1. Open a document (or create one from a template).
+2. Copy the URL from your browser's address bar — it contains the room ID in the
+   hash.
+3. Send this URL to your collaborators.
+4. When they open the URL, they automatically join the same room and see the
    same document.
 
-You can also set a **display name** by clicking the person icon (👤) in the
-toolbar. This name is visible to other collaborators.
+### 7.3 Sync Status
 
-Changes are synchronized in real time. When a collaborator selects a node, you
-can see their selection highlighted with a distinct color overlay.
+The header bar shows the current connection state:
 
-### 6.3 Conflict Resolution
+| Indicator           | Meaning                           |
+| ------------------- | --------------------------------- |
+| 🟢 **connected**    | Synchronized with the sync server |
+| 🟡 **connecting**   | Connection attempt in progress    |
+| 🔴 **disconnected** | Connection lost                   |
+| ⚪ **idle**         | Not connected to any sync server  |
 
-Because mywebnicek uses CRDTs (specifically the Loro library), conflicts are
-resolved automatically and deterministically. All peers converge to the same
-document state regardless of the order in which they receive changes.
+The status also displays the current **peer ID** (your unique identifier in the
+room) and the **room ID**.
 
-Specific resolution behaviors:
+Use the **Connect** / **Disconnect** button to toggle synchronization on or off.
 
-| Concurrent Operations                     | What Happens                      |
+### 7.4 Conflict Resolution
+
+mydenicek uses a custom **operational transformation (OT)** algorithm over an
+**event DAG** — not CRDTs. All peers that receive the same set of events
+deterministically converge to the same document state, regardless of delivery
+order.
+
+Events are replayed in a deterministic topological order. Concurrent structural
+edits (rename, wrap, delete) are resolved by transforming selectors through the
+OT layer.
+
+| Concurrent Operations                     | Resolution                        |
 | ----------------------------------------- | --------------------------------- |
-| Two users rename the same tag             | One wins (last-writer-wins)       |
-| Two users edit the same value             | One wins (last-writer-wins)       |
-| Two users add children to the same parent | Both children are added           |
-| Two users move the same node              | One move wins (last-writer-wins)  |
-| One user moves, another deletes           | Delete wins — the node is removed |
-| Two users delete the same node            | Node is deleted (idempotent)      |
+| Two users edit the same primitive         | Last-writer-wins (by event order) |
+| Two users add children to the same parent | Both additions are applied        |
+| Two users rename the same field           | Last-writer-wins                  |
+| One user wraps, another edits inside      | OT transforms the inner edit path |
+| Two users delete the same node            | Idempotent — deleted once         |
 
 ---
 
-## 7. Recording & Replay
+## 8. Formative Examples
 
-mywebnicek records every editing action you perform and displays them in the
-**Actions Panel** on the right side of the screen. This enables **programming by
-demonstration** — you can replay recorded actions to automate repetitive edits.
+The **"Formative Examples"** template creates a pre-built document demonstrating
+the core features of mydenicek. It contains three sections:
 
-### 7.1 How Recording Works
+### 8.1 Counter
 
-Every change you make to the document is automatically recorded as a patch in
-the Actions Panel:
+A simple numeric counter with an **Increment** button.
 
-- **Tree patches** — Creating, deleting, or moving nodes.
-- **Map patches** — Changing attributes, tags, or properties.
-- **Text patches** — Editing text values.
+- **Path**: `/counter/value` — holds the current count (starts at `0`)
+- **Button**: "Increment" — executes a multi-step edit sequence:
+  1. Wraps the counter value in a formula record (`x-formula-plus`)
+  2. Renames the value field to `left`
+  3. Adds a `right` field with value `1`
+  4. The formula evaluates to the incremented counter
 
-Each recorded action shows a human-readable description like "create `<tr>` in
-..." or "set style on ..." along with clickable node references.
+Try it: click the "Increment" button repeatedly and watch the counter increase.
+You can also manually set the value: `/counter/value set 100`.
 
-### 7.2 Replaying Actions
+### 8.2 Conference List
 
-To replay recorded actions:
+A simple list with a text input and an **Add** button.
 
-1. **Select the actions** you want to replay by checking their checkboxes in the
-   Actions Panel. Use "Select all" to select everything, or pick individual
-   actions.
-2. **Select a target node** in the document — this is where the replayed actions
-   will be applied.
-3. Click **Apply** (or "Apply (N)" if specific actions are selected).
+- **Input field**: Pre-filled with `"New Speaker, speaker@example.com"`
+- **Button**: "Add" — copies the input text and inserts it as a new `<li>` at
+  the top of the list
+- **Pre-populated items**: "Tomáš Petříček, tomas@tomasp.net" and "Ada Lovelace,
+  ada@example.com"
 
-The system **generalizes** the recorded actions before replay:
+### 8.3 Conferences Table
 
-- Nodes that were created during the recorded session are replaced with
-  placeholder variables (`$1`, `$2`, etc.).
-- The target node you select becomes the starting point for the replayed
-  actions.
+A structured table with separate Name and Email columns.
 
-This means you can perform a set of edits on one part of the document, then
-replay them on a different part.
-
-**Retargeting node references:** In the Actions Panel, each node reference has a
-small target icon (🎯). Click it to replace that reference with the currently
-selected node. This lets you adjust which nodes the replayed actions will
-affect.
-
-### 7.3 Programming Action Buttons
-
-You can save recorded actions as reusable **action buttons** embedded in the
-document:
-
-1. First, create an action node (via **Add → Action**) and give it a label.
-2. Perform the editing actions you want to automate.
-3. In the Actions Panel, select the recorded actions with the checkboxes.
-4. Click **Add to Button**.
-5. In the dialog:
-   - Choose which action button to add the actions to.
-   - **Configure parameters**: For each referenced node, you can name it as a
-     parameter (e.g., `target`) or mark it as "Fixed" (hardcoded). Parameters
-     become clickable prompts when the button is used.
-6. Click **Add**.
-
-**Using an action button:**
-
-- Click the button in the rendered document.
-- If the button has parameters, a yellow banner prompts you to click on a node
-  for each parameter (e.g., "Click a node to set as $target").
-- Once all parameters are provided, the actions execute.
-
-**Viewing and editing button actions:**
-
-- Select an action node to see its stored actions in the Actions Panel (they
-  appear in a pinned section at the top).
-- You can delete individual actions from a button using the trash icon.
-
-### 7.4 Clearing the Recording History
-
-Click the stop (■) icon at the top of the Actions Panel to clear all recorded
-history and start fresh.
+- **Input field**: Pre-filled with `"Jan Novák, jan@novak.cz"`
+- **Button**: "Add Speaker" — executes a 5-step sequence:
+  1. Inserts a new `<tr>` with `<td>` cells
+  2. Copies the input text to both cells
+  3. Applies `splitFirst` on the name cell (extracts text before `,`)
+  4. Applies `splitRest` on the email cell (extracts text after `,`)
+- **Pre-populated rows**: Tomáš Petříček / tomas@tomasp.net and Ada Lovelace /
+  ada@example.com
 
 ---
 
-## 8. Advanced Features
+## 9. Keyboard Shortcuts & Tips
 
-### 8.1 Formulas
+### 9.1 Command Bar Shortcuts
 
-Formula nodes compute values from their inputs using built-in operations. There
-are two styles:
+| Key            | Action                                                 |
+| -------------- | ------------------------------------------------------ |
+| **Tab**        | Auto-complete the current input; cycle through options |
+| **Enter**      | Execute the command or accept the selected completion  |
+| **Arrow Up**   | Previous command from history / previous completion    |
+| **Arrow Down** | Next command from history / next completion            |
+| **Escape**     | Close the completions dropdown                         |
 
-**Child-based formulas:** The formula takes its children as arguments.
+### 9.2 Tips
 
-- Create a formula node as a parent, then add value or reference nodes as its
-  children.
-- In formula view mode, it displays as `operation(arg1, arg2, ...)`.
-- In result view mode, it displays the computed value.
-
-**RPN (Reverse Polish Notation) formulas:** Childless formula nodes that consume
-their preceding siblings as arguments.
-
-- Place value or reference nodes as siblings, followed by the formula node.
-- The formula pops the required number of arguments from the preceding siblings.
-- This enables stack-based composition (e.g., `5`, `3`, `add` produces `8`).
-
-**Available operations:**
-
-| Category   | Operations                                                                                        |
-| ---------- | ------------------------------------------------------------------------------------------------- |
-| **String** | `lowerText`, `upperText`, `capitalize`, `concat` (variadic), `trim`, `length`, `replace` (3 args) |
-| **Math**   | `add`, `subtract`, `divide`, `product` (variadic), `mod`, `round`, `floor`, `ceil`, `abs`         |
-| **Array**  | `atIndex`, `splitString`, `arrayLength`                                                           |
-| **Tree**   | `countChildren`                                                                                   |
-
-**Editing a formula's operation:** Select a formula node and use the dropdown in
-the toolbar to change the operation. An arity indicator shows whether the
-formula has the correct number of arguments (e.g., "2/2" means 2 children out of
-2 expected).
-
-**Toggling formula view:** Click the **Calculator** (🧮) button in the toolbar
-to toggle between:
-
-- **Results** mode — Shows computed values.
-- **Formulas** mode — Shows the formula structure with operation names and
-  arguments.
-
-Errors display with a red background (e.g., `#ERR: division by zero`).
-
-### 8.2 JSON View
-
-Click the **Raw** button in the toolbar to open a dialog showing the complete
-document state as raw JSON. This is useful for debugging and inspecting the
-internal CRDT structure.
-
-### 8.3 Snapshots
-
-Click the **Snapshot** (📷) button in the toolbar to capture a snapshot of the
-current document state. This creates a frozen copy that can be compared against
-future changes. You can filter the snapshot view by the current selection and
-toggle between table and JSON display.
-
-### 8.4 Keyboard Shortcuts
-
-| Shortcut        | Action                                                           |
-| --------------- | ---------------------------------------------------------------- |
-| **Ctrl+Z**      | Undo                                                             |
-| **Ctrl+Y**      | Redo                                                             |
-| **Ctrl+X**      | Cut selected node(s) for move                                    |
-| **Ctrl+V**      | Paste — move cut nodes to selected target, or paste copied value |
-| **Ctrl+C**      | Copy selected value node                                         |
-| **Escape**      | Cancel cut operation / clear selection                           |
-| **Arrow Up**    | Navigate to parent node                                          |
-| **Arrow Down**  | Navigate to first child                                          |
-| **Arrow Left**  | Navigate to previous sibling                                     |
-| **Arrow Right** | Navigate to next sibling                                         |
-| **Ctrl+Click**  | Toggle node in multi-selection                                   |
-| **Shift+Click** | Select range of siblings                                         |
+- **Tab completion** works for both selectors (paths) and command names. Start
+  typing a path and press Tab to cycle through available fields/indices.
+- **Ghost text** appears in faded text showing the remaining required arguments
+  for the current command.
+- **Command history** is stored in the browser (up to 200 entries). Use Arrow
+  Up/Down to recall previous commands.
+- Use the **`tree`** command to see the full document structure and discover
+  paths.
+- Use **`/path get`** to inspect the value at any path before editing.
+- The **wildcard** `*` in selectors lets you operate on all children at once,
+  e.g., `/items/*/done set true` to mark all items as done.
 
 ---
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 ### The document is empty when I open a shared link
 
-When joining an existing room via a shared link, the app waits up to 1 second
-for the sync server to deliver the document. If the connection is slow, the app
-may initialize with a blank document. Try refreshing the page.
+The app waits for the sync server to deliver the document when joining a room.
+If the connection is slow, the document may appear empty. Try refreshing the
+page.
 
 ### Changes are not syncing
 
-- Check the status indicator in the top-right corner. If it says "Offline" or
-  "Disconnected", toggle the sync switch off and on.
+- Check the sync status indicator in the header bar. If it shows "disconnected"
+  or "idle", click the **Connect** button.
 - Ensure you and your collaborator are using the same URL (same room ID in the
   hash).
-- The sync server at `wss://mywebnicek-sync-prod.azurewebsites.net` must be
-  reachable. Corporate firewalls may block WebSocket connections.
+- Corporate firewalls may block WebSocket connections to the sync server.
 
 ### Undo doesn't revert a collaborator's change
 
-Undo only affects your own local changes. It does not undo edits made by other
-peers. This is by design — each user's undo history is independent.
+Undo only affects your own local edits. Each peer's undo history is independent.
 
-### A formula shows #ERR
+### A command returns an error
 
-Common causes:
-
-- **Wrong number of arguments** — Check the arity indicator in the toolbar
-  (e.g., "1/2" means 1 child but 2 expected).
-- **Type mismatch** — Math operations require numbers; string operations require
-  strings. Values like `"abc"` cannot be used with `add`.
-- **Division by zero** — The `divide` operation returns `#ERR: division by zero`
-  if the second argument is 0.
-
-### An action button does nothing when clicked
-
-- The button may have no actions assigned. Select it and check the Actions Panel
-  for its stored actions.
-- If the button has parameters, look for a yellow prompt banner asking you to
-  click on nodes for each parameter.
-
-### The document looks broken or elements are misplaced
-
-- Try toggling between **Results** and **Formulas** view mode to see if formula
-  evaluation is causing the issue.
-- Check the **Element Details** panel for unexpected attributes (especially
-  `style`).
-- Use the **Raw** (JSON) view to inspect the raw document structure.
-
-### I accidentally deleted something
-
-Press **Ctrl+Z** immediately to undo the deletion. Up to 100 undo steps are
-available.
+- Check that the **selector** points to an existing node (use `tree` or
+  `/path get` to verify).
+- Ensure you are using the right command for the **node type** — e.g., `set`
+  only works on primitives; `pushBack` only works on lists.
+- Check the **number of arguments** — the command bar shows ghost text hints for
+  required parameters.

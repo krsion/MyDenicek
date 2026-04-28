@@ -48,10 +48,10 @@ The documentation covers:
 - The `@mydenicek/core` library (CRDT engine, document model, edit operations,
   formula engine)
 - The `@mydenicek/sync` package (WebSocket sync protocol)
-- The `mywebnicek` web application (React UI, Loro-based CRDT integration)
+- The `mywebnicek` web application (React UI, custom OT-based CRDT engine)
 - Testing methodology (unit tests, property-based tests, random fuzzer,
   Playwright E2E)
-- Deployment (Azure App Service, GitHub Pages, CI/CD)
+- Deployment (Azure Container Apps, GitHub Pages, CI/CD)
 
 ### 2.3 Background — Original Denicek System
 
@@ -248,8 +248,8 @@ packages/core/
 │       ├── unwrap-edits.ts  # UnwrapRecordEdit, UnwrapListEdit (inverse of wrap)
 │       └── value-edits.ts   # ApplyPrimitiveEdit (with extensible primitive edit registry)
 ├── tests/
-│   ├── core/                # 8 unit test files
-│   ├── formative/           # 6 domain scenario tests
+│   ├── core/                # 19 unit test files
+│   ├── formative/           # 4 domain scenario tests
 │   └── core-properties.test.ts  # Property-based convergence tests
 └── tools/
     └── core-random-fuzzer.ts    # Standalone random fuzzer
@@ -281,12 +281,14 @@ packages/react/
 ```
 apps/mywebnicek/
 ├── src/
-│   ├── App.tsx                # Multi-document tabs, template system
+│   ├── App.tsx                # Tab system, template launcher, editor layout
 │   ├── CommandBar.tsx         # Terminal-style /path command args
-│   ├── RenderedDocument.tsx   # Tag-based HTML renderer with formulas
-│   ├── EventGraphView.tsx     # SVG DAG visualization
-│   ├── RawDocumentView.tsx    # Syntax-highlighted JSON view
-│   └── initializeDocument.ts  # Formative example templates
+│   ├── RenderedDocument.tsx   # Tag-based HTML renderer with formulas & actions
+│   ├── EventGraphView.tsx     # SVG DAG visualization with replay
+│   ├── RawDocumentView.tsx    # Syntax-highlighted JSON tree view
+│   ├── initializeDocument.ts  # Formative example document & action setup
+│   └── components/
+│       └── ErrorBoundary.tsx  # React error boundary
 ├── e2e/                # Playwright E2E tests
 └── playwright.config.ts
 ```
@@ -697,31 +699,40 @@ as a "recording" — a sequence of edit steps.
 
 ### 7.1 Unit Tests
 
-The core library has **8 unit test files** in `packages/core/tests/core/`:
+The core library has **19 unit test files** in `packages/core/tests/core/`:
 
-| File                               | Coverage                                                                            |
-| ---------------------------------- | ----------------------------------------------------------------------------------- |
-| `basic.test.ts`                    | Document creation, field operations, list operations, serialization                 |
-| `concurrency.test.ts`              | Two-peer and three-peer concurrent edits, all structural conflict types             |
-| `copy-and-tags.test.ts`            | Copy edit semantics, managed-copy OT, tag operations                                |
-| `errors-and-replay.test.ts`        | Error conditions, event replay, retargeting                                         |
-| `selectors-and-references.test.ts` | Selector parsing, wildcard expansion, reference resolution, reference integrity     |
-| `undo-redo.test.ts`                | 39 tests covering undo/redo for all edit types, multi-peer convergence              |
-| `formula-engine.test.ts`           | 41 tests: all built-in operations, nested formulas, cycle detection, error handling |
-| `formula-integration.test.ts`      | 9 tests: formula evaluation within full Denicek documents                           |
+| File                                 | Coverage                                                                        |
+| ------------------------------------ | ------------------------------------------------------------------------------- |
+| `basic.test.ts`                      | Document creation, field operations, list operations, serialization             |
+| `concurrency.test.ts`                | Two-peer and three-peer concurrent edits, all structural conflict types         |
+| `concurrent-pair-matrix.test.ts`     | Exhaustive pairwise concurrent edit combinations                                |
+| `copy-and-tags.test.ts`              | Copy edit semantics, managed-copy OT, tag operations                            |
+| `copy-undo.test.ts`                  | Undo/redo of copy operations                                                    |
+| `determinism.test.ts`                | Deterministic convergence across random edit orderings                          |
+| `determinism-check.test.ts`          | Subprocess-based determinism verification                                       |
+| `errors-and-replay.test.ts`          | Error conditions, event replay, retargeting                                     |
+| `event-concurrency.test.ts`          | Event concurrency detection and vector clock behavior                           |
+| `formula-engine.test.ts`             | All built-in operations, nested formulas, cycle detection, error handling       |
+| `formula-integration.test.ts`        | Formula evaluation within full Denicek documents                                |
+| `formula-ref-stability.test.ts`      | Formula reference stability across structural edits                             |
+| `incremental-materialize.test.ts`    | Incremental materialization correctness                                         |
+| `ingest-recovery.test.ts`            | Out-of-order event ingestion and recovery                                       |
+| `list-insert-remove-reorder.test.ts` | List operations: insert, remove, reorder, index shifting                        |
+| `ref-rewriting.test.ts`              | Reference rewriting during structural edits                                     |
+| `selectors-and-references.test.ts`   | Selector parsing, wildcard expansion, reference resolution, reference integrity |
+| `undo-redo.test.ts`                  | Undo/redo for all edit types, multi-peer convergence                            |
+| `unwrap-transform.test.ts`           | Unwrap edit OT and structural transformation                                    |
 
 ### 7.2 Formative Tests (Domain Scenarios)
 
-Six domain-specific scenario tests in `packages/core/tests/formative/` validate
+Four domain-specific scenario tests in `packages/core/tests/formative/` validate
 end-to-end workflows:
 
 | File                                  | Scenario                                            |
 | ------------------------------------- | --------------------------------------------------- |
-| `hello-world-formative.test.ts`       | Basic document creation and editing                 |
-| `todo-formative.test.ts`              | Todo list with add/delete/rename operations         |
+| `hello-world-formative.test.ts`       | Custom primitive edit and wildcard replay           |
 | `conference-list-formative.test.ts`   | Conference attendee list with collaborative editing |
-| `conference-budget-formative.test.ts` | Budget spreadsheet with formulas                    |
-| `counter-formative.test.ts`           | Counter with formula-based computed values          |
+| `counter-formative.test.ts`           | Counter with recorded action button replay          |
 | `traffic-accidents-formative.test.ts` | Data table with aggregation formulas                |
 
 These tests simulate realistic user workflows and verify that the CRDT produces
@@ -760,20 +771,15 @@ Run with: `deno run packages/core/tools/core-random-fuzzer.ts`
 
 ### 7.5 E2E Tests (Playwright)
 
-The mywebnicek web application has 5 Playwright test files in
-`apps/mywebnicek/tests/`:
+The mywebnicek web application has Playwright E2E tests in
+`apps/mywebnicek/e2e/`:
 
-| File                    | Coverage                                                               |
-| ----------------------- | ---------------------------------------------------------------------- |
-| `bulk_actions.spec.ts`  | Multi-select and bulk rename of elements                               |
-| `undo_redo.spec.ts`     | Undo/redo for node add/remove operations                               |
-| `recording.spec.ts`     | Recording and replay (currently skipped due to DOM interaction issues) |
-| `named_params.spec.ts`  | Named parameter functionality                                          |
-| `history_debug.spec.ts` | History debugging interface                                            |
+| File                         | Coverage                                         |
+| ---------------------------- | ------------------------------------------------ |
+| `command-bar-output.test.ts` | Command bar input/output and document editing    |
+| `sync.test.ts`               | Multi-peer WebSocket sync and room collaboration |
 
-Configuration: tests run against `http://localhost:5174/mywebnicek/` on
-Chromium, Firefox, and WebKit. In CI, tests run sequentially with 2 retries;
-locally, they run in parallel.
+Configuration: tests run against the Vite dev server on Chromium.
 
 ---
 
@@ -781,22 +787,20 @@ locally, they run in parallel.
 
 ### 8.1 Local Development Setup
 
-**mywebnicek-core** (Deno):
-
 ```bash
 # Clone the repository
 git clone https://github.com/krsion/mydenicek.git
-cd mywebnicek-core
+cd mydenicek
 
-# Install dependencies (Deno auto-manages, but for npm compat packages):
-deno install
+# Install web app dependencies:
+cd apps/mywebnicek && deno install && cd ../..
 
 # Format, lint, type-check, test:
 deno task fmt          # Format all files
 deno task lint         # Lint all packages
 deno task check        # Type-check all packages
 deno task test         # Run all tests
-deno task build        # Build runnable apps (playground + mywebnicek)
+deno task build        # Build the web app
 
 # Run property tests:
 deno task property-test
@@ -804,65 +808,35 @@ deno task property-test
 # Run the random fuzzer:
 deno task random-fuzzer
 
-# Start the sync server:
-deno task sync-server
+# Start everything locally (sync server + web app):
+deno task dev
 ```
 
-**mywebnicek** (Node.js):
+Prerequisites: [Deno](https://deno.com/) 2.x.
 
-```bash
-# Clone the repository
-git clone https://github.com/krsion/mydenicek.git
-cd mywebnicek
+### 8.2 Deployment
 
-# Install dependencies:
-npm ci
+**Sync server**: Deployed to **Azure Container Apps** via Docker container. The
+`apps/sync-server/Dockerfile` builds a Deno-based image. The infrastructure is
+defined in `infra/azure/sync-server/main.bicep`.
 
-# Build the core library first:
-npm run build -w @mydenicek/core
+Live endpoint:
+`wss://mydenicek-core-krsion-dev-sync.happyisland-d6dda219.westeurope.azurecontainerapps.io/sync`
 
-# Start development (sync server + web app concurrently):
-npm run dev
+**Web application**: Deployed to **GitHub Pages** at
+<https://krsion.github.io/mydenicek/>. The live demo connects to the Azure sync
+server automatically.
 
-# Or run individually:
-npm run dev -w mywebnicek              # Web app at localhost:5174
-npm run dev -w @mydenicek/sync  # Sync server at port 3001
+### 8.3 CI/CD Pipeline
 
-# Run tests:
-npm run test --workspaces              # All tests
-npm test -w @mydenicek/core            # Core unit tests (Vitest)
-npm run test -w mywebnicek             # E2E tests (Playwright)
-```
+The repository uses GitHub Actions (`.github/workflows/deno.yml`):
 
-### 8.2 Azure Deployment
-
-**Sync server** (mywebnicek-core): Deployed via
-`deno run --allow-net --allow-read --allow-write --allow-env apps/sync-server/main.ts`.
-Supports optional file-based persistence via `--persistence-path`.
-
-**Sync server** (mywebnicek): Deployed to Azure App Service
-(`mywebnicek-sync-prod.azurewebsites.net`). Uses Azure Blob Storage for event
-persistence. Deployment is triggered by changes to
-`apps/mywebnicek-sync-server/` or manual dispatch.
-
-**Web application**: Deployed to GitHub Pages at
-`https://krsion.github.io/mydenicek/`. Live demo connects to the Azure sync
-server via `wss://mywebnicek-sync-prod.azurewebsites.net`.
-
-### 8.3 CI/CD Pipelines
-
-**mywebnicek-core**: Uses Deno's built-in task runner. CI runs
-`deno task fmt:check`, `deno task check`, `deno task test`, and
-`deno task build`.
-
-**mywebnicek** has 4 GitHub Actions workflows:
-
-| Workflow                                          | Trigger                       | Steps                                                        |
-| ------------------------------------------------- | ----------------------------- | ------------------------------------------------------------ |
-| **Unit Tests** (`unit-tests.yml`)                 | Push/PR to main               | `npm ci` → core unit tests (Vitest)                          |
-| **Playwright** (`playwright.yml`)                 | Push to main                  | Build core → install browsers → run E2E → upload report      |
-| **Deploy Sync Server** (`deploy-sync-server.yml`) | Sync server changes or manual | Build → prepare dist → deploy to Azure App Service           |
-| **Deploy Pages** (`deploy-pages.yml`)             | Push to main                  | Build core → build app → unit tests → deploy to GitHub Pages |
+| Stage           | Steps                                                             |
+| --------------- | ----------------------------------------------------------------- |
+| **Validate**    | `deno task fmt:check` → `deno task check` → `deno task test`      |
+| **Build**       | `deno task build` (Vite production build of `apps/mywebnicek`)    |
+| **Deploy app**  | Upload `apps/mywebnicek/dist/` to GitHub Pages                    |
+| **Deploy sync** | Docker build → push to ACR → deploy Azure Container App via Bicep |
 
 ---
 
@@ -884,12 +858,6 @@ server via `wss://mywebnicek-sync-prod.azurewebsites.net`.
    variable placeholders for making recorded scripts portable across structural
    contexts. The current event-ID-based replay achieves the same goal for
    interactive use but ties scripts to specific event history.
-
-4. **Action node button rendering**: Action nodes should render as clickable
-   buttons in the UI. Currently they render as normal records.
-
-5. **Limited node selection in UI**: Click-to-select and keyboard navigation
-   (arrows, Tab) in the rendered tree are partially implemented.
 
 ### 9.2 Features Beyond Specification
 

@@ -30,8 +30,8 @@ custom OT-based event DAG. The custom approach was chosen because:
   TypeScript with no runtime dependencies, making it portable across Deno, Node,
   and browser environments.
 
-See [README-legacy-automerge.md](../README-legacy-automerge.md) for the previous
-Automerge-based design.
+The previous Automerge-based design was archived when the project migrated to
+the custom OT approach.
 
 ## 2. Why selector paths instead of node IDs?
 

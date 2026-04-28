@@ -2,8 +2,7 @@
 
 ## Executive Summary
 
-The
-[original specification](https://github.com/krsion/MyDenicek/blob/main/specification/specification.tex)[^1]
+The [original specification](../documents/specification/specification.pdf)[^1]
 describes a system built on **Loro CRDTs** with ID-addressed nodes, a
 Loro-managed undo/redo system, automatic recording via Loro event subscriptions,
 and a formula engine embedded in the node model. The actual `mydenicek`
@@ -78,19 +77,19 @@ original Denicek paper.
 
 ### 2.2 Web Application Requirements
 
-| Req ID    | Specification Requirement        | Status         | Notes                                                                                                                                              |
-| --------- | -------------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **FR-13** | Document rendering as HTML       | ✅ **Met**     | `apps/mywebnicek` renders documents via `MaterializedTree` component[^44]. Formula nodes render with purple `ƒ` styling and computed results[^45]. |
-| **FR-14** | Node selection (click, keyboard) | ⚠️ **Partial** | Click selection not implemented; node paths are visible in the tree.                                                                               |
-| **FR-15** | JSON inspector                   | ✅ **Met**     | `MaterializedTree` provides a tree view. `apps/playground` adds DAG inspection[^46].                                                               |
-| **FR-16** | Element details panel            | ⚠️ **Partial** | Event details panel shows edit kind, target, parents when an event is selected.                                                                    |
-| **FR-17** | Add node interface               | ✅ **Met**     | `EditComposer` provides a form-based interface for all 12 edit operations[^47].                                                                    |
-| **FR-18** | Recording controls               | ⚠️ **Partial** | Core replay API exists; no dedicated recording UI controls.                                                                                        |
-| **FR-19** | Replay controls                  | ⚠️ **Partial** | Core replay API exists; no dedicated replay UI controls.                                                                                           |
-| **FR-20** | Keyboard shortcuts               | ✅ **Met**     | `Ctrl+Z` (undo), `Ctrl+Shift+Z` / `Ctrl+Y` (redo) implemented in `MyWebnicekApp`[^48].                                                             |
-| **FR-21** | WebSocket synchronization        | ✅ **Met**     | `packages/sync` with room-based WebSocket sync[^49].                                                                                               |
-| **FR-22** | Formula rendering                | ✅ **Met**     | Formula nodes display with purple `ƒ operation = result` styling. Formula results panel shows all evaluated formulas with error highlighting[^50]. |
-| **FR-23** | Action node rendering as buttons | ❌ **Not met** | No button rendering for action nodes.                                                                                                              |
+| Req ID    | Specification Requirement        | Status         | Notes                                                                                                             |
+| --------- | -------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------- |
+| **FR-13** | Document rendering as HTML       | ✅ **Met**     | `apps/mywebnicek` renders documents via `RenderedDocument` component. Formula nodes render with computed results. |
+| **FR-14** | Node selection (click, keyboard) | ⚠️ **Partial** | Node editing via command bar (`/path command args`); no click-to-select in rendered tree.                         |
+| **FR-15** | JSON inspector                   | ✅ **Met**     | `RawDocumentView` panel provides a full JSON tree view. `EventGraphView` provides DAG visualization.              |
+| **FR-16** | Element details panel            | ⚠️ **Partial** | Event details visible in the Event Graph panel; no dedicated element details panel.                               |
+| **FR-17** | Add node interface               | ✅ **Met**     | `CommandBar` provides a terminal-style interface supporting all edit operations.                                  |
+| **FR-18** | Recording controls               | ⚠️ **Partial** | Core replay API exists; Event Graph panel shows replay buttons per event.                                         |
+| **FR-19** | Replay controls                  | ✅ **Met**     | Event Graph panel provides replay buttons. `repeatEditsFrom` supports batch replay of action button scripts.      |
+| **FR-20** | Keyboard shortcuts               | ✅ **Met**     | `Ctrl+Z` (undo), `Ctrl+Y` (redo) via command bar. Tab completion for paths and commands.                          |
+| **FR-21** | WebSocket synchronization        | ✅ **Met**     | `packages/sync` with room-based WebSocket sync[^49].                                                              |
+| **FR-22** | Formula rendering                | ✅ **Met**     | Formula nodes display computed values in the rendered document. `recomputeFormulas` command available.            |
+| **FR-23** | Action node rendering as buttons | ✅ **Met**     | Action nodes render as clickable buttons in the Document panel; clicking triggers `repeatEditsFrom`.              |
 
 ### 2.3 Non-Functional Requirements
 
@@ -140,35 +139,12 @@ character-level collaborative text editing.
   `splice(index, deleteCount, insertText)` edit and transform indices through
   concurrent edits.
 
-**Priority:** Medium — needed for rich text editing scenarios.
-
 ### 4.2 Generalized Patches with Variable Placeholders (FR-12 partial)
 
 **What's missing:** The specification defines a `$0`, `$1`, ... variable
 placeholder system for action nodes that makes recorded scripts portable and
 context-independent. The current event-id-based replay works well but ties
 scripts to specific event history.
-
-**Recommended approach:** Add a `GeneralizedPatch` system on top of existing
-edit replay. Action nodes would store edits with variable placeholders resolved
-at replay time.
-
-**Priority:** Low — the current event-id replay achieves the same goal for
-interactive use.
-
-### 4.3 Action Node Button Rendering (FR-23)
-
-**What's missing:** Action nodes should render as clickable buttons in the UI.
-Currently they render as normal records.
-
-**Priority:** Low — UI polish.
-
-### 4.4 Node Selection in UI (FR-14 partial)
-
-**What's missing:** Click-to-select nodes in the rendered tree, with keyboard
-navigation (arrows, Tab).
-
-**Priority:** Medium — important for usability.
 
 ---
 
@@ -190,19 +166,19 @@ The current implementation includes capabilities not specified:
 
 - **High confidence:** The architectural comparison and requirement mapping are
   based on thorough reading of both the specification LaTeX source and the full
-  `mydenicek` implementation (22 files, +2806 lines changed).
-- **High confidence:** Undo/redo and formula engine statuses are verified by 205
-  passing tests as of commit `cbcefa0`.
-- **Medium confidence:** Web app requirements (FR-14, FR-18, FR-19) could not be
-  fully verified without running the applications interactively.
+- **High confidence:** The architectural comparison and requirement mapping are
+  based on thorough reading of both the specification LaTeX source and the full
+  `mydenicek` implementation.
+- **High confidence:** Undo/redo and formula engine statuses are verified by 337
+  passing tests.
 - **High confidence:** The missing features list is minimal — most specification
-  requirements are now implemented.
+  requirements are now implemented, including action node rendering as buttons.
 
 ---
 
 ## Footnotes
 
-[^1]: [`specification/specification.tex`](https://github.com/krsion/MyDenicek/blob/main/specification/specification.tex)
+[^1]: [`documents/specification/specification.pdf`](../documents/specification/specification.pdf)
     — the original project specification
 
 [^2]: `packages/core/` in the `mydenicek` repository
@@ -324,24 +300,24 @@ The current implementation includes capabilities not specified:
 [^43]: `packages/core/tests/formative/counter-formative.test.ts:39-51` — action
     button modeled as tagged record with event-step list
 
-[^44]: `apps/mywebnicek/src/components/MaterializedTree.tsx` — recursive
-    `NodeView` component
+[^44]: `apps/mywebnicek/src/RenderedDocument.tsx` — tag-based HTML renderer with
+    formula evaluation and action button support
 
-[^45]: `apps/mywebnicek/src/components/MaterializedTree.tsx` — formula nodes
-    detected by `isFormula()` and rendered with `ƒ op = result` styling
+[^45]: `apps/mywebnicek/src/RenderedDocument.tsx` — formula nodes evaluated via
+    `evaluateAllFormulas` from `@mydenicek/core`
 
-[^46]: `apps/playground/` — multi-peer simulator with DAG visualization
+[^46]: `apps/mywebnicek/src/EventGraphView.tsx` — SVG DAG visualization with
+    replay buttons
 
-[^47]: `apps/mywebnicek/src/components/EditComposer.tsx` — form for all 12 edit
-    operations
+[^47]: `apps/mywebnicek/src/CommandBar.tsx` — terminal-style command bar
+    supporting all edit operations
 
-[^48]: `apps/mywebnicek/src/components/MyWebnicekApp.tsx` — `useEffect` with
-    `keydown` listener for Ctrl+Z/Ctrl+Shift+Z/Ctrl+Y
+[^48]: `apps/mywebnicek/src/CommandBar.tsx` — undo/redo commands via command bar
 
 [^49]: `packages/sync/` — sync protocol, room, WebSocket server/client
 
-[^50]: `apps/mywebnicek/src/components/MyWebnicekApp.tsx` — formula results
-    panel with green/red color coding
+[^50]: `apps/mywebnicek/src/RenderedDocument.tsx` — formula results rendered
+    inline in the document tree
 
 [^51]: `packages/core/core/event-graph.ts:338-356` — `materialize()`
     deterministic replay
@@ -359,7 +335,7 @@ The current implementation includes capabilities not specified:
 
 [^56]: Root `deno.json` tasks: `"fmt"`, `"lint"`
 
-[^57]: 205 core tests as of commit `cbcefa0` — verified by `deno task test`
+[^57]: 337 tests — verified by `deno task test`
 
 [^58]: `packages/core/core/denicek.ts` — JSDoc on all public methods
 
