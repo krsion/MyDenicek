@@ -1,37 +1,29 @@
-# Azure deployment for `apps\sync-server`, `apps\playground`, and `apps\mywebnicek`
+# Azure deployment for `apps/sync-server`
 
-This repo now targets:
+The sync server is deployed to **Azure Container Apps (Consumption tier)**. The
+web application (`apps/mywebnicek`) is deployed separately to **GitHub Pages**
+via `.github/workflows/deno.yml`.
 
-- **Azure Container Apps Consumption** for the sync server
-- **Azure Static Web Apps Free** for both browser apps
+The deployment workflow (`.github/workflows/deno.yml`) builds a Docker image,
+pushes it to Azure Container Registry, and deploys it to Azure Container Apps
+using the Bicep template in this directory.
 
-The supported workflows are:
+## What the Bicep template creates
 
-- `.github\workflows\infra-setup.yml` — provisions Azure resources with GitHub
-  OIDC
-- `.github\workflows\deploy-app.yml` — builds and deploys the sync server image,
-  playground, and mywebnicek
+From the workflow parameters, the template provisions:
 
-## What the infra workflow creates
+- Azure Container Registry
+- Container Apps managed environment
+- Sync server container app
+- Azure Storage account with an Azure Files share (mounted for persistence)
 
-From a single `name_prefix`, the workflow derives:
-
-- resource group = `rg-<name_prefix>`
-- Azure Container Registry = `<name_prefix-without-symbols>acr`
-- Container Apps environment = `cae-<name_prefix>`
-- sync server container app = `<name_prefix>-sync`
-- persistence storage account = `<name_prefix-without-symbols>sync`
-- playground Static Web App = `<name_prefix>-playground`
-- mywebnicek Static Web App = `<name_prefix>-mywebnicek`
-
-The Bicep template also creates an Azure Files share mounted into the
-sync-server container. The app is configured with:
+The app is configured with:
 
 - **Consumption**-style serverless hosting
 - **min replicas = 0**
 - **max replicas = 1**
 
-That `max replicas = 1` limit is intentional because the current sync server
+The `max replicas = 1` limit is intentional because the current sync server
 persists room events to files and should stay single-writer.
 
 ## One-time Azure OIDC setup
@@ -89,55 +81,3 @@ Create these repository variables in GitHub:
 - `AZURE_CLIENT_ID` = the `$AppId` value
 - `AZURE_TENANT_ID` = the `$TenantId` value
 - `AZURE_SUBSCRIPTION_ID` = the `$SubscriptionId` value
-
-## Run the infra workflow
-
-Run **Azure infra setup** from the Actions tab with:
-
-- `name_prefix` — defaults to `mydenicek-krsion-dev`
-- `location` — defaults to `westeurope`
-
-After the workflow finishes, store both Static Web Apps deployment tokens as
-GitHub repository secrets.
-
-From your machine, use:
-
-```powershell
-$NamePrefix = "mydenicek-krsion-dev"
-$NormalizedPrefix = $NamePrefix.ToLower() -replace "[^a-z0-9]+", "-"
-$PlaygroundStaticWebAppName = "$NormalizedPrefix-playground"
-$MyWebnicekStaticWebAppName = "$NormalizedPrefix-mywebnicek"
-$ResourceGroup = "rg-$NormalizedPrefix"
-
-az staticwebapp secrets list `
-  --name $PlaygroundStaticWebAppName `
-  --resource-group $ResourceGroup `
-  --query properties.apiKey `
-  -o tsv
-
-az staticwebapp secrets list `
-  --name $MyWebnicekStaticWebAppName `
-  --resource-group $ResourceGroup `
-  --query properties.apiKey `
-  -o tsv
-```
-
-Paste the values into these repository secrets:
-
-- `AZURE_STATIC_WEB_APPS_API_TOKEN_PLAYGROUND`
-- `AZURE_STATIC_WEB_APPS_API_TOKEN_MYWEBNICEK`
-
-## Run the app deploy workflow
-
-Run **Deploy sync server, playground, and mywebnicek** with:
-
-- `name_prefix` — defaults to `mydenicek-krsion-dev`
-- `image_tag` — defaults to `latest`
-
-It will:
-
-- build the sync-server image in ACR
-- redeploy the Container App to the requested image tag
-- build `apps\playground`
-- build `apps\mywebnicek`
-- upload both browser apps to Azure Static Web Apps
