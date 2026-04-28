@@ -1,4 +1,5 @@
-FROM denoland/deno:2.7.5
+ARG REGISTRY=denoland
+FROM ${REGISTRY}/deno:2.7.5
 
 WORKDIR /app
 
@@ -8,9 +9,8 @@ COPY packages/core ./packages/core
 COPY packages/react ./packages/react
 COPY packages/sync ./packages/sync
 
-# Create stub workspace members that the sync server doesn't need
-RUN mkdir -p apps/playground apps/mywebnicek && \
-    echo '{}' > apps/playground/deno.json && \
+# Create stub workspace member that the sync server doesn't need
+RUN mkdir -p apps/mywebnicek && \
     echo '{}' > apps/mywebnicek/deno.json
 
 RUN deno cache apps/sync-server/main.ts
