@@ -17,7 +17,7 @@ jobs:
   fmt:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: denoland/setup-deno@v2
       - run: deno fmt --check deno.json README.md main.ts
       - run: deno fmt --check mod.ts internal.ts core tests tools deno.json
@@ -32,7 +32,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: denoland/setup-deno@v2
       - run: deno lint . && deno doc --lint mod.ts
         working-directory: packages/core
@@ -46,7 +46,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: denoland/setup-deno@v2
       - run: deno check mod.ts tests/**/*.ts
         working-directory: packages/core
@@ -58,7 +58,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: denoland/setup-deno@v2
       - run: deno test --allow-all --no-check tests
         working-directory: packages/core
@@ -68,7 +68,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: denoland/setup-deno@v2
       - run: deno install
         working-directory: apps/mywebnicek
@@ -83,16 +83,16 @@ jobs:
       pages: write
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: denoland/setup-deno@v2
       - run: deno install
         working-directory: apps/mywebnicek
       - run: deno task build
         working-directory: apps/mywebnicek
-      - uses: actions/upload-pages-artifact@v4
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: apps/mywebnicek/dist
-      - uses: actions/deploy-pages@v4
+      - uses: actions/deploy-pages@v5
 
   # Deploy sync server to Azure after all CI jobs pass (push to main only)
   deploy-sync-server:
@@ -112,7 +112,7 @@ jobs:
       IMAGE_TAG: ${{ github.sha }}
       NAME_PREFIX: mydenicek-core-krsion-dev
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: denoland/setup-deno@v2
       - uses: azure/login@v2
         with:
@@ -177,7 +177,7 @@ jobs:
     needs: [deploy-pages, deploy-sync-server]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Wake sync-server (cold-start Azure Container App)
         shell: bash
         run: |
@@ -204,7 +204,7 @@ jobs:
         run: npx playwright test
       - name: Upload playwright artifacts on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: |
